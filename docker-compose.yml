@@ -1,0 +1,35 @@
+# Default always-on deployment: runs the released image from ghcr.io and serves MCP over HTTP.
+# To run a local build instead: make docker, then set image: abs-mcp (or add build: .).
+# Secrets (ABS_TOKEN, ABS_AUTH_TOKEN) come from a gitignored .env next to this file,
+# see .env.example. Then register it in Claude Code:
+#   claude mcp add --transport http audiobookshelf http://<host>:8080/mcp \
+#     --header "Authorization: Bearer <ABS_AUTH_TOKEN>"
+
+networks:
+  net:
+    name: net
+
+services:
+  abs-mcp:
+    image: ghcr.io/katbyte/abs-mcp:latest
+    container_name: abs-mcp
+    restart: always
+    logging:
+      options:
+        max-size: 100m
+        max-file: "1"
+    networks:
+      net:
+    dns:
+      - 1.1.1.1
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - "TZ=America/Vancouver"
+      - "ABS_SERVER=http://nas:13378"
+      - "ABS_LISTEN=:8080"
+      - "ABS_LOG=INFO"
+      # - "ABS_READ_ONLY=true"     # only register tools that never change server state
+      # - "ABS_ENABLE_DELETE=true" # opt in to item_delete, podcast_episode_delete, author_delete, library_remove_issues

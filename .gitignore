@@ -1,0 +1,8 @@
+.claude/
+.DS_Store
+.idea/
+dist/
+abs-mcp
+.tools/bin/
+.tools/venv/
+.env
