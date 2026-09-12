@@ -2,68 +2,41 @@
 
 ### Breaking
 
-- **the server now registers only the `core` toolset by default**: `server_info`, `library_list`,
-  `library_search`, `library_items`, `item_get` - five read-only tools, about 4,400 tokens of
-  schema instead of 33,000. Curating a library, which is what this server is for, now has to be
-  asked for: `ABS_TOOLSETS=curation`. `ABS_TOOLSETS=all` restores every tool
-- `item_chapters` and `item_files` are gone: `item_get` takes `chapters` and `files` instead,
-  both off by default. Measured on a 300-chapter book against a real server, the chapter list is
-  19 times the rest of the answer - 26,962 bytes against 1,504 - so it stays opt-in, but
-  `item_get` always reports how many chapters and tracks an item has, so a model can decide
-  before asking
-- `library_stats` folded into `library_get`, which already made the same call and threw the
-  result away; `server_stats` into `server_info`; `podcast_recent` into `podcast_episodes`
-  (omit `item` for the newest across the whole library)
-- `library_match_all` removed. It applied provider matches to an entire library with nothing to
-  review and no undo - correction without judgment, which is the one thing this server says it
-  does not do. `item_match` then `item_match_apply` is the reviewed path. `lib/abs` keeps
-  `MatchAll`, so the SDK still covers every route
-- 94 tools became 88 (50 read, 34 write, 4 delete)
+- default is now the `core` toolset: 5 read-only tools, ~4,400 tokens instead of ~33,000.
+  `ABS_TOOLSETS=curation` for the audits and their fixers, `ABS_TOOLSETS=all` for everything
+- `item_chapters` and `item_files` are now `chapters` and `files` flags on `item_get`, off by
+  default (a 300-chapter book is 19x the rest of the answer)
+- `library_stats` folded into `library_get`, `server_stats` into `server_info`,
+  `podcast_recent` into `podcast_episodes` (omit `item` for the whole library)
+- removed `library_match_all`: no candidates to review, no undo. Use `item_match` then
+  `item_match_apply`. `lib/abs` keeps `MatchAll`
+- 94 tools -> 88
 
 ### Added
 
-- `--toolsets` / `ABS_TOOLSETS` registers a group rather than everything: `core`, `curation`,
-  `listening`, `podcasts`, `organise`, `admin`, `all`, or a resource family like `item`,
-  `podcast` or `audit`. `core` is always included, because nothing else can find a library or
-  open an item. Families are derived from the registered names, so a new tool joins its family
-  on its own; a test fails if a tool belongs to no curated set or to two. Globs could not do
-  this: `--allow-tools` ANDs with everything, so "core plus every item tool" had no spelling
-- `abs-mcp tools` lists what the current flags would register, grouped by toolset, with each
-  tool's kind and what it does. Needs no server, and shares the filter with the real
-  registration so it cannot drift from it. `-q` prints names only
-- a coverage workflow and badge. `make cover` runs all three suites into separate coverage
-  directories and merges them with `go tool covdata`, because `go test -cover ./...` reports
-  about 40% for `tools/` - almost everything real happens in the live suites behind the
-  `integration` tag, which that flag cannot see. The badge is published from the repository's
-  own CI with no coverage service and no secret
+- `--toolsets` / `ABS_TOOLSETS`: `core`, `curation`, `listening`, `podcasts`, `organise`,
+  `admin`, `all`, or a resource family like `item`. `core` is always included
+- `abs-mcp tools` lists what the current flags would register, grouped by toolset. No server
+  needed; `-q` for names only
+- coverage workflow and badge; `make cover` merges all three suites
 
 ### Fixed
 
-- `server_info` now says what an admin-only key could not see, instead of dropping the totals
-  silently - absent counts were indistinguishable from a server with no books and nobody
-  listening. They are one nested object, present or absent as a whole, which also fixes
-  `omitempty` hiding the perfectly ordinary answers of zero podcasts and zero open sessions
-- folding `item_chapters` into `item_get` had quietly dropped its refusal for podcasts, which
-  said chapters belong to each episode and to use `podcast_episode_get`. The guidance is back
-- `abs-mcp tools -q > file` wrote past cobra's buffer straight to stdout; every command now
-  writes through `cmd.OutOrStdout()`
-- the Homebrew formula was never published for v0.1.0: `scripts/update-homebrew-formula.sh` was
-  committed non-executable, so the release job failed with "Permission denied". The release
-  workflow can now regenerate the formula for any existing tag without cutting a new release
+- `server_info` says what an admin-only key could not see instead of dropping the totals
+  silently, and no longer hides zero podcasts or zero open sessions
+- `item_get chapters=true` on a podcast says chapters belong to the episodes again
+- `abs-mcp tools -q > file` wrote to stdout past cobra's buffer
+- the Homebrew formula never published for v0.1.0: the script was committed non-executable.
+  The release workflow can now republish it for any tag
 
 ### Changed
 
-- `library_items` and `library_search` no longer read as the same tool. They are different
-  endpoints - one takes a structured filter, sort and page and no text at all, the other one
-  free-text query and no filters - and each now says so and names the other. `library_items`
-  also stopped advertising `missing:<field>` and `issues`, which are the same server-side
-  filters `audit_missing` and `audit_issues` are built on, with worse output
-- coverage is measured across all three suites: 84.8% overall, `lib/abs` 87.1%, `tools` 86.1%,
-  `cli` 58.8%. `requireBearer` - the whole of the authentication on `--listen` - was at 0% and
-  is now at 100%
-- the id half of "id, or an exact title" is tested for the first time, across every resolver.
-  An id is what a model has after a search, and only the title path had ever been exercised
-- workflow names are lowercase, so the badges read `build` / `tests` / `golangci-lint`
+- `library_items` and `library_search` say what each is for and name the other;
+  `library_items` no longer advertises `missing:` and `issues`, which are `audit_missing` and
+  `audit_issues`
+- coverage 84.8% (`lib/abs` 87.1%, `tools` 86.1%, `cli` 58.8%); `requireBearer` 0% -> 100%
+- ids are tested across every resolver, not just titles
+- lowercase workflow names
 
 ## 0.1.0 (2026-09-12)
 
