@@ -22,6 +22,24 @@ It is two things in one repo: a **standalone Go client for the Audiobookshelf AP
 usable entirely on its own) and the MCP server built on top of it. Both are tested against a
 real Audiobookshelf in Docker, not a stub.
 
+### What makes this different
+
+There are several Audiobookshelf MCP servers, and they do a useful thing: expose the API as
+tools, so a model can browse your library and read your progress. This one does that too - all
+202 routes are covered - but the reason it exists is the layer above:
+
+- **It audits.** 16 sweeps over a whole library, each one looking for a specific thing that
+  goes wrong in a real collection, returning a worklist rather than a dump. `audit_all` runs
+  every per-item check in a single pass and tells you where to start.
+- **It is also a Go SDK.** `lib/abs` is a complete Audiobookshelf API client with no
+  dependencies outside the standard library and no knowledge of MCP - useful on its own,
+  whether or not you care about AI.
+- **It is tested against a real server.** Every tool and every client method runs against an
+  actual Audiobookshelf in Docker, and the suite fails if a registered tool has no test. Seven
+  response-shape bugs in this client were found that way and could not have been found any
+  other way, because Audiobookshelf publishes no OpenAPI spec and its public API docs say they
+  are unmaintained.
+
 The design principle: **detection is code, correction is judgment.** The server runs cheap
 deterministic checks over the whole library and produces worklists; the AI reasons only about
 the anomalies. Every response is a trimmed projection of what a decision needs, never the raw
