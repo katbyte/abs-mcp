@@ -161,7 +161,10 @@ func (c *Client) UpdateEReaderDevices(ctx context.Context, devices []EReaderDevi
 	return resp.EReaderDevices, nil
 }
 
-// MeUpdateEReaderDevices replaces the calling user's own device list.
+// MeUpdateEReaderDevices replaces the calling user's own device list. The
+// server requires every device here to have AvailableTo "specificUsers" with
+// Users naming only the calling user: a non-admin cannot make a device others
+// can see.
 func (c *Client) MeUpdateEReaderDevices(ctx context.Context, devices []EReaderDevice) ([]EReaderDevice, error) {
 	var resp struct {
 		EReaderDevices []EReaderDevice `json:"ereaderDevices"`
@@ -567,7 +570,7 @@ func (c *Client) ParseOPML(ctx context.Context, opmlText string) ([]map[string]a
 func (c *Client) CreatePodcastsFromOPML(ctx context.Context, libraryID, folderID string, feedURLs []string, autoDownload bool) error {
 	body := map[string]any{
 		"libraryId": libraryID, "folderId": folderID,
-		"feedUrls": feedURLs, "autoDownloadEpisodes": autoDownload,
+		"feeds": feedURLs, "autoDownloadEpisodes": autoDownload,
 	}
 	return c.post(ctx, "/api/podcasts/opml/create", nil, body, nil)
 }

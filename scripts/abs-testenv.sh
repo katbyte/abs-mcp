@@ -101,6 +101,16 @@ fixtures() {
     [ -n "$title" ] && silent_mp3 "${DATA}/nonfiction/${author}/${title}/01.mp3"
   done <<<"$NONFICTION"
 
+  # one book also gets an ebook beside the audio, so the ebook endpoints have
+  # something to read. A minimal epub is a zip whose first entry is an
+  # uncompressed "mimetype" file.
+  ebook_dir="${DATA}/fiction/Isaac Asimov/Foundation"
+  printf 'application/epub+zip' > "${ebook_dir}/mimetype"
+  mkdir -p "${ebook_dir}/META-INF"
+  printf '%s' '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>' > "${ebook_dir}/META-INF/container.xml"
+  printf '%s' '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">sdk</dc:identifier><dc:title>Foundation</dc:title><dc:language>en</dc:language></metadata><manifest/><spine/></package>' > "${ebook_dir}/content.opf"
+  ( cd "${ebook_dir}" && zip -q -X -0 Foundation.epub mimetype && zip -q -X -9 -r Foundation.epub META-INF content.opf && rm -f mimetype content.opf && rm -rf META-INF )
+
   # podcasts are "<podcast>/<episode file>"
   while read -r show; do
     [ -n "$show" ] || continue
@@ -128,6 +138,7 @@ wait_for() {
 up() {
   command -v ffmpeg >/dev/null || { echo "ffmpeg is required to generate fixtures" >&2; exit 1; }
   command -v jq >/dev/null || { echo "jq is required" >&2; exit 1; }
+  command -v zip >/dev/null || { echo "zip is required to build the ebook fixture" >&2; exit 1; }
   command -v docker >/dev/null || { echo "docker is required" >&2; exit 1; }
 
   down >/dev/null 2>&1 || true

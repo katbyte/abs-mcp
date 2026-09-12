@@ -7,8 +7,11 @@
 package integration
 
 import (
+	"bytes"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -247,8 +250,21 @@ func TestSessionsAndAuth(t *testing.T) {
 	if err := client.DeleteSession(ctx, session.ID); err != nil {
 		t.Errorf("DeleteSession: %v", err)
 	}
-	if err := client.DeleteSessions(ctx, []string{session.ID}); err != nil {
-		t.Logf("DeleteSessions on an already-deleted id: %v", err)
+	// batch delete against a second session, so it is asserted rather than
+	// tolerated
+	second, err := client.Play(ctx, item.ID, "", abs.PlayRequest{
+		DeviceInfo:         map[string]any{"clientName": "abs-mcp-sdk-test"},
+		SupportedMimeTypes: []string{"audio/mpeg"},
+		ForceDirectPlay:    true,
+	})
+	if err != nil {
+		t.Skipf("second Play: %v", err)
+	}
+	if err := client.DeleteSessions(ctx, []string{second.ID}); err != nil {
+		t.Errorf("DeleteSessions: %v", err)
+	}
+	if _, err := client.Session(ctx, second.ID); !abs.IsNotFound(err) {
+		t.Errorf("the batch-deleted session is still there: %v", err)
 	}
 }
 
@@ -380,32 +396,62 @@ func TestRemainingAdminSurface(t *testing.T) {
 		}
 	}
 
-	reaches("UpdateNotificationSettings", client.UpdateNotificationSettings(ctx, map[string]any{"maxFailedAttempts": 5}))
-	reaches("TestNotification", client.TestNotification(ctx))
-	reaches("UpdateAuthSettings", client.UpdateAuthSettings(ctx, map[string]any{"authActiveAuthMethods": []string{"local"}}))
+	// settings changes are asserted by reading them back
+	if err := client.UpdateNotificationSettings(ctx, map[string]any{"maxFailedAttempts": 7}); err != nil {
+		t.Errorf("UpdateNotificationSettings: %v", err)
+	} else if got := must(client.Notifications(ctx)); got.MaxFailedAttempts != 7 {
+		t.Errorf("maxFailedAttempts = %d, want the change to have stuck", got.MaxFailedAttempts)
+	}
 
-	_, err := client.MeUpdateEReaderDevices(ctx, nil)
-	reaches("MeUpdateEReaderDevices", err)
-	reaches("SendEbookToDevice", client.SendEbookToDevice(ctx, item.ID, "SDK Reader"))
+	before := must(client.AuthSettings(ctx))
+	if err := client.UpdateAuthSettings(ctx, map[string]any{"authActiveAuthMethods": []string{"local"}}); err != nil {
+		t.Errorf("UpdateAuthSettings: %v", err)
+	} else if after := must(client.AuthSettings(ctx)); len(after) != len(before) {
+		t.Errorf("auth settings changed shape: %d keys, was %d", len(after), len(before))
+	}
 
+	// a user's own device must be scoped to that user alone
+	devices := []abs.EReaderDevice{{
+		Name: "SDK Me Reader", Email: "me@example.invalid",
+		AvailableTo: "specificUsers", Users: []string{must(client.Me(ctx)).ID},
+	}}
+	// the server answers with every device it knows, not just the caller's
+	if got, err := client.MeUpdateEReaderDevices(ctx, devices); err != nil {
+		t.Errorf("MeUpdateEReaderDevices: %v", err)
+	} else {
+		var present bool
+		for _, d := range got {
+			if d.Name == "SDK Me Reader" {
+				present = true
+			}
+		}
+		if !present {
+			t.Errorf("devices = %+v, want the new one among them", got)
+		}
+	}
+	t.Cleanup(func() { _, _ = client.MeUpdateEReaderDevices(t.Context(), nil) })
+
+	// the password is not what this suite authenticates with - it uses an API
+	// key - so changing it and changing it back is safe
+	if err := client.ChangePassword(ctx, "abs-mcp-integration", "sdk-new-password"); err != nil {
+		t.Errorf("ChangePassword: %v", err)
+	} else if err := client.ChangePassword(ctx, "sdk-new-password", "abs-mcp-integration"); err != nil {
+		t.Errorf("ChangePassword back: %v", err)
+	}
+
+	if err := client.SyncLocalSessions(ctx, nil); err != nil {
+		t.Errorf("SyncLocalSessions with nothing to sync: %v", err)
+	}
+
+	// these need infrastructure a throwaway container has not got - an SMTP
+	// server, an apprise endpoint, an OpenID provider - so the assertion is
+	// that they reach the server and answer, not that they succeed
 	me := must(client.Me(ctx))
+	reaches("TestNotification", client.TestNotification(ctx))
+	reaches("SendEbookToDevice", client.SendEbookToDevice(ctx, item.ID, "SDK Reader"))
 	reaches("UnlinkOpenID", client.UnlinkOpenID(ctx, me.ID))
 	reaches("CloseMeSession", client.CloseMeSession(ctx, "no-such-session"))
-	reaches("ChangePassword", client.ChangePassword(ctx, "wrong", "alsowrong"))
-
 	reaches("SyncLocalSession", client.SyncLocalSession(ctx, map[string]any{"id": "sdk-local", "libraryItemId": item.ID}))
-	reaches("SyncLocalSessions", client.SyncLocalSessions(ctx, nil))
-
-	reaches("CreatePodcastsFromOPML", client.CreatePodcastsFromOPML(ctx, podcastLibrary(t), "", nil, false))
-
-	// ebooks and author images: the fixtures have neither, so a clean 404 is
-	// the right answer and a decode failure is not
-	if body, err := client.Ebook(ctx, item.ID, ""); err == nil {
-		_ = body.Close()
-	} else {
-		reaches("Ebook", err)
-	}
-	reaches("SetEbookPrimary", client.SetEbookPrimary(ctx, item.ID, "no-such-file", true))
 
 	authors, _, err := client.Authors(ctx, id, abs.ListOptions{Limit: 1})
 	if err != nil {
@@ -417,8 +463,9 @@ func TestRemainingAdminSurface(t *testing.T) {
 		} else {
 			reaches("AuthorImage", err)
 		}
-		_, err := client.DeleteAuthorImage(ctx, authors[0].ID)
-		reaches("DeleteAuthorImage", err)
+		if _, err := client.DeleteAuthorImage(ctx, authors[0].ID); err != nil {
+			reaches("DeleteAuthorImage", err)
+		}
 	}
 }
 
@@ -465,4 +512,135 @@ func TestDeleteItemFile(t *testing.T) {
 	if _, err := client.DeleteItemFile(ctx, item.ID, "no-such-file"); err == nil {
 		t.Error("DeleteItemFile accepted a nonexistent file id")
 	}
+}
+
+// Foundation carries an epub beside its audio, so the ebook endpoints have
+// something real to work on.
+func TestEbookEndpoints(t *testing.T) {
+	ctx := skipUnlessLive(t)
+	id := library(t)
+
+	var item *abs.Item
+	for _, candidate := range must(client.Items(ctx, id, abs.ItemsOptions{Limit: 100})).Results {
+		full := must(client.Item(ctx, candidate.ID))
+		for _, f := range full.LibraryFiles {
+			if f.FileType == "ebook" {
+				item = full
+			}
+		}
+		if item != nil {
+			break
+		}
+	}
+	if item == nil {
+		t.Skip("no ebook was scanned; the epub fixture may not have been picked up")
+	}
+
+	body, err := client.Ebook(ctx, item.ID, "")
+	if err != nil {
+		t.Fatalf("Ebook: %v", err)
+	}
+	head := make([]byte, 4)
+	n, _ := io.ReadFull(body, head)
+	_ = body.Close()
+	if n < 2 || head[0] != 'P' || head[1] != 'K' {
+		t.Errorf("the ebook does not start with a zip header: %q", head[:n])
+	}
+
+	var ebookFile string
+	for _, f := range item.LibraryFiles {
+		if f.FileType == "ebook" {
+			ebookFile = f.Ino
+		}
+	}
+	if err := client.SetEbookPrimary(ctx, item.ID, ebookFile, false); err != nil {
+		t.Errorf("SetEbookPrimary: %v", err)
+	}
+	if err := client.SetEbookPrimary(ctx, item.ID, ebookFile, true); err != nil {
+		t.Errorf("SetEbookPrimary back: %v", err)
+	}
+}
+
+// CreatePodcastsFromOPML subscribes to every feed in an OPML document. It runs
+// against the feed the proxy has recorded.
+func TestCreatePodcastsFromOPML(t *testing.T) {
+	ctx := skipUnlessLive(t)
+	id := podcastLibrary(t)
+
+	lib := must(client.Library(ctx, id))
+	if len(lib.Folders) == 0 {
+		t.Skip("no folder to create into")
+	}
+
+	before := must(client.Items(ctx, id, abs.ItemsOptions{Limit: 1, Minified: true})).Total
+	if err := client.CreatePodcastsFromOPML(ctx, id, lib.Folders[0].ID, []string{feedURL}, false); err != nil {
+		t.Fatalf("CreatePodcastsFromOPML: %v", err)
+	}
+
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		res, err := client.Items(ctx, id, abs.ItemsOptions{Limit: 100, Minified: true})
+		if err == nil && res.Total > before {
+			for i := range res.Results {
+				// the podcast the OPML names is new; take it away again
+				if res.Results[i].Title() != "Well There's Your Problem" && res.Results[i].Title() != "Behind the Bastards" {
+					t.Cleanup(func() { _ = client.DeleteItem(t.Context(), res.Results[i].ID, false) })
+				}
+			}
+			return
+		}
+		time.Sleep(2 * time.Second)
+	}
+	t.Errorf("the OPML feed never became a podcast: still %d items", before)
+}
+
+// Upload streams a file up and the server creates the item folder from it.
+func TestUploadCreatesAnItem(t *testing.T) {
+	ctx := skipUnlessLive(t)
+
+	data := os.Getenv("ABS_TEST_DATA")
+	if data == "" {
+		t.Skip("ABS_TEST_DATA is not set")
+	}
+	audio, err := os.ReadFile(filepath.Join(data, "fiction", "Isaac Asimov", "Foundation", "01.mp3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	scratch := must(client.CreateLibrary(ctx, abs.LibraryCreate{
+		Name: "SDK Upload Scratch", MediaType: "book",
+		Folders: []abs.Folder{{FullPath: "/nonfiction"}},
+	}))
+	t.Cleanup(func() {
+		_ = client.DeleteLibrary(t.Context(), scratch.ID)
+		_ = os.RemoveAll(filepath.Join(data, "nonfiction", "SDK Uploader"))
+	})
+
+	if err := client.Upload(ctx, scratch.ID, scratch.Folders[0].ID,
+		"SDK Uploaded", "SDK Uploader", "", "01.mp3", bytes.NewReader(audio)); err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+
+	// the upload writes the folder; prove that much before waiting on a scan
+	uploaded := filepath.Join(data, "nonfiction", "SDK Uploader", "SDK Uploaded")
+	if _, err := os.Stat(uploaded); err != nil {
+		t.Fatalf("Upload reported success but wrote nothing to %s: %v", uploaded, err)
+	}
+
+	if err := client.ScanLibrary(ctx, scratch.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(60 * time.Second)
+	for time.Now().Before(deadline) {
+		res, err := client.Items(ctx, scratch.ID, abs.ItemsOptions{Limit: 100, Minified: true})
+		if err == nil {
+			for i := range res.Results {
+				if res.Results[i].Title() == "SDK Uploaded" {
+					return
+				}
+			}
+		}
+		time.Sleep(2 * time.Second)
+	}
+	t.Error("the uploaded file never became a library item")
 }

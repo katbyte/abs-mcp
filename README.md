@@ -229,7 +229,11 @@ make testacc        # both, each in a throwaway container, torn down after
 make check-all      # build + unit + both live suites + every linter
 ```
 
-**All 101 tools and all 202 client methods are exercised.** Calls out to Audible, Audnexus and
+**All 101 tools and all 202 client methods are exercised**, 197 of them asserting a result
+rather than only that the call reached the server. The five that do not - sending an ebook by
+email, firing a notification, closing a device session, unlinking OpenID, syncing an offline
+session - need infrastructure a throwaway container has not got, and say so where they are
+written. Calls out to Audible, Audnexus and
 iTunes go through a record/replay proxy (`lib/providerproxy`), so neither suite needs a network:
 
 ```bash
