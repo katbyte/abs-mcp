@@ -13,7 +13,7 @@ func TestItemMethods(t *testing.T) {
 
 	item := must(client.Items(ctx, id, abs.ItemsOptions{Limit: 1})).Results[0]
 
-	// a batch fetch by id, which me_bookmarks uses to name its items
+	// a batch fetch by id, which user_bookmarks uses to name its items
 	batch := must(client.ItemsBatch(ctx, []string{item.ID}))
 	if len(batch) != 1 || batch[0].ID != item.ID {
 		t.Errorf("ItemsBatch = %d items", len(batch))

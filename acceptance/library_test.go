@@ -115,7 +115,7 @@ func TestLibraryRecent(t *testing.T) {
 	}
 }
 
-// library_filters is the per-library counterpart to server_tag_get.
+// library_filters is the per-library counterpart to server_tags.
 func TestLibraryFilters(t *testing.T) {
 	out := call(t, "library_filters", map[string]any{"library": "Fiction"})
 
@@ -123,7 +123,7 @@ func TestLibraryFilters(t *testing.T) {
 	// always current. Tags, narrators, publishers and languages come from a
 	// filter-data cache the server does not invalidate on an edit - not even
 	// on a rescan - so they lag behind item_edit and are not asserted here.
-	// server_tag_get reads the live tag and genre endpoints instead.
+	// server_tags reads the live tag and genre endpoints instead.
 	if authors := rows(t, out["authors"], "authors"); len(authors) != 3 {
 		t.Errorf("authors = %d, want 3", len(authors))
 	}

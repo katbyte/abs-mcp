@@ -8,11 +8,14 @@ package acceptance
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -39,7 +42,7 @@ var libraries = []libraryFixture{
 // bookFixture is a seeded item. Foundation is complete, The Expanse skips one book
 // and Otherland skips two, so a clean series, a single gap and a run of gaps
 // are all represented. Non-fiction carries no series but its own tags, which
-// is what makes server_tag_get (server-wide) differ from library_filters.
+// is what makes server_tags (server-wide) differ from library_filters.
 type bookFixture struct {
 	Title, Author, Narrator, Publisher, Year, Language string
 	Series                                             []string
@@ -121,6 +124,24 @@ func testMain(m *testing.M) {
 		}
 	}
 
+	// every registered tool must have been called by something above. Only a
+	// whole-suite run can say that, so a -run filter skips the check.
+	if f := flag.Lookup("test.run"); f == nil || f.Value.String() == "" {
+		missing, err := uncovered()
+		switch {
+		case err != nil:
+			fmt.Fprintln(os.Stderr, "\ntool coverage: could not list tools:", err)
+			code = 1
+		case len(missing) > 0:
+			fmt.Fprintf(os.Stderr, "\n%d registered tool(s) are never called by this suite:\n", len(missing))
+			for _, name := range missing {
+				fmt.Fprintln(os.Stderr, "  "+name)
+			}
+			fmt.Fprintln(os.Stderr, "every tool needs a test; add one or remove the tool")
+			code = 1
+		}
+	}
+
 	// drift is only collected under ABS_TEST_VERIFY: the providers still
 	// answer, but no longer in the shape the client decodes
 	if drifts := proxyDrifts; len(drifts) > 0 {
@@ -141,6 +162,34 @@ var (
 	proxyMisses []string
 	proxyDrifts []providerproxy.Drift
 )
+
+var (
+	calledMu sync.Mutex
+	called   = map[string]bool{}
+)
+
+// uncovered names the registered tools no test called. A tool that is only
+// listed is not tested, so adding one without a test fails the suite rather
+// than quietly widening the untested surface.
+func uncovered() ([]string, error) {
+	res, err := session.ListTools(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	calledMu.Lock()
+	defer calledMu.Unlock()
+
+	var missing []string
+	for _, tool := range res.Tools {
+		if !called[tool.Name] {
+			missing = append(missing, tool.Name)
+		}
+	}
+	slices.Sort(missing)
+
+	return missing, nil
+}
 
 // startProxy brings up the record/replay proxy the container's HTTP_PROXY
 // already points at. Audiobookshelf makes the provider calls, not us, so this
@@ -305,8 +354,13 @@ func waitForItems(library string, want int) error {
 	return fmt.Errorf("library %s never reached %d items (%s)", library, want, last)
 }
 
-// invoke calls a tool and returns its structured result.
+// invoke calls a tool and returns its structured result. Every tool call in
+// the suite comes through here, so this is also where coverage is recorded.
 func invoke(name string, args map[string]any) (map[string]any, error) {
+	calledMu.Lock()
+	called[name] = true
+	calledMu.Unlock()
+
 	res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", name, err)

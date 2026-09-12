@@ -132,7 +132,7 @@ comes back as an error listing the candidates.
 
 | Resource | Tools |
 |---|---|
-| server | `server_info`, `server_stats`, `server_tasks`, `server_sessions`, `server_backups`, `server_backup_create`, `server_tag_get`, `server_tag_rename` |
+| server | `server_info`, `server_stats`, `server_tasks`, `server_sessions`, `server_backups`, `server_backup_create`, `server_tags`, `server_tag_rename` |
 | libraries | `library_list`, `library_get`, `library_create`, `library_edit`, `library_search`, `library_items` (the server's own filters: genre, tag, author, series, narrator, progress, missing metadata, issues...), `library_recent`, `library_filters`, `library_stats`, `library_scan`, `library_match_all` |
 | audits | `audit_all` (every per-item audit in one sweep - start here after a scan), `audit_missing` (field: cover, description, narrator, series, author, genres, year, publisher, language, chapters), `audit_unmatched`, `audit_issues`, `audit_no_audio`, `audit_path`, `audit_author_as_title`, `audit_single_chapter`, `audit_stale_feed`, `audit_no_episodes`, `audit_duplicates`, `audit_series_gaps`, `audit_terminology` / `audit_terminology_rename`, `audit_cover_ratio`, `audit_author_missing_image` |
 | items | `item_get`, `item_chapters`, `item_files`, `item_edit`, `item_batch_edit` (same fields across many books), `item_rescan`, `item_embed_metadata` |
@@ -142,13 +142,12 @@ comes back as an error listing the candidates.
 | narrators | `narrator_list`, `narrator_edit` (rename to merge, or remove) |
 | collections | `collection_list`, `collection_get`, `collection_create`, `collection_edit`, `collection_books_edit` (add or remove), `collection_delete` |
 | playlists | `playlist_list`, `playlist_get`, `playlist_create` (also from a collection), `playlist_edit`, `playlist_entries_edit` (add or remove), `playlist_delete` |
-| me (the API key's user) | `me_get`, `me_in_progress`, `me_progress_get`, `me_progress_set`, `me_progress_remove`, `me_bookmarks`, `me_bookmark_edit` (add or remove), `me_history`, `me_stats` (all-time or year in review) |
 | podcasts | `podcast_episodes`, `podcast_episode_get`, `podcast_episode_edit`, `podcast_check_new`, `podcast_feed_episodes`, `podcast_episode_download`, `podcast_downloads`, `podcast_recent`, `podcast_search`, `podcast_add`, `podcast_settings` |
-| users (admin) | `user_list`, `user_get`, `user_history`, `user_stats` |
+| users | `user_get`, `user_in_progress`, `user_progress_get`, `user_progress_set`, `user_progress_remove`, `user_bookmarks`, `user_bookmark_edit` (add or remove), `user_history`, `user_stats` (all-time or year in review), `user_list` (admin) |
 
 `item_delete`, `podcast_episode_delete`, `author_delete` and `library_issues_remove` are only
 registered when `--enable-delete` / `ABS_ENABLE_DELETE` is set. `--read-only` registers the
-58 read tools and nothing else, so a write tool is absent from `tools/list` rather than refused
+55 read tools and nothing else, so a write tool is absent from `tools/list` rather than refused
 when called.
 
 ### Choosing which tools load
@@ -156,11 +155,11 @@ when called.
 A model picks the right tool more reliably from eight than from eighty. `--allow-tools` and
 `--deny-tools` take comma-separated tool names, globs with a leading or trailing `*`, or the
 `essential` preset (`library_list`, `library_search`, `library_items`, `item_get`,
-`item_chapters`, `me_in_progress`, `me_progress_get`, `me_progress_set`):
+`item_chapters`, `user_in_progress`, `user_progress_get`, `user_progress_set`):
 
 ```sh
 ABS_ALLOW_TOOLS=essential
-ABS_ALLOW_TOOLS=library_*,item_get,me_*
+ABS_ALLOW_TOOLS=library_*,item_get,user_*
 ABS_DENY_TOOLS=*_delete,server_*
 ```
 
@@ -229,11 +228,13 @@ make testacc        # both, each in a throwaway container, torn down after
 make check-all      # build + unit + both live suites + every linter
 ```
 
-**All 101 tools and all 202 client methods are exercised**, 197 of them asserting a result
+**All 94 tools and all 204 client methods are exercised**, 199 of them asserting a result
 rather than only that the call reached the server. The five that do not - sending an ebook by
 email, firing a notification, closing a device session, unlinking OpenID, syncing an offline
 session - need infrastructure a throwaway container has not got, and say so where they are
-written. Calls out to Audible, Audnexus and
+written. Tool coverage is enforced rather than claimed: the acceptance suite records every tool
+it calls and fails if the server registered one nothing called, so a new tool cannot ship
+untested. Calls out to Audible, Audnexus and
 iTunes go through a record/replay proxy (`lib/providerproxy`), so neither suite needs a network:
 
 ```bash

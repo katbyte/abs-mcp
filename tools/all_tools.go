@@ -39,9 +39,9 @@ var EssentialTools = []string{
 	"library_items",
 	"item_get",
 	"item_chapters",
-	"me_in_progress",
-	"me_progress_get",
-	"me_progress_set",
+	"user_in_progress",
+	"user_progress_get",
+	"user_progress_set",
 }
 
 type toolKind int
@@ -104,7 +104,6 @@ func RegisterAll(server *mcp.Server, client *abs.Client, opts Options) ([]string
 	registerSeriesTools(r)
 	registerCollectionTools(r)
 	registerPlaylistTools(r)
-	registerMeTools(r)
 	registerPodcastTools(r)
 	registerUserTools(r)
 

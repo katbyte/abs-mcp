@@ -13,7 +13,7 @@ type progressSummary struct {
 	LastUpdate  string `json:"last_update,omitempty"`
 	FinishedAt  string `json:"finished_at,omitempty"`
 	Hidden      bool   `json:"hidden_from_continue,omitempty"`
-	ProgressID  string `json:"progress_id,omitempty"          jsonschema:"pass to me_progress_remove"`
+	ProgressID  string `json:"progress_id,omitempty"          jsonschema:"pass to user_progress_remove"`
 }
 
 func progressOf(p *abs.MediaProgress) *progressSummary {

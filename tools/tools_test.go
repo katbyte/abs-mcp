@@ -77,16 +77,16 @@ func TestRegisterAllFilters(t *testing.T) {
 		t.Errorf("essential = %v", got)
 	}
 
-	got = register(t, Options{Allow: []string{"library_*,me_get"}, Deny: []string{"*_scan"}})
+	got = register(t, Options{Allow: []string{"library_*,user_get"}, Deny: []string{"*_scan"}})
 	for _, name := range got {
-		if !strings.HasPrefix(name, "library_") && name != "me_get" {
+		if !strings.HasPrefix(name, "library_") && name != "user_get" {
 			t.Errorf("unexpected %s", name)
 		}
 		if name == "library_scan" {
 			t.Error("denied tool registered")
 		}
 	}
-	if !slices.Contains(got, "library_list") || !slices.Contains(got, "me_get") {
+	if !slices.Contains(got, "library_list") || !slices.Contains(got, "user_get") {
 		t.Errorf("allow list not honoured: %v", got)
 	}
 

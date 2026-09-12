@@ -143,7 +143,7 @@ func registerServerTools(r *registry) {
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "server_sessions",
-		Description: "What is playing right now: open playback sessions across all users with title, position and device. Admin only. For history use user_history or me_history.",
+		Description: "What is playing right now: open playback sessions across all users with title, position and device. Admin only. For history use user_history.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, sessionsOut, error) {
 		sessions, err := client.OpenSessions(ctx)
 		if err != nil {
@@ -207,7 +207,7 @@ func registerServerTools(r *registry) {
 		Genres []string `json:"genres,omitempty"`
 	}
 	add(r, readTool, &mcp.Tool{
-		Name:        "server_tag_get",
+		Name:        "server_tags",
 		Description: "Every tag and genre in use across all libraries: the server-wide vocabulary to normalize against before merging with server_tag_rename. Admin only. library_filters is the per-library equivalent.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in tagsIn) (*mcp.CallToolResult, tagsOut, error) {
 		var out tagsOut
