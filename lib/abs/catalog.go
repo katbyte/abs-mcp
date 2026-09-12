@@ -2,6 +2,7 @@ package abs
 
 import (
 	"context"
+	"net/http"
 	"net/url"
 )
 
@@ -247,4 +248,121 @@ func (c *Client) RemoveFromPlaylist(ctx context.Context, id string, items []Play
 		return nil, err
 	}
 	return &p, nil
+}
+
+// Feed is an RSS feed the server is publishing for an item, collection or
+// series.
+type Feed struct {
+	ID         string `json:"id"`
+	Slug       string `json:"slug"`
+	EntityType string `json:"entityType"`
+	EntityID   string `json:"entityId"`
+	FeedURL    string `json:"feedUrl"`
+	ItemID     string `json:"itemId"`
+	Meta       struct {
+		Title       string `json:"title"`
+		Description string `json:"description"`
+		Author      string `json:"author"`
+		ImageURL    string `json:"imageUrl"`
+	} `json:"meta"`
+}
+
+// Feeds lists the RSS feeds the server is currently publishing (admin only).
+func (c *Client) Feeds(ctx context.Context) ([]Feed, error) {
+	var resp struct {
+		Feeds []Feed `json:"feeds"`
+	}
+	if err := c.get(ctx, "/api/feeds", nil, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Feeds, nil
+}
+
+// OpenItemFeed starts publishing an RSS feed for one item. slug is the feed's
+// path segment; serverAddress is the url the feed advertises, which has to be
+// reachable by whatever reads it.
+func (c *Client) OpenItemFeed(ctx context.Context, itemID, slug, serverAddress string) (*Feed, error) {
+	return c.openFeed(ctx, "/api/feeds/item/"+url.PathEscape(itemID)+"/open", slug, serverAddress)
+}
+
+// OpenCollectionFeed publishes a feed for a whole collection.
+func (c *Client) OpenCollectionFeed(ctx context.Context, collectionID, slug, serverAddress string) (*Feed, error) {
+	return c.openFeed(ctx, "/api/feeds/collection/"+url.PathEscape(collectionID)+"/open", slug, serverAddress)
+}
+
+// OpenSeriesFeed publishes a feed for a whole series.
+func (c *Client) OpenSeriesFeed(ctx context.Context, seriesID, slug, serverAddress string) (*Feed, error) {
+	return c.openFeed(ctx, "/api/feeds/series/"+url.PathEscape(seriesID)+"/open", slug, serverAddress)
+}
+
+func (c *Client) openFeed(ctx context.Context, path, slug, serverAddress string) (*Feed, error) {
+	var resp struct {
+		Feed Feed `json:"feed"`
+	}
+	body := map[string]string{"slug": slug, "serverAddress": serverAddress}
+	if err := c.post(ctx, path, nil, body, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Feed, nil
+}
+
+// CloseFeed stops publishing a feed.
+func (c *Client) CloseFeed(ctx context.Context, feedID string) error {
+	return c.post(ctx, "/api/feeds/"+url.PathEscape(feedID)+"/close", nil, nil, nil)
+}
+
+// AddBookToCollection adds a single book. AddToCollection is the batch form.
+func (c *Client) AddBookToCollection(ctx context.Context, id, bookID string) (*Collection, error) {
+	var col Collection
+	if err := c.post(ctx, "/api/collections/"+url.PathEscape(id)+"/book", nil, map[string]string{"id": bookID}, &col); err != nil {
+		return nil, err
+	}
+	return &col, nil
+}
+
+// RemoveBookFromCollection removes a single book. RemoveFromCollection is the
+// batch form.
+func (c *Client) RemoveBookFromCollection(ctx context.Context, id, bookID string) (*Collection, error) {
+	var col Collection
+	path := "/api/collections/" + url.PathEscape(id) + "/book/" + url.PathEscape(bookID)
+	if err := c.do(ctx, http.MethodDelete, path, nil, nil, &col); err != nil {
+		return nil, err
+	}
+	return &col, nil
+}
+
+// AddItemToPlaylist appends a single entry. AddToPlaylist is the batch form.
+func (c *Client) AddItemToPlaylist(ctx context.Context, id string, entry PlaylistEntry) (*Playlist, error) {
+	var pl Playlist
+	if err := c.post(ctx, "/api/playlists/"+url.PathEscape(id)+"/item", nil, entry, &pl); err != nil {
+		return nil, err
+	}
+	return &pl, nil
+}
+
+// RemoveItemFromPlaylist removes a single entry. RemoveFromPlaylist is the
+// batch form. episodeID may be empty for a book.
+func (c *Client) RemoveItemFromPlaylist(ctx context.Context, id, itemID, episodeID string) (*Playlist, error) {
+	path := "/api/playlists/" + url.PathEscape(id) + "/item/" + url.PathEscape(itemID)
+	if episodeID != "" {
+		path += "/" + url.PathEscape(episodeID)
+	}
+	var pl Playlist
+	if err := c.do(ctx, http.MethodDelete, path, nil, nil, &pl); err != nil {
+		return nil, err
+	}
+	return &pl, nil
+}
+
+// SearchAuthors looks an author up on the provider by name, without applying
+// anything. MatchAuthor is the form that writes the result to a record.
+func (c *Client) SearchAuthors(ctx context.Context, query string) ([]Author, error) {
+	q := url.Values{"q": {query}}
+	var resp struct {
+		Results []Author `json:"results"`
+	}
+	if err := c.get(ctx, "/api/search/authors", q, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Results, nil
 }

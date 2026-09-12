@@ -2,6 +2,8 @@ package abs
 
 import (
 	"context"
+	"encoding/base64"
+	"net/http"
 	"net/url"
 	"strconv"
 )
@@ -259,4 +261,117 @@ func (c *Client) RenameGenre(ctx context.Context, genre, newGenre string) (int, 
 		return 0, err
 	}
 	return resp.NumItemsUpdated, nil
+}
+
+// DeleteTag removes a tag from every item that carries it, across all
+// libraries (admin only). Returns how many items were updated. Unlike
+// RenameTag this drops the value entirely, which is what a placeholder such as
+// "XXX" needs rather than a merge.
+func (c *Client) DeleteTag(ctx context.Context, tag string) (int, error) {
+	var resp struct {
+		NumItemsUpdated int `json:"numItemsUpdated"`
+	}
+	if err := c.do(ctx, http.MethodDelete, "/api/tags/"+vocabularyID(tag), nil, nil, &resp); err != nil {
+		return 0, err
+	}
+	return resp.NumItemsUpdated, nil
+}
+
+// DeleteGenre removes a genre from every item that carries it (admin only).
+func (c *Client) DeleteGenre(ctx context.Context, genre string) (int, error) {
+	var resp struct {
+		NumItemsUpdated int `json:"numItemsUpdated"`
+	}
+	if err := c.do(ctx, http.MethodDelete, "/api/genres/"+vocabularyID(genre), nil, nil, &resp); err != nil {
+		return 0, err
+	}
+	return resp.NumItemsUpdated, nil
+}
+
+// vocabularyID addresses a tag or genre the way the server does: base64 of the
+// value, percent-encoded into the path, the same encoding the narrator
+// endpoints use.
+func vocabularyID(value string) string {
+	return url.PathEscape(base64.StdEncoding.EncodeToString([]byte(value)))
+}
+
+// ServerYearStats returns the whole server's year in review, as opposed to
+// YearStats which is the API key user's own.
+func (c *Client) ServerYearStats(ctx context.Context, year int) (*YearStats, error) {
+	var s YearStats
+	if err := c.get(ctx, "/api/stats/year/"+strconv.Itoa(year), nil, &s); err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+// DeleteBackup removes a backup file (admin only) and returns the remaining
+// backups.
+func (c *Client) DeleteBackup(ctx context.Context, id string) ([]Backup, error) {
+	var resp struct {
+		Backups []Backup `json:"backups"`
+	}
+	if err := c.do(ctx, http.MethodDelete, "/api/backups/"+url.PathEscape(id), nil, nil, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Backups, nil
+}
+
+// SetBackupPath changes where backups are written (admin only).
+func (c *Client) SetBackupPath(ctx context.Context, path string) error {
+	return c.patch(ctx, "/api/backups/path", map[string]string{"path": path}, nil)
+}
+
+// UserCreate holds the fields POST /api/users accepts. Type is the account
+// kind: "user", "guest" or "admin".
+type UserCreate struct {
+	Username            string          `json:"username"`
+	Password            string          `json:"password"`
+	Type                string          `json:"type,omitempty"`
+	Email               string          `json:"email,omitempty"`
+	IsActive            *bool           `json:"isActive,omitempty"`
+	Permissions         map[string]bool `json:"permissions,omitempty"`
+	LibrariesAccessible []string        `json:"librariesAccessible,omitempty"`
+	ItemTagsSelected    []string        `json:"itemTagsSelected,omitempty"`
+}
+
+// CreateUser adds an account (admin only).
+func (c *Client) CreateUser(ctx context.Context, in UserCreate) (*User, error) {
+	var resp struct {
+		User User `json:"user"`
+	}
+	if err := c.post(ctx, "/api/users", nil, in, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.User, nil
+}
+
+// UserUpdate holds the editable account fields; the zero value changes
+// nothing. Id, password hash, token and bookmarks cannot be set here.
+type UserUpdate struct {
+	Username            *string         `json:"username,omitempty"`
+	Password            *string         `json:"password,omitempty"`
+	Type                *string         `json:"type,omitempty"`
+	Email               *string         `json:"email,omitempty"`
+	IsActive            *bool           `json:"isActive,omitempty"`
+	Permissions         map[string]bool `json:"permissions,omitempty"`
+	LibrariesAccessible []string        `json:"librariesAccessible,omitempty"`
+	ItemTagsSelected    []string        `json:"itemTagsSelected,omitempty"`
+}
+
+// UpdateUser edits an account (admin only).
+func (c *Client) UpdateUser(ctx context.Context, id string, upd UserUpdate) (*User, error) {
+	var resp struct {
+		User User `json:"user"`
+	}
+	if err := c.patch(ctx, "/api/users/"+url.PathEscape(id), upd, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.User, nil
+}
+
+// DeleteUser removes an account (admin only). The root account cannot be
+// deleted.
+func (c *Client) DeleteUser(ctx context.Context, id string) error {
+	return c.del(ctx, "/api/users/"+url.PathEscape(id), nil)
 }

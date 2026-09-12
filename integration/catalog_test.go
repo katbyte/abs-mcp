@@ -169,3 +169,14 @@ func TestCatalogueMethods(t *testing.T) {
 		t.Errorf("series description = %q", got.Description)
 	}
 }
+
+// SearchAuthors looks a name up on the provider without writing anything,
+// where MatchAuthor applies the result. It goes through the proxy.
+func TestSearchAuthors(t *testing.T) {
+	ctx := skipUnlessLive(t)
+	library(t)
+
+	if _, err := client.SearchAuthors(ctx, "Isaac Asimov"); err != nil {
+		t.Errorf("SearchAuthors: %v", err)
+	}
+}

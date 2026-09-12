@@ -190,9 +190,11 @@ client, err := abs.New("http://nas:13378", os.Getenv("ABS_TOKEN"))
 items, err := client.Items(ctx, libraryID, abs.ItemsOptions{Limit: 50})
 ```
 
-It has 105 methods over ~72 endpoints, covering libraries, items, authors, series, collections,
-playlists, listening progress, bookmarks, sessions, podcasts, provider search, tags, tasks and
-backups.
+It has 137 methods covering **every Audiobookshelf endpoint in scope** - libraries, items,
+authors, series, narrators, collections, playlists, listening progress, bookmarks, sessions,
+podcasts, provider search, RSS feeds, tags, genres, tasks, backups and user administration.
+`make apicheck` reads the route table out of the Audiobookshelf source and reports what is
+covered, what is deliberately excluded and what is missing.
 Audiobookshelf publishes no OpenAPI spec and its
 [public API docs say they are unmaintained](https://api.audiobookshelf.org), so the types here
 are written against the server source (see [docs/README.md](docs/README.md)) and then **proved
@@ -224,8 +226,7 @@ make testacc        # both, each in a throwaway container, torn down after
 make check-all      # build + unit + both live suites + every linter
 ```
 
-**All 101 tools are exercised**, along with 76 of the client's 105 methods - the rest are the
-provider-backed calls, which the tool suite covers instead. Calls out to Audible, Audnexus and
+**All 101 tools and all 137 client methods are exercised.** Calls out to Audible, Audnexus and
 iTunes go through a record/replay proxy (`lib/providerproxy`), so neither suite needs a network:
 
 ```bash

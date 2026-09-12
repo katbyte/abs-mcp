@@ -425,3 +425,65 @@ func SplitCSV(s string) []string {
 	}
 	return out
 }
+
+// RemoveLibraryMetadata deletes the metadata files the server wrote into the
+// library's item folders (admin only). kind is "json" or "abs"; empty removes
+// both.
+func (c *Client) RemoveLibraryMetadata(ctx context.Context, libraryID, kind string) error {
+	q := url.Values{}
+	if kind != "" {
+		q.Set("ext", kind)
+	}
+	return c.post(ctx, "/api/libraries/"+url.PathEscape(libraryID)+"/remove-metadata", q, nil, nil)
+}
+
+// ReorderLibraries sets the order libraries are shown in. The ids are given in
+// the order wanted; the server is sent the display order it expects, which is
+// an array of objects rather than bare ids (admin only).
+func (c *Client) ReorderLibraries(ctx context.Context, ids []string) ([]Library, error) {
+	type order struct {
+		ID       string `json:"id"`
+		NewOrder int    `json:"newOrder"`
+	}
+	body := make([]order, 0, len(ids))
+	for i, id := range ids {
+		body = append(body, order{ID: id, NewOrder: i + 1})
+	}
+
+	var resp struct {
+		Libraries []Library `json:"libraries"`
+	}
+	if err := c.post(ctx, "/api/libraries/order", nil, body, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Libraries, nil
+}
+
+// LibrarySeries returns one series with its books, from inside a library.
+// Series looks the same record up by id alone.
+func (c *Client) LibrarySeries(ctx context.Context, libraryID, seriesID string) (*Series, error) {
+	var s Series
+	path := "/api/libraries/" + url.PathEscape(libraryID) + "/series/" + url.PathEscape(seriesID)
+	if err := c.get(ctx, path, url.Values{"include": {"progress,rssfeed"}}, &s); err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+// PodcastTitles lists the titles of the podcasts in a library, which is far
+// cheaper than listing the items when all you need is what is subscribed.
+func (c *Client) PodcastTitles(ctx context.Context, libraryID string) ([]string, error) {
+	var resp struct {
+		Podcasts []struct {
+			Title string `json:"title"`
+		} `json:"podcasts"`
+	}
+	if err := c.get(ctx, "/api/libraries/"+url.PathEscape(libraryID)+"/podcast-titles", nil, &resp); err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(resp.Podcasts))
+	for _, p := range resp.Podcasts {
+		out = append(out, p.Title)
+	}
+	return out, nil
+}

@@ -101,3 +101,35 @@ func TestPlaylistMethods(t *testing.T) {
 		t.Errorf("after remove = %d entries, want 1", len(removed.Items))
 	}
 }
+
+// The single-item forms, alongside the batch forms above.
+func TestSingleItemCollectionAndPlaylist(t *testing.T) {
+	ctx := skipUnlessLive(t)
+	id := library(t)
+
+	items := must(client.Items(ctx, id, abs.ItemsOptions{Limit: 2})).Results
+
+	col := must(client.CreateCollection(ctx, id, "SDK Single", "", []string{items[0].ID}))
+	t.Cleanup(func() { _ = client.DeleteCollection(t.Context(), col.ID) })
+
+	added := must(client.AddBookToCollection(ctx, col.ID, items[1].ID))
+	if len(added.Books) != 2 {
+		t.Errorf("after AddBookToCollection = %d books, want 2", len(added.Books))
+	}
+	removed := must(client.RemoveBookFromCollection(ctx, col.ID, items[1].ID))
+	if len(removed.Books) != 1 {
+		t.Errorf("after RemoveBookFromCollection = %d books, want 1", len(removed.Books))
+	}
+
+	pl := must(client.CreatePlaylist(ctx, id, "SDK Single Playlist", "", []abs.PlaylistEntry{{LibraryItemID: items[0].ID}}))
+	t.Cleanup(func() { _ = client.DeletePlaylist(t.Context(), pl.ID) })
+
+	plAdded := must(client.AddItemToPlaylist(ctx, pl.ID, abs.PlaylistEntry{LibraryItemID: items[1].ID}))
+	if len(plAdded.Items) != 2 {
+		t.Errorf("after AddItemToPlaylist = %d entries, want 2", len(plAdded.Items))
+	}
+	plRemoved := must(client.RemoveItemFromPlaylist(ctx, pl.ID, items[1].ID, ""))
+	if len(plRemoved.Items) != 1 {
+		t.Errorf("after RemoveItemFromPlaylist = %d entries, want 1", len(plRemoved.Items))
+	}
+}

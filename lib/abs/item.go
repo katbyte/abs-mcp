@@ -305,3 +305,71 @@ func (c *Client) SearchChapters(ctx context.Context, asin, region string) ([]Cha
 	}
 	return out, nil
 }
+
+// BatchDelete removes several items' records at once (requires the delete
+// permission). Files on disk are untouched.
+func (c *Client) BatchDelete(ctx context.Context, ids []string) error {
+	return c.post(ctx, "/api/items/batch/delete", nil, map[string][]string{"libraryItemIds": ids}, nil)
+}
+
+// BatchScan rescans several items' folders (admin only). Returns immediately;
+// the scans run in the background.
+func (c *Client) BatchScan(ctx context.Context, ids []string) error {
+	return c.post(ctx, "/api/items/batch/scan", nil, map[string][]string{"libraryItemIds": ids}, nil)
+}
+
+// TrackOrder is one audio file in an item's play order, identified by its
+// inode as the server reports it in LibraryFiles.
+type TrackOrder struct {
+	Ino     string `json:"ino"`
+	Exclude bool   `json:"exclude"`
+}
+
+// UpdateTracks sets the play order of an item's audio files, and which of them
+// to exclude. This is the fix for a multi-file book whose chapters play out of
+// order.
+func (c *Client) UpdateTracks(ctx context.Context, id string, order []TrackOrder) (*Item, error) {
+	var it Item
+	body := map[string]any{"orderedFileData": order}
+	if err := c.patch(ctx, "/api/items/"+url.PathEscape(id)+"/tracks", body, &it); err != nil {
+		return nil, err
+	}
+	return &it, nil
+}
+
+// MetadataObject returns the tags the server would write into an item's audio
+// files, without writing them: the dry run for EmbedMetadata.
+func (c *Client) MetadataObject(ctx context.Context, id string) (map[string]any, error) {
+	var out map[string]any
+	if err := c.get(ctx, "/api/items/"+url.PathEscape(id)+"/metadata-object", nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// BatchEmbedMetadata writes metadata and chapters into several items' audio
+// files (admin only). Runs in the background.
+func (c *Client) BatchEmbedMetadata(ctx context.Context, ids []string, backup bool) error {
+	q := url.Values{}
+	if backup {
+		q.Set("backup", "1")
+	}
+	return c.post(ctx, "/api/tools/batch/embed-metadata", q, map[string][]string{"libraryItemIds": ids}, nil)
+}
+
+// EncodeM4B merges an item's audio files into a single m4b (admin only). Runs
+// in the background; poll Tasks for completion.
+func (c *Client) EncodeM4B(ctx context.Context, id, bitrate, channels, codec string) error {
+	q := url.Values{}
+	for k, v := range map[string]string{"bitrate": bitrate, "channels": channels, "codec": codec} {
+		if v != "" {
+			q.Set(k, v)
+		}
+	}
+	return c.post(ctx, "/api/tools/item/"+url.PathEscape(id)+"/encode-m4b", q, nil, nil)
+}
+
+// CancelEncodeM4B stops an m4b encode that is still running.
+func (c *Client) CancelEncodeM4B(ctx context.Context, id string) error {
+	return c.del(ctx, "/api/tools/item/"+url.PathEscape(id)+"/encode-m4b", nil)
+}

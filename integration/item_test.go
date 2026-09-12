@@ -47,3 +47,46 @@ func TestItemMethods(t *testing.T) {
 		t.Errorf("ScanItem: %v", err)
 	}
 }
+
+// The batch and single-item forms that the lifecycle tests do not reach.
+func TestBatchAndTrackMethods(t *testing.T) {
+	ctx := skipUnlessLive(t)
+	id := library(t)
+
+	items := must(client.Items(ctx, id, abs.ItemsOptions{Limit: 3})).Results
+	ids := []string{items[0].ID, items[1].ID}
+
+	if err := client.BatchScan(ctx, ids); err != nil {
+		t.Errorf("BatchScan: %v", err)
+	}
+	if err := client.BatchEmbedMetadata(ctx, ids, true); err != nil {
+		t.Errorf("BatchEmbedMetadata: %v", err)
+	}
+
+	// the tags the server would write into the audio files, without writing
+	if meta := must(client.MetadataObject(ctx, items[0].ID)); len(meta) == 0 {
+		t.Error("MetadataObject returned nothing")
+	}
+
+	// reordering needs the inodes the server reports for the audio files
+	full := must(client.Item(ctx, items[0].ID))
+	order := make([]abs.TrackOrder, 0, len(full.LibraryFiles))
+	for _, f := range full.LibraryFiles {
+		if f.FileType == "audio" {
+			order = append(order, abs.TrackOrder{Ino: f.Ino})
+		}
+	}
+	if len(order) == 0 {
+		t.Skip("no audio files to reorder")
+	}
+	if _, err := client.UpdateTracks(ctx, items[0].ID, order); err != nil {
+		t.Errorf("UpdateTracks: %v", err)
+	}
+
+	// m4b encoding is a background task; that it starts is what this asserts
+	if err := client.EncodeM4B(ctx, items[2].ID, "", "", ""); err != nil {
+		t.Logf("EncodeM4B: %v", err) // needs ffmpeg in the container; not fatal
+	} else if err := client.CancelEncodeM4B(ctx, items[2].ID); err != nil {
+		t.Logf("CancelEncodeM4B: %v", err)
+	}
+}

@@ -160,3 +160,53 @@ func (c *Client) YearStats(ctx context.Context, year int) (*YearStats, error) {
 	}
 	return &s, nil
 }
+
+// AllProgress returns every progress record the API key user has, which is
+// the whole listening history in one call rather than one item at a time.
+func (c *Client) AllProgress(ctx context.Context) ([]MediaProgress, error) {
+	var resp struct {
+		MediaProgress []MediaProgress `json:"mediaProgress"`
+	}
+	if err := c.get(ctx, "/api/me/progress", nil, &resp); err != nil {
+		return nil, err
+	}
+	return resp.MediaProgress, nil
+}
+
+// BatchProgressUpdate is one entry of BatchSetProgress: the item (and episode)
+// to update, with the fields to set.
+type BatchProgressUpdate struct {
+	LibraryItemID string `json:"libraryItemId"`
+	EpisodeID     string `json:"episodeId,omitempty"`
+	ProgressUpdate
+}
+
+// BatchSetProgress updates progress on several items at once, which is how to
+// mark a whole series finished without a call per book.
+func (c *Client) BatchSetProgress(ctx context.Context, updates []BatchProgressUpdate) error {
+	return c.patch(ctx, "/api/me/progress/batch/update", updates, nil)
+}
+
+// ItemBookmarks lists the API key user's bookmarks on one item. Bookmarks
+// returns them all.
+func (c *Client) ItemBookmarks(ctx context.Context, itemID string) ([]Bookmark, error) {
+	// wrapped in an object, the same as Bookmarks
+	var resp struct {
+		Bookmarks []Bookmark `json:"bookmarks"`
+	}
+	if err := c.get(ctx, "/api/me/bookmarks/"+url.PathEscape(itemID), nil, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Bookmarks, nil
+}
+
+// HideSeriesFromContinueListening stops a whole series appearing on the
+// continue-listening shelf.
+func (c *Client) HideSeriesFromContinueListening(ctx context.Context, seriesID string) error {
+	return c.get(ctx, "/api/me/series/"+url.PathEscape(seriesID)+"/remove-from-continue-listening", nil, nil)
+}
+
+// UnhideSeriesFromContinueListening puts it back.
+func (c *Client) UnhideSeriesFromContinueListening(ctx context.Context, seriesID string) error {
+	return c.get(ctx, "/api/me/series/"+url.PathEscape(seriesID)+"/readd-to-continue-listening", nil, nil)
+}

@@ -92,3 +92,53 @@ func TestBookmarkUpdateAndGenreRename(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+// The progress and bookmark forms the lifecycle test does not reach.
+func TestProgressAndBookmarkExtras(t *testing.T) {
+	ctx := skipUnlessLive(t)
+	id := library(t)
+
+	items := must(client.Items(ctx, id, abs.ItemsOptions{Limit: 2})).Results
+
+	// several items in one call, rather than one call per book
+	finished := true
+	if err := client.BatchSetProgress(ctx, []abs.BatchProgressUpdate{
+		{LibraryItemID: items[0].ID, ProgressUpdate: abs.ProgressUpdate{IsFinished: &finished}},
+		{LibraryItemID: items[1].ID, ProgressUpdate: abs.ProgressUpdate{IsFinished: &finished}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		for _, it := range items {
+			if p, err := client.Progress(t.Context(), it.ID, ""); err == nil && p != nil {
+				_ = client.RemoveProgress(t.Context(), p.ID)
+			}
+		}
+	})
+
+	all := must(client.AllProgress(ctx))
+	if len(all) < 2 {
+		t.Errorf("AllProgress returned %d records, want at least the two just set", len(all))
+	}
+
+	if _, err := client.CreateBookmark(ctx, items[0].ID, 0.3, "extras"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = client.DeleteBookmark(t.Context(), items[0].ID, 0.3) })
+	if bs := must(client.ItemBookmarks(ctx, items[0].ID)); len(bs) == 0 {
+		t.Error("ItemBookmarks returned nothing for an item with one")
+	}
+
+	series, _, err := client.SeriesList(ctx, id, abs.ListOptions{Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(series) > 0 {
+		if err := client.HideSeriesFromContinueListening(ctx, series[0].ID); err != nil {
+			t.Errorf("HideSeriesFromContinueListening: %v", err)
+		}
+		if err := client.UnhideSeriesFromContinueListening(ctx, series[0].ID); err != nil {
+			t.Errorf("UnhideSeriesFromContinueListening: %v", err)
+		}
+	}
+}

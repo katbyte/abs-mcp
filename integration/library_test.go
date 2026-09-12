@@ -252,3 +252,50 @@ func scanned(t *testing.T, libraryID string) string {
 
 	return fmt.Sprintf("%d of them: %s", res.Total, strings.Join(titles, ", "))
 }
+
+// The library-scoped reads and the ordering call.
+func TestLibraryExtras(t *testing.T) {
+	ctx := skipUnlessLive(t)
+	id := library(t)
+
+	series, _, err := client.SeriesList(ctx, id, abs.ListOptions{Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(series) > 0 {
+		one := must(client.LibrarySeries(ctx, id, series[0].ID))
+		if one.Name != series[0].Name {
+			t.Errorf("LibrarySeries = %q, want %q", one.Name, series[0].Name)
+		}
+	}
+
+	// the podcast library has titles; the book library has none
+	if titles := must(client.PodcastTitles(ctx, podcastLibrary(t))); len(titles) != 2 {
+		t.Errorf("PodcastTitles = %v, want the two shows", titles)
+	}
+
+	libs := must(client.Libraries(ctx))
+	ids := make([]string, 0, len(libs))
+	for i := range libs {
+		ids = append(ids, libs[i].ID)
+	}
+	if _, err := client.ReorderLibraries(ctx, ids); err != nil {
+		t.Errorf("ReorderLibraries: %v", err)
+	}
+}
+
+// RemoveLibraryMetadata deletes metadata files the server wrote beside the
+// audio, so it runs on the scratch library rather than the shared fixture.
+func TestRemoveLibraryMetadata(t *testing.T) {
+	ctx := skipUnlessLive(t)
+
+	scratch := must(client.CreateLibrary(ctx, abs.LibraryCreate{
+		Name: "SDK Metadata Scratch", MediaType: "book",
+		Folders: []abs.Folder{{FullPath: "/nonfiction"}},
+	}))
+	t.Cleanup(func() { _ = client.DeleteLibrary(t.Context(), scratch.ID) })
+
+	if err := client.RemoveLibraryMetadata(ctx, scratch.ID, "json"); err != nil {
+		t.Errorf("RemoveLibraryMetadata: %v", err)
+	}
+}

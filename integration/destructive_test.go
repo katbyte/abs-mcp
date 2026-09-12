@@ -5,6 +5,7 @@ package integration
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -252,5 +253,70 @@ func tinyJPEG() []byte {
 		0xFF, 0xC4, 0x00, 0x14, 0x10, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3F, 0x00, 0x37, 0xFF, 0xD9,
+	}
+}
+
+// BatchDelete removes several records at once; it runs against throwaway
+// copies in a library of its own.
+func TestBatchDelete(t *testing.T) {
+	ctx := skipUnlessLive(t)
+
+	data := os.Getenv("ABS_TEST_DATA")
+	if data == "" {
+		t.Skip("ABS_TEST_DATA is not set")
+	}
+	audio, err := os.ReadFile(filepath.Join(data, "fiction", "Isaac Asimov", "Foundation", "01.mp3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, title := range []string{"SDK Batch One", "SDK Batch Two"} {
+		dir := filepath.Join(data, "nonfiction", "SDK Batch", title)
+		if err := os.MkdirAll(dir, 0o777); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "01.mp3"), audio, 0o666); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	scratch := must(client.CreateLibrary(ctx, abs.LibraryCreate{
+		Name: "SDK Batch Scratch", MediaType: "book",
+		Folders: []abs.Folder{{FullPath: "/nonfiction"}},
+	}))
+	t.Cleanup(func() {
+		_ = client.DeleteLibrary(t.Context(), scratch.ID)
+		_ = os.RemoveAll(filepath.Join(data, "nonfiction", "SDK Batch"))
+	})
+
+	if err := client.ScanLibrary(ctx, scratch.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	deadline := time.Now().Add(2 * time.Minute)
+	for time.Now().Before(deadline) && len(ids) < 2 {
+		res, err := client.Items(ctx, scratch.ID, abs.ItemsOptions{Limit: 100, Minified: true})
+		if err == nil {
+			ids = nil
+			for i := range res.Results {
+				if strings.HasPrefix(res.Results[i].Title(), "SDK Batch") {
+					ids = append(ids, res.Results[i].ID)
+				}
+			}
+		}
+		if len(ids) < 2 {
+			time.Sleep(2 * time.Second)
+		}
+	}
+	if len(ids) < 2 {
+		t.Fatalf("the scan found %d of the 2 throwaway books", len(ids))
+	}
+
+	if err := client.BatchDelete(ctx, ids); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range ids {
+		if _, err := client.Item(ctx, id); !abs.IsNotFound(err) {
+			t.Errorf("item %s survived BatchDelete: %v", id, err)
+		}
 	}
 }

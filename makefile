@@ -210,6 +210,9 @@ testenv-up: ## Start and seed a throwaway Audiobookshelf container
 testenv-down: ## Remove the throwaway Audiobookshelf container
 	@scripts/abs-testenv.sh down
 
-check-all: build test testacc lint actionlint yamllint shellcheck depscheck ## Run build + tests (incl. integration) + all linters + depscheck
+apicheck: ## Report how much of the Audiobookshelf API lib/abs covers
+	@python3 scripts/apicheck.py --list
 
-.PHONY: default all help fmt goimports build docker lint lint-fix actionlint yamllint shellcheck depscheck check-all install tools test test-integration testacc record testenv-up testenv-down
+check-all: build test testacc lint actionlint yamllint shellcheck depscheck apicheck ## Run build + tests (incl. integration) + all linters + depscheck
+
+.PHONY: default all help fmt goimports build docker lint lint-fix actionlint yamllint shellcheck depscheck check-all install tools test test-integration testacc record testenv-up testenv-down apicheck
