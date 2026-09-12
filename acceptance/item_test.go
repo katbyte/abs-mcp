@@ -252,3 +252,43 @@ func TestItemBatchEditValidation(t *testing.T) {
 		t.Error("a podcast should be refused")
 	}
 }
+
+// item_get on a podcast takes three branches a book never does: the episode
+// listing, the per-episode audio files, and chapters that live on the episodes
+// rather than the item. None were covered.
+func TestItemGetPodcast(t *testing.T) {
+	out := call(t, "item_get", map[string]any{"item": "Behind the Bastards", "files": true, "chapters": true})
+
+	if out["type"] != "podcast" {
+		t.Errorf("type = %v, want podcast", out["type"])
+	}
+	episodes := rows(t, out["episodes"], "episodes")
+	if len(episodes) == 0 {
+		t.Fatal("no episodes on a podcast item_get")
+	}
+	if total := num(t, out["episode_total"], "episode_total"); total != len(episodes) {
+		t.Errorf("episode_total = %d but %d episodes returned", total, len(episodes))
+	}
+
+	// files=true on a podcast lists the downloaded episodes' audio, which comes
+	// from a different field than a book's tracks
+	tracks := rows(t, out["track_list"], "track_list")
+	if len(tracks) != len(episodes) {
+		t.Errorf("track_list = %d, want one per downloaded episode (%d)", len(tracks), len(episodes))
+	}
+	for _, tr := range tracks {
+		if codec, _ := tr["codec"].(string); codec == "" {
+			t.Errorf("no codec probed on %v", tr)
+		}
+	}
+
+	// a podcast's chapters belong to its episodes, so the item's own list is
+	// empty rather than missing - the schema says where to look instead
+	chapters := out["chapter_list"]
+	if chapters == nil {
+		t.Error("chapter_list is absent even though chapters was asked for")
+	}
+	if got := rows(t, chapters, "chapter_list"); len(got) != 0 {
+		t.Errorf("chapter_list = %v, want empty on a podcast", got)
+	}
+}

@@ -41,8 +41,8 @@ func registerItemTools(r *registry) {
 	}
 	type getIn struct {
 		itemRef
-		Chapters bool `json:"chapters,omitempty" jsonschema:"include the full chapter list; a long book can run to thousands of tokens, and chapter_count is always reported, so check that first"`
-		Files    bool `json:"files,omitempty"    jsonschema:"include every audio track with codec, bitrate, duration and any probe error, plus the non-audio files"`
+		Chapters bool `json:"chapters,omitempty" jsonschema:"include the full chapter list; a long book can run to thousands of tokens, and chapter_count is always reported, so check that first. Books only: a podcast's chapters belong to each episode, see podcast_episode_get"`
+		Files    bool `json:"files,omitempty"    jsonschema:"include every audio track with codec, bitrate, duration and any probe error, plus the non-audio files; for a podcast the tracks are its downloaded episodes"`
 	}
 	type getOut struct {
 		itemSummary
