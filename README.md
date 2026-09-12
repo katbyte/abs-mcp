@@ -1,4 +1,4 @@
-# abs-mcp
+# abs-mcp - an Audiobookshelf MCP server, CLI and Go SDK
 
 [![GitHub release](https://img.shields.io/github/v/release/katbyte/abs-mcp?color=blueviolet)](https://github.com/katbyte/abs-mcp/releases/latest)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/katbyte/abs-mcp?color=00ADD8)](https://github.com/katbyte/abs-mcp/blob/main/go.mod)
@@ -7,13 +7,20 @@
 ![test](https://github.com/katbyte/abs-mcp/actions/workflows/pr-tests.yaml/badge.svg)
 ![lint](https://github.com/katbyte/abs-mcp/actions/workflows/pr-golangci-lint.yaml/badge.svg)
 
-An MCP server (and CLI) for curating an [Audiobookshelf](https://www.audiobookshelf.org) library:
-search, inspect, audit and fix metadata, manage listening progress, collections, playlists and
-podcasts from an AI client such as Claude Code.
+An [MCP](https://modelcontextprotocol.io) server, CLI and Go SDK for curating an
+[Audiobookshelf](https://www.audiobookshelf.org) audiobook and podcast library: search it,
+audit it for bad metadata, and fix what you find - from Claude Code, Claude Desktop, or any
+other MCP client.
+
+**94 tools**, including **16 audits** that sweep a whole library for the things that actually
+go wrong: books never matched to a provider, missing covers or chapters, duplicates, gaps in a
+series, folders that disagree with their metadata, near-duplicate genres and narrators
+(`Sci-Fi` vs `sci fi`, `Jim Dale` vs `jim dale`), podcasts whose feed has gone dead.
 
 It is two things in one repo: a **standalone Go client for the Audiobookshelf API**
-(`lib/abs` - no dependencies outside the standard library, usable on its own) and the MCP
-server built on top of it. Both are tested against a real Audiobookshelf in Docker, not a stub.
+(`lib/abs` - 204 methods over all 202 routes, no dependencies outside the standard library,
+usable entirely on its own) and the MCP server built on top of it. Both are tested against a
+real Audiobookshelf in Docker, not a stub.
 
 The design principle: **detection is code, correction is judgment.** The server runs cheap
 deterministic checks over the whole library and produces worklists; the AI reasons only about
