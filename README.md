@@ -172,7 +172,7 @@ comes back as an error listing the candidates.
 
 `item_delete`, `podcast_episode_delete`, `author_delete` and `library_issues_remove` are only
 registered when `--enable-delete` / `ABS_ENABLE_DELETE` is set. `--read-only` registers the
-49 read tools and nothing else, so a write tool is absent from `tools/list` rather than refused
+50 read tools and nothing else, so a write tool is absent from `tools/list` rather than refused
 when called.
 
 ### Choosing which tools load
