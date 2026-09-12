@@ -132,14 +132,25 @@ func TestLibraryFilters(t *testing.T) {
 	}
 }
 
-func TestLibraryStats(t *testing.T) {
-	out := call(t, "library_stats", map[string]any{"library": "Fiction"})
+// the statistics library_get absorbed from the former library_stats: the same
+// LibraryStats call it already made, no longer thrown away.
+func TestLibraryGetStatistics(t *testing.T) {
+	out := call(t, "library_get", map[string]any{"library": "Fiction"})
 
 	if items := num(t, out["items"], "items"); items != 7 {
 		t.Errorf("items = %d, want 7", items)
 	}
 	if top := rows(t, out["top_authors"], "top_authors"); len(top) == 0 {
 		t.Error("no top_authors")
+	}
+	if rows(t, out["top_genres"], "top_genres") == nil {
+		t.Error("no top_genres")
+	}
+	if longest := rows(t, out["longest"], "longest"); len(longest) == 0 {
+		t.Error("no longest items")
+	}
+	if largest := rows(t, out["largest"], "largest"); len(largest) == 0 {
+		t.Error("no largest items")
 	}
 }
 

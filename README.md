@@ -157,8 +157,8 @@ comes back as an error listing the candidates.
 
 | Resource | Tools |
 |---|---|
-| server | `server_info`, `server_stats`, `server_tasks`, `server_sessions`, `server_backups`, `server_backup_create`, `server_tags`, `server_tag_rename` |
-| libraries | `library_list`, `library_get`, `library_create`, `library_edit`, `library_search`, `library_items` (the server's own filters: genre, tag, author, series, narrator, progress, missing metadata, issues...), `library_recent`, `library_filters`, `library_stats`, `library_scan`, `library_match_all` |
+| server | `server_info` (connectivity, permissions, libraries, providers and server-wide totals), `server_tasks`, `server_sessions`, `server_backups`, `server_backup_create`, `server_tags`, `server_tag_rename` |
+| libraries | `library_list`, `library_get` (in depth, with statistics), `library_create`, `library_edit`, `library_search`, `library_items` (the server's own filters and sorts: genre, tag, author, series, narrator, progress, tracks...), `library_recent`, `library_filters`, `library_scan`, `library_match_all` |
 | audits | `audit_all` (every per-item audit in one sweep - start here after a scan), `audit_missing` (field: cover, description, narrator, series, author, genres, year, publisher, language, chapters), `audit_unmatched`, `audit_issues`, `audit_no_audio`, `audit_path`, `audit_author_as_title`, `audit_single_chapter`, `audit_stale_feed`, `audit_no_episodes`, `audit_duplicates`, `audit_series_gaps`, `audit_terminology` / `audit_terminology_rename`, `audit_cover_ratio`, `audit_author_missing_image` |
 | items | `item_get`, `item_chapters`, `item_files`, `item_edit`, `item_batch_edit` (same fields across many books), `item_rescan`, `item_embed_metadata` |
 | matching | `item_match` (candidates from a provider), `item_match_apply`, `item_cover_search`, `item_cover_edit` (url, file, or removed), `item_chapters_set` (explicit list or from Audible by asin) |
@@ -172,7 +172,7 @@ comes back as an error listing the candidates.
 
 `item_delete`, `podcast_episode_delete`, `author_delete` and `library_issues_remove` are only
 registered when `--enable-delete` / `ABS_ENABLE_DELETE` is set. `--read-only` registers the
-55 read tools and nothing else, so a write tool is absent from `tools/list` rather than refused
+53 read tools and nothing else, so a write tool is absent from `tools/list` rather than refused
 when called.
 
 ### Choosing which tools load
@@ -253,7 +253,7 @@ make testacc        # both, each in a throwaway container, torn down after
 make check-all      # build + unit + both live suites + every linter
 ```
 
-**All 94 tools and all 204 client methods are exercised**, 199 of them asserting a result
+**All 92 tools and all 204 client methods are exercised**, 199 of them asserting a result
 rather than only that the call reached the server. The five that do not - sending an ebook by
 email, firing a notification, closing a device session, unlinking OpenID, syncing an offline
 session - need infrastructure a throwaway container has not got, and say so where they are

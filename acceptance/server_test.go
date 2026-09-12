@@ -30,8 +30,10 @@ func TestServerInfo(t *testing.T) {
 	}
 }
 
-func TestServerStats(t *testing.T) {
-	out := call(t, "server_stats", nil)
+// the server-wide totals server_info absorbed from the former server_stats.
+// They are admin-only and best-effort, so an admin key must actually see them.
+func TestServerInfoTotals(t *testing.T) {
+	out := call(t, "server_info", nil)
 
 	if books := num(t, out["books"], "books"); books != 10 {
 		t.Errorf("books = %d, want 10", books)
@@ -41,6 +43,11 @@ func TestServerStats(t *testing.T) {
 	}
 	if users := num(t, out["users"], "users"); users != 1 {
 		t.Errorf("users = %d, want 1", users)
+	}
+	if _, ok := out["total_size_gb"]; !ok {
+		if _, ok := out["audio_files"]; !ok {
+			t.Error("no server-wide size or file counts")
+		}
 	}
 }
 

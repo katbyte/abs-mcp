@@ -18,12 +18,20 @@ func registerServerTools(r *registry) {
 		CanUpdate        bool         `json:"can_update"`
 		CanDelete        bool         `json:"can_delete"`
 		Libraries        []libraryRow `json:"libraries"`
+		Books            int          `json:"books,omitempty"             jsonschema:"server-wide totals; admin only, absent otherwise"`
+		Podcasts         int          `json:"podcasts,omitempty"`
+		AudioFiles       int          `json:"audio_files,omitempty"`
+		TotalSizeGB      int64        `json:"total_size_gb,omitempty"`
+		BooksSizeGB      int64        `json:"books_size_gb,omitempty"`
+		PodcastsSizeGB   int64        `json:"podcasts_size_gb,omitempty"`
+		Users            int          `json:"users,omitempty"`
+		OpenSessions     int          `json:"open_sessions,omitempty"     jsonschema:"how many are playing right now; server_sessions lists them"`
 		BookProviders    []string     `json:"book_providers,omitempty"    jsonschema:"metadata providers accepted by item_match"`
 		PodcastProviders []string     `json:"podcast_providers,omitempty"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "server_info",
-		Description: "Check connectivity: server version, the user the API key acts as and their permissions, the libraries, and the metadata providers available for matching. Call this first when unsure what the key can do.",
+		Description: "Check connectivity and see the whole server at once: version, the user the API key acts as and their permissions, the libraries, the metadata providers available for matching, and - for an admin key - server-wide item counts, disk usage, user count and how many people are listening. Call this first when unsure what the key can do. server_sessions lists who is playing what.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, infoOut, error) {
 		status, err := client.Status(ctx)
 		if err != nil {
@@ -53,35 +61,13 @@ func registerServerTools(r *registry) {
 		if book, podcast, err := client.Providers(ctx); err == nil {
 			out.BookProviders, out.PodcastProviders = book, podcast
 		}
-
-		return nil, out, nil
-	})
-
-	type statsOut struct {
-		Books          int   `json:"books"`
-		Podcasts       int   `json:"podcasts"`
-		AudioFiles     int   `json:"audio_files"`
-		TotalSizeGB    int64 `json:"total_size_gb"`
-		BooksSizeGB    int64 `json:"books_size_gb"`
-		PodcastsSizeGB int64 `json:"podcasts_size_gb"`
-		Users          int   `json:"users,omitempty"`
-		OpenSessions   int   `json:"open_sessions"`
-	}
-	add(r, readTool, &mcp.Tool{
-		Name:        "server_stats",
-		Description: "Server-wide totals: item counts, audio file counts, disk usage, user count and open playback sessions. Admin only.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, statsOut, error) {
-		s, err := client.ServerStats(ctx)
-		if err != nil {
-			return nil, statsOut{}, err
-		}
-		out := statsOut{
-			Books:          s.Books.NumItems,
-			Podcasts:       s.Podcasts.NumItems,
-			AudioFiles:     s.Total.NumAudioFiles,
-			TotalSizeGB:    s.Total.TotalSize >> 30,
-			BooksSizeGB:    s.Books.TotalSize >> 30,
-			PodcastsSizeGB: s.Podcasts.TotalSize >> 30,
+		// the totals are admin-only, and this is the one tool that has to answer
+		// for any key, so every one of them is best-effort
+		if st, err := client.ServerStats(ctx); err == nil {
+			out.Books, out.Podcasts = st.Books.NumItems, st.Podcasts.NumItems
+			out.AudioFiles = st.Total.NumAudioFiles
+			out.TotalSizeGB = st.Total.TotalSize >> 30
+			out.BooksSizeGB, out.PodcastsSizeGB = st.Books.TotalSize>>30, st.Podcasts.TotalSize>>30
 		}
 		if users, err := client.Users(ctx, false); err == nil {
 			out.Users = len(users)

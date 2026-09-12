@@ -46,19 +46,34 @@ func registerLibraryTools(r *registry) {
 	type getIn struct {
 		Library string `json:"library,omitempty" jsonschema:"library name (case-insensitive) or id; optional when the server has one library"`
 	}
+	type countRow struct {
+		Name  string `json:"name"`
+		ID    string `json:"id,omitempty"`
+		Count int    `json:"count"`
+	}
+	type statRow struct {
+		ID       string `json:"id"`
+		Title    string `json:"title"`
+		Duration string `json:"duration,omitempty"`
+		SizeMB   int64  `json:"size_mb,omitempty"`
+	}
 	type getOut struct {
 		libraryRow
-		Items      int      `json:"items"`
-		Authors    int      `json:"authors,omitempty"`
-		Series     int      `json:"series,omitempty"`
-		Genres     int      `json:"genres"`
-		Tags       int      `json:"tags"`
-		Narrators  int      `json:"narrators,omitempty"`
-		Languages  []string `json:"languages,omitempty"`
-		Issues     int      `json:"issues"                   jsonschema:"items whose folder is missing or has no playable media; see audit_issues"`
-		Duration   string   `json:"total_duration,omitempty"`
-		SizeGB     int64    `json:"total_size_gb,omitempty"`
-		AudioFiles int      `json:"audio_files,omitempty"`
+		Items      int        `json:"items"`
+		Authors    int        `json:"authors,omitempty"`
+		Series     int        `json:"series,omitempty"`
+		Genres     int        `json:"genres"`
+		Tags       int        `json:"tags"`
+		Narrators  int        `json:"narrators,omitempty"`
+		Languages  []string   `json:"languages,omitempty"`
+		Issues     int        `json:"issues"                   jsonschema:"items whose folder is missing or has no playable media; see audit_issues"`
+		Duration   string     `json:"total_duration,omitempty"`
+		SizeGB     int64      `json:"total_size_gb,omitempty"`
+		AudioFiles int        `json:"audio_files,omitempty"`
+		TopAuthors []countRow `json:"top_authors,omitempty"    jsonschema:"most-published authors in this library"`
+		TopGenres  []countRow `json:"top_genres,omitempty"`
+		Longest    []statRow  `json:"longest,omitempty"`
+		Largest    []statRow  `json:"largest,omitempty"`
 		Settings   struct {
 			SkipMatchingWithASIN bool     `json:"skip_matching_with_asin"`
 			SkipMatchingWithISBN bool     `json:"skip_matching_with_isbn"`
@@ -69,7 +84,7 @@ func registerLibraryTools(r *registry) {
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "library_get",
-		Description: "One library in depth: counts of items, authors, series, genres, tags and narrators, total duration and size, issue count, and the scan/match settings.",
+		Description: "One library in depth: counts of items, authors, series, genres, tags and narrators, total duration and size, issue count, the scan/match settings, and its top authors and genres with the longest and largest items.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, getOut, error) {
 		lib, err := resolveLibrary(ctx, client, in.Library)
 		if err != nil {
@@ -101,6 +116,18 @@ func registerLibraryTools(r *registry) {
 			out.Duration = fmtDuration(st.TotalDuration)
 			out.SizeGB = st.TotalSize >> 30
 			out.AudioFiles = st.NumAudioTracks
+			for _, a := range st.AuthorsWithCount {
+				out.TopAuthors = append(out.TopAuthors, countRow{Name: a.Name, ID: a.ID, Count: a.Count})
+			}
+			for _, g := range st.GenresWithCount {
+				out.TopGenres = append(out.TopGenres, countRow{Name: g.Genre, Count: g.Count})
+			}
+			for _, it := range st.LongestItems {
+				out.Longest = append(out.Longest, statRow{ID: it.ID, Title: it.Title, Duration: fmtDuration(it.Duration)})
+			}
+			for _, it := range st.LargestItems {
+				out.Largest = append(out.Largest, statRow{ID: it.ID, Title: it.Title, SizeMB: mb(it.Size)})
+			}
 		} else {
 			out.Items = fd.BookCount + fd.PodcastCount
 		}
@@ -285,69 +312,6 @@ func registerLibraryTools(r *registry) {
 			Authors:          fd.Authors,
 			Series:           fd.Series,
 		}, nil
-	})
-
-	type statsIn struct {
-		Library string `json:"library,omitempty" jsonschema:"library name or id; optional when the server has one library"`
-	}
-	type statRow struct {
-		ID       string `json:"id"`
-		Title    string `json:"title"`
-		Duration string `json:"duration,omitempty"`
-		SizeMB   int64  `json:"size_mb,omitempty"`
-	}
-	type countRow struct {
-		Name  string `json:"name"`
-		ID    string `json:"id,omitempty"`
-		Count int    `json:"count"`
-	}
-	type statsOut struct {
-		Items      int        `json:"items"`
-		Authors    int        `json:"authors,omitempty"`
-		Genres     int        `json:"genres"`
-		Duration   string     `json:"total_duration"`
-		SizeGB     int64      `json:"total_size_gb"`
-		AudioFiles int        `json:"audio_files"`
-		TopAuthors []countRow `json:"top_authors,omitempty"`
-		TopGenres  []countRow `json:"top_genres,omitempty"`
-		Longest    []statRow  `json:"longest,omitempty"`
-		Largest    []statRow  `json:"largest,omitempty"`
-	}
-	add(r, readTool, &mcp.Tool{
-		Name:        "library_stats",
-		Description: "Library statistics: totals, top authors and genres by count, and the longest and largest items.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in statsIn) (*mcp.CallToolResult, statsOut, error) {
-		lib, err := resolveLibrary(ctx, client, in.Library)
-		if err != nil {
-			return nil, statsOut{}, err
-		}
-		st, err := client.LibraryStats(ctx, lib.ID)
-		if err != nil {
-			return nil, statsOut{}, err
-		}
-
-		out := statsOut{
-			Items:      st.TotalItems,
-			Authors:    st.TotalAuthors,
-			Genres:     st.TotalGenres,
-			Duration:   fmtDuration(st.TotalDuration),
-			SizeGB:     st.TotalSize >> 30,
-			AudioFiles: st.NumAudioTracks,
-		}
-		for _, a := range st.AuthorsWithCount {
-			out.TopAuthors = append(out.TopAuthors, countRow{Name: a.Name, ID: a.ID, Count: a.Count})
-		}
-		for _, g := range st.GenresWithCount {
-			out.TopGenres = append(out.TopGenres, countRow{Name: g.Genre, Count: g.Count})
-		}
-		for _, it := range st.LongestItems {
-			out.Longest = append(out.Longest, statRow{ID: it.ID, Title: it.Title, Duration: fmtDuration(it.Duration)})
-		}
-		for _, it := range st.LargestItems {
-			out.Largest = append(out.Largest, statRow{ID: it.ID, Title: it.Title, SizeMB: mb(it.Size)})
-		}
-
-		return nil, out, nil
 	})
 
 	type scanIn struct {
