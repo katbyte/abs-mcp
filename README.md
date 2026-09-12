@@ -124,7 +124,7 @@ passed via `-e`.
 
 ## MCP Tools
 
-Tools are named resource-first (`library_*`, `item_*`, `me_*`...) so they group by what they
+Tools are named resource-first (`library_*`, `item_*`, `user_*`...) so they group by what they
 act on. Every tool carries MCP annotations (read-only or destructive) and tools that change
 server state say so in their descriptions. Wherever a tool takes a library, item, author,
 series, collection, playlist or user it accepts a name as well as an id; an ambiguous title
@@ -207,7 +207,7 @@ underneath you.
 
 ```bash
 make            # fmt + build
-make check-all  # build + test + all linters + depscheck
+make check-all  # build + unit tests + both live suites (needs docker) + every linter
 ```
 
 ### Tests
@@ -247,7 +247,8 @@ vanished fields, changed types - and ignores values, so it goes red when a provi
 contract rather than when a chart position moves.
 
 Fixtures are generated, never committed: `scripts/abs-testenv.sh` writes one-second silent files
-with `ffmpeg` into a temp directory, creates the libraries through `library_create`, fills them
+with `ffmpeg` under `~/.cache/abs-mcp` (`ABS_TEST_DATA` to move them - not `$TMPDIR`, which
+Docker Desktop does not share), creates the libraries through `library_create`, fills them
 with `library_scan` and sets the metadata with `item_edit` - so building the fixtures is itself
 part of the coverage. `scripts/abs-testenv.sh fixtures` writes just the audio tree if you want
 to look at the layout. Requires docker, ffmpeg and jq; the suites skip when `ABS_SERVER` and

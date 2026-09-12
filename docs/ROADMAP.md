@@ -11,7 +11,7 @@ Design rules, in priority order:
    pick → apply → verify), it is one tool, not N.
 4. **Names, not just ids.** Every tool that takes a library, item, author, series,
    collection, playlist or user resolves a name, and an ambiguous title lists candidates.
-5. **Resource-first names** (`library_*`, `item_*`, `me_*`) so tools group by what they act on.
+5. **Resource-first names** (`library_*`, `item_*`, `user_*`) so tools group by what they act on.
 6. **Reads are cheap, writes are explicit, destructive is opt-in.** Every tool carries MCP
    annotations; anything that changes the server says so in its description; anything that
    deletes records or files is disabled unless the operator sets `--enable-delete`.

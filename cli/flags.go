@@ -61,10 +61,12 @@ func configureFlags(root *cobra.Command) error {
 
 	viper.SetConfigName(".abs-mcp")
 	viper.SetConfigType("env")
+	// viper reads the first file it finds, so the working directory comes
+	// first: a per-project .abs-mcp overrides the one in $HOME
+	viper.AddConfigPath(".")
 	if home, err := os.UserHomeDir(); err == nil {
 		viper.AddConfigPath(home)
 	}
-	viper.AddConfigPath(".")
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := errors.AsType[viper.ConfigFileNotFoundError](err); !ok {
