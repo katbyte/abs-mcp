@@ -167,12 +167,12 @@ comes back as an error listing the candidates.
 | narrators | `narrator_list`, `narrator_edit` (rename to merge, or remove) |
 | collections | `collection_list`, `collection_get`, `collection_create`, `collection_edit`, `collection_books_edit` (add or remove), `collection_delete` |
 | playlists | `playlist_list`, `playlist_get`, `playlist_create` (also from a collection), `playlist_edit`, `playlist_entries_edit` (add or remove), `playlist_delete` |
-| podcasts | `podcast_episodes`, `podcast_episode_get`, `podcast_episode_edit`, `podcast_check_new`, `podcast_feed_episodes`, `podcast_episode_download`, `podcast_downloads`, `podcast_recent`, `podcast_search`, `podcast_add`, `podcast_settings` |
+| podcasts | `podcast_episodes` (one show, or the newest across the library), `podcast_episode_get`, `podcast_episode_edit`, `podcast_check_new`, `podcast_feed_episodes`, `podcast_episode_download`, `podcast_downloads`, `podcast_search`, `podcast_add`, `podcast_settings` |
 | users | `user_get`, `user_in_progress`, `user_progress_get`, `user_progress_set`, `user_progress_remove`, `user_bookmarks`, `user_bookmark_edit` (add or remove), `user_history`, `user_stats` (all-time or year in review), `user_list` (admin) |
 
 `item_delete`, `podcast_episode_delete`, `author_delete` and `library_issues_remove` are only
 registered when `--enable-delete` / `ABS_ENABLE_DELETE` is set. `--read-only` registers the
-53 read tools and nothing else, so a write tool is absent from `tools/list` rather than refused
+52 read tools and nothing else, so a write tool is absent from `tools/list` rather than refused
 when called.
 
 ### Choosing which tools load
@@ -253,7 +253,7 @@ make testacc        # both, each in a throwaway container, torn down after
 make check-all      # build + unit + both live suites + every linter
 ```
 
-**All 92 tools and all 204 client methods are exercised**, 199 of them asserting a result
+**All 91 tools and all 204 client methods are exercised**, 199 of them asserting a result
 rather than only that the call reached the server. The five that do not - sending an ebook by
 email, firing a notification, closing a device session, unlinking OpenID, syncing an offline
 session - need infrastructure a throwaway container has not got, and say so where they are

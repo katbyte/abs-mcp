@@ -25,7 +25,7 @@ Design rules, in priority order:
 | maintenance | `library_scan`, `library_match_all`, `item_rescan`, `item_embed_metadata`, `server_tasks`, `server_backups`, `server_tags` → `server_tag_rename` | "keep it healthy" |
 | listening | `user_in_progress`, `user_progress_*`, `user_bookmark*`, `user_history`, `user_stats`, `user_list`, `server_sessions` | "what am I / are they listening to" |
 | organise | `collection_*`, `playlist_*` | "group these" |
-| podcasts | `podcast_episodes`, `podcast_feed_episodes` → `podcast_episode_download`, `podcast_check_new`, `podcast_search` → `podcast_add`, `podcast_settings`, `podcast_downloads`, `podcast_recent` | "subscribe, catch up, back-fill" |
+| podcasts | `podcast_episodes`, `podcast_feed_episodes` → `podcast_episode_download`, `podcast_check_new`, `podcast_search` → `podcast_add`, `podcast_settings`, `podcast_downloads` | "subscribe, catch up, back-fill" |
 
 ## Candidates
 

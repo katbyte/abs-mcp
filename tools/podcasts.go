@@ -72,9 +72,10 @@ func registerPodcastTools(r *registry) {
 	client := r.client
 
 	type episodesIn struct {
-		itemRef
-		Limit  int `json:"limit,omitempty"  jsonschema:"page size, default 50"`
-		Offset int `json:"offset,omitempty"`
+		Item    string `json:"item,omitempty"    jsonschema:"podcast id or exact title; omit for the newest episodes across every podcast"`
+		Library string `json:"library,omitempty" jsonschema:"narrow to one library by name or id"`
+		Limit   int    `json:"limit,omitempty"   jsonschema:"page size, default 50"`
+		Offset  int    `json:"offset,omitempty"  jsonschema:"only when a podcast is named"`
 	}
 	type episodesOut struct {
 		Podcast  string           `json:"podcast"`
@@ -83,8 +84,38 @@ func registerPodcastTools(r *registry) {
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "podcast_episodes",
-		Description: "A podcast's downloaded episodes, newest first, with the API key user's progress on each.",
+		Description: "Downloaded podcast episodes, newest first. Name a podcast for its own episodes with the API key user's progress on each; omit it for the newest episodes across every podcast in the library - 'what is new to listen to'. For episodes not downloaded yet, see podcast_feed_episodes.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in episodesIn) (*mcp.CallToolResult, episodesOut, error) {
+		// no podcast named: the library-wide recent-episodes endpoint, which is
+		// the same question asked of everything rather than of one show
+		if strings.TrimSpace(in.Item) == "" {
+			libs, err := resolveLibraries(ctx, client, in.Library)
+			if err != nil {
+				return nil, episodesOut{}, err
+			}
+			out := episodesOut{Episodes: []episodeSummary{}}
+			podcastLibs := 0
+			for i := range libs {
+				if !libs[i].IsPodcast() {
+					continue
+				}
+				podcastLibs++
+				eps, err := client.RecentEpisodes(ctx, libs[i].ID, limitOr(in.Limit, defaultLimit), 0)
+				if err != nil {
+					return nil, episodesOut{}, err
+				}
+				for j := range eps {
+					out.Episodes = append(out.Episodes, summarizeEpisode(&eps[j], "", false))
+				}
+			}
+			if podcastLibs == 0 {
+				return nil, episodesOut{}, errors.New("no podcast library found")
+			}
+			out.Total = len(out.Episodes)
+
+			return nil, out, nil
+		}
+
 		it, err := resolvePodcast(ctx, client, in.Library, in.Item)
 		if err != nil {
 			return nil, episodesOut{}, err
@@ -363,49 +394,6 @@ func registerPodcastTools(r *registry) {
 			}
 			for j := range queue {
 				out.Downloads = append(out.Downloads, rowOf(&queue[j], "queued"))
-			}
-		}
-
-		return nil, out, nil
-	})
-
-	type recentIn struct {
-		Library string `json:"library,omitempty" jsonschema:"podcast library name or id; optional when there is one"`
-		Limit   int    `json:"limit,omitempty"   jsonschema:"maximum episodes, default 25"`
-	}
-	type recentOut struct {
-		Episodes []episodeSummary `json:"episodes" jsonschema:"newest first across every podcast"`
-	}
-	add(r, readTool, &mcp.Tool{
-		Name:        "podcast_recent",
-		Description: "The newest downloaded episodes across every podcast in a library.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in recentIn) (*mcp.CallToolResult, recentOut, error) {
-		libs, err := resolveLibraries(ctx, client, in.Library)
-		if err != nil {
-			return nil, recentOut{}, err
-		}
-		out := recentOut{Episodes: []episodeSummary{}}
-		for i := range libs {
-			if !libs[i].IsPodcast() {
-				continue
-			}
-			eps, err := client.RecentEpisodes(ctx, libs[i].ID, limitOr(in.Limit, defaultLimit), 0)
-			if err != nil {
-				return nil, recentOut{}, err
-			}
-			for j := range eps {
-				out.Episodes = append(out.Episodes, summarizeEpisode(&eps[j], "", false))
-			}
-		}
-		if len(out.Episodes) == 0 && len(libs) > 0 {
-			podcasts := 0
-			for i := range libs {
-				if libs[i].IsPodcast() {
-					podcasts++
-				}
-			}
-			if podcasts == 0 {
-				return nil, recentOut{}, errors.New("no podcast library found")
 			}
 		}
 

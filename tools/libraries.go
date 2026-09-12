@@ -252,7 +252,7 @@ func registerLibraryTools(r *registry) {
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "library_recent",
-		Description: "Recently added books or podcasts, newest first.",
+		Description: "Recently added books and podcasts across every library at once, newest first - 'what turned up lately'. This is the only item listing that spans libraries; for one library with the full filters, sorts and paging use library_items with sort=added and desc=true.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in recentIn) (*mcp.CallToolResult, recentOut, error) {
 		libs, err := resolveLibraries(ctx, client, in.Library)
 		if err != nil {

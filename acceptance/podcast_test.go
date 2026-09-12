@@ -50,11 +50,27 @@ func TestPodcastEpisodeGetAndEdit(t *testing.T) {
 	}
 }
 
-func TestPodcastRecent(t *testing.T) {
-	out := call(t, "podcast_recent", map[string]any{"library": "Podcasts"})
+// podcast_episodes with no podcast named is the library-wide view that used to
+// be podcast_recent: the same question asked of everything rather than of one
+// show, and a different endpoint underneath.
+func TestPodcastEpisodesAcrossLibrary(t *testing.T) {
+	out := call(t, "podcast_episodes", map[string]any{"library": "Podcasts"})
 
-	if eps := rows(t, out["episodes"], "episodes"); len(eps) != 4 {
-		t.Errorf("podcast_recent = %d episodes, want 4 across both shows", len(eps))
+	eps := rows(t, out["episodes"], "episodes")
+	if len(eps) != 4 {
+		t.Errorf("library-wide episodes = %d, want 4 across both shows", len(eps))
+	}
+	if total := num(t, out["total"], "total"); total != 4 {
+		t.Errorf("total = %d, want 4", total)
+	}
+
+	// naming a podcast narrows it to that show
+	one := call(t, "podcast_episodes", map[string]any{"item": "Behind the Bastards"})
+	if got := rows(t, one["episodes"], "episodes"); len(got) >= len(eps) {
+		t.Errorf("one podcast returned %d episodes, want fewer than the %d across the library", len(got), len(eps))
+	}
+	if one["podcast"] != "Behind the Bastards" {
+		t.Errorf("podcast = %v", one["podcast"])
 	}
 }
 
