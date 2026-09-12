@@ -64,7 +64,7 @@ func registerItemTools(r *registry) {
 
 		m := &it.Media.Metadata
 		out := getOut{
-			itemSummary:   summarise(it),
+			itemSummary:   summarize(it),
 			Description:   clip(plain(m.Description), 1500),
 			PublishedDate: m.PublishedDate,
 			Authors:       m.Authors,
@@ -88,7 +88,7 @@ func registerItemTools(r *registry) {
 			out.EpisodeTotal = len(eps)
 			// newest first
 			for i := len(eps) - 1; i >= 0 && len(out.Episodes) < defaultLimit; i-- {
-				out.Episodes = append(out.Episodes, summariseEpisode(&eps[i], "", false))
+				out.Episodes = append(out.Episodes, summarizeEpisode(&eps[i], "", false))
 			}
 		}
 
@@ -436,9 +436,84 @@ func registerItemTools(r *registry) {
 		}
 		out := applyOut{Updated: res.Updated, Warning: res.Warning}
 		if res.LibraryItem != nil {
-			s := summarise(res.LibraryItem)
+			s := summarize(res.LibraryItem)
 			out.Item = &s
 		}
+
+		return nil, out, nil
+	})
+
+	type batchEditIn struct {
+		Library string   `json:"library,omitempty" jsonschema:"library name or id, for resolving titles"`
+		Items   []string `json:"items"             jsonschema:"the books to change, by id or exact title"`
+		Genres  []string `json:"genres,omitempty"  jsonschema:"replacement genre list, applied to every item"`
+		Tags    []string `json:"tags,omitempty"    jsonschema:"replacement tag list, applied to every item"`
+		Authors []string `json:"authors,omitempty" jsonschema:"replacement author list"`
+		Year    string   `json:"year,omitempty"`
+		Publish string   `json:"publisher,omitempty"`
+		Lang    string   `json:"language,omitempty"`
+	}
+	type batchEditOut struct {
+		Updated int      `json:"items_updated"`
+		Items   []string `json:"items"         jsonschema:"the titles that were sent"`
+	}
+	add(r, writeTool, &mcp.Tool{
+		Name:        "item_batch_edit",
+		Description: "Apply the same metadata to many books in one call - a genre on forty titles, a publisher on a series. Every field given replaces that field on every item listed; fields left out are untouched. Use item_edit for one item, or for fields that differ per item. Changes server state.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in batchEditIn) (*mcp.CallToolResult, batchEditOut, error) {
+		if len(in.Items) == 0 {
+			return nil, batchEditOut{}, errors.New("at least one item is required")
+		}
+
+		md := abs.MetadataUpdate{}
+		var hasMeta bool
+		if len(in.Genres) > 0 {
+			md.Genres, hasMeta = in.Genres, true
+		}
+		if len(in.Authors) > 0 {
+			for _, a := range in.Authors {
+				md.Authors = append(md.Authors, abs.NameRef{Name: a})
+			}
+			hasMeta = true
+		}
+		for _, f := range []struct {
+			dst **string
+			val string
+		}{{&md.PublishedYear, in.Year}, {&md.Publisher, in.Publish}, {&md.Language, in.Lang}} {
+			if f.val != "" {
+				v := f.val
+				*f.dst = &v
+				hasMeta = true
+			}
+		}
+		if len(in.Tags) == 0 && !hasMeta {
+			return nil, batchEditOut{}, errors.New("nothing to change: pass genres, tags, authors, year, publisher or language")
+		}
+
+		out := batchEditOut{Items: make([]string, 0, len(in.Items))}
+		updates := make([]abs.BatchMediaUpdate, 0, len(in.Items))
+		for _, ref := range in.Items {
+			it, err := resolveItem(ctx, client, in.Library, ref)
+			if err != nil {
+				return nil, batchEditOut{}, err
+			}
+			if it.IsPodcast() {
+				return nil, batchEditOut{}, fmt.Errorf("%s is a podcast; item_batch_edit is for books", it.Title())
+			}
+			upd := abs.MediaUpdate{Tags: in.Tags}
+			if hasMeta {
+				m := md
+				upd.Metadata = &m
+			}
+			updates = append(updates, abs.BatchMediaUpdate{ID: it.ID, MediaPayload: upd})
+			out.Items = append(out.Items, it.Title())
+		}
+
+		n, err := client.BatchUpdate(ctx, updates)
+		if err != nil {
+			return nil, batchEditOut{}, err
+		}
+		out.Updated = n
 
 		return nil, out, nil
 	})

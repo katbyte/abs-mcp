@@ -115,7 +115,7 @@ func registerCollectionTools(r *registry) {
 			return nil, getOut{}, err
 		}
 
-		return nil, getOut{row: rowOf(c), Items: summariseAll(c.Books)}, nil
+		return nil, getOut{row: rowOf(c), Items: summarizeAll(c.Books)}, nil
 	})
 
 	type createIn struct {

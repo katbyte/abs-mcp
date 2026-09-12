@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/katbyte/abs-mcp/lib/abs"
@@ -12,6 +13,9 @@ import (
 
 // resolveAuthor finds an author by id or name, searching the named library or
 // all of them.
+// authorResolveLimit caps the author listing a name lookup pages through.
+const authorResolveLimit = 500
+
 func resolveAuthor(ctx context.Context, client *abs.Client, library, nameOrID string) (*abs.Author, error) {
 	nameOrID = strings.TrimSpace(nameOrID)
 	if nameOrID == "" {
@@ -27,11 +31,14 @@ func resolveAuthor(ctx context.Context, client *abs.Client, library, nameOrID st
 	}
 	var candidates []abs.Author
 	for i := range libs {
-		fd, err := client.FilterData(ctx, libs[i].ID)
+		// the live authors endpoint, not FilterData: the server caches filter
+		// data and does not invalidate it on an edit or a scan, so a renamed
+		// author would not be found there
+		authors, _, err := client.Authors(ctx, libs[i].ID, abs.ListOptions{Limit: authorResolveLimit})
 		if err != nil {
 			return nil, err
 		}
-		for _, a := range fd.Authors {
+		for _, a := range authors {
 			if strings.EqualFold(a.Name, nameOrID) {
 				full, err := client.Author(ctx, a.ID, true)
 				if err != nil {
@@ -169,7 +176,66 @@ func registerAuthorTools(r *registry) {
 			return nil, getOut{}, err
 		}
 
-		return nil, getOut{authorRow: authorRowOf(a, true), Books: summariseAll(a.LibraryItems)}, nil
+		return nil, getOut{authorRow: authorRowOf(a, true), Books: summarizeAll(a.LibraryItems)}, nil
+	})
+
+	type missingImageIn struct {
+		Library string `json:"library,omitempty" jsonschema:"library name or id; default every library"`
+		Limit   int    `json:"limit,omitempty"   jsonschema:"maximum findings, default 100"`
+	}
+	type missingImageRow struct {
+		ID    string `json:"id"`
+		Name  string `json:"name"`
+		Books int    `json:"books"`
+		ASIN  string `json:"asin,omitempty" jsonschema:"present means author_match already ran and found no photo"`
+	}
+	type missingImageOut struct {
+		Scanned  int               `json:"authors_scanned"`
+		Found    int               `json:"total_findings"`
+		Findings []missingImageRow `json:"findings" jsonschema:"most books first: the authors worth fixing"`
+	}
+	add(r, readTool, &mcp.Tool{
+		Name:        "audit_author_missing_image",
+		Description: "Find authors with no photo, most-published first. Fix with author_match, which looks them up on Audible, or author_image_set with a url when that finds nothing. An author that already has an asin but no image is one author_match has tried.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in missingImageIn) (*mcp.CallToolResult, missingImageOut, error) {
+		libs, err := resolveLibraries(ctx, client, in.Library)
+		if err != nil {
+			return nil, missingImageOut{}, err
+		}
+
+		out := missingImageOut{Findings: []missingImageRow{}}
+		for i := range libs {
+			if libs[i].MediaType == "podcast" {
+				continue
+			}
+			authors, _, err := client.Authors(ctx, libs[i].ID, abs.ListOptions{Limit: authorResolveLimit, Sort: "numBooks", Desc: true})
+			if err != nil {
+				return nil, missingImageOut{}, err
+			}
+			for j := range authors {
+				a := &authors[j]
+				out.Scanned++
+				if a.ImagePath != "" {
+					continue
+				}
+				out.Found++
+				out.Findings = append(out.Findings, missingImageRow{
+					ID: a.ID, Name: a.Name, Books: a.NumBooks, ASIN: a.ASIN,
+				})
+			}
+		}
+
+		slices.SortFunc(out.Findings, func(x, y missingImageRow) int {
+			if x.Books != y.Books {
+				return y.Books - x.Books
+			}
+			return strings.Compare(x.Name, y.Name)
+		})
+		if limit := limitOr(in.Limit, 100); len(out.Findings) > limit {
+			out.Findings = out.Findings[:limit]
+		}
+
+		return nil, out, nil
 	})
 
 	type editIn struct {
@@ -200,6 +266,32 @@ func registerAuthorTools(r *registry) {
 		}
 
 		return nil, editOut{Merged: merged, Author: authorRowOf(updated, true)}, nil
+	})
+
+	type imageIn struct {
+		authorIn
+		URL string `json:"url" jsonschema:"image url; the server downloads it"`
+	}
+	type imageOut struct {
+		Author authorRow `json:"author"`
+	}
+	add(r, writeTool, &mcp.Tool{
+		Name:        "author_image_set",
+		Description: "Set an author's photo from an image url, which the server downloads. author_match already fetches one from Audible, so use this for authors it cannot find. Requires the upload permission. Changes server state.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in imageIn) (*mcp.CallToolResult, imageOut, error) {
+		if strings.TrimSpace(in.URL) == "" {
+			return nil, imageOut{}, errors.New("url is required")
+		}
+		a, err := resolveAuthor(ctx, client, in.Library, in.Author)
+		if err != nil {
+			return nil, imageOut{}, err
+		}
+		updated, err := client.SetAuthorImage(ctx, a.ID, in.URL)
+		if err != nil {
+			return nil, imageOut{}, err
+		}
+
+		return nil, imageOut{Author: authorRowOf(updated, true)}, nil
 	})
 
 	type matchIn struct {
@@ -248,6 +340,82 @@ func registerAuthorTools(r *registry) {
 		}
 
 		return nil, deleteOut{Deleted: a.Name}, nil
+	})
+}
+
+func registerNarratorTools(r *registry) {
+	client := r.client
+
+	type narratorRow struct {
+		Name  string `json:"name"`
+		Books int    `json:"books"`
+	}
+	type listIn struct {
+		Library string `json:"library,omitempty" jsonschema:"library name or id; optional when the server has one library"`
+	}
+	type listOut struct {
+		Total     int           `json:"total"`
+		Narrators []narratorRow `json:"narrators"`
+	}
+	add(r, readTool, &mcp.Tool{
+		Name:        "narrator_list",
+		Description: "List a library's narrators with the number of books each reads. The vocabulary to normalize against: near-duplicates like 'Jim Dale' and 'jim dale' show up as separate entries, and narrator_edit merges them.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in listIn) (*mcp.CallToolResult, listOut, error) {
+		lib, err := resolveLibrary(ctx, client, in.Library)
+		if err != nil {
+			return nil, listOut{}, err
+		}
+		ns, err := client.Narrators(ctx, lib.ID)
+		if err != nil {
+			return nil, listOut{}, err
+		}
+
+		out := listOut{Total: len(ns), Narrators: make([]narratorRow, 0, len(ns))}
+		for i := range ns {
+			out.Narrators = append(out.Narrators, narratorRow{Name: ns[i].Name, Books: ns[i].NumBooks})
+		}
+
+		return nil, out, nil
+	})
+
+	type editIn struct {
+		Library  string `json:"library,omitempty" jsonschema:"library name or id; optional when the server has one library"`
+		Narrator string `json:"narrator"          jsonschema:"the narrator's current name, exactly as narrator_list reports it"`
+		Name     string `json:"name,omitempty"    jsonschema:"the new name; renaming onto an existing narrator merges the two"`
+		Remove   bool   `json:"remove,omitempty"  jsonschema:"instead of renaming, drop this narrator from every book"`
+	}
+	type editOut struct {
+		ItemsUpdated int `json:"items_updated"`
+	}
+	add(r, writeTool, &mcp.Tool{
+		Name:        "narrator_edit",
+		Description: "Rename a narrator on every book in the library that carries them, or with remove drop them entirely. Renaming onto a name that already exists merges the two, which is how to fix 'Jim Dale' vs 'jim dale'. Changes server state.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in editIn) (*mcp.CallToolResult, editOut, error) {
+		narrator := strings.TrimSpace(in.Narrator)
+		if narrator == "" {
+			return nil, editOut{}, errors.New("narrator is required")
+		}
+		name := strings.TrimSpace(in.Name)
+		if name == "" && !in.Remove {
+			return nil, editOut{}, errors.New("pass name to rename, or remove to drop the narrator")
+		}
+
+		lib, err := resolveLibrary(ctx, client, in.Library)
+		if err != nil {
+			return nil, editOut{}, err
+		}
+
+		var n int
+		if in.Remove {
+			n, err = client.RemoveNarrator(ctx, lib.ID, narrator)
+		} else {
+			n, err = client.RenameNarrator(ctx, lib.ID, narrator, name)
+		}
+		if err != nil {
+			return nil, editOut{}, err
+		}
+
+		return nil, editOut{ItemsUpdated: n}, nil
 	})
 }
 
@@ -356,7 +524,7 @@ func registerSeriesTools(r *registry) {
 		out := getOut{ID: s.ID, Name: s.Name, Description: clip(plain(s.Description), descriptionCap), Books: []bookRow{}}
 		for i := range page.Results {
 			it := &page.Results[i]
-			row := bookRow{itemSummary: summarise(it), Finished: finished[it.ID]}
+			row := bookRow{itemSummary: summarize(it), Finished: finished[it.ID]}
 			for _, ref := range it.Media.Metadata.Series {
 				if ref.ID == s.ID || ref.Name == s.Name {
 					row.Sequence = ref.Sequence

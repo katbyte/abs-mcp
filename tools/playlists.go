@@ -131,10 +131,10 @@ func registerPlaylistTools(r *registry) {
 				if e.LibraryItem != nil {
 					title = e.LibraryItem.Title()
 				}
-				ep := summariseEpisode(e.Episode, title, false)
+				ep := summarizeEpisode(e.Episode, title, false)
 				er.Episode = &ep
 			} else if e.LibraryItem != nil {
-				s := summarise(e.LibraryItem)
+				s := summarize(e.LibraryItem)
 				er.Item = &s
 			}
 			out.Entries = append(out.Entries, er)

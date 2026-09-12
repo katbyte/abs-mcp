@@ -67,7 +67,7 @@ type itemSummary struct {
 	Progress  *progressSummary `json:"progress,omitempty"     jsonschema:"the API key user's listening progress, when known"`
 }
 
-func summarise(it *abs.Item) itemSummary {
+func summarize(it *abs.Item) itemSummary {
 	m := &it.Media.Metadata
 	s := itemSummary{
 		ID:        it.ID,
@@ -120,10 +120,10 @@ func summarise(it *abs.Item) itemSummary {
 	return s
 }
 
-func summariseAll(items []abs.Item) []itemSummary {
+func summarizeAll(items []abs.Item) []itemSummary {
 	out := make([]itemSummary, 0, len(items))
 	for i := range items {
-		out = append(out, summarise(&items[i]))
+		out = append(out, summarize(&items[i]))
 	}
 	return out
 }
@@ -144,7 +144,7 @@ type episodeSummary struct {
 	Progress    *progressSummary `json:"progress,omitempty"`
 }
 
-func summariseEpisode(e *abs.Episode, podcastTitle string, withDescription bool) episodeSummary {
+func summarizeEpisode(e *abs.Episode, podcastTitle string, withDescription bool) episodeSummary {
 	s := episodeSummary{
 		ID:        e.ID,
 		PodcastID: e.LibraryItemID,
@@ -207,7 +207,7 @@ type sessionSummary struct {
 	LastUpdated string `json:"last_updated,omitempty"`
 }
 
-func summariseSession(s *abs.Session) sessionSummary {
+func summarizeSession(s *abs.Session) sessionSummary {
 	out := sessionSummary{
 		ID:          s.ID,
 		UserID:      s.UserID,

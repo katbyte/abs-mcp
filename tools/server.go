@@ -151,7 +151,7 @@ func registerServerTools(r *registry) {
 		}
 		out := sessionsOut{Sessions: []sessionSummary{}}
 		for i := range sessions {
-			out.Sessions = append(out.Sessions, summariseSession(&sessions[i]))
+			out.Sessions = append(out.Sessions, summarizeSession(&sessions[i]))
 		}
 
 		return nil, out, nil
@@ -197,6 +197,33 @@ func registerServerTools(r *registry) {
 		}
 
 		return nil, backupsOut{Backups: backupRows(bs)}, nil
+	})
+
+	type tagsIn struct {
+		Kind string `json:"kind,omitempty" jsonschema:"tags, genres, or omit for both"`
+	}
+	type tagsOut struct {
+		Tags   []string `json:"tags,omitempty"`
+		Genres []string `json:"genres,omitempty"`
+	}
+	add(r, readTool, &mcp.Tool{
+		Name:        "server_get_tags",
+		Description: "Every tag and genre in use across all libraries: the server-wide vocabulary to normalize against before merging with server_rename_tag. Admin only. library_filters is the per-library equivalent.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in tagsIn) (*mcp.CallToolResult, tagsOut, error) {
+		var out tagsOut
+		var err error
+		if in.Kind != "genre" && in.Kind != "genres" {
+			if out.Tags, err = client.Tags(ctx); err != nil {
+				return nil, tagsOut{}, err
+			}
+		}
+		if in.Kind != "tag" && in.Kind != "tags" {
+			if out.Genres, err = client.Genres(ctx); err != nil {
+				return nil, tagsOut{}, err
+			}
+		}
+
+		return nil, out, nil
 	})
 
 	type renameIn struct {

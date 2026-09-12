@@ -1,0 +1,25 @@
+{
+  "host": "mcdn.podbean.com",
+  "interactions": [
+    {
+      "key": "GET mcdn.podbean.com/mf/web/w9ebcd6tnc5qf972/Area_51_Preview_Audioboua2.mp3",
+      "method": "GET",
+      "host": "mcdn.podbean.com",
+      "path": "/mf/web/w9ebcd6tnc5qf972/Area_51_Preview_Audioboua2.mp3",
+      "status": 302,
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-store",
+        "Content-Security-Policy": "frame-ancestors 'none';",
+        "Content-Type": "text/html; charset=UTF-8",
+        "Location": "https://s365.podbean.com/pb/9986abaee03ddf976b59497f2fdfcd9f/6aa47191/data1/fs109/6563527/uploads/Area_51_Preview_Audioboua2.mp3?pbss=78c76c17-b83e-5109-943d-89a33eb1c49c",
+        "Permissions-Policy": "accelerometer=(), bluetooth=(), camera=(),clipboard-read=(),usb=()",
+        "Referrer-Policy": "no-referrer-when-downgrade",
+        "Server": "Podbean",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY"
+      }
+    }
+  ]
+}

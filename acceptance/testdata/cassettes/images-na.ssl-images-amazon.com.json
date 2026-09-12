@@ -1,0 +1,29 @@
+{
+  "host": "images-na.ssl-images-amazon.com",
+  "interactions": [
+    {
+      "key": "GET images-na.ssl-images-amazon.com/images/S/amzn-author-media-prod/6ce4rnjgpci8m81tu3aibtlf5r.jpg",
+      "method": "GET",
+      "host": "images-na.ssl-images-amazon.com",
+      "path": "/images/S/amzn-author-media-prod/6ce4rnjgpci8m81tu3aibtlf5r.jpg",
+      "status": 200,
+      "headers": {
+        "Accept-Ranges": "bytes",
+        "Access-Control-Allow-Origin": "*",
+        "Akamai-Cache-Status": "Miss from child, Hit from parent",
+        "Akamai-Grn": "0.83e5d517.1789200154.c215bd3",
+        "Akamai-Request-Bc": "[a=23.213.229.131,b=203512787,c=g,n=CA_BC_VANCOUVER,o=20940],[c=c,n=US_WA_SEATTLE,o=20940]",
+        "Content-Type": "image/jpeg",
+        "Last-Modified": "Thu, 27 Apr 2023 04:52:16 GMT",
+        "Server": "Server",
+        "Surrogate-Key": "x-cache-403 /images/S/amzn-author-media-prod/6ce4rnjgpci8m81tu3aibtlf5r",
+        "Timing-Allow-Origin": "https://www.amazon.in, https://www.amazon.com",
+        "X-Amz-Ir-Id": "ad7f4253-4f41-407b-8996-5c06571d1811",
+        "X-Nginx-Cache-Status": "HIT"
+      },
+      "elided": true,
+      "elided_type": "image/jpeg",
+      "elided_size": 536258
+    }
+  ]
+}

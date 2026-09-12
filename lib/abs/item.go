@@ -1,7 +1,15 @@
 package abs
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"fmt"
+	"image"
+	_ "image/gif"  // registered for image.DecodeConfig
+	_ "image/jpeg" // registered for image.DecodeConfig
+	_ "image/png"  // registered for image.DecodeConfig
+	"net/http"
 	"net/url"
 )
 
@@ -90,10 +98,13 @@ func (c *Client) BatchUpdate(ctx context.Context, updates []BatchMediaUpdate) (i
 	return resp.Updates, nil
 }
 
-// BatchMediaUpdate is one entry of BatchUpdate.
+// BatchMediaUpdate is one entry of BatchUpdate. The update must be nested
+// under mediaPayload: the server reads up.mediaPayload.metadata without
+// checking, so a flattened entry crashes it with an unhandled rejection
+// rather than returning an error.
 type BatchMediaUpdate struct {
-	ID string `json:"id"`
-	MediaUpdate
+	ID           string      `json:"id"`
+	MediaPayload MediaUpdate `json:"mediaPayload"`
 }
 
 // MatchOptions steers a quick match against a metadata provider.
@@ -153,6 +164,33 @@ func (c *Client) DeleteItem(ctx context.Context, id string, hard bool) error {
 	}
 	return c.del(ctx, "/api/items/"+url.PathEscape(id), q)
 }
+
+// CoverSize returns the pixel dimensions of an item's cover without holding
+// the image: only the header is decoded, and the bytes are discarded. Returns
+// ErrNoCover when the item has none, and an unsupported-format error for
+// anything the standard library cannot read (webp, avif).
+func (c *Client) CoverSize(ctx context.Context, itemID string) (width, height int, err error) {
+	raw, err := c.doRaw(ctx, http.MethodGet, "/api/items/"+url.PathEscape(itemID)+"/cover", nil, nil)
+	if err != nil {
+		if IsNotFound(err) {
+			return 0, 0, ErrNoCover
+		}
+		return 0, 0, err
+	}
+	if len(raw) == 0 {
+		return 0, 0, ErrNoCover
+	}
+
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(raw))
+	if err != nil {
+		return 0, 0, fmt.Errorf("decoding cover for %s: %w", itemID, err)
+	}
+
+	return cfg.Width, cfg.Height, nil
+}
+
+// ErrNoCover reports that an item has no cover image at all.
+var ErrNoCover = errors.New("item has no cover")
 
 // SetCoverFromURL downloads an image and sets it as the item's cover.
 func (c *Client) SetCoverFromURL(ctx context.Context, id, imageURL string) error {

@@ -91,7 +91,9 @@ type Status struct {
 }
 
 type Folder struct {
-	ID        string `json:"id"`
+	// omitempty matters on create: the server takes an empty id literally and
+	// the second library then collides on the primary key
+	ID        string `json:"id,omitempty"`
 	FullPath  string `json:"fullPath"`
 	LibraryID string `json:"libraryId,omitempty"`
 	AddedAt   int64  `json:"addedAt,omitempty"`
@@ -907,7 +909,7 @@ type ServerStats struct {
 	Total    SizeStats `json:"total"`
 }
 
-// Shelf is one row of the personalised home page.
+// Shelf is one row of the personalized home page.
 type Shelf struct {
 	ID       string          `json:"id"` // continue-listening, continue-series, recently-added, listen-again, recent-series, discover, newest-authors, newest-episodes, continue-reading, ...
 	Label    string          `json:"label"`

@@ -54,7 +54,7 @@ func registerLibraryTools(r *registry) {
 		Tags       int      `json:"tags"`
 		Narrators  int      `json:"narrators,omitempty"`
 		Languages  []string `json:"languages,omitempty"`
-		Issues     int      `json:"issues"                   jsonschema:"items whose folder is missing or has no playable media; see library_audit issues"`
+		Issues     int      `json:"issues"                   jsonschema:"items whose folder is missing or has no playable media; see audit_issues"`
 		Duration   string   `json:"total_duration,omitempty"`
 		SizeGB     int64    `json:"total_size_gb,omitempty"`
 		AudioFiles int      `json:"audio_files,omitempty"`
@@ -145,7 +145,7 @@ func registerLibraryTools(r *registry) {
 			}
 			matches := res.Items()
 			for j := range matches {
-				out.Items = append(out.Items, summarise(&matches[j].LibraryItem))
+				out.Items = append(out.Items, summarize(&matches[j].LibraryItem))
 			}
 			for _, a := range res.Authors {
 				out.Authors = append(out.Authors, nameCount{Name: a.Name, ID: a.ID, Count: a.NumBooks})
@@ -212,7 +212,7 @@ func registerLibraryTools(r *registry) {
 			return nil, itemsOut{}, err
 		}
 
-		return nil, itemsOut{Total: res.Total, Offset: page * limit, Items: summariseAll(res.Results)}, nil
+		return nil, itemsOut{Total: res.Total, Offset: page * limit, Items: summarizeAll(res.Results)}, nil
 	})
 
 	type recentIn struct {
@@ -245,7 +245,7 @@ func registerLibraryTools(r *registry) {
 			all = all[:limit]
 		}
 
-		return nil, recentOut{Items: summariseAll(all)}, nil
+		return nil, recentOut{Items: summarizeAll(all)}, nil
 	})
 
 	type filtersIn struct {
@@ -263,7 +263,7 @@ func registerLibraryTools(r *registry) {
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "library_filters",
-		Description: "The distinct genres, tags, narrators, languages, publishers, authors and series in a library: the valid values for library_items filters, and the vocabulary to normalise against.",
+		Description: "The distinct genres, tags, narrators, languages, publishers, authors and series in a library: the valid values for library_items filters, and the vocabulary to normalize against.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in filtersIn) (*mcp.CallToolResult, filtersOut, error) {
 		lib, err := resolveLibrary(ctx, client, in.Library)
 		if err != nil {
@@ -356,6 +356,84 @@ func registerLibraryTools(r *registry) {
 	type scanOut struct {
 		Started string `json:"started" jsonschema:"the scan runs in the background; poll server_tasks for completion"`
 	}
+	type createIn struct {
+		Name      string   `json:"name"`
+		Folders   []string `json:"folders"              jsonschema:"absolute paths on the Audiobookshelf server, not on this machine"`
+		MediaType string   `json:"media_type,omitempty" jsonschema:"book (default) or podcast"`
+		Provider  string   `json:"provider,omitempty"   jsonschema:"default metadata provider: audible, google, openlibrary, itunes..."`
+		Icon      string   `json:"icon,omitempty"`
+	}
+	type createOut struct {
+		Library libraryRow `json:"library"`
+	}
+	add(r, writeTool, &mcp.Tool{
+		Name:        "library_create",
+		Description: "Create a library over folders that already exist on the Audiobookshelf server (the paths are the server's, not the caller's). The library starts empty; library_scan populates it. Admin only. Changes server state.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in createIn) (*mcp.CallToolResult, createOut, error) {
+		name := strings.TrimSpace(in.Name)
+		if name == "" {
+			return nil, createOut{}, errors.New("name is required")
+		}
+
+		mediaType := strings.ToLower(strings.TrimSpace(in.MediaType))
+		if mediaType == "" {
+			mediaType = "book"
+		}
+		if mediaType != "book" && mediaType != "podcast" {
+			return nil, createOut{}, fmt.Errorf("media_type %q must be book or podcast", in.MediaType)
+		}
+
+		folders := make([]abs.Folder, 0, len(in.Folders))
+		for _, f := range in.Folders {
+			if f = strings.TrimSpace(f); f != "" {
+				folders = append(folders, abs.Folder{FullPath: f})
+			}
+		}
+		if len(folders) == 0 {
+			return nil, createOut{}, errors.New("at least one folder path on the server is required")
+		}
+
+		lib, err := client.CreateLibrary(ctx, abs.LibraryCreate{
+			Name: name, Folders: folders, MediaType: mediaType, Provider: in.Provider, Icon: in.Icon,
+		})
+		if err != nil {
+			return nil, createOut{}, err
+		}
+
+		return nil, createOut{Library: libraryRowOf(lib)}, nil
+	})
+
+	type libEditIn struct {
+		Library  string `json:"library"             jsonschema:"library name or id"`
+		Name     string `json:"name,omitempty"      jsonschema:"new name"`
+		Provider string `json:"provider,omitempty"  jsonschema:"default metadata provider: audible, google, openlibrary, itunes..."`
+		Icon     string `json:"icon,omitempty"`
+	}
+	type libEditOut struct {
+		Library libraryRow `json:"library"`
+	}
+	add(r, writeTool, &mcp.Tool{
+		Name:        "library_edit",
+		Description: "Rename a library, or change its default metadata provider or icon. Folders and scan settings are not touched. Admin only. Changes server state.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in libEditIn) (*mcp.CallToolResult, libEditOut, error) {
+		lib, err := resolveLibrary(ctx, client, in.Library)
+		if err != nil {
+			return nil, libEditOut{}, err
+		}
+
+		upd := abs.LibraryUpdate{Name: strPtr(in.Name), Provider: strPtr(in.Provider), Icon: strPtr(in.Icon)}
+		if upd.Name == nil && upd.Provider == nil && upd.Icon == nil {
+			return nil, libEditOut{}, errors.New("nothing to change: pass name, provider or icon")
+		}
+
+		updated, err := client.UpdateLibrary(ctx, lib.ID, upd)
+		if err != nil {
+			return nil, libEditOut{}, err
+		}
+
+		return nil, libEditOut{Library: libraryRowOf(updated)}, nil
+	})
+
 	add(r, writeTool, &mcp.Tool{
 		Name:        "library_scan",
 		Description: "Scan a library's folders so new, changed and removed files are picked up. Admin only. Changes server state; runs in the background.",
@@ -397,7 +475,7 @@ func registerLibraryTools(r *registry) {
 	}
 	add(r, deleteTool, &mcp.Tool{
 		Name:        "library_remove_issues",
-		Description: "Delete the library records of every item whose folder is missing or has no playable media (library_audit issues lists them first). Files on disk are untouched, but listening progress for those items is lost. Admin only.",
+		Description: "Delete the library records of every item whose folder is missing or has no playable media (audit_issues lists them first). Files on disk are untouched, but listening progress for those items is lost. Admin only.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in removeIssuesIn) (*mcp.CallToolResult, removeIssuesOut, error) {
 		lib, err := resolveLibrary(ctx, client, in.Library)
 		if err != nil {

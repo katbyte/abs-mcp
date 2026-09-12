@@ -73,11 +73,14 @@ func (c *Client) ItemsInProgress(ctx context.Context, limit int) ([]Item, error)
 
 // Bookmarks lists the API key user's bookmarks across all items.
 func (c *Client) Bookmarks(ctx context.Context) ([]Bookmark, error) {
-	var bs []Bookmark
-	if err := c.get(ctx, "/api/me/bookmarks", nil, &bs); err != nil {
+	// the server wraps these in an object, unlike most of the /api/me routes
+	var resp struct {
+		Bookmarks []Bookmark `json:"bookmarks"`
+	}
+	if err := c.get(ctx, "/api/me/bookmarks", nil, &resp); err != nil {
 		return nil, err
 	}
-	return bs, nil
+	return resp.Bookmarks, nil
 }
 
 // CreateBookmark adds a bookmark at time (seconds) on an item.

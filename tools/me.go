@@ -90,9 +90,9 @@ func registerMeTools(r *registry) {
 		out := inProgressOut{Items: []inProgressRow{}}
 		for i := range items {
 			it := &items[i]
-			row := inProgressRow{itemSummary: summarise(it)}
+			row := inProgressRow{itemSummary: summarize(it)}
 			if it.RecentEpisode != nil {
-				ep := summariseEpisode(it.RecentEpisode, it.Title(), false)
+				ep := summarizeEpisode(it.RecentEpisode, it.Title(), false)
 				ep.Progress = row.Progress
 				row.Episode = &ep
 				row.Progress = nil
@@ -380,7 +380,7 @@ func registerMeTools(r *registry) {
 			if abs.Millis(sessions[i].UpdatedAt).Before(cutoff) {
 				continue
 			}
-			out.Sessions = append(out.Sessions, summariseSession(&sessions[i]))
+			out.Sessions = append(out.Sessions, summarizeSession(&sessions[i]))
 		}
 
 		return nil, out, nil

@@ -48,14 +48,33 @@ func (c *Client) Tasks(ctx context.Context) ([]Task, error) {
 
 // Providers lists the metadata providers available for matching.
 func (c *Client) Providers(ctx context.Context) (book, podcast []string, err error) {
+	// {"providers":{"books":[{"value":"audible","text":"Audible.com"},...],
+	//               "podcasts":[...]}} - the value is what the match endpoints take
 	var resp struct {
-		Book    []string `json:"book"`
-		Podcast []string `json:"podcast"`
+		Providers struct {
+			Books    []providerOption `json:"books"`
+			Podcasts []providerOption `json:"podcasts"`
+		} `json:"providers"`
 	}
 	if err := c.get(ctx, "/api/search/providers", nil, &resp); err != nil {
 		return nil, nil, err
 	}
-	return resp.Book, resp.Podcast, nil
+	return providerValues(resp.Providers.Books), providerValues(resp.Providers.Podcasts), nil
+}
+
+type providerOption struct {
+	Value string `json:"value"`
+	Text  string `json:"text"`
+}
+
+func providerValues(opts []providerOption) []string {
+	out := make([]string, 0, len(opts))
+	for _, o := range opts {
+		if o.Value != "" {
+			out = append(out, o.Value)
+		}
+	}
+	return out
 }
 
 // Users lists all user accounts (admin only). includeLatestSession adds each

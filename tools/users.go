@@ -160,7 +160,7 @@ func registerUserTools(r *registry) {
 			if abs.Millis(sessions[i].UpdatedAt).Before(cutoff) {
 				continue
 			}
-			out.Sessions = append(out.Sessions, summariseSession(&sessions[i]))
+			out.Sessions = append(out.Sessions, summarizeSession(&sessions[i]))
 		}
 
 		return nil, out, nil

@@ -2,6 +2,8 @@ package abs
 
 import (
 	"context"
+	"encoding/base64"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -232,6 +234,40 @@ func (c *Client) Narrators(ctx context.Context, libraryID string) ([]NarratorRow
 	return resp.Narrators, nil
 }
 
+// narratorID encodes a narrator name the way the server addresses it: base64
+// of the name, then percent-encoded into the path.
+func narratorID(name string) string {
+	return url.PathEscape(base64.StdEncoding.EncodeToString([]byte(name)))
+}
+
+// RenameNarrator renames a narrator on every book that carries them, across
+// the library. Renaming onto an existing narrator merges the two. Requires the
+// update permission; returns how many items changed.
+func (c *Client) RenameNarrator(ctx context.Context, libraryID, from, to string) (int, error) {
+	var resp struct {
+		Updated int `json:"updated"`
+	}
+	path := "/api/libraries/" + url.PathEscape(libraryID) + "/narrators/" + narratorID(from)
+	if err := c.patch(ctx, path, map[string]string{"name": to}, &resp); err != nil {
+		return 0, err
+	}
+	return resp.Updated, nil
+}
+
+// RemoveNarrator drops a narrator from every book that carries them. Requires
+// the update permission; returns how many items changed.
+func (c *Client) RemoveNarrator(ctx context.Context, libraryID, name string) (int, error) {
+	var resp struct {
+		Updated int `json:"updated"`
+	}
+	// not c.del: that discards the body, and the count is in it
+	path := "/api/libraries/" + url.PathEscape(libraryID) + "/narrators/" + narratorID(name)
+	if err := c.do(ctx, http.MethodDelete, path, nil, nil, &resp); err != nil {
+		return 0, err
+	}
+	return resp.Updated, nil
+}
+
 // Collections lists collections, optionally restricted to one library.
 func (c *Client) Collections(ctx context.Context, libraryID string) ([]Collection, error) {
 	path := "/api/collections"
@@ -285,13 +321,12 @@ func (c *Client) RecentEpisodes(ctx context.Context, libraryID string, limit, pa
 	return resp.Episodes, nil
 }
 
-// Personalised returns the home-page shelves (continue listening, recently
-// added, continue series, ...) for the API key's user.
-func (c *Client) Personalised(ctx context.Context, libraryID string, limit int) ([]Shelf, error) {
+// Personalized returns the server's own home-screen shelves for a library.
+func (c *Client) Personalized(ctx context.Context, libraryID string, limit int) ([]Shelf, error) {
 	q := url.Values{}
 	intQuery(q, "limit", limit)
 	var shelves []Shelf
-	if err := c.get(ctx, "/api/libraries/"+url.PathEscape(libraryID)+"/personalised", q, &shelves); err != nil {
+	if err := c.get(ctx, "/api/libraries/"+url.PathEscape(libraryID)+"/personalized", q, &shelves); err != nil {
 		return nil, err
 	}
 	return shelves, nil
@@ -329,6 +364,32 @@ func (c *Client) MatchAll(ctx context.Context, libraryID string) error {
 // (admin only). Files are untouched.
 func (c *Client) RemoveIssues(ctx context.Context, libraryID string) error {
 	return c.del(ctx, "/api/libraries/"+url.PathEscape(libraryID)+"/issues", nil)
+}
+
+// DeleteLibrary removes a library and its item records (admin only). The files
+// on disk are untouched.
+func (c *Client) DeleteLibrary(ctx context.Context, libraryID string) error {
+	return c.del(ctx, "/api/libraries/"+url.PathEscape(libraryID), nil)
+}
+
+// LibraryCreate holds the fields POST /api/libraries accepts. Folders are
+// paths on the Audiobookshelf server, not on the caller's machine.
+type LibraryCreate struct {
+	Name      string   `json:"name"`
+	Folders   []Folder `json:"folders"`
+	MediaType string   `json:"mediaType,omitempty"`
+	Provider  string   `json:"provider,omitempty"`
+	Icon      string   `json:"icon,omitempty"`
+}
+
+// CreateLibrary adds a library over folders already present on the server
+// (admin only). The library is created empty: ScanLibrary populates it.
+func (c *Client) CreateLibrary(ctx context.Context, in LibraryCreate) (*Library, error) {
+	var l Library
+	if err := c.post(ctx, "/api/libraries", nil, in, &l); err != nil {
+		return nil, err
+	}
+	return &l, nil
 }
 
 // LibraryUpdate holds the editable library fields; nil pointers are left

@@ -1,0 +1,27 @@
+{
+  "host": "s365.podbean.com",
+  "interactions": [
+    {
+      "key": "GET s365.podbean.com/pb/9986abaee03ddf976b59497f2fdfcd9f/6aa47191/data1/fs109/6563527/uploads/Area_51_Preview_Audioboua2.mp3?pbss=78c76c17-b83e-5109-943d-89a33eb1c49c",
+      "method": "GET",
+      "host": "s365.podbean.com",
+      "path": "/pb/9986abaee03ddf976b59497f2fdfcd9f/6aa47191/data1/fs109/6563527/uploads/Area_51_Preview_Audioboua2.mp3",
+      "query": "pbss=78c76c17-b83e-5109-943d-89a33eb1c49c",
+      "status": 200,
+      "headers": {
+        "Accept-Ranges": "bytes",
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "max-age=3600",
+        "Content-Type": "audio/mpeg",
+        "Etag": "\"6a90480b-12b991e\"",
+        "Last-Modified": "Thu, 27 Aug 2026 14:22:03 GMT",
+        "Server": "Podbean Content Distribution Network",
+        "Strict-Transport-Security": "max-age=15552000; includeSubDomains"
+      },
+      "elided": true,
+      "elided_type": "audio/mpeg",
+      "elided_size": 19634462
+    }
+  ]
+}

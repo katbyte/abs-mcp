@@ -1,0 +1,152 @@
+{
+  "host": "api.audible.com",
+  "interactions": [
+    {
+      "key": "GET api.audible.com/1.0/catalog/products?author=Isaac+Asimov\u0026num_results=10\u0026products_sort_by=Relevance\u0026title=Foundation",
+      "method": "GET",
+      "host": "api.audible.com",
+      "path": "/1.0/catalog/products",
+      "query": "num_results=10\u0026products_sort_by=Relevance\u0026title=Foundation\u0026author=Isaac+Asimov",
+      "status": 200,
+      "headers": {
+        "Cache-Control": "private, max-age=1800",
+        "Content-Type": "application/json",
+        "Edge-Cache-Control": "no-store,no-cache,stale-if-error=0,stale-while-revalidate=0",
+        "Server": "Server",
+        "Strict-Transport-Security": "max-age=47474747; includeSubDomains; preload",
+        "Vary": "User-Agent,Accept-Encoding",
+        "Via": "1.1 be64eb4001898a3afeb0b33698851c54.cloudfront.net (CloudFront)",
+        "X-Amz-Date": "Sat, 12 Sep 2026 08:02:34 GMT",
+        "X-Amz-Rid": "C3CT1N23617W5RF997TF",
+        "X-Amzn-Requestid": "a29bb7c7-8b3f-4aa8-83db-fab478c19ba7"
+      },
+      "body": "{\"product_filters\":[],\"products\":[{\"asin\":\"B003D8W5VS\"},{\"asin\":\"B003FCV4O6\"},{\"asin\":\"B005T6ZETM\"},{\"asin\":\"B005WL4R7E\"},{\"asin\":\"B003D8S2ME\"},{\"asin\":\"B005WWT30E\"},{\"asin\":\"B005WWT7TQ\"},{\"asin\":\"8466355189\"},{\"asin\":\"B0BV7MGYFH\"},{\"asin\":\"B0BPYXHCCS\"}],\"response_groups\":[\"always-returned\"],\"total_results\":19}"
+    },
+    {
+      "key": "GET api.audible.com/1.0/catalog/products?author=Isaac+Asimov\u0026num_results=10\u0026products_sort_by=Relevance\u0026title=Foundation+and+Empire",
+      "method": "GET",
+      "host": "api.audible.com",
+      "path": "/1.0/catalog/products",
+      "query": "num_results=10\u0026products_sort_by=Relevance\u0026title=Foundation+and+Empire\u0026author=Isaac+Asimov",
+      "status": 200,
+      "headers": {
+        "Cache-Control": "private, max-age=1800",
+        "Content-Type": "application/json",
+        "Edge-Cache-Control": "no-store,no-cache,stale-if-error=0,stale-while-revalidate=0",
+        "Server": "Server",
+        "Strict-Transport-Security": "max-age=47474747; includeSubDomains; preload",
+        "Vary": "User-Agent,Accept-Encoding",
+        "Via": "1.1 be64eb4001898a3afeb0b33698851c54.cloudfront.net (CloudFront)",
+        "X-Amz-Date": "Sat, 12 Sep 2026 08:02:34 GMT",
+        "X-Amz-Rid": "YN5JD3H85EN21J98X1W4",
+        "X-Amzn-Requestid": "e50aa7ee-3217-4daf-a690-28d71ed92068"
+      },
+      "body": "{\"product_filters\":[],\"products\":[{\"asin\":\"B003FCV4O6\"},{\"asin\":\"B0BTV24S37\"}],\"response_groups\":[\"always-returned\"],\"total_results\":2}"
+    },
+    {
+      "key": "GET api.audible.com/1.0/catalog/products?author=Isaac+Asimov\u0026num_results=10\u0026products_sort_by=Relevance\u0026title=Second+Foundation",
+      "method": "GET",
+      "host": "api.audible.com",
+      "path": "/1.0/catalog/products",
+      "query": "num_results=10\u0026products_sort_by=Relevance\u0026title=Second+Foundation\u0026author=Isaac+Asimov",
+      "status": 200,
+      "headers": {
+        "Cache-Control": "private, max-age=1800",
+        "Content-Type": "application/json",
+        "Edge-Cache-Control": "no-store,no-cache,stale-if-error=0,stale-while-revalidate=0",
+        "Server": "Server",
+        "Strict-Transport-Security": "max-age=47474747; includeSubDomains; preload",
+        "Vary": "User-Agent,Accept-Encoding",
+        "Via": "1.1 be64eb4001898a3afeb0b33698851c54.cloudfront.net (CloudFront)",
+        "X-Amz-Date": "Sat, 12 Sep 2026 08:02:33 GMT",
+        "X-Amz-Rid": "M0J30YPN354MYTDJ2BQB",
+        "X-Amzn-Requestid": "fc772a6e-a3ff-471c-bf03-1fdd95eab313"
+      },
+      "body": "{\"product_filters\":[],\"products\":[{\"asin\":\"B003D8S2ME\"}],\"response_groups\":[\"always-returned\"],\"total_results\":1}"
+    },
+    {
+      "key": "GET api.audible.com/1.0/catalog/products?author=James+S.+A.+Corey\u0026num_results=10\u0026products_sort_by=Relevance\u0026title=Leviathan+Wakes",
+      "method": "GET",
+      "host": "api.audible.com",
+      "path": "/1.0/catalog/products",
+      "query": "num_results=10\u0026products_sort_by=Relevance\u0026title=Leviathan+Wakes\u0026author=James+S.+A.+Corey",
+      "status": 200,
+      "headers": {
+        "Cache-Control": "private, max-age=1800",
+        "Content-Type": "application/json",
+        "Edge-Cache-Control": "no-store,no-cache,stale-if-error=0,stale-while-revalidate=0",
+        "Server": "Server",
+        "Strict-Transport-Security": "max-age=47474747; includeSubDomains; preload",
+        "Vary": "User-Agent,Accept-Encoding",
+        "Via": "1.1 be64eb4001898a3afeb0b33698851c54.cloudfront.net (CloudFront)",
+        "X-Amz-Date": "Sat, 12 Sep 2026 08:02:35 GMT",
+        "X-Amz-Rid": "ESNCVYDT2GCE85HS8RMG",
+        "X-Amzn-Requestid": "440d5553-8a24-4c83-b755-8fa054cfdcec"
+      },
+      "body": "{\"product_filters\":[],\"products\":[{\"asin\":\"B073H9PF2D\"}],\"response_groups\":[\"always-returned\"],\"total_results\":1}"
+    },
+    {
+      "key": "GET api.audible.com/1.0/catalog/products?author=Robert+Evans\u0026num_results=10\u0026products_sort_by=Relevance\u0026title=A+Brief+History+of+Vice",
+      "method": "GET",
+      "host": "api.audible.com",
+      "path": "/1.0/catalog/products",
+      "query": "num_results=10\u0026products_sort_by=Relevance\u0026title=A+Brief+History+of+Vice\u0026author=Robert+Evans",
+      "status": 200,
+      "headers": {
+        "Cache-Control": "private, max-age=1800",
+        "Content-Type": "application/json",
+        "Edge-Cache-Control": "no-store,no-cache,stale-if-error=0,stale-while-revalidate=0",
+        "Server": "Server",
+        "Strict-Transport-Security": "max-age=47474747; includeSubDomains; preload",
+        "Vary": "User-Agent,Accept-Encoding",
+        "Via": "1.1 cc9ebca5a54f4373a29c55c0b44fa476.cloudfront.net (CloudFront)",
+        "X-Amz-Date": "Sat, 12 Sep 2026 08:48:07 GMT",
+        "X-Amz-Rid": "E5E7TB2D46B6E5FRE8V0",
+        "X-Amzn-Requestid": "473d89b4-81a9-440a-ac61-94d99a36b436"
+      },
+      "body": "{\"product_filters\":[],\"products\":[{\"asin\":\"B01IIBKTDA\"}],\"response_groups\":[\"always-returned\"],\"total_results\":1}"
+    },
+    {
+      "key": "GET api.audible.com/1.0/catalog/products?author=Smedley+D.+Butler\u0026num_results=10\u0026products_sort_by=Relevance\u0026title=War+Is+a+Racket",
+      "method": "GET",
+      "host": "api.audible.com",
+      "path": "/1.0/catalog/products",
+      "query": "num_results=10\u0026products_sort_by=Relevance\u0026title=War+Is+a+Racket\u0026author=Smedley+D.+Butler",
+      "status": 200,
+      "headers": {
+        "Cache-Control": "private, max-age=1800",
+        "Content-Type": "application/json",
+        "Edge-Cache-Control": "no-store,no-cache,stale-if-error=0,stale-while-revalidate=0",
+        "Server": "Server",
+        "Strict-Transport-Security": "max-age=47474747; includeSubDomains; preload",
+        "Vary": "User-Agent,Accept-Encoding",
+        "Via": "1.1 cc9ebca5a54f4373a29c55c0b44fa476.cloudfront.net (CloudFront)",
+        "X-Amz-Date": "Sat, 12 Sep 2026 08:48:06 GMT",
+        "X-Amz-Rid": "KNF2Y93XMQZQH4MP7JT4",
+        "X-Amzn-Requestid": "996cd9f3-7ca3-47bf-aa4c-42457306b5c8"
+      },
+      "body": "{\"product_filters\":[],\"products\":[{\"asin\":\"B003SRW71C\"},{\"asin\":\"1982786280\"},{\"asin\":\"B0FM5CXD6X\"},{\"asin\":\"B0GCPYK8H1\"},{\"asin\":\"B0CYJ2XJ3M\"}],\"response_groups\":[\"always-returned\"],\"total_results\":5}"
+    },
+    {
+      "key": "GET api.audible.com/1.0/catalog/products?author=William+Manchester\u0026num_results=10\u0026products_sort_by=Relevance\u0026title=The+Arms+of+Krupp",
+      "method": "GET",
+      "host": "api.audible.com",
+      "path": "/1.0/catalog/products",
+      "query": "num_results=10\u0026products_sort_by=Relevance\u0026title=The+Arms+of+Krupp\u0026author=William+Manchester",
+      "status": 200,
+      "headers": {
+        "Cache-Control": "private, max-age=1800",
+        "Content-Type": "application/json",
+        "Edge-Cache-Control": "no-store,no-cache,stale-if-error=0,stale-while-revalidate=0",
+        "Server": "Server",
+        "Strict-Transport-Security": "max-age=47474747; includeSubDomains; preload",
+        "Vary": "User-Agent,Accept-Encoding",
+        "Via": "1.1 cc9ebca5a54f4373a29c55c0b44fa476.cloudfront.net (CloudFront)",
+        "X-Amz-Date": "Sat, 12 Sep 2026 08:48:02 GMT",
+        "X-Amz-Rid": "56AT05AN1XF6M8Z7TDKK",
+        "X-Amzn-Requestid": "2768b0e6-75bb-464d-9870-b99dfc6a82dd"
+      },
+      "body": "{\"product_filters\":[],\"products\":[{\"asin\":\"B071CMVW9Q\"}],\"response_groups\":[\"always-returned\"],\"total_results\":1}"
+    }
+  ]
+}

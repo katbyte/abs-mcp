@@ -6,3 +6,6 @@ abs-mcp
 .tools/bin/
 .tools/venv/
 .env
+.abs-mcp
+.testenv.sh
+.testenv-sdk.sh

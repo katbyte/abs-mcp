@@ -20,9 +20,9 @@ Design rules, in priority order:
 
 | Area | Tools | Answers |
 |---|---|---|
-| know the library | `server_info`, `library_list`, `library_get`, `library_search`, `library_items`, `library_filters`, `library_stats`, `library_recent`, `item_get`, `item_chapters`, `item_files` | "what do I have, and what shape is it in" |
-| curation | `library_audit` (17 checks), `library_duplicates`, `item_match` → `item_match_apply`, `item_cover_search` → `item_cover_set`, `item_chapters_set`, `item_edit`, `author_match`, `author_edit` (merge), `series_list` (gaps) | "what is wrong, and fix it" |
-| maintenance | `library_scan`, `library_match_all`, `item_rescan`, `item_embed_metadata`, `server_tasks`, `server_backups`, `server_rename_tag` | "keep it healthy" |
+| know the library | `server_info`, `library_list`, `library_get`, `library_create`, `library_edit`, `narrator_list`, `library_search`, `library_items`, `library_filters`, `library_stats`, `library_recent`, `item_get`, `item_chapters`, `item_files` | "what do I have, and what shape is it in" |
+| curation | `audit_all` + `audit_missing` + 7 per-item audits, `audit_duplicates`, `item_match` → `item_match_apply`, `item_cover_search` → `item_cover_set`, `item_chapters_set`, `item_edit`, `author_match`, `author_edit` (merge), `author_image_set`, `narrator_edit` (merge), `item_batch_edit`, `audit_series_gaps`, `audit_terminology`, `audit_cover_ratio`, `audit_author_missing_image` | "what is wrong, and fix it" |
+| maintenance | `library_scan`, `library_match_all`, `item_rescan`, `item_embed_metadata`, `server_tasks`, `server_backups`, `server_get_tags` → `server_rename_tag` | "keep it healthy" |
 | listening | `me_in_progress`, `me_progress_*`, `me_bookmark*`, `me_history`, `me_stats`, `server_sessions`, `user_*` | "what am I / are they listening to" |
 | organise | `collection_*`, `playlist_*` | "group these" |
 | podcasts | `podcast_episodes`, `podcast_feed_episodes` → `podcast_episode_download`, `podcast_check_new`, `podcast_search` → `podcast_add`, `podcast_settings`, `podcast_downloads`, `podcast_recent` | "subscribe, catch up, back-fill" |
@@ -31,13 +31,11 @@ Design rules, in priority order:
 
 | Tool | Endpoints | Answers |
 |---|---|---|
-| `library_audit check=year_mismatch` | folder `(year)` vs `publishedYear` | wrong-edition matches |
-| `item_batch_edit` | `POST /api/items/batch/update` | "set the genre on these 40 books" in one call |
+| `audit_year_mismatch` | folder `(year)` vs `publishedYear` | wrong-edition matches |
 | `item_send_ebook` | `POST /api/emails/send-ebook-to-device` | "send this epub to my Kobo" |
 | `feed_open` / `feed_close` | `/api/feeds/*` | "make an RSS feed for this series" |
 | `user_create` / `user_edit` | `/api/users` | account admin |
 | `item_encode_m4b` | `/api/tools/item/:id/encode-m4b` | "merge these mp3s into one m4b" |
-| `library_audit check=narrator_case` | vocabulary normalisation against `library_filters` | "Jim Dale" vs "jim dale" |
 
 ## Guarded / deliberately excluded
 

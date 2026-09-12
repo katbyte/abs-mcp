@@ -38,6 +38,18 @@ func (c *Client) UpdateAuthor(ctx context.Context, id string, upd AuthorUpdate) 
 	return &resp.Author, resp.Merged, nil
 }
 
+// SetAuthorImage downloads imageURL on the server and makes it the author's
+// photo. Requires the upload permission.
+func (c *Client) SetAuthorImage(ctx context.Context, id, imageURL string) (*Author, error) {
+	var resp struct {
+		Author Author `json:"author"`
+	}
+	if err := c.post(ctx, "/api/authors/"+url.PathEscape(id)+"/image", nil, map[string]string{"url": imageURL}, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Author, nil
+}
+
 // MatchAuthor looks the author up on Audnexus by name (or ASIN) and fills in
 // their ASIN, description and image.
 func (c *Client) MatchAuthor(ctx context.Context, id, name, asin, region string) (author *Author, updated bool, err error) {

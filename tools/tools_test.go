@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/katbyte/abs-mcp/lib/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -220,7 +221,7 @@ func TestSummariseItem(t *testing.T) {
 		},
 		UserMediaProgress: &abs.MediaProgress{Progress: 0.5, CurrentTime: 37_500, ID: "p1"},
 	}
-	s := summarise(it)
+	s := summarize(it)
 	if s.Title != "Dune" || s.Author != "Frank Herbert" || s.Narrator != "Scott Brick" || s.Year != "1965" {
 		t.Errorf("summary = %+v", s)
 	}
@@ -258,8 +259,13 @@ func TestAuditChecks(t *testing.T) {
 	if _, bad := auditChecksByName["chapters"](book(abs.Metadata{}, abs.Media{Duration: 3600})); bad {
 		t.Error("chapters: short book flagged")
 	}
-	if _, bad := auditChecksByName["single_file"](book(abs.Metadata{}, abs.Media{Duration: 3 * 3600, NumTracks: 5})); bad {
-		t.Error("single_file: multi-track flagged")
+	// one chapter across a long book is as unnavigable as none, and the
+	// chapters check treats any chapter count above zero as fine
+	if _, bad := auditChecksByName["single_chapter"](book(abs.Metadata{}, abs.Media{Duration: 3 * 3600, NumChapters: 1})); !bad {
+		t.Error("single_chapter: one chapter over 3h not flagged")
+	}
+	if _, bad := auditChecksByName["single_chapter"](book(abs.Metadata{}, abs.Media{Duration: 3 * 3600, NumChapters: 30})); bad {
+		t.Error("single_chapter: a properly chaptered book flagged")
 	}
 
 	// path check: Author/Title layout matches; a foreign folder does not
@@ -288,5 +294,330 @@ func TestAuditChecks(t *testing.T) {
 	}
 	if _, bad := auditChecksByName["unmatched"](pod); bad {
 		t.Error("unmatched: podcast flagged")
+	}
+}
+
+func TestSeriesSequences(t *testing.T) {
+	t.Parallel()
+
+	// items as a series-filtered query returns them: the series listing has no
+	// sequence numbers at all
+	series := func(seqs ...string) []abs.Item {
+		var items []abs.Item
+		for _, seq := range seqs {
+			it := abs.Item{}
+			it.Media.Metadata.Series = abs.SeriesRefs{{ID: "s1", Sequence: seq}}
+			items = append(items, it)
+		}
+		return items
+	}
+
+	for _, tc := range []struct {
+		name    string
+		seqs    []string
+		have    []string
+		missing []string
+	}{
+		{"complete", []string{"1", "2", "3"}, []string{"1", "2", "3"}, nil},
+		{"one gap", []string{"1", "3"}, []string{"1", "3"}, []string{"2"}},
+		{"run of gaps", []string{"3", "6"}, []string{"3", "6"}, []string{"4", "5"}},
+		{"out of order", []string{"4", "1", "2"}, []string{"1", "2", "4"}, []string{"3"}},
+		{"novella is not a gap", []string{"1", "1.5", "2"}, []string{"1", "1.5", "2"}, nil},
+		{"gap around a novella", []string{"1", "2.5", "4"}, []string{"1", "2.5", "4"}, []string{"2", "3"}},
+		{"does not assume a start", []string{"3", "4"}, []string{"3", "4"}, nil},
+		{"single book", []string{"1"}, []string{"1"}, nil},
+		{"unnumbered", []string{"", "", ""}, nil, nil},
+		{"non-numeric ignored", []string{"one", "2", "4"}, []string{"2", "4"}, []string{"3"}},
+		{"duplicate sequences", []string{"1", "1", "3"}, []string{"1", "3"}, []string{"2"}},
+	} {
+		if have, missing := seriesSequences(series(tc.seqs...), "s1"); !slices.Equal(have, tc.have) || !slices.Equal(missing, tc.missing) {
+			t.Errorf("%s: have=%v missing=%v, want have=%v missing=%v", tc.name, have, missing, tc.have, tc.missing)
+		}
+	}
+
+	// a ref for another series in the same book must not count
+	it := abs.Item{}
+	it.Media.Metadata.Series = abs.SeriesRefs{{ID: "s2", Sequence: "9"}, {ID: "s1", Sequence: "1"}}
+	if have, missing := seriesSequences([]abs.Item{it}, "s1"); !slices.Equal(have, []string{"1"}) || missing != nil {
+		t.Errorf("cross-series: have=%v missing=%v", have, missing)
+	}
+}
+
+// norm and lastFirstMatch carry the folder-vs-metadata heuristic for the path
+// audit. They are pure string logic with real branching, and enumerating the
+// shapes here is far cheaper than staging folders on a real server.
+func TestNorm(t *testing.T) {
+	t.Parallel()
+
+	for in, want := range map[string]string{
+		"":                       "",
+		"Dune":                   "dune",
+		"The Hitchhiker's Guide": "the hitchhikers guide",
+		"Foundation_and-Empire":  "foundation and empire",
+		"A.B.C.":                 "a b c",
+		"  spaced   out  ":       "spaced out",
+		"Gödel, Escher, Bach":    "gdel escher bach",
+		"2001: A Space Odyssey":  "2001 a space odyssey",
+		"!!!":                    "",
+	} {
+		if got := norm(in); got != want {
+			t.Errorf("norm(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestLastFirstMatch(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		folder, author string
+		want           bool
+	}{
+		{"herbert frank", "frank herbert", true},
+		{"tolkien j r r", "j r r tolkien", true},
+		{"the herbert frank collection", "frank herbert", true},
+		{"frank herbert", "frank herbert", false}, // already first-last; the caller's Contains handles it
+		{"asimov", "isaac asimov", false},         // a surname alone is not the reordering
+		{"herbert frank", "herbert", false},       // single-word authors cannot reorder
+		{"", "frank herbert", false},
+	} {
+		if got := lastFirstMatch(tc.folder, tc.author); got != tc.want {
+			t.Errorf("lastFirstMatch(%q, %q) = %v, want %v", tc.folder, tc.author, got, tc.want)
+		}
+	}
+}
+
+func TestLimitOr(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct{ limit, def, want int }{
+		{0, 50, 50}, {-1, 50, 50}, {10, 50, 10}, {1, 50, 1},
+	} {
+		if got := limitOr(tc.limit, tc.def); got != tc.want {
+			t.Errorf("limitOr(%d, %d) = %d, want %d", tc.limit, tc.def, got, tc.want)
+		}
+	}
+}
+
+// progressOf is the projection every progress-bearing tool goes through, and
+// nil (no progress record) is a normal state rather than an error.
+func TestProgressOf(t *testing.T) {
+	t.Parallel()
+
+	if got := progressOf(nil); got != nil {
+		t.Errorf("progressOf(nil) = %v, want nil", got)
+	}
+
+	got := progressOf(&abs.MediaProgress{
+		ID: "p1", Progress: 0.256, CurrentTime: 3725, IsFinished: false,
+		LastUpdate: 1_700_000_000_000, HideFromContinueListening: true,
+	})
+	if got == nil {
+		t.Fatal("progressOf returned nil for a real record")
+	}
+	if got.Percent != 26 {
+		t.Errorf("percent = %d, want 26 (rounded)", got.Percent)
+	}
+	if got.CurrentTime != "1h 2m" {
+		t.Errorf("current_time = %q, want 1h 2m", got.CurrentTime)
+	}
+	if got.Seconds != 3725 {
+		t.Errorf("seconds = %d", got.Seconds)
+	}
+	if !got.Hidden || got.ProgressID != "p1" {
+		t.Errorf("hidden/id did not carry through: %+v", got)
+	}
+}
+
+// vocabKey decides what counts as "the same value spelled differently", which
+// is the whole basis of audit_terminology. Languages are special: en, eng and
+// English are the same language but share no normalized spelling.
+func TestVocabKey(t *testing.T) {
+	t.Parallel()
+
+	same := func(field string, values ...string) {
+		t.Helper()
+		first := vocabKey(field, values[0])
+		for _, v := range values[1:] {
+			if got := vocabKey(field, v); got != first {
+				t.Errorf("%s: %q (%q) and %q (%q) should group together", field, values[0], first, v, got)
+			}
+		}
+	}
+	differ := func(field, a, b string) {
+		t.Helper()
+		if vocabKey(field, a) == vocabKey(field, b) {
+			t.Errorf("%s: %q and %q should NOT group together", field, a, b)
+		}
+	}
+
+	// the real mess found in a live library
+	same("languages", "en", "eng", "English", "english", "ENGLISH")
+	same("languages", "de", "ger", "deu", "German", "Deutsch")
+	differ("languages", "en", "de")
+	differ("languages", "en", "XXX")
+
+	// everything else groups on spelling alone
+	same("narrators", "Jim Dale", "jim dale", "JIM DALE")
+	same("genres", "Sci-Fi", "sci fi", "Sci Fi")
+	same("tags", "space-opera", "Space Opera", "space_opera")
+	same("authors", "J.R.R. Tolkien", "J R R Tolkien", "j.r.r. tolkien")
+	differ("narrators", "Jim Dale", "Jim Dales")
+	differ("genres", "Science Fiction", "Science")
+
+	// a language code is not folded when it is not one we know
+	if knownLanguage("XXX") {
+		t.Error("XXX should not be a recognized language")
+	}
+	if !knownLanguage("eng") || !knownLanguage("English") {
+		t.Error("eng/English should be recognized")
+	}
+}
+
+func TestVocabKeyEmpty(t *testing.T) {
+	t.Parallel()
+
+	for _, field := range vocabFields {
+		if got := vocabKey(field, "   "); got != "" {
+			t.Errorf("%s: blank value gave key %q", field, got)
+		}
+	}
+}
+
+// Every audit must have a case that trips it and a case that does not, so a
+// predicate cannot silently degenerate into "flags everything" (which is how
+// audit_series_gaps shipped broken) or "flags nothing".
+func TestEveryAuditTripsAndClears(t *testing.T) {
+	t.Parallel()
+
+	book := func(m abs.Metadata, media abs.Media) *abs.Item {
+		media.Metadata = m
+		return &abs.Item{MediaType: "book", RelPath: "Frank Herbert/Dune", Media: media}
+	}
+	pod := func(m abs.Metadata, media abs.Media) *abs.Item {
+		media.Metadata = m
+		return &abs.Item{MediaType: "podcast", RelPath: "Behind the Bastards", Media: media}
+	}
+	// a book with nothing wrong with it
+	clean := func() *abs.Item {
+		return book(abs.Metadata{
+			Title: "Dune", AuthorName: "Frank Herbert", ASIN: "B0", Description: "A book.",
+			NarratorName: "Scott Brick", SeriesName: "Dune", Genres: []string{"Science Fiction"},
+			PublishedYear: "1965", Publisher: "Bantam", Language: "English",
+		}, abs.Media{Duration: 3600, NumTracks: 3, NumChapters: 20, NumAudioFiles: 3, CoverPath: "/c.jpg"})
+	}
+
+	trips := map[string]*abs.Item{
+		"unmatched":   book(abs.Metadata{Title: "Dune"}, abs.Media{}),
+		"cover":       book(abs.Metadata{Title: "Dune"}, abs.Media{}),
+		"description": book(abs.Metadata{Title: "Dune"}, abs.Media{}),
+		"narrator":    book(abs.Metadata{Title: "Dune"}, abs.Media{}),
+		"series":      book(abs.Metadata{Title: "Dune"}, abs.Media{}),
+		"author":      book(abs.Metadata{Title: "Dune"}, abs.Media{}),
+		"genres":      book(abs.Metadata{Title: "Dune"}, abs.Media{}),
+		"year":        book(abs.Metadata{Title: "Dune"}, abs.Media{}),
+		"publisher":   book(abs.Metadata{Title: "Dune"}, abs.Media{}),
+		"language":    book(abs.Metadata{Title: "Dune"}, abs.Media{}),
+		"chapters":    book(abs.Metadata{}, abs.Media{Duration: 3 * 3600, NumTracks: 3}),
+		// one chapter over three hours is as unnavigable as none
+		"single_chapter": book(abs.Metadata{}, abs.Media{Duration: 3 * 3600, NumTracks: 1, NumChapters: 1}),
+		"no_audio":       book(abs.Metadata{Title: "Dune"}, abs.Media{}),
+		// the server flags these itself; the predicate only reads the flags
+		"issues":          {MediaType: "book", IsMissing: true, Media: abs.Media{Metadata: abs.Metadata{Title: "Gone"}}},
+		"path":            book(abs.Metadata{Title: "Neuromancer", AuthorName: "William Gibson"}, abs.Media{}),
+		"author_as_title": book(abs.Metadata{Title: "Mark of Calth", AuthorName: "Mark of Calth"}, abs.Media{}),
+		"stale_feed":      pod(abs.Metadata{FeedURL: "http://f"}, abs.Media{}),
+		"no_episodes":     pod(abs.Metadata{FeedURL: "http://f"}, abs.Media{}),
+	}
+	clears := map[string]*abs.Item{
+		"unmatched":       clean(),
+		"cover":           clean(),
+		"description":     clean(),
+		"narrator":        clean(),
+		"series":          clean(),
+		"author":          clean(),
+		"genres":          clean(),
+		"year":            clean(),
+		"publisher":       clean(),
+		"language":        clean(),
+		"chapters":        clean(),
+		"single_chapter":  clean(),
+		"no_audio":        clean(),
+		"path":            clean(),
+		"author_as_title": clean(),
+		"issues":          clean(),
+		// a podcast checked recently with episodes downloaded
+		"stale_feed":  pod(abs.Metadata{FeedURL: "http://f"}, abs.Media{LastEpisodeCheck: time.Now().UnixMilli(), NumEpisodes: 3}),
+		"no_episodes": pod(abs.Metadata{FeedURL: "http://f"}, abs.Media{NumEpisodes: 3}),
+	}
+
+	cases := map[string]string{} // check -> the tool or field that exposes it
+	for _, spec := range auditSpecs {
+		cases[spec.Check] = spec.Tool
+	}
+	for _, field := range missingFields {
+		cases[field] = "audit_missing " + field
+	}
+
+	for check, label := range cases {
+		spec := struct{ Tool, Check string }{label, check}
+		check, ok := auditChecksByName[spec.Check]
+		if !ok {
+			t.Errorf("%s: no predicate for check %q", spec.Tool, spec.Check)
+			continue
+		}
+
+		item, ok := trips[spec.Check]
+		if !ok {
+			t.Errorf("%s: no case that trips it - add one", spec.Tool)
+			continue
+		}
+		detail, bad := check(item)
+		if !bad {
+			t.Errorf("%s: did not flag the item it should have", spec.Tool)
+		}
+		if detail == "" {
+			t.Errorf("%s: flagged without saying why", spec.Tool)
+		}
+
+		item, ok = clears[spec.Check]
+		if !ok {
+			t.Errorf("%s: no case that clears it - add one", spec.Tool)
+			continue
+		}
+		if detail, bad := check(item); bad {
+			t.Errorf("%s: flagged a clean item: %s", spec.Tool, detail)
+		}
+	}
+}
+
+// audit_all must cover every audit that has a per-item predicate, or a library
+// could look clean while an audit it never ran has findings.
+func TestAuditSpecsAreComplete(t *testing.T) {
+	t.Parallel()
+
+	byCheck := map[string]string{}
+	for _, spec := range auditSpecs {
+		if prev, dup := byCheck[spec.Check]; dup {
+			t.Errorf("check %q is exposed by both %s and %s", spec.Check, prev, spec.Tool)
+		}
+		byCheck[spec.Check] = spec.Tool
+		if !strings.HasPrefix(spec.Tool, "audit_") {
+			t.Errorf("%s does not use the audit_ prefix", spec.Tool)
+		}
+		if spec.Description == "" {
+			t.Errorf("%s has no description", spec.Tool)
+		}
+	}
+	for _, field := range missingFields {
+		if prev, dup := byCheck[field]; dup {
+			t.Errorf("check %q is exposed by both %s and audit_missing", field, prev)
+		}
+		byCheck[field] = "audit_missing"
+	}
+	for check := range auditChecksByName {
+		if _, ok := byCheck[check]; !ok {
+			t.Errorf("check %q has no audit tool, so audit_all never reports it", check)
+		}
 	}
 }

@@ -60,13 +60,23 @@ func (c *Client) CheckNewEpisodes(ctx context.Context, itemID string, limit int)
 // SearchFeedEpisodes finds episodes in the podcast's feed whose title
 // matches, without downloading.
 func (c *Client) SearchFeedEpisodes(ctx context.Context, itemID, title string) ([]FeedEpisode, error) {
+	// each match is wrapped: {"episodes":[{"episode":{...}}]}. Decoding
+	// straight into []FeedEpisode collides with the episode-number field,
+	// which is a string, not the episode object.
 	var resp struct {
-		Episodes []FeedEpisode `json:"episodes"`
+		Episodes []struct {
+			Episode FeedEpisode `json:"episode"`
+		} `json:"episodes"`
 	}
 	if err := c.get(ctx, "/api/podcasts/"+url.PathEscape(itemID)+"/search-episode", url.Values{"title": {title}}, &resp); err != nil {
 		return nil, err
 	}
-	return resp.Episodes, nil
+
+	out := make([]FeedEpisode, 0, len(resp.Episodes))
+	for _, m := range resp.Episodes {
+		out = append(out, m.Episode)
+	}
+	return out, nil
 }
 
 // DownloadEpisodes queues feed episodes (from SearchFeedEpisodes /

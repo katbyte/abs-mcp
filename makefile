@@ -145,6 +145,68 @@ depscheck: ## Check that go.mod/go.sum and vendor/ are in sync
 test: build ## Run tests
 	go test ./... -timeout ${TEST_TIMEOUT}
 
-check-all: build test lint actionlint yamllint shellcheck depscheck ## Run build + test + all linters + depscheck
+test-integration: ## Run the SDK tests (lib/abs shapes) against an already-running server
+	@[ -n "${ABS_SERVER}" ] && [ -n "${ABS_TOKEN}" ] || \
+		(echo 'ABS_SERVER and ABS_TOKEN must be set; or use "make testacc"'; exit 1)
+	go test -tags integration -count=1 ./integration/... -timeout ${TEST_TIMEOUT} -v
 
-.PHONY: default all help fmt goimports build docker lint lint-fix actionlint yamllint shellcheck depscheck check-all install tools test
+test-acceptance: ## Run the tool tests (behaviour, audits, providers) against an already-running server
+	@[ -n "${ABS_SERVER}" ] && [ -n "${ABS_TOKEN}" ] || \
+		(echo 'ABS_SERVER and ABS_TOKEN must be set; or use "make testacc"'; exit 1)
+	go test -tags integration -count=1 ./acceptance/... -timeout ${TEST_TIMEOUT} -v
+
+# each suite gets its own container: the SDK tests create and delete libraries
+# of their own, which would trample the tool suite's fixtures
+testacc-integration: ## SDK tests in a throwaway container
+	@echo "==> integration (SDK) on port 13379..."
+	@set -e; \
+		ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_PORT=13379 ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk \
+			scripts/abs-testenv.sh up | grep '^export' > .testenv-sdk.sh; \
+		trap 'ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk scripts/abs-testenv.sh down; rm -f .testenv-sdk.sh' EXIT; \
+		. ./.testenv-sdk.sh; \
+		go test -tags integration -count=1 ./integration/... -timeout ${TEST_TIMEOUT} -v
+
+testacc-acceptance: ## Tool tests in a throwaway container
+	@echo "==> acceptance (tools) on port 13378..."
+	@set -e; \
+		scripts/abs-testenv.sh up | grep '^export' > .testenv.sh; \
+		trap 'scripts/abs-testenv.sh down; rm -f .testenv.sh' EXIT; \
+		. ./.testenv.sh; \
+		go test -tags integration -count=1 ./acceptance/... -timeout ${TEST_TIMEOUT} -v
+
+testacc: testacc-integration testacc-acceptance ## Run both live suites, each in its own container
+
+record-sdk: ## Re-record the SDK suite's provider cassettes against the real providers
+	@echo "==> recording the SDK cassettes (this hits the network)..."
+	@set -e; \
+		ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_PORT=13379 ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk \
+			scripts/abs-testenv.sh up | grep '^export' > .testenv-sdk.sh; \
+		trap 'ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk scripts/abs-testenv.sh down; rm -f .testenv-sdk.sh' EXIT; \
+		. ./.testenv-sdk.sh; \
+		ABS_TEST_RECORD=1 go test -tags integration -count=1 ./integration/... -timeout ${TEST_TIMEOUT} -v
+
+record: ## Re-record the provider cassettes against the real Audible/Audnexus/iTunes
+	@echo "==> recording against the real providers (this hits the network)..."
+	@set -e; \
+		scripts/abs-testenv.sh up | grep '^export' > .testenv.sh; \
+		trap 'scripts/abs-testenv.sh down; rm -f .testenv.sh' EXIT; \
+		. ./.testenv.sh; \
+		ABS_TEST_RECORD=1 go test -tags integration -count=1 ./acceptance/... -timeout ${TEST_TIMEOUT} -v
+
+record-check: ## Check the provider cassettes still match the real APIs, without rewriting them
+	@echo "==> verifying cassettes against the real providers (this hits the network)..."
+	@set -e; \
+		scripts/abs-testenv.sh up | grep '^export' > .testenv.sh; \
+		trap 'scripts/abs-testenv.sh down; rm -f .testenv.sh' EXIT; \
+		. ./.testenv.sh; \
+		ABS_TEST_VERIFY=1 go test -tags integration -count=1 ./acceptance/... -timeout ${TEST_TIMEOUT}
+
+testenv-up: ## Start and seed a throwaway Audiobookshelf container
+	@scripts/abs-testenv.sh up
+
+testenv-down: ## Remove the throwaway Audiobookshelf container
+	@scripts/abs-testenv.sh down
+
+check-all: build test testacc lint actionlint yamllint shellcheck depscheck ## Run build + tests (incl. integration) + all linters + depscheck
+
+.PHONY: default all help fmt goimports build docker lint lint-fix actionlint yamllint shellcheck depscheck check-all install tools test test-integration testacc record testenv-up testenv-down

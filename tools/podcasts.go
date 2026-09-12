@@ -105,7 +105,7 @@ func registerPodcastTools(r *registry) {
 		for i := len(eps) - 1 - in.Offset; i >= 0 && len(out.Episodes) < limit; i-- {
 			e := &eps[i]
 			e.Progress = progress[e.ID]
-			out.Episodes = append(out.Episodes, summariseEpisode(e, "", false))
+			out.Episodes = append(out.Episodes, summarizeEpisode(e, "", false))
 		}
 
 		return nil, out, nil
@@ -141,7 +141,7 @@ func registerPodcastTools(r *registry) {
 		}
 		e.Progress, _ = client.Progress(ctx, it.ID, e.ID)
 
-		summary := summariseEpisode(e, it.Title(), true)
+		summary := summarizeEpisode(e, it.Title(), true)
 		summary.Description = clip(plain(e.Description), 1500)
 		out := episodeGetOut{episodeSummary: summary, Subtitle: e.Subtitle}
 		if e.AudioFile != nil {
@@ -394,7 +394,7 @@ func registerPodcastTools(r *registry) {
 				return nil, recentOut{}, err
 			}
 			for j := range eps {
-				out.Episodes = append(out.Episodes, summariseEpisode(&eps[j], "", false))
+				out.Episodes = append(out.Episodes, summarizeEpisode(&eps[j], "", false))
 			}
 		}
 		if len(out.Episodes) == 0 && len(libs) > 0 {
@@ -530,7 +530,7 @@ func registerPodcastTools(r *registry) {
 			return nil, addOut{}, err
 		}
 
-		return nil, addOut{itemSummary: summarise(it), FeedEpisodes: len(feed.Episodes)}, nil
+		return nil, addOut{itemSummary: summarize(it), FeedEpisodes: len(feed.Episodes)}, nil
 	})
 
 	type settingsIn struct {

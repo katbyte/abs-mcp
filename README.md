@@ -11,6 +11,10 @@ An MCP server (and CLI) for curating an [Audiobookshelf](https://www.audiobooksh
 search, inspect, audit and fix metadata, manage listening progress, collections, playlists and
 podcasts from an AI client such as Claude Code.
 
+It is two things in one repo: a **standalone Go client for the Audiobookshelf API**
+(`lib/abs` - no dependencies outside the standard library, usable on its own) and the MCP
+server built on top of it. Both are tested against a real Audiobookshelf in Docker, not a stub.
+
 The design principle: **detection is code, correction is judgment.** The server runs cheap
 deterministic checks over the whole library and produces worklists; the AI reasons only about
 the anomalies. Every response is a trimmed projection of what a decision needs, never the raw
@@ -128,13 +132,14 @@ comes back as an error listing the candidates.
 
 | Resource | Tools |
 |---|---|
-| server | `server_info`, `server_stats`, `server_tasks`, `server_sessions`, `server_backups`, `server_backup_create`, `server_rename_tag` |
-| libraries | `library_list`, `library_get`, `library_search`, `library_items` (the server's own filters: genre, tag, author, series, narrator, progress, missing metadata, issues...), `library_recent`, `library_filters`, `library_stats`, `library_scan`, `library_match_all` |
-| audits | `library_audit` (checks: unmatched, cover, description, narrator, series, author, genres, year, publisher, language, chapters, single_file, issues, no_audio, path, stale_feed, no_episodes), `library_duplicates` |
-| items | `item_get`, `item_chapters`, `item_files`, `item_edit`, `item_rescan`, `item_embed_metadata` |
+| server | `server_info`, `server_stats`, `server_tasks`, `server_sessions`, `server_backups`, `server_backup_create`, `server_get_tags`, `server_rename_tag` |
+| libraries | `library_list`, `library_get`, `library_create`, `library_edit`, `library_search`, `library_items` (the server's own filters: genre, tag, author, series, narrator, progress, missing metadata, issues...), `library_recent`, `library_filters`, `library_stats`, `library_scan`, `library_match_all` |
+| audits | `audit_all` (every per-item audit in one sweep - start here after a scan), `audit_missing` (field: cover, description, narrator, series, author, genres, year, publisher, language, chapters), `audit_unmatched`, `audit_issues`, `audit_no_audio`, `audit_path`, `audit_author_as_title`, `audit_single_chapter`, `audit_stale_feed`, `audit_no_episodes`, `audit_duplicates`, `audit_series_gaps`, `audit_terminology` / `audit_terminology_rename`, `audit_cover_ratio`, `audit_author_missing_image` |
+| items | `item_get`, `item_chapters`, `item_files`, `item_edit`, `item_batch_edit` (same fields across many books), `item_rescan`, `item_embed_metadata` |
 | matching | `item_match` (candidates from a provider), `item_match_apply`, `item_cover_search`, `item_cover_set`, `item_cover_remove`, `item_chapters_set` (explicit list or from Audible by asin) |
-| authors | `author_list`, `author_get`, `author_edit` (rename to merge duplicates), `author_match` |
-| series | `series_list` (with sequence gaps), `series_get`, `series_edit` |
+| authors | `author_list`, `author_get`, `author_edit` (rename to merge duplicates), `author_match`, `author_image_set` |
+| series | `series_list`, `series_get`, `series_edit` |
+| narrators | `narrator_list`, `narrator_edit` (rename to merge, or remove) |
 | collections | `collection_list`, `collection_get`, `collection_create`, `collection_edit`, `collection_add`, `collection_remove`, `collection_delete` |
 | playlists | `playlist_list`, `playlist_get`, `playlist_create` (also from a collection), `playlist_edit`, `playlist_add`, `playlist_remove`, `playlist_delete` |
 | me (the API key's user) | `me_get`, `me_in_progress`, `me_progress_get`, `me_progress_set`, `me_progress_remove`, `me_bookmarks`, `me_bookmark_add`, `me_bookmark_remove`, `me_history`, `me_stats` (all-time or year in review) |
@@ -143,7 +148,7 @@ comes back as an error listing the candidates.
 
 `item_delete`, `podcast_episode_delete`, `author_delete` and `library_remove_issues` are only
 registered when `--enable-delete` / `ABS_ENABLE_DELETE` is set. `--read-only` registers the
-43 read tools and nothing else, so a write tool is absent from `tools/list` rather than refused
+46 read tools and nothing else, so a write tool is absent from `tools/list` rather than refused
 when called.
 
 ### Choosing which tools load
@@ -164,14 +169,35 @@ tool.
 
 ### A typical curation session
 
-1. `library_audit check=unmatched` lists books that were never matched to a provider.
+1. `audit_all` says where the library needs work; `audit_unmatched` lists the books never matched to a provider.
 2. For each, `item_match` returns candidates with duration, narrator and series; compare them
    with the item and `item_match_apply candidate=N`.
-3. `library_audit check=cover` and `item_cover_search` / `item_cover_set` fill the gaps.
-4. `library_audit check=chapters` finds long books with no chapters; `item_chapters_set` pulls
+3. `audit_missing field=cover` and `item_cover_search` / `item_cover_set` fill the gaps.
+4. `audit_missing field=chapters` finds long books with no chapters; `item_chapters_set` pulls
    them from Audible by asin.
-5. `library_duplicates` and `series_list` (sequence gaps) show what to prune and what is
-   missing.
+5. `audit_duplicates` and `audit_series_gaps` show what to prune and what is missing.
+
+## Using the client on its own
+
+`lib/abs` is a plain Go client for the Audiobookshelf API with **no dependencies outside the
+standard library**, and no knowledge of MCP. If you only want to talk to Audiobookshelf from Go,
+take it and ignore the rest:
+
+```go
+import "github.com/katbyte/abs-mcp/lib/abs"
+
+client, err := abs.New("http://nas:13378", os.Getenv("ABS_TOKEN"))
+items, err := client.Items(ctx, libraryID, abs.ItemsOptions{Limit: 50})
+```
+
+It has 105 methods over ~72 endpoints, covering libraries, items, authors, series, collections,
+playlists, listening progress, bookmarks, sessions, podcasts, provider search, tags, tasks and
+backups.
+Audiobookshelf publishes no OpenAPI spec and its
+[public API docs say they are unmaintained](https://api.audiobookshelf.org), so the types here
+are written against the server source (see [docs/README.md](docs/README.md)) and then **proved
+against a running server** - which is the only thing that catches the server changing shape
+underneath you.
 
 ## Development
 
@@ -180,9 +206,43 @@ make            # fmt + build
 make check-all  # build + test + all linters + depscheck
 ```
 
-Dev tools are pinned in `.tools/go.mod` (actionlint in `.tools/actionlint/go.mod`) and built
-into `.tools/bin` by make. On a noexec checkout point `TOOLS_BIN` somewhere local, e.g.
-`make TOOLS_BIN=~/.cache/abs-mcp/bin lint`.
+### Tests
+
+`make test` is hermetic and fast: unit tests over the pure logic - filter encoding, formatting,
+gap arithmetic, the audit heuristics, tool registration.
+
+Everything else runs against **a real Audiobookshelf in Docker**, because a stub can only
+confirm what you already believed. Two suites, each in its own container:
+
+| | Covers | Command |
+|---|---|---|
+| `integration/` | the `lib/abs` client: that every response decodes with its fields populated | `make testacc-integration` |
+| `acceptance/` | the tools: name resolution, projections, audits, provider flows | `make testacc-acceptance` |
+
+```bash
+make testacc        # both, each in a throwaway container, torn down after
+make check-all      # build + unit + both live suites + every linter
+```
+
+**All 101 tools are exercised**, along with 76 of the client's 105 methods - the rest are the
+provider-backed calls, which the tool suite covers instead. Calls out to Audible, Audnexus and
+iTunes go through a record/replay proxy (`lib/providerproxy`), so neither suite needs a network:
+
+```bash
+make record         # re-record the cassettes against the real providers
+make record-check   # check the cassettes still match, without rewriting them
+```
+
+`record-check` compares the *shape* of live responses against the recordings - renamed fields,
+vanished fields, changed types - and ignores values, so it goes red when a provider changes its
+contract rather than when a chart position moves.
+
+Fixtures are generated, never committed: `scripts/abs-testenv.sh` writes one-second silent files
+with `ffmpeg` into a temp directory, creates the libraries through `library_create`, fills them
+with `library_scan` and sets the metadata with `item_edit` - so building the fixtures is itself
+part of the coverage. `scripts/abs-testenv.sh fixtures` writes just the audio tree if you want
+to look at the layout. Requires docker, ffmpeg and jq; the suites skip when `ABS_SERVER` and
+`ABS_TOKEN` are unset, so they never fail for want of a daemon.
 
 The Audiobookshelf API reference is the server source, not the public docs; see
 [docs/README.md](docs/README.md).
