@@ -389,34 +389,6 @@ func TestPodcastProviderFlow(t *testing.T) {
 	})
 }
 
-// library_match_all kicks off a background quick-match over a whole library.
-//
-// The test waits for the task to finish rather than just asserting it started:
-// the match looks up every unmatched book against the provider, and if those
-// requests are still in flight when a recording run ends they never reach a
-// cassette, and the next replay misses them.
-func TestLibraryMatchAll(t *testing.T) {
-	requireProviders(t)
-
-	t.Cleanup(func() {
-		for _, b := range books {
-			switch b.Author {
-			case "William Manchester", "Robert Evans", "Smedley D. Butler":
-				restoreBook(t, b.Title)
-			}
-		}
-	})
-
-	out := call(t, "library_match_all", map[string]any{"library": "Non-Fiction"})
-	if started, _ := out["started"].(string); started == "" {
-		t.Errorf("library_match_all started = %v", out["started"])
-	}
-
-	if !waitForTasks(t) {
-		t.Error("the match-all task did not finish; its provider calls may be unrecorded")
-	}
-}
-
 // waitForTasks polls until nothing is running, so a background job's provider
 // traffic has all been made before the run ends.
 func waitForTasks(t *testing.T) bool {

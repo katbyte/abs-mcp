@@ -47,7 +47,7 @@ type auditSpec struct {
 var auditSpecs = []auditSpec{
 	{
 		"audit_unmatched", "unmatched",
-		"Find books never matched to a metadata provider: no asin and no isbn, so nothing else can be filled in automatically. Fix with item_match then item_match_apply, or library_match_all for a whole library.",
+		"Find books never matched to a metadata provider: no asin and no isbn, so nothing else can be filled in automatically. Fix with item_match to see the candidates, then item_match_apply on the one that is actually the right book.",
 	},
 	{
 		"audit_issues", "issues",

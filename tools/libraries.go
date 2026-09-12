@@ -414,24 +414,6 @@ func registerLibraryTools(r *registry) {
 		return nil, scanOut{Started: lib.Name}, nil
 	})
 
-	type matchAllIn struct {
-		Library string `json:"library,omitempty" jsonschema:"library name or id; optional when the server has one library"`
-	}
-	add(r, writeTool, &mcp.Tool{
-		Name:        "library_match_all",
-		Description: "Quick-match every item in a library against its metadata provider, filling in missing details and covers (items with an asin/isbn are skipped when the library settings say so). Admin only. Changes server state; runs in the background, see server_tasks. Prefer item_match for one item.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in matchAllIn) (*mcp.CallToolResult, scanOut, error) {
-		lib, err := resolveLibrary(ctx, client, in.Library)
-		if err != nil {
-			return nil, scanOut{}, err
-		}
-		if err := client.MatchAll(ctx, lib.ID); err != nil {
-			return nil, scanOut{}, err
-		}
-
-		return nil, scanOut{Started: lib.Name}, nil
-	})
-
 	type removeIssuesIn struct {
 		Library string `json:"library,omitempty" jsonschema:"library name or id; optional when the server has one library"`
 	}
