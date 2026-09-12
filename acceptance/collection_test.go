@@ -42,16 +42,16 @@ func TestCollectionLifecycle(t *testing.T) {
 	}
 
 	// add
-	added := call(t, "collection_add", map[string]any{
-		"collection": "Integration Collection", "items": []any{"Second Foundation"},
+	added := call(t, "collection_books_edit", map[string]any{
+		"collection": "Integration Collection", "action": "add", "items": []any{"Second Foundation"},
 	})
 	if n := num(t, added["books"], "books"); n != 3 {
 		t.Errorf("after add = %d books, want 3", n)
 	}
 
 	// remove
-	removed := call(t, "collection_remove", map[string]any{
-		"collection": "Integration Collection", "items": []any{"Leviathan Wakes"},
+	removed := call(t, "collection_books_edit", map[string]any{
+		"collection": "Integration Collection", "action": "remove", "items": []any{"Leviathan Wakes"},
 	})
 	if n := num(t, removed["books"], "books"); n != 2 {
 		t.Errorf("after remove = %d books, want 2", n)
@@ -75,5 +75,13 @@ func TestCollectionLifecycle(t *testing.T) {
 func TestCollectionUnknown(t *testing.T) {
 	if msg := callErr(t, "collection_get", map[string]any{"collection": "No Such Collection"}); msg == "" {
 		t.Error("an unknown collection should be an error")
+	}
+}
+
+func TestCollectionBooksEditValidation(t *testing.T) {
+	if msg := callErr(t, "collection_books_edit", map[string]any{
+		"collection": "No Such Collection", "action": "sideways", "items": []any{"Foundation"},
+	}); msg == "" {
+		t.Error("an unknown action should be refused")
 	}
 }

@@ -543,11 +543,11 @@ func registerItemTools(r *registry) {
 	}
 	type coverSearchOut struct {
 		Item   string   `json:"item"`
-		Covers []string `json:"covers" jsonschema:"image urls; pass one to item_cover_set"`
+		Covers []string `json:"covers" jsonschema:"image urls; pass one to item_cover_edit"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "item_cover_search",
-		Description: "Find candidate cover images for an item from the metadata providers. Returns urls for item_cover_set.",
+		Description: "Find candidate cover images for an item from the metadata providers. Returns urls for item_cover_edit.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in coverSearchIn) (*mcp.CallToolResult, coverSearchOut, error) {
 		it, err := resolveItem(ctx, client, in.Library, in.Item)
 		if err != nil {
@@ -568,46 +568,33 @@ func registerItemTools(r *registry) {
 		return nil, coverSearchOut{Item: it.Title(), Covers: covers}, nil
 	})
 
-	type coverSetIn struct {
+	type doneOut struct {
+		Done bool `json:"done"`
+	}
+	type coverEditIn struct {
 		itemRef
 		URL  string `json:"url,omitempty"  jsonschema:"image url to download as the cover"`
 		File string `json:"file,omitempty" jsonschema:"instead of a url: the path of an image already in the item's folder (see item_files)"`
 	}
-	type doneOut struct {
-		Done bool `json:"done"`
-	}
 	add(r, writeTool, &mcp.Tool{
-		Name:        "item_cover_set",
-		Description: "Set an item's cover from a url (e.g. from item_cover_search) or from an image file already in its folder. Changes server state.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in coverSetIn) (*mcp.CallToolResult, doneOut, error) {
+		Name:        "item_cover_edit",
+		Description: "Set an item's cover from a url (e.g. from item_cover_search) or from an image file already in its folder, or remove the cover by passing neither. Changes server state.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in coverEditIn) (*mcp.CallToolResult, doneOut, error) {
 		it, err := resolveItem(ctx, client, in.Library, in.Item)
 		if err != nil {
 			return nil, doneOut{}, err
 		}
+
 		switch {
 		case in.URL != "":
 			err = client.SetCoverFromURL(ctx, it.ID, in.URL)
 		case in.File != "":
 			err = client.SetCoverFromFile(ctx, it.ID, in.File)
 		default:
-			err = errors.New("url or file is required")
+			// neither means there is no cover to set: take the current one away
+			err = client.RemoveCover(ctx, it.ID)
 		}
 		if err != nil {
-			return nil, doneOut{}, err
-		}
-
-		return nil, doneOut{Done: true}, nil
-	})
-
-	add(r, writeTool, &mcp.Tool{
-		Name:        "item_cover_remove",
-		Description: "Remove an item's cover image. Changes server state.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in itemRef) (*mcp.CallToolResult, doneOut, error) {
-		it, err := resolveItem(ctx, client, in.Library, in.Item)
-		if err != nil {
-			return nil, doneOut{}, err
-		}
-		if err := client.RemoveCover(ctx, it.ID); err != nil {
 			return nil, doneOut{}, err
 		}
 

@@ -207,8 +207,8 @@ func registerServerTools(r *registry) {
 		Genres []string `json:"genres,omitempty"`
 	}
 	add(r, readTool, &mcp.Tool{
-		Name:        "server_get_tags",
-		Description: "Every tag and genre in use across all libraries: the server-wide vocabulary to normalize against before merging with server_rename_tag. Admin only. library_filters is the per-library equivalent.",
+		Name:        "server_tag_get",
+		Description: "Every tag and genre in use across all libraries: the server-wide vocabulary to normalize against before merging with server_tag_rename. Admin only. library_filters is the per-library equivalent.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in tagsIn) (*mcp.CallToolResult, tagsOut, error) {
 		var out tagsOut
 		var err error
@@ -235,7 +235,7 @@ func registerServerTools(r *registry) {
 		ItemsUpdated int `json:"items_updated"`
 	}
 	add(r, writeTool, &mcp.Tool{
-		Name:        "server_rename_tag",
+		Name:        "server_tag_rename",
 		Description: "Rename a tag or genre everywhere it is used, across all libraries (e.g. to merge 'Sci-Fi' into 'Science Fiction'). Admin only. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in renameIn) (*mcp.CallToolResult, renameOut, error) {
 		var n int

@@ -227,7 +227,7 @@ func registerMeTools(r *registry) {
 		Item    string  `json:"item,omitempty"`
 		Title   string  `json:"title"`
 		Time    string  `json:"time"`
-		Seconds float64 `json:"seconds"           jsonschema:"pass to me_bookmark_remove"`
+		Seconds float64 `json:"seconds"           jsonschema:"pass to me_bookmark_edit to remove it"`
 		Created string  `json:"created,omitempty"`
 	}
 	type bookmarksIn struct {
@@ -297,50 +297,54 @@ func registerMeTools(r *registry) {
 		return nil, out, nil
 	})
 
-	type bookmarkAddIn struct {
+	type bookmarkEditIn struct {
 		itemRef
-		Seconds float64 `json:"seconds" jsonschema:"position in seconds"`
-		Title   string  `json:"title"   jsonschema:"bookmark name"`
+		Action  string  `json:"action"          jsonschema:"add or remove"`
+		Seconds float64 `json:"seconds"         jsonschema:"position in seconds; from me_bookmarks when removing"`
+		Title   string  `json:"title,omitempty" jsonschema:"bookmark name; required when adding"`
+	}
+	type bookmarkEditOut struct {
+		Done     bool         `json:"done"`
+		Bookmark *bookmarkRow `json:"bookmark,omitempty" jsonschema:"the bookmark as it now stands; absent after a removal"`
 	}
 	add(r, writeTool, &mcp.Tool{
-		Name:        "me_bookmark_add",
-		Description: "Add a named bookmark at a position in a book (or rename the one already at that position). Changes server state.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in bookmarkAddIn) (*mcp.CallToolResult, bookmarkRow, error) {
+		Name:        "me_bookmark_edit",
+		Description: "Add a named bookmark at a position in a book, or remove the one at that position. Adding at a position that already has a bookmark renames it. Changes server state.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in bookmarkEditIn) (*mcp.CallToolResult, bookmarkEditOut, error) {
+		action := strings.ToLower(strings.TrimSpace(in.Action))
+		if action != "add" && action != "remove" {
+			return nil, bookmarkEditOut{}, fmt.Errorf("action %q must be add or remove", in.Action)
+		}
+
 		it, err := resolveItem(ctx, client, in.Library, in.Item)
 		if err != nil {
-			return nil, bookmarkRow{}, err
+			return nil, bookmarkEditOut{}, err
 		}
+
+		if action == "remove" {
+			if err := client.DeleteBookmark(ctx, it.ID, in.Seconds); err != nil {
+				return nil, bookmarkEditOut{}, err
+			}
+			return nil, bookmarkEditOut{Done: true}, nil
+		}
+
 		if strings.TrimSpace(in.Title) == "" {
-			return nil, bookmarkRow{}, errors.New("title is required")
+			return nil, bookmarkEditOut{}, errors.New("title is required when adding a bookmark")
 		}
 		b, err := client.CreateBookmark(ctx, it.ID, in.Seconds, in.Title)
 		if err != nil {
-			// an existing bookmark at this time is updated instead
-			if b, err = client.UpdateBookmark(ctx, it.ID, in.Seconds, in.Title); err != nil {
-				return nil, bookmarkRow{}, err
-			}
+			// a bookmark already there is renamed rather than duplicated
+			b, err = client.UpdateBookmark(ctx, it.ID, in.Seconds, in.Title)
 		}
-
-		return nil, bookmarkRow{ItemID: it.ID, Item: it.Title(), Title: b.Title, Time: fmtDuration(b.Time), Seconds: b.Time, Created: fmtTime(b.CreatedAt)}, nil
-	})
-
-	type bookmarkRemoveIn struct {
-		itemRef
-		Seconds float64 `json:"seconds" jsonschema:"the bookmark's position from me_bookmarks"`
-	}
-	add(r, writeTool, &mcp.Tool{
-		Name:        "me_bookmark_remove",
-		Description: "Remove the bookmark at a position in a book. Changes server state.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in bookmarkRemoveIn) (*mcp.CallToolResult, doneOut, error) {
-		it, err := resolveItem(ctx, client, in.Library, in.Item)
 		if err != nil {
-			return nil, doneOut{}, err
+			return nil, bookmarkEditOut{}, err
 		}
-		if err := client.DeleteBookmark(ctx, it.ID, in.Seconds); err != nil {
-			return nil, doneOut{}, err
+		row := bookmarkRow{
+			ItemID: it.ID, Item: it.Title(), Title: b.Title,
+			Time: fmtDuration(b.Time), Seconds: b.Time, Created: fmtTime(b.CreatedAt),
 		}
 
-		return nil, doneOut{Done: true}, nil
+		return nil, bookmarkEditOut{Done: true, Bookmark: &row}, nil
 	})
 
 	type historyIn struct {

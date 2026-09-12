@@ -115,7 +115,7 @@ func TestItemMatchAndApply(t *testing.T) {
 	})
 }
 
-// item_cover_search returns urls; item_cover_set has the server fetch one.
+// item_cover_search returns urls; item_cover_edit has the server fetch one.
 func TestItemCoverSearchAndSet(t *testing.T) {
 	requireProviders(t)
 
@@ -141,15 +141,15 @@ func TestItemCoverSearchAndSet(t *testing.T) {
 		coverURL = covers[0]
 	})
 
-	t.Run("item_cover_set", func(t *testing.T) {
+	t.Run("item_cover_edit", func(t *testing.T) {
 		if coverURL == "" {
 			t.Skip("item_cover_search produced no url")
 		}
-		t.Cleanup(func() { call(t, "item_cover_remove", map[string]any{"item": book}) })
+		t.Cleanup(func() { call(t, "item_cover_edit", map[string]any{"item": book}) })
 
-		out := call(t, "item_cover_set", map[string]any{"item": book, "url": coverURL})
+		out := call(t, "item_cover_edit", map[string]any{"item": book, "url": coverURL})
 		if done, _ := out["done"].(bool); !done {
-			t.Errorf("item_cover_set done = %v", out["done"])
+			t.Errorf("item_cover_edit done = %v", out["done"])
 		}
 
 		// the fixtures start with no cover, so this is visible on the item

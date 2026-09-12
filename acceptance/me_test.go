@@ -76,14 +76,20 @@ func TestMeProgressRemove(t *testing.T) {
 }
 
 func TestMeBookmarks(t *testing.T) {
-	added := call(t, "me_bookmark_add", map[string]any{
-		"item": "Leviathan Wakes", "seconds": 0.25, "title": "A good bit",
+	added := call(t, "me_bookmark_edit", map[string]any{
+		"item": "Leviathan Wakes", "action": "add", "seconds": 0.25, "title": "A good bit",
 	})
 	t.Cleanup(func() {
-		call(t, "me_bookmark_remove", map[string]any{"item": "Leviathan Wakes", "seconds": 0.25})
+		call(t, "me_bookmark_edit", map[string]any{
+			"item": "Leviathan Wakes", "action": "remove", "seconds": 0.25,
+		})
 	})
-	if added["title"] != "A good bit" {
-		t.Errorf("title = %v", added["title"])
+	bookmark, ok := added["bookmark"].(map[string]any)
+	if !ok {
+		t.Fatalf("bookmark = %T", added["bookmark"])
+	}
+	if bookmark["title"] != "A good bit" {
+		t.Errorf("title = %v", bookmark["title"])
 	}
 
 	out := call(t, "me_bookmarks", map[string]any{"item": "Leviathan Wakes"})

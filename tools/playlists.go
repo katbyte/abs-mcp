@@ -221,10 +221,19 @@ func registerPlaylistTools(r *registry) {
 		Playlist string `json:"playlist"`
 		Entries  int    `json:"entries"  jsonschema:"size after the change"`
 	}
+	type entriesEditIn struct {
+		entriesIn
+		Action string `json:"action" jsonschema:"add or remove"`
+	}
 	add(r, writeTool, &mcp.Tool{
-		Name:        "playlist_add",
-		Description: "Append books or podcast episodes to a playlist. Changes server state.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in entriesIn) (*mcp.CallToolResult, changeOut, error) {
+		Name:        "playlist_entries_edit",
+		Description: "Append books or podcast episodes to a playlist, or take them out of it. Removing only changes the playlist; the items stay in the library. Changes server state.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in entriesEditIn) (*mcp.CallToolResult, changeOut, error) {
+		action := strings.ToLower(strings.TrimSpace(in.Action))
+		if action != "add" && action != "remove" {
+			return nil, changeOut{}, fmt.Errorf("action %q must be add or remove", in.Action)
+		}
+
 		p, err := resolvePlaylist(ctx, client, in.Playlist)
 		if err != nil {
 			return nil, changeOut{}, err
@@ -233,27 +242,13 @@ func registerPlaylistTools(r *registry) {
 		if err != nil {
 			return nil, changeOut{}, err
 		}
-		updated, err := client.AddToPlaylist(ctx, p.ID, entries)
-		if err != nil {
-			return nil, changeOut{}, err
-		}
 
-		return nil, changeOut{Playlist: updated.Name, Entries: len(updated.Items)}, nil
-	})
-
-	add(r, writeTool, &mcp.Tool{
-		Name:        "playlist_remove",
-		Description: "Remove entries from a playlist (the items stay in the library). Changes server state.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in entriesIn) (*mcp.CallToolResult, changeOut, error) {
-		p, err := resolvePlaylist(ctx, client, in.Playlist)
-		if err != nil {
-			return nil, changeOut{}, err
+		var updated *abs.Playlist
+		if action == "add" {
+			updated, err = client.AddToPlaylist(ctx, p.ID, entries)
+		} else {
+			updated, err = client.RemoveFromPlaylist(ctx, p.ID, entries)
 		}
-		entries, err := resolvePlaylistEntries(ctx, client, p.LibraryID, in.Entries)
-		if err != nil {
-			return nil, changeOut{}, err
-		}
-		updated, err := client.RemoveFromPlaylist(ctx, p.ID, entries)
 		if err != nil {
 			return nil, changeOut{}, err
 		}

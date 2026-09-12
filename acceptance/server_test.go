@@ -75,10 +75,10 @@ func TestServerBackups(t *testing.T) {
 	}
 }
 
-// server_get_tags is server-wide, so it must see tags from every library at
+// server_tag_get is server-wide, so it must see tags from every library at
 // once - which is what library_filters, being per-library, cannot do.
 func TestServerGetTags(t *testing.T) {
-	out := call(t, "server_get_tags", nil)
+	out := call(t, "server_tag_get", nil)
 	tags := strs(t, out["tags"], "tags")
 	genres := strs(t, out["genres"], "genres")
 
@@ -94,25 +94,25 @@ func TestServerGetTags(t *testing.T) {
 		}
 	}
 
-	if only := call(t, "server_get_tags", map[string]any{"kind": "genres"}); only["tags"] != nil {
+	if only := call(t, "server_tag_get", map[string]any{"kind": "genres"}); only["tags"] != nil {
 		t.Errorf("kind=genres returned tags: %v", only["tags"])
 	}
-	if only := call(t, "server_get_tags", map[string]any{"kind": "tags"}); only["genres"] != nil {
+	if only := call(t, "server_tag_get", map[string]any{"kind": "tags"}); only["genres"] != nil {
 		t.Errorf("kind=tags returned genres: %v", only["genres"])
 	}
 }
 
 // rename and rename back, so the rest of the suite still sees the original.
 func TestServerRenameTag(t *testing.T) {
-	out := call(t, "server_rename_tag", map[string]any{"kind": "tag", "from": "humour", "to": "humor"})
+	out := call(t, "server_tag_rename", map[string]any{"kind": "tag", "from": "humour", "to": "humor"})
 	if n := num(t, out["items_updated"], "items_updated"); n != 1 {
 		t.Errorf("items_updated = %d, want 1", n)
 	}
 	t.Cleanup(func() {
-		call(t, "server_rename_tag", map[string]any{"kind": "tag", "from": "humor", "to": "humour"})
+		call(t, "server_tag_rename", map[string]any{"kind": "tag", "from": "humor", "to": "humour"})
 	})
 
-	if tags := strs(t, call(t, "server_get_tags", map[string]any{"kind": "tags"})["tags"], "tags"); !slices.Contains(tags, "humor") {
+	if tags := strs(t, call(t, "server_tag_get", map[string]any{"kind": "tags"})["tags"], "tags"); !slices.Contains(tags, "humor") {
 		t.Errorf("tags %v missing the renamed humor", tags)
 	}
 }

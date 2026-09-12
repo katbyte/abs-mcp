@@ -474,7 +474,7 @@ func registerLibraryTools(r *registry) {
 		Removed int `json:"removed" jsonschema:"item records deleted; files on disk are untouched"`
 	}
 	add(r, deleteTool, &mcp.Tool{
-		Name:        "library_remove_issues",
+		Name:        "library_issues_remove",
 		Description: "Delete the library records of every item whose folder is missing or has no playable media (audit_issues lists them first). Files on disk are untouched, but listening progress for those items is lost. Admin only.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in removeIssuesIn) (*mcp.CallToolResult, removeIssuesOut, error) {
 		lib, err := resolveLibrary(ctx, client, in.Library)

@@ -115,7 +115,7 @@ func TestLibraryRecent(t *testing.T) {
 	}
 }
 
-// library_filters is the per-library counterpart to server_get_tags.
+// library_filters is the per-library counterpart to server_tag_get.
 func TestLibraryFilters(t *testing.T) {
 	out := call(t, "library_filters", map[string]any{"library": "Fiction"})
 
@@ -123,7 +123,7 @@ func TestLibraryFilters(t *testing.T) {
 	// always current. Tags, narrators, publishers and languages come from a
 	// filter-data cache the server does not invalidate on an edit - not even
 	// on a rescan - so they lag behind item_edit and are not asserted here.
-	// server_get_tags reads the live tag and genre endpoints instead.
+	// server_tag_get reads the live tag and genre endpoints instead.
 	if authors := rows(t, out["authors"], "authors"); len(authors) != 3 {
 		t.Errorf("authors = %d, want 3", len(authors))
 	}
@@ -208,7 +208,7 @@ func TestLibraryEdit(t *testing.T) {
 	}
 }
 
-// library_remove_issues deletes the records of items whose folder has gone.
+// library_issues_remove deletes the records of items whose folder has gone.
 // Last in this file: it needs a broken item, which means disturbing the
 // library and putting it back.
 func TestLibraryRemoveIssues(t *testing.T) {
@@ -259,7 +259,7 @@ func TestLibraryRemoveIssues(t *testing.T) {
 		t.Fatal("audit_issues never reported the removed folder")
 	}
 
-	out := call(t, "library_remove_issues", map[string]any{"library": "Non-Fiction"})
+	out := call(t, "library_issues_remove", map[string]any{"library": "Non-Fiction"})
 	if removed := num(t, out["removed"], "removed"); removed < 1 {
 		t.Errorf("removed = %d, want at least the broken item", removed)
 	}

@@ -169,10 +169,10 @@ func TestItemRescan(t *testing.T) {
 
 // no cover was ever set, so removing one is a no-op that must still succeed.
 func TestItemCoverRemove(t *testing.T) {
-	out := call(t, "item_cover_remove", map[string]any{"item": "A Brief History of Vice"})
+	out := call(t, "item_cover_edit", map[string]any{"item": "A Brief History of Vice"})
 
 	if done, _ := out["done"].(bool); !done {
-		t.Errorf("item_cover_remove done = %v", out["done"])
+		t.Errorf("item_cover_edit done = %v", out["done"])
 	}
 }
 

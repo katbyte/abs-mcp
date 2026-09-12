@@ -51,7 +51,7 @@ var auditSpecs = []auditSpec{
 	},
 	{
 		"audit_issues", "issues",
-		"Find items whose folder is missing from disk or holds no playable media. These are broken records rather than metadata gaps: remove them with library_remove_issues, or item_delete one at a time.",
+		"Find items whose folder is missing from disk or holds no playable media. These are broken records rather than metadata gaps: remove them with library_issues_remove, or item_delete one at a time.",
 	},
 	{
 		"audit_no_audio", "no_audio",
@@ -136,7 +136,7 @@ func registerAuditTools(r *registry) {
 		Name: "audit_missing",
 		Description: "Find items with a metadata field left empty: " + strings.Join(missingFields, ", ") + ". " +
 			"chapters only reports books over two hours, where the absence actually hurts. " +
-			"Fix most of them with item_match_apply, covers with item_cover_search then item_cover_set, chapters with item_chapters_set, " +
+			"Fix most of them with item_match_apply, covers with item_cover_search then item_cover_edit, chapters with item_chapters_set, " +
 			"and anything the providers cannot supply with item_edit or item_batch_edit.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in missingIn) (*mcp.CallToolResult, auditOut, error) {
 		field := strings.ToLower(strings.TrimSpace(in.Field))
@@ -256,7 +256,7 @@ func registerAuditTools(r *registry) {
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "audit_cover_ratio",
-		Description: "Find covers that are not square or are too small to look right in a client. Audiobook art is square by convention, so a tall book-jacket scan or a thumbnail stands out. This reads every cover's header, so it is far slower than the other audits: narrow it with library, or raise limit knowing the cost. Fix with item_cover_search then item_cover_set.",
+		Description: "Find covers that are not square or are too small to look right in a client. Audiobook art is square by convention, so a tall book-jacket scan or a thumbnail stands out. This reads every cover's header, so it is far slower than the other audits: narrow it with library, or raise limit knowing the cost. Fix with item_cover_search then item_cover_edit.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in coverRatioIn) (*mcp.CallToolResult, coverRatioOut, error) {
 		tolerance := in.Tolerance
 		if tolerance <= 0 {

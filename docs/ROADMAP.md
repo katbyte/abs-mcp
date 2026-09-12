@@ -21,8 +21,8 @@ Design rules, in priority order:
 | Area | Tools | Answers |
 |---|---|---|
 | know the library | `server_info`, `library_list`, `library_get`, `library_create`, `library_edit`, `narrator_list`, `library_search`, `library_items`, `library_filters`, `library_stats`, `library_recent`, `item_get`, `item_chapters`, `item_files` | "what do I have, and what shape is it in" |
-| curation | `audit_all` + `audit_missing` + 7 per-item audits, `audit_duplicates`, `item_match` → `item_match_apply`, `item_cover_search` → `item_cover_set`, `item_chapters_set`, `item_edit`, `author_match`, `author_edit` (merge), `author_image_set`, `narrator_edit` (merge), `item_batch_edit`, `audit_series_gaps`, `audit_terminology`, `audit_cover_ratio`, `audit_author_missing_image` | "what is wrong, and fix it" |
-| maintenance | `library_scan`, `library_match_all`, `item_rescan`, `item_embed_metadata`, `server_tasks`, `server_backups`, `server_get_tags` → `server_rename_tag` | "keep it healthy" |
+| curation | `audit_all` + `audit_missing` + 7 per-item audits, `audit_duplicates`, `item_match` → `item_match_apply`, `item_cover_search` → `item_cover_edit`, `item_chapters_set`, `item_edit`, `author_match`, `author_edit` (merge), `author_image_set`, `narrator_edit` (merge), `item_batch_edit`, `audit_series_gaps`, `audit_terminology`, `audit_cover_ratio`, `audit_author_missing_image` | "what is wrong, and fix it" |
+| maintenance | `library_scan`, `library_match_all`, `item_rescan`, `item_embed_metadata`, `server_tasks`, `server_backups`, `server_tag_get` → `server_tag_rename` | "keep it healthy" |
 | listening | `me_in_progress`, `me_progress_*`, `me_bookmark*`, `me_history`, `me_stats`, `server_sessions`, `user_*` | "what am I / are they listening to" |
 | organise | `collection_*`, `playlist_*` | "group these" |
 | podcasts | `podcast_episodes`, `podcast_feed_episodes` → `podcast_episode_download`, `podcast_check_new`, `podcast_search` → `podcast_add`, `podcast_settings`, `podcast_downloads`, `podcast_recent` | "subscribe, catch up, back-fill" |
@@ -39,7 +39,7 @@ Design rules, in priority order:
 
 ## Guarded / deliberately excluded
 
-- `item_delete`, `podcast_episode_delete`, `author_delete`, `library_remove_issues`: only
+- `item_delete`, `podcast_episode_delete`, `author_delete`, `library_issues_remove`: only
   registered with `--enable-delete` (`ABS_ENABLE_DELETE`).
 - Not wrapping **as tools**, ever: audio streaming and playback sessions, cover/image byte
   delivery, uploads, server settings and auth settings, API key management, notification

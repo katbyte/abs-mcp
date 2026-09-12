@@ -29,9 +29,9 @@ func TestPlaylistLifecycle(t *testing.T) {
 		t.Error("the new playlist is not in playlist_list")
 	}
 
-	added := call(t, "playlist_add", map[string]any{
-		"playlist": "Integration Playlist",
-		"entries":  []any{map[string]any{"item": "Foundation and Empire"}},
+	added := call(t, "playlist_entries_edit", map[string]any{
+		"playlist": "Integration Playlist", "action": "add",
+		"entries": []any{map[string]any{"item": "Foundation and Empire"}},
 	})
 	if n := num(t, added["entries"], "entries"); n != 2 {
 		t.Errorf("after add = %d entries, want 2", n)
@@ -42,9 +42,9 @@ func TestPlaylistLifecycle(t *testing.T) {
 		t.Errorf("playlist_get returned %d entries, want 2", len(entries))
 	}
 
-	removed := call(t, "playlist_remove", map[string]any{
-		"playlist": "Integration Playlist",
-		"entries":  []any{map[string]any{"item": "Foundation"}},
+	removed := call(t, "playlist_entries_edit", map[string]any{
+		"playlist": "Integration Playlist", "action": "remove",
+		"entries": []any{map[string]any{"item": "Foundation"}},
 	})
 	if n := num(t, removed["entries"], "entries"); n != 1 {
 		t.Errorf("after remove = %d entries, want 1", n)

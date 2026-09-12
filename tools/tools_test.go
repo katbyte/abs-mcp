@@ -44,7 +44,7 @@ func TestRegisterAllKinds(t *testing.T) {
 	if len(all) <= len(dflt) || len(dflt) <= len(ro) || len(ro) == 0 {
 		t.Fatalf("counts all=%d default=%d read-only=%d", len(all), len(dflt), len(ro))
 	}
-	for _, name := range []string{"item_delete", "podcast_episode_delete", "author_delete", "library_remove_issues"} {
+	for _, name := range []string{"item_delete", "podcast_episode_delete", "author_delete", "library_issues_remove"} {
 		if slices.Contains(dflt, name) {
 			t.Errorf("%s registered without --enable-delete", name)
 		}

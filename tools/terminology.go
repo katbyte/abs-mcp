@@ -123,7 +123,7 @@ func registerTerminologyTools(r *registry) {
 	add(r, readTool, &mcp.Tool{
 		Name: "audit_terminology",
 		Description: "Find values that mean the same thing but are spelled differently, across genres, tags, narrators, languages, publishers and authors: 'Jim Dale' and 'jim dale', 'Sci-Fi' and 'sci fi', 'en' and 'eng' and 'English'. " +
-			"Fix narrators with narrator_edit, tags and genres with server_rename_tag, authors with author_edit, and languages or publishers with item_edit or item_batch_edit. " +
+			"Fix narrators with narrator_edit, tags and genres with server_tag_rename, authors with author_edit, and languages or publishers with item_edit or item_batch_edit. " +
 			"Language values that are not a code or name this tool recognizes are reported separately, which is how placeholders like XXX surface.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in vocabIn) (*mcp.CallToolResult, vocabOut, error) {
 		fields := vocabFields
@@ -226,7 +226,7 @@ func registerTerminologyTools(r *registry) {
 
 	type renameIn struct {
 		Library string `json:"library,omitempty" jsonschema:"library name or id; default every library"`
-		Field   string `json:"field"             jsonschema:"languages or publishers; narrators use narrator_edit, tags and genres server_rename_tag, authors author_edit"`
+		Field   string `json:"field"             jsonschema:"languages or publishers; narrators use narrator_edit, tags and genres server_tag_rename, authors author_edit"`
 		From    string `json:"from"              jsonschema:"the spelling to replace, exactly as audit_terminology reports it"`
 		To      string `json:"to"                jsonschema:"the spelling to keep"`
 	}
@@ -240,7 +240,7 @@ func registerTerminologyTools(r *registry) {
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in renameIn) (*mcp.CallToolResult, renameOut, error) {
 		field := strings.ToLower(strings.TrimSpace(in.Field))
 		if field != "languages" && field != "publishers" {
-			return nil, renameOut{}, errors.New("field must be languages or publishers; use narrator_edit, server_rename_tag or author_edit for the others")
+			return nil, renameOut{}, errors.New("field must be languages or publishers; use narrator_edit, server_tag_rename or author_edit for the others")
 		}
 		from, to := strings.TrimSpace(in.From), strings.TrimSpace(in.To)
 		if from == "" || to == "" {

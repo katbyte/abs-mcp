@@ -39,7 +39,7 @@ var libraries = []libraryFixture{
 // bookFixture is a seeded item. Foundation is complete, The Expanse skips one book
 // and Otherland skips two, so a clean series, a single gap and a run of gaps
 // are all represented. Non-fiction carries no series but its own tags, which
-// is what makes server_get_tags (server-wide) differ from library_filters.
+// is what makes server_tag_get (server-wide) differ from library_filters.
 type bookFixture struct {
 	Title, Author, Narrator, Publisher, Year, Language string
 	Series                                             []string

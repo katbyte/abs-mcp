@@ -178,10 +178,19 @@ func registerCollectionTools(r *registry) {
 		Collection string `json:"collection"`
 		Books      int    `json:"books"      jsonschema:"size after the change"`
 	}
+	type booksEditIn struct {
+		itemsIn
+		Action string `json:"action" jsonschema:"add or remove"`
+	}
 	add(r, writeTool, &mcp.Tool{
-		Name:        "collection_add",
-		Description: "Add books to a collection. Changes server state.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in itemsIn) (*mcp.CallToolResult, changeOut, error) {
+		Name:        "collection_books_edit",
+		Description: "Add books to a collection or take them out of it. Removing only changes the collection; the books stay in the library. Changes server state.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in booksEditIn) (*mcp.CallToolResult, changeOut, error) {
+		action := strings.ToLower(strings.TrimSpace(in.Action))
+		if action != "add" && action != "remove" {
+			return nil, changeOut{}, fmt.Errorf("action %q must be add or remove", in.Action)
+		}
+
 		c, err := resolveCollection(ctx, client, in.Collection)
 		if err != nil {
 			return nil, changeOut{}, err
@@ -190,27 +199,13 @@ func registerCollectionTools(r *registry) {
 		if err != nil {
 			return nil, changeOut{}, err
 		}
-		updated, err := client.AddToCollection(ctx, c.ID, ids)
-		if err != nil {
-			return nil, changeOut{}, err
-		}
 
-		return nil, changeOut{Collection: updated.Name, Books: len(updated.Books)}, nil
-	})
-
-	add(r, writeTool, &mcp.Tool{
-		Name:        "collection_remove",
-		Description: "Remove books from a collection (they stay in the library). Changes server state.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in itemsIn) (*mcp.CallToolResult, changeOut, error) {
-		c, err := resolveCollection(ctx, client, in.Collection)
-		if err != nil {
-			return nil, changeOut{}, err
+		var updated *abs.Collection
+		if action == "add" {
+			updated, err = client.AddToCollection(ctx, c.ID, ids)
+		} else {
+			updated, err = client.RemoveFromCollection(ctx, c.ID, ids)
 		}
-		ids, err := resolveItemIDs(ctx, client, c.LibraryID, in.Items)
-		if err != nil {
-			return nil, changeOut{}, err
-		}
-		updated, err := client.RemoveFromCollection(ctx, c.ID, ids)
 		if err != nil {
 			return nil, changeOut{}, err
 		}

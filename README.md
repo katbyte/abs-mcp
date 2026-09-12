@@ -132,23 +132,23 @@ comes back as an error listing the candidates.
 
 | Resource | Tools |
 |---|---|
-| server | `server_info`, `server_stats`, `server_tasks`, `server_sessions`, `server_backups`, `server_backup_create`, `server_get_tags`, `server_rename_tag` |
+| server | `server_info`, `server_stats`, `server_tasks`, `server_sessions`, `server_backups`, `server_backup_create`, `server_tag_get`, `server_tag_rename` |
 | libraries | `library_list`, `library_get`, `library_create`, `library_edit`, `library_search`, `library_items` (the server's own filters: genre, tag, author, series, narrator, progress, missing metadata, issues...), `library_recent`, `library_filters`, `library_stats`, `library_scan`, `library_match_all` |
 | audits | `audit_all` (every per-item audit in one sweep - start here after a scan), `audit_missing` (field: cover, description, narrator, series, author, genres, year, publisher, language, chapters), `audit_unmatched`, `audit_issues`, `audit_no_audio`, `audit_path`, `audit_author_as_title`, `audit_single_chapter`, `audit_stale_feed`, `audit_no_episodes`, `audit_duplicates`, `audit_series_gaps`, `audit_terminology` / `audit_terminology_rename`, `audit_cover_ratio`, `audit_author_missing_image` |
 | items | `item_get`, `item_chapters`, `item_files`, `item_edit`, `item_batch_edit` (same fields across many books), `item_rescan`, `item_embed_metadata` |
-| matching | `item_match` (candidates from a provider), `item_match_apply`, `item_cover_search`, `item_cover_set`, `item_cover_remove`, `item_chapters_set` (explicit list or from Audible by asin) |
+| matching | `item_match` (candidates from a provider), `item_match_apply`, `item_cover_search`, `item_cover_edit` (url, file, or removed), `item_chapters_set` (explicit list or from Audible by asin) |
 | authors | `author_list`, `author_get`, `author_edit` (rename to merge duplicates), `author_match`, `author_image_set` |
 | series | `series_list`, `series_get`, `series_edit` |
 | narrators | `narrator_list`, `narrator_edit` (rename to merge, or remove) |
-| collections | `collection_list`, `collection_get`, `collection_create`, `collection_edit`, `collection_add`, `collection_remove`, `collection_delete` |
-| playlists | `playlist_list`, `playlist_get`, `playlist_create` (also from a collection), `playlist_edit`, `playlist_add`, `playlist_remove`, `playlist_delete` |
-| me (the API key's user) | `me_get`, `me_in_progress`, `me_progress_get`, `me_progress_set`, `me_progress_remove`, `me_bookmarks`, `me_bookmark_add`, `me_bookmark_remove`, `me_history`, `me_stats` (all-time or year in review) |
+| collections | `collection_list`, `collection_get`, `collection_create`, `collection_edit`, `collection_books_edit` (add or remove), `collection_delete` |
+| playlists | `playlist_list`, `playlist_get`, `playlist_create` (also from a collection), `playlist_edit`, `playlist_entries_edit` (add or remove), `playlist_delete` |
+| me (the API key's user) | `me_get`, `me_in_progress`, `me_progress_get`, `me_progress_set`, `me_progress_remove`, `me_bookmarks`, `me_bookmark_edit` (add or remove), `me_history`, `me_stats` (all-time or year in review) |
 | podcasts | `podcast_episodes`, `podcast_episode_get`, `podcast_episode_edit`, `podcast_check_new`, `podcast_feed_episodes`, `podcast_episode_download`, `podcast_downloads`, `podcast_recent`, `podcast_search`, `podcast_add`, `podcast_settings` |
 | users (admin) | `user_list`, `user_get`, `user_history`, `user_stats` |
 
-`item_delete`, `podcast_episode_delete`, `author_delete` and `library_remove_issues` are only
+`item_delete`, `podcast_episode_delete`, `author_delete` and `library_issues_remove` are only
 registered when `--enable-delete` / `ABS_ENABLE_DELETE` is set. `--read-only` registers the
-46 read tools and nothing else, so a write tool is absent from `tools/list` rather than refused
+58 read tools and nothing else, so a write tool is absent from `tools/list` rather than refused
 when called.
 
 ### Choosing which tools load
@@ -172,7 +172,7 @@ tool.
 1. `audit_all` says where the library needs work; `audit_unmatched` lists the books never matched to a provider.
 2. For each, `item_match` returns candidates with duration, narrator and series; compare them
    with the item and `item_match_apply candidate=N`.
-3. `audit_missing field=cover` and `item_cover_search` / `item_cover_set` fill the gaps.
+3. `audit_missing field=cover` and `item_cover_search` / `item_cover_edit` fill the gaps.
 4. `audit_missing field=chapters` finds long books with no chapters; `item_chapters_set` pulls
    them from Audible by asin.
 5. `audit_duplicates` and `audit_series_gaps` show what to prune and what is missing.
