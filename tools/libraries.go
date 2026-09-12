@@ -16,9 +16,10 @@ import (
 // for the named groups come from library_filters.
 const filterGroups = "genres, tags, series, authors, narrators, languages, publishers, publishedDecades (value: the name from library_filters); " +
 	"progress (finished, not-started, in-progress, not-finished); " +
-	"missing (asin, isbn, subtitle, authors, narrators, series, publishedYear, description, genres, tags, publisher, language, cover, chapters); " +
 	"ebooks (ebook, no-ebook, supplementary, no-supplementary); tracks (none, single, multi); " +
-	"issues (missing or invalid folders); abridged (abridged, not-abridged); explicit; feed-open; recent (added in the last 60 days)"
+	"abridged (abridged, not-abridged); explicit; feed-open; recent (added in the last 60 days). " +
+	"The server also takes missing:<field> and issues, but prefer audit_missing and audit_issues for those: " +
+	"they sweep the whole library into a worklist and say how to fix what they find"
 
 func registerLibraryTools(r *registry) {
 	client := r.client
@@ -127,7 +128,7 @@ func registerLibraryTools(r *registry) {
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "library_search",
-		Description: "Search by text across titles, authors, narrators, series, tags and genres (also matches isbn/asin). The quickest way to find an item's id. Returns trimmed summaries plus matching authors/series/narrators/tags.",
+		Description: "Find something by name: one free-text query, matched against titles, authors, narrators, series, tags, genres and isbn/asin. The quickest way to turn a title a user typed into an item id. Returns the matching books and podcasts plus the authors, series, narrators and tags that matched, grouped. For a filtered or sorted listing rather than a name lookup, use library_items.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in searchIn) (*mcp.CallToolResult, searchOut, error) {
 		if strings.TrimSpace(in.Query) == "" {
 			return nil, searchOut{}, errors.New("query is required")
@@ -169,7 +170,7 @@ func registerLibraryTools(r *registry) {
 
 	type itemsIn struct {
 		Library string `json:"library,omitempty" jsonschema:"library name or id; optional when the server has one library"`
-		Filter  string `json:"filter,omitempty"  jsonschema:"group or group:value, e.g. genres:Fantasy, authors:Brandon Sanderson, series:Mistborn, progress:in-progress, missing:asin, issues; the tool description lists every group"`
+		Filter  string `json:"filter,omitempty"  jsonschema:"group or group:value, e.g. genres:Fantasy, authors:Brandon Sanderson, series:Mistborn, progress:in-progress; the tool description lists every group"`
 		Sort    string `json:"sort,omitempty"    jsonschema:"title (default), author, year, duration, size, added, modified, sequence (with a series filter), progress, random"`
 		Desc    bool   `json:"desc,omitempty"    jsonschema:"sort descending"`
 		Limit   int    `json:"limit,omitempty"   jsonschema:"page size, default 25"`
@@ -182,7 +183,7 @@ func registerLibraryTools(r *registry) {
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "library_items",
-		Description: "Browse a library page by page with the server's own filters and sorts. Filter groups: " + filterGroups + ". Authors and series accept a name or an id from library_filters.",
+		Description: "Browse or count a library by structured filter, sorted and paged - 'every Sanderson book, longest first', 'what is in progress'. Takes no text query: use library_search to find something by name. Filter groups: " + filterGroups + ". Authors and series accept a name or an id from library_filters.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in itemsIn) (*mcp.CallToolResult, itemsOut, error) {
 		lib, err := resolveLibrary(ctx, client, in.Library)
 		if err != nil {
