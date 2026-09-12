@@ -35,12 +35,13 @@ jobs:
           go-version-file: ./.go-version
 
       # ffmpeg generates the fixture audio and jq parses the seeding
-      # responses; both are preinstalled on ubuntu-latest
-      - name: Check prerequisites
+      # responses. ffmpeg is not on the runner image, so install it rather
+      # than assume it is there.
+      - name: Install prerequisites
         run: |
-          ffmpeg -version | head -1
-          jq --version
-          docker --version
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          command -v ffmpeg jq docker
 
       # make owns the container lifecycle, so CI runs exactly what a
       # developer runs rather than a second copy of the same steps
@@ -66,11 +67,11 @@ jobs:
         with:
           go-version-file: ./.go-version
 
-      - name: Check prerequisites
+      - name: Install prerequisites
         run: |
-          ffmpeg -version | head -1
-          jq --version
-          docker --version
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          command -v ffmpeg jq docker
 
       # provider calls replay from the committed cassettes, so this needs no
       # network beyond the container image
