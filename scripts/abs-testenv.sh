@@ -64,6 +64,20 @@ War Is a Racket|Smedley D. Butler'
 PODCASTS="Well There's Your Problem
 Behind the Bastards"
 
+# wipe_data removes the data directory. The container writes its config,
+# metadata and backups as root, and on Linux those land root-owned in the bind
+# mount where the calling user cannot delete them (Docker Desktop on macOS
+# remaps them, which is why this only bites in CI). A throwaway root container
+# can always remove them.
+wipe_data() {
+  [ -d "${DATA}" ] || return 0
+  rm -rf "${DATA}" 2>/dev/null && return 0
+
+  log "removing root-owned container files"
+  docker run --rm -v "${DATA}:/data" alpine:3 sh -c 'rm -rf /data/..?* /data/.[!.]* /data/*' >/dev/null 2>&1 || true
+  rm -rf "${DATA}" 2>/dev/null || true
+}
+
 # silent_mp3 PATH - a one-second mp3 so the scanner has something to probe.
 silent_mp3() {
   mkdir -p "$(dirname "$1")"
@@ -75,7 +89,7 @@ silent_mp3() {
 
 fixtures() {
   log "generating audio fixtures under ${DATA}"
-  rm -rf "${DATA}"
+  wipe_data
 
   # books are "<author>/<title>/"; the scanner takes author and title from the
   # path, and seed_metadata then sets everything the tests actually assert on
@@ -173,7 +187,7 @@ up() {
 down() {
   log "removing ${NAME}"
   docker rm -f "$NAME" >/dev/null 2>&1 || true
-  rm -rf "${DATA}"
+  wipe_data
 }
 
 case "${1:-up}" in
