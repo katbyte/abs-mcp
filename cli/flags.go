@@ -17,6 +17,7 @@ type FlagData struct {
 	Token        string   `mapstructure:"token"`
 	ReadOnly     bool     `mapstructure:"read-only"`
 	EnableDelete bool     `mapstructure:"enable-delete"`
+	Toolsets     []string `mapstructure:"toolsets"`
 	AllowTools   []string `mapstructure:"allow-tools"`
 	DenyTools    []string `mapstructure:"deny-tools"`
 	Listen       string   `mapstructure:"listen"`
@@ -30,6 +31,7 @@ func configureFlags(root *cobra.Command) error {
 	pflags.StringP("token", "t", "", "an Audiobookshelf API key (consider exporting to ABS_TOKEN instead)")
 	pflags.Bool("read-only", false, "register only tools that never change server state")
 	pflags.Bool("enable-delete", false, "register the tools that delete library items, episodes and authors")
+	pflags.StringSlice("toolsets", nil, "only register these groups of tools: core, listening, curation, podcasts, organise, admin (core is always included)")
 	pflags.StringSlice("allow-tools", nil, "only register these tools: names, prefix globs like library_*, or the essential preset")
 	pflags.StringSlice("deny-tools", nil, "never register these tools: names or prefix globs like *_delete")
 	pflags.String("listen", "", "serve MCP over HTTP on this address (e.g. :8080) instead of stdio")
@@ -41,6 +43,7 @@ func configureFlags(root *cobra.Command) error {
 		"token":         "ABS_TOKEN",
 		"read-only":     "ABS_READ_ONLY",
 		"enable-delete": "ABS_ENABLE_DELETE",
+		"toolsets":      "ABS_TOOLSETS",
 		"allow-tools":   "ABS_ALLOW_TOOLS",
 		"deny-tools":    "ABS_DENY_TOOLS",
 		"listen":        "ABS_LISTEN",
@@ -99,6 +102,7 @@ func (f *FlagData) ToolOptions() tools.Options {
 	return tools.Options{
 		ReadOnly:     f.ReadOnly,
 		EnableDelete: f.EnableDelete,
+		Toolsets:     f.Toolsets,
 		Allow:        f.AllowTools,
 		Deny:         f.DenyTools,
 	}

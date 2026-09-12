@@ -621,3 +621,120 @@ func TestAuditSpecsAreComplete(t *testing.T) {
 		}
 	}
 }
+
+// Every tool belongs to exactly one toolset. Without this a tool added later
+// is silently unreachable for anyone using --toolsets, which is the failure
+// mode that would go unnoticed longest.
+func TestToolsetsPartition(t *testing.T) {
+	t.Parallel()
+
+	all := register(t, Options{EnableDelete: true})
+
+	seen := map[string]string{}
+	for set, names := range Toolsets {
+		if set == "core" {
+			continue
+		}
+		for _, name := range names {
+			if !slices.Contains(all, name) {
+				t.Errorf("toolset %s lists %q, which is not a registered tool", set, name)
+			}
+			if other, dup := seen[name]; dup {
+				t.Errorf("%q is in both %s and %s; a tool belongs to one set", name, other, set)
+			}
+			seen[name] = set
+		}
+	}
+	for _, name := range Toolsets["core"] {
+		if !slices.Contains(all, name) {
+			t.Errorf("core lists %q, which is not a registered tool", name)
+		}
+		seen[name] = "core"
+	}
+
+	for _, name := range all {
+		if seen[name] == "" {
+			t.Errorf("%q is in no toolset; add it to one in tools/all_tools.go", name)
+		}
+	}
+}
+
+// core comes along with whatever else is asked for, because nothing else can
+// find a library or open an item.
+func TestToolsetsIncludeCore(t *testing.T) {
+	t.Parallel()
+
+	got := register(t, Options{Toolsets: []string{"podcast"}, EnableDelete: true})
+
+	for _, name := range Toolsets["core"] {
+		if !slices.Contains(got, name) {
+			t.Errorf("core tool %q missing from --toolsets podcasts", name)
+		}
+	}
+	if !slices.Contains(got, "podcast_search") {
+		t.Error("podcast_search missing from --toolsets podcast")
+	}
+	if slices.Contains(got, "collection_list") {
+		t.Error("collection_list registered for --toolsets podcast")
+	}
+}
+
+// a family name is every tool with that prefix, derived from what is
+// registered so a new tool joins its family without anyone remembering to.
+func TestToolsetsResourceFamily(t *testing.T) {
+	t.Parallel()
+
+	got := register(t, Options{Toolsets: []string{"item"}, EnableDelete: true})
+
+	all := register(t, Options{EnableDelete: true})
+	for _, name := range all {
+		want := strings.HasPrefix(name, "item_") || slices.Contains(Toolsets["core"], name)
+		if has := slices.Contains(got, name); has != want {
+			t.Errorf("--toolsets item: %q registered=%v, want %v", name, has, want)
+		}
+	}
+}
+
+// a family and a curated set compose, which globs could not do: --toolsets
+// core is ANDed with --allow-tools, so "core plus every item tool" had no
+// spelling before.
+func TestToolsetsFamilyAndSet(t *testing.T) {
+	t.Parallel()
+
+	got := register(t, Options{Toolsets: []string{"listening", "audit"}})
+
+	for _, want := range []string{"user_in_progress", "audit_all", "item_get", "library_search"} {
+		if !slices.Contains(got, want) {
+			t.Errorf("%q missing from --toolsets listening,audit", want)
+		}
+	}
+	if slices.Contains(got, "podcast_search") {
+		t.Error("podcast_search should not be in listening,audit")
+	}
+}
+
+// toolsets select the pool; allow and deny still narrow it.
+func TestToolsetsComposeWithDeny(t *testing.T) {
+	t.Parallel()
+
+	got := register(t, Options{Toolsets: []string{"listening"}, Deny: []string{"user_stats"}})
+
+	if slices.Contains(got, "user_stats") {
+		t.Error("user_stats survived a deny")
+	}
+	if !slices.Contains(got, "user_in_progress") {
+		t.Error("user_in_progress should still be there")
+	}
+}
+
+func TestToolsetsUnknown(t *testing.T) {
+	t.Parallel()
+
+	_, err := RegisterAll(mcp.NewServer(&mcp.Implementation{Name: "t", Version: "0"}, nil), newTestClient(t), Options{Toolsets: []string{"nope"}})
+	if err == nil {
+		t.Fatal("an unknown toolset should abort startup")
+	}
+	if !strings.Contains(err.Error(), "curation") {
+		t.Errorf("the error should name the valid sets, got: %v", err)
+	}
+}

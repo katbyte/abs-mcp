@@ -5,11 +5,23 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/katbyte/abs-mcp/lib/version"
+	"github.com/katbyte/abs-mcp/tools"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
+
+// firstSentence trims a tool description to its opening sentence, so the list
+// stays one line per tool.
+func firstSentence(s string) string {
+	if i := strings.Index(s, ". "); i > 0 {
+		return s[:i+1]
+	}
+
+	return s
+}
 
 func ValidateParams(params []string) func(cmd *cobra.Command, args []string) error {
 	return func(_ *cobra.Command, _ []string) error {
@@ -51,6 +63,73 @@ Complete documentation is available at https://github.com/katbyte/abs-mcp`,
 			fmt.Println("abs-mcp " + version.Version)
 		},
 	})
+
+	root.AddCommand(&cobra.Command{
+		Use:   "tools",
+		Short: "List the tools and toolsets, and what the current flags would register",
+		Long: `Lists every tool abs-mcp would register with the current flags, grouped by toolset,
+with its kind (read, write or delete) and what it does.
+
+Needs no server: it reports what would be registered, not what a server accepts.
+
+  abs-mcp tools                        # everything registered by default
+  abs-mcp tools --toolsets core        # just the base set
+  abs-mcp tools --read-only            # only the tools that never change state
+  abs-mcp tools -q                     # names only`,
+		Args:          cobra.NoArgs,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cmd.SilenceUsage = true
+			quiet, _ := cmd.Flags().GetBool("quiet")
+
+			f := GetFlags()
+			list, err := tools.Describe(f.ToolOptions())
+			if err != nil {
+				return err
+			}
+
+			if quiet {
+				for _, t := range list {
+					fmt.Println(t.Name)
+				}
+				return nil
+			}
+
+			byset := map[string][]tools.ToolInfo{}
+			for _, t := range list {
+				byset[t.Toolset] = append(byset[t.Toolset], t)
+			}
+			order := []string{"core", "curation", "listening", "podcasts", "organise", "admin"}
+			counts := map[string]int{}
+			for _, t := range list {
+				counts[t.Kind]++
+			}
+
+			for _, set := range order {
+				in := byset[set]
+				if len(in) == 0 {
+					continue
+				}
+				fmt.Printf("\n%s (%d)\n", set, len(in))
+				for _, t := range in {
+					fmt.Printf("  %-26s %-6s %s\n", t.Name, t.Kind, firstSentence(t.Description))
+				}
+			}
+			fmt.Printf("\n%d tools: %d read, %d write, %d delete\n",
+				len(list), counts["read"], counts["write"], counts["delete"])
+			if !f.EnableDelete {
+				fmt.Println("delete tools are hidden; --enable-delete registers them")
+			}
+			fmt.Printf("\ntoolsets: %s\n", strings.Join(tools.ToolsetNames(), ", "))
+			fmt.Printf("families: %s\n", strings.Join(tools.FamilyNames(), ", "))
+			fmt.Println("select with --toolsets / ABS_TOOLSETS; core is always included")
+
+			return nil
+		},
+	})
+	if c, _, err := root.Find([]string{"tools"}); err == nil {
+		c.Flags().BoolP("quiet", "q", false, "print tool names only")
+	}
 
 	root.AddCommand(&cobra.Command{
 		Use:           "info",
