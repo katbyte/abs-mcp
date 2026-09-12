@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -153,6 +154,78 @@ func (c *Client) doRaw(ctx context.Context, method, path string, query url.Value
 	}
 
 	return raw, nil
+}
+
+// stream performs a request and hands back the response body unread, for the
+// endpoints that return a file rather than JSON. The caller must close it.
+// doRaw buffers into memory with a cap, which is wrong for an audiobook.
+func (c *Client) stream(ctx context.Context, path string, query url.Values) (io.ReadCloser, error) {
+	u := c.baseURL + path
+	if len(query) > 0 {
+		u += "?" + query.Encode()
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, http.NoBody)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("User-Agent", "abs-mcp")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, errBodyPreview))
+		_ = resp.Body.Close()
+		return nil, &HTTPError{Method: http.MethodGet, Path: path, Status: resp.StatusCode, Body: truncate(strings.TrimSpace(string(body)), errBodyPreview)}
+	}
+
+	return resp.Body, nil
+}
+
+// uploadMultipart posts a multipart form with one file part, for the two endpoints that
+// take a file rather than JSON.
+func (c *Client) uploadMultipart(ctx context.Context, path, field, filename string, content io.Reader, fields map[string]string) error {
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	for k, v := range fields {
+		if err := w.WriteField(k, v); err != nil {
+			return err
+		}
+	}
+	part, err := w.CreateFormFile(field, filename)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(part, content); err != nil {
+		return err
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, &buf)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("User-Agent", "abs-mcp")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, errBodyPreview))
+		return &HTTPError{Method: http.MethodPost, Path: path, Status: resp.StatusCode, Body: truncate(strings.TrimSpace(string(body)), errBodyPreview)}
+	}
+
+	return nil
 }
 
 func (c *Client) get(ctx context.Context, path string, query url.Values, out any) error {

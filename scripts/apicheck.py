@@ -12,7 +12,6 @@ what is covered, what is deliberately out of scope, and what is simply missing.
 """
 
 import argparse
-import collections
 import glob
 import re
 import sys
@@ -20,38 +19,10 @@ import urllib.request
 
 ROUTER = "https://raw.githubusercontent.com/advplyr/audiobookshelf/{ref}/server/routers/ApiRouter.js"
 
-# Deliberately not wrapped, per docs/ROADMAP.md. These are not gaps: streaming,
-# byte delivery, uploads and server administration are outside what an AI needs
-# to curate a library.
-OUT_OF_SCOPE = {
-    "/api/notifications": "notifications",
-    "/api/notificationdata": "notifications",
-    "/api/emails": "email / send-to-ereader",
-    "/api/me/ereader-devices": "email / send-to-ereader",
-    "/api/cache": "cache purges",
-    "/api/filesystem": "filesystem browser",
-    "/api/api-keys": "API key management",
-    "/api/auth-settings": "auth settings",
-    "/api/settings": "server settings",
-    "/api/share": "media item sharing",
-    "/api/upload": "uploads",
-    "/api/backups/upload": "uploads",
-    "/api/session": "playback sessions",
-    "/api/sessions": "playback sessions",
-    "/api/me/sessions": "playback sessions",
-    "/api/custom-metadata-providers": "custom metadata providers",
-    "/api/logger-data": "logs",
-    "/api/watcher": "watcher",
-    "/api/validate-cron": "cron validation",
-    "/api/sorting-prefixes": "sorting prefixes",
-    "/api/authorize": "auth",
-    "/api/me/password": "auth",
-    "/api/users/:id/openid-unlink": "auth",
-    "/api/backups/:id/apply": "restore (would replace the database)",
-}
-
-# Routes that only move bytes: covers, downloads, probes, ebook files, opml.
-BYTES = re.compile(r"/(cover|image|download|ffprobe|file|ebook|opml|play)(/|$)")
+# lib/abs is a general Audiobookshelf client, so it covers the whole API. The
+# "not wrapping, ever" list in docs/ROADMAP.md is about which endpoints get an
+# MCP *tool* - an AI curating a library has no business changing auth settings
+# or streaming audio - which is a separate question from what the SDK exposes.
 
 
 def abs_routes(ref):
@@ -110,14 +81,6 @@ def variants(path):
     return {x.rstrip("/") or "/" for x in out}
 
 
-def classify(verb, path):
-    for prefix, label in OUT_OF_SCOPE.items():
-        if path == prefix or path.startswith(prefix + "/"):
-            return label
-    if BYTES.search(path):
-        return "byte delivery / playback"
-    return None
-
 
 def main():
     ap = argparse.ArgumentParser()
@@ -134,29 +97,17 @@ def main():
         hit = any((verb, x) in ours or x in any_verb for x in variants(path))
         (covered if hit else uncovered).append((verb, path))
 
-    excluded = collections.defaultdict(list)
-    gaps = []
-    for verb, path in uncovered:
-        label = classify(verb, path)
-        (excluded[label].append((verb, path)) if label else gaps.append((verb, path)))
-
-    in_scope = len(routes) - sum(len(v) for v in excluded.values())
     print(f"Audiobookshelf {args.ref}: {len(routes)} routes")
-    print(f"  covered by lib/abs   {len(covered):3}   {round(100 * len(covered) / len(routes))}% of all, "
-          f"{round(100 * len(covered) / in_scope)}% of the {in_scope} in scope")
-    print(f"  out of scope         {sum(len(v) for v in excluded.values()):3}   {len(excluded)} categories, see docs/ROADMAP.md")
-    print(f"  not implemented      {len(gaps):3}")
+    print(f"  covered by lib/abs   {len(covered):3}   {round(100 * len(covered) / len(routes))}%")
+    print(f"  not implemented      {len(uncovered):3}")
 
-    if args.list and gaps:
+    if uncovered and args.list:
         print("\nnot implemented:")
-        for verb, path in gaps:
+        for verb, path in uncovered:
             print(f"  {verb:6} {path}")
-    if args.list and excluded:
-        print("\nout of scope:")
-        for label in sorted(excluded, key=lambda k: -len(excluded[k])):
-            print(f"  {len(excluded[label]):3}  {label}")
 
-    return 0
+    # a gap is a regression: the client is meant to cover the whole API
+    return 1 if uncovered else 0
 
 
 if __name__ == "__main__":
