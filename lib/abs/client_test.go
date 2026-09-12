@@ -147,3 +147,54 @@ func TestHTTPErrorMessage(t *testing.T) {
 		}
 	}
 }
+
+// SplitCSV parses the comma-separated fields the API returns for genres, tags
+// and narrators, where blanks and stray spacing are common.
+func TestSplitCSV(t *testing.T) {
+	t.Parallel()
+
+	for _, c := range []struct {
+		in   string
+		want []string
+	}{
+		{"", nil},
+		{"   ", nil},
+		{",,,", nil},
+		{"Science Fiction", []string{"Science Fiction"}},
+		{"sf, classic", []string{"sf", "classic"}},
+		{" sf ,, classic ,", []string{"sf", "classic"}},
+	} {
+		got := SplitCSV(c.in)
+		if len(got) != len(c.want) {
+			t.Errorf("SplitCSV(%q) = %v, want %v", c.in, got, c.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != c.want[i] {
+				t.Errorf("SplitCSV(%q) = %v, want %v", c.in, got, c.want)
+				break
+			}
+		}
+	}
+}
+
+// DeviceInfo.Describe names the client and device in a playback session, and
+// has to survive a nil receiver and every field being empty.
+func TestDeviceInfoDescribe(t *testing.T) {
+	t.Parallel()
+
+	var nilDevice *DeviceInfo
+	if got := nilDevice.Describe(); got != "" {
+		t.Errorf("nil DeviceInfo described as %q, want empty", got)
+	}
+	if got := (&DeviceInfo{}).Describe(); got != "" {
+		t.Errorf("empty DeviceInfo described as %q, want empty", got)
+	}
+	if got := (&DeviceInfo{ClientName: "abs-mcp"}).Describe(); !contains(got, "abs-mcp") {
+		t.Errorf("Describe() = %q, want the client name", got)
+	}
+	// browser name stands in when there is no client name
+	if got := (&DeviceInfo{BrowserName: "Firefox"}).Describe(); !contains(got, "Firefox") {
+		t.Errorf("Describe() = %q, want the browser name", got)
+	}
+}

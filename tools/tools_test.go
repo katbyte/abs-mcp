@@ -766,3 +766,59 @@ func TestToolsetsEmptyMeansEverything(t *testing.T) {
 		t.Errorf("no toolsets registered %d, want %d", len(got), len(all))
 	}
 }
+
+// safeFolderName builds the directory a subscribed podcast lands in, so a show
+// with a slash or a colon in its title cannot escape the library folder or
+// produce a path the server refuses.
+func TestSafeFolderName(t *testing.T) {
+	t.Parallel()
+
+	for _, c := range []struct{ in, want string }{
+		{"Behind the Bastards", "Behind the Bastards"},
+		{"Well There's Your Problem", "Well There's Your Problem"},
+		{"AC/DC: The Podcast", "AC DC The Podcast"},
+		{"../../etc/passwd", ".. .. etc passwd"},
+		{`a\b:c*d?e"f<g>h|i`, "a b c d e f g h i"},
+		{"  spaced   out  ", "spaced out"},
+		{"", ""},
+	} {
+		if got := safeFolderName(c.in); got != c.want {
+			t.Errorf("safeFolderName(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// ToolsetNames and FamilyNames back `abs-mcp tools`, so they have to stay in
+// step with what is actually registered.
+func TestToolsetAndFamilyNames(t *testing.T) {
+	t.Parallel()
+
+	sets := ToolsetNames()
+	if !slices.IsSorted(sets) {
+		t.Errorf("toolset names are not sorted: %v", sets)
+	}
+	for _, want := range []string{"core", "curation", "listening", "admin"} {
+		if !slices.Contains(sets, want) {
+			t.Errorf("%q missing from ToolsetNames: %v", want, sets)
+		}
+	}
+	if len(sets) != len(Toolsets) {
+		t.Errorf("ToolsetNames returned %d, want %d", len(sets), len(Toolsets))
+	}
+
+	families := FamilyNames()
+	if !slices.IsSorted(families) {
+		t.Errorf("family names are not sorted: %v", families)
+	}
+	// every registered tool's prefix must be offered as a family
+	for _, name := range register(t, Options{EnableDelete: true}) {
+		prefix, _, ok := strings.Cut(name, "_")
+		if !ok {
+			t.Errorf("%q has no resource prefix", name)
+			continue
+		}
+		if !slices.Contains(families, prefix) {
+			t.Errorf("%q is registered but %q is not offered as a family", name, prefix)
+		}
+	}
+}

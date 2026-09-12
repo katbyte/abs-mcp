@@ -266,3 +266,110 @@ func login(username, password string) error {
 
 	return nil
 }
+
+// Nothing in the fixtures has ever been played, so every session-shaped answer
+// was only ever tested empty - which left summarizeSession and
+// DeviceInfo.Describe, the projection behind server_sessions and user_history,
+// never executed by any test. This opens a real playback session so both are
+// asserted against actual data.
+func TestServerSessionsWithAPlaybackSession(t *testing.T) {
+	if !ready {
+		t.Skip("ABS_SERVER and ABS_TOKEN are not set")
+	}
+
+	client, err := abs.New(os.Getenv("ABS_SERVER"), os.Getenv("ABS_TOKEN"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// a book no other test asserts on: opening a session and syncing time
+	// against it writes progress, which would knock it off another test's
+	// continue-listening shelf
+	const book = "City of Golden Shadow"
+	item := call(t, "item_get", map[string]any{"item": book})
+	id, _ := item["id"].(string)
+	if id == "" {
+		t.Fatalf("no id for %s: %v", book, item)
+	}
+
+	session, err := client.Play(ctx, id, "", abs.PlayRequest{
+		MediaPlayer:        "acceptance-player",
+		SupportedMimeTypes: []string{"audio/mpeg"},
+		DeviceInfo:         map[string]any{"clientName": "abs-mcp tests", "deviceName": "a test runner"},
+		ForceDirectPlay:    true,
+	})
+	if err != nil {
+		t.Fatalf("opening a playback session: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.CloseSession(ctx, session.ID, nil)
+		call(t, "user_progress_remove", map[string]any{"item": book})
+	})
+
+	// it is open, so server_sessions must project it rather than return nothing
+	rows := rows(t, call(t, "server_sessions", nil)["sessions"], "sessions")
+	if len(rows) == 0 {
+		t.Fatal("server_sessions is empty while a session is open")
+	}
+	var found map[string]any
+	for _, r := range rows {
+		if r["id"] == session.ID {
+			found = r
+		}
+	}
+	if found == nil {
+		t.Fatalf("the open session %s is not in server_sessions: %v", session.ID, rows)
+	}
+	if found["title"] != book {
+		t.Errorf("title = %v, want %s", found["title"], book)
+	}
+	// an open session carries userId but not the expanded user object, so the
+	// name is absent here and only appears on a finished one
+	if uid, _ := found["user_id"].(string); uid == "" {
+		t.Errorf("no user_id on the open session: %v", found)
+	}
+	// DeviceInfo.Describe builds this from clientName and deviceName
+	if device, _ := found["device"].(string); !strings.Contains(device, "abs-mcp tests") {
+		t.Errorf("device = %q, want the client name in it", device)
+	}
+
+	// a session only reaches the history once it has listened time against it.
+	// The fixtures are one second long, so stay inside that: syncing past the
+	// end marks the book finished.
+	if err := client.SyncSession(ctx, session.ID, 0.3, 0.3); err != nil {
+		t.Fatalf("syncing listened time: %v", err)
+	}
+
+	// and it reaches the history, which reads a different endpoint
+	history := call(t, "user_history", nil)
+	if num(t, history["total_sessions"], "total_sessions") == 0 {
+		t.Error("user_history reports no sessions after one was opened")
+	}
+	var inHistory bool
+	for _, r := range rows2(t, history["sessions"]) {
+		if r["id"] == session.ID {
+			inHistory = true
+			if r["title"] != book {
+				t.Errorf("history title = %v, want %s", r["title"], book)
+			}
+		}
+	}
+	if !inHistory {
+		t.Errorf("session %s is not in user_history", session.ID)
+	}
+}
+
+// rows2 is rows without the t.Helper fatal, for a list that may legitimately
+// be short.
+func rows2(t *testing.T, v any) []map[string]any {
+	t.Helper()
+
+	list, _ := v.([]any)
+	out := make([]map[string]any, 0, len(list))
+	for _, e := range list {
+		if m, ok := e.(map[string]any); ok {
+			out = append(out, m)
+		}
+	}
+
+	return out
+}
