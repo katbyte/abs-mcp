@@ -67,7 +67,10 @@ Behind the Bastards"
 # silent_mp3 PATH - a one-second mp3 so the scanner has something to probe.
 silent_mp3() {
   mkdir -p "$(dirname "$1")"
-  ffmpeg -loglevel error -y -f lavfi -i anullsrc=r=44100:cl=mono -t 1 -q:a 9 "$1"
+  # -nostdin matters: without it ffmpeg reads the while-read loop's stdin
+  # looking for interactive keys and swallows a character of the next line,
+  # which silently truncates the titles that follow
+  ffmpeg -nostdin -loglevel error -y -f lavfi -i anullsrc=r=44100:cl=mono -t 1 -q:a 9 "$1"
 }
 
 fixtures() {

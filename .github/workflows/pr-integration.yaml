@@ -48,10 +48,6 @@ jobs:
       - name: Run the SDK suite
         run: make testacc-integration
 
-      - name: Server logs on failure
-        if: failure()
-        run: docker logs abs-mcp-sdk 2>&1 | tail -100 || true
-
       - name: Tear down
         if: always()
         run: |
@@ -77,10 +73,6 @@ jobs:
       # network beyond the container image
       - name: Run the tool suite
         run: make testacc-acceptance
-
-      - name: Server logs on failure
-        if: failure()
-        run: docker logs abs-mcp-test 2>&1 | tail -100 || true
 
       - name: Tear down
         if: always()

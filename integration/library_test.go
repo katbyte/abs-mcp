@@ -3,10 +3,13 @@
 package integration
 
 import (
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/katbyte/abs-mcp/lib/abs"
 )
 
 // --- the library lifecycle ----------------------------------------------
@@ -78,14 +81,14 @@ func library(t *testing.T) string {
 	}
 	deadline := time.Now().Add(2 * time.Minute)
 	for time.Now().Before(deadline) {
-		res, err := client.Items(ctx, fiction, abs.ItemsOptions{Limit: 1, Minified: true})
+		res, err := client.Items(ctx, fiction, abs.ItemsOptions{Limit: 100, Minified: true})
 		if err == nil && res.Total == 7 {
 			seedMetadata(t)
 			return fiction
 		}
 		time.Sleep(2 * time.Second)
 	}
-	t.Fatal("the scan never reached 7 items")
+	t.Fatal("the scan never reached 7 items; found: " + scanned(t, fiction))
 
 	return fiction
 }
@@ -118,13 +121,13 @@ func podcastLibrary(t *testing.T) string {
 	}
 	deadline := time.Now().Add(2 * time.Minute)
 	for time.Now().Before(deadline) {
-		res, err := client.Items(ctx, podcasts, abs.ItemsOptions{Limit: 1, Minified: true})
+		res, err := client.Items(ctx, podcasts, abs.ItemsOptions{Limit: 100, Minified: true})
 		if err == nil && res.Total == 2 {
 			return podcasts
 		}
 		time.Sleep(2 * time.Second)
 	}
-	t.Fatal("the podcast scan never reached 2 shows")
+	t.Fatal("the podcast scan never reached 2 shows; found: " + scanned(t, podcasts))
 
 	return podcasts
 }
@@ -231,4 +234,21 @@ func TestUpdateMediaAndBatch(t *testing.T) {
 	if n != 2 {
 		t.Errorf("BatchUpdate updated %d, want 2", n)
 	}
+}
+
+// scanned lists what a library actually holds, so a scan that comes up short
+// names the titles it did find rather than only the count.
+func scanned(t *testing.T, libraryID string) string {
+	t.Helper()
+
+	res, err := client.Items(t.Context(), libraryID, abs.ItemsOptions{Limit: 100, Minified: true})
+	if err != nil {
+		return "could not list items: " + err.Error()
+	}
+	titles := make([]string, 0, len(res.Results))
+	for i := range res.Results {
+		titles = append(titles, strconv.Quote(res.Results[i].Title()))
+	}
+
+	return fmt.Sprintf("%d of them: %s", res.Total, strings.Join(titles, ", "))
 }

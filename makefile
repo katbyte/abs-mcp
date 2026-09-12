@@ -162,7 +162,9 @@ testacc-integration: ## SDK tests in a throwaway container
 	@set -e; \
 		ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_PORT=13379 ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk \
 			scripts/abs-testenv.sh up | grep '^export' > .testenv-sdk.sh; \
-		trap 'ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk scripts/abs-testenv.sh down; rm -f .testenv-sdk.sh' EXIT; \
+		trap 'st=$$?; [ $$st -eq 0 ] || docker logs abs-mcp-sdk 2>&1 | tail -60; \
+			ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk scripts/abs-testenv.sh down; \
+			rm -f .testenv-sdk.sh; exit $$st' EXIT; \
 		. ./.testenv-sdk.sh; \
 		go test -tags integration -count=1 ./integration/... -timeout ${TEST_TIMEOUT} -v
 
@@ -170,7 +172,8 @@ testacc-acceptance: ## Tool tests in a throwaway container
 	@echo "==> acceptance (tools) on port 13378..."
 	@set -e; \
 		scripts/abs-testenv.sh up | grep '^export' > .testenv.sh; \
-		trap 'scripts/abs-testenv.sh down; rm -f .testenv.sh' EXIT; \
+		trap 'st=$$?; [ $$st -eq 0 ] || docker logs abs-mcp-test 2>&1 | tail -60; \
+			scripts/abs-testenv.sh down; rm -f .testenv.sh; exit $$st' EXIT; \
 		. ./.testenv.sh; \
 		go test -tags integration -count=1 ./acceptance/... -timeout ${TEST_TIMEOUT} -v
 
