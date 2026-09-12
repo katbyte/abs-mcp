@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/katbyte/abs-mcp/lib/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -10,6 +11,20 @@ import (
 func registerServerTools(r *registry) {
 	client := r.client
 
+	// totals are a nested object rather than flat fields so their absence is a
+	// single unambiguous fact. Flat and omitempty could not tell "this key may
+	// not ask" from the perfectly ordinary answers of no podcasts and nobody
+	// listening.
+	type totalsOut struct {
+		Books          int   `json:"books"`
+		Podcasts       int   `json:"podcasts"`
+		AudioFiles     int   `json:"audio_files"`
+		TotalSizeGB    int64 `json:"total_size_gb"`
+		BooksSizeGB    int64 `json:"books_size_gb"`
+		PodcastsSizeGB int64 `json:"podcasts_size_gb"`
+		Users          int   `json:"users"`
+		OpenSessions   int   `json:"open_sessions"    jsonschema:"how many are playing right now; server_sessions lists them"`
+	}
 	type infoOut struct {
 		Version          string       `json:"version"`
 		URL              string       `json:"url"`
@@ -18,16 +33,10 @@ func registerServerTools(r *registry) {
 		CanUpdate        bool         `json:"can_update"`
 		CanDelete        bool         `json:"can_delete"`
 		Libraries        []libraryRow `json:"libraries"`
-		Books            int          `json:"books,omitempty"             jsonschema:"server-wide totals; admin only, absent otherwise"`
-		Podcasts         int          `json:"podcasts,omitempty"`
-		AudioFiles       int          `json:"audio_files,omitempty"`
-		TotalSizeGB      int64        `json:"total_size_gb,omitempty"`
-		BooksSizeGB      int64        `json:"books_size_gb,omitempty"`
-		PodcastsSizeGB   int64        `json:"podcasts_size_gb,omitempty"`
-		Users            int          `json:"users,omitempty"`
-		OpenSessions     int          `json:"open_sessions,omitempty"     jsonschema:"how many are playing right now; server_sessions lists them"`
 		BookProviders    []string     `json:"book_providers,omitempty"    jsonschema:"metadata providers accepted by item_match"`
 		PodcastProviders []string     `json:"podcast_providers,omitempty"`
+		Totals           *totalsOut   `json:"totals,omitempty"            jsonschema:"server-wide totals; present only for an admin key, so absent means unknown rather than zero - see note"`
+		Note             string       `json:"note,omitempty"              jsonschema:"what this key could not see, when part of the answer needed permissions it does not have"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "server_info",
@@ -62,18 +71,29 @@ func registerServerTools(r *registry) {
 			out.BookProviders, out.PodcastProviders = book, podcast
 		}
 		// the totals are admin-only, and this is the one tool that has to answer
-		// for any key, so every one of them is best-effort
+		// for any key, so they are best-effort - but a key that may not ask must
+		// be told that, or it reads the silence as an empty server
 		if st, err := client.ServerStats(ctx); err == nil {
-			out.Books, out.Podcasts = st.Books.NumItems, st.Podcasts.NumItems
-			out.AudioFiles = st.Total.NumAudioFiles
-			out.TotalSizeGB = st.Total.TotalSize >> 30
-			out.BooksSizeGB, out.PodcastsSizeGB = st.Books.TotalSize>>30, st.Podcasts.TotalSize>>30
-		}
-		if users, err := client.Users(ctx, false); err == nil {
-			out.Users = len(users)
-		}
-		if sessions, err := client.OpenSessions(ctx); err == nil {
-			out.OpenSessions = len(sessions)
+			t := totalsOut{
+				Books:          st.Books.NumItems,
+				Podcasts:       st.Podcasts.NumItems,
+				AudioFiles:     st.Total.NumAudioFiles,
+				TotalSizeGB:    st.Total.TotalSize >> 30,
+				BooksSizeGB:    st.Books.TotalSize >> 30,
+				PodcastsSizeGB: st.Podcasts.TotalSize >> 30,
+			}
+			if users, err := client.Users(ctx, false); err == nil {
+				t.Users = len(users)
+			}
+			if sessions, err := client.OpenSessions(ctx); err == nil {
+				t.OpenSessions = len(sessions)
+			}
+			out.Totals = &t
+		} else {
+			out.Note = fmt.Sprintf("server-wide totals need an admin key and are not included: this key acts as %s (%s). "+
+				"The libraries and permissions above are complete. Treat the totals as unknown rather than zero, "+
+				"and expect the other admin-only tools (server_sessions, server_tasks, server_backups, server_tags, user_list) to be refused as well.",
+				me.Username, me.Type)
 		}
 
 		return nil, out, nil
