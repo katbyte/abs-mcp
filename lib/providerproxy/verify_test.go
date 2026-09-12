@@ -8,6 +8,8 @@ import (
 // fieldPaths is what decides whether a provider has changed shape, so the
 // distinction it draws - structure counts, values and list lengths do not -
 // is worth pinning down directly.
+const bodyAX = `{"a":"x"}`
+
 func TestFieldPathsIgnoresValuesAndListLength(t *testing.T) {
 	t.Parallel()
 
@@ -28,7 +30,7 @@ func TestFieldPathsCatchesRealChanges(t *testing.T) {
 
 	for _, tc := range []struct{ name, a, b string }{
 		{"field renamed", `{"book":[]}`, `{"books":[]}`},
-		{"field removed", `{"a":"x","b":"y"}`, `{"a":"x"}`},
+		{"field removed", `{"a":"x","b":"y"}`, bodyAX},
 		{"type changed", `{"n":1}`, `{"n":"1"}`},
 		{"nesting added", `{"providers":["a"]}`, `{"providers":{"books":["a"]}}`},
 		{"array of strings became array of objects", `{"p":["a"]}`, `{"p":[{"value":"a"}]}`},
@@ -76,8 +78,8 @@ func TestCompareCatchesStatusChange(t *testing.T) {
 
 	p := &Proxy{}
 	p.compare(
-		&interaction{Key: "k", Status: 200, Body: `{"a":"x"}`},
-		&interaction{Key: "k", Status: 429, Body: `{"a":"x"}`},
+		&interaction{Key: "k", Status: 200, Body: bodyAX},
+		&interaction{Key: "k", Status: 429, Body: bodyAX},
 	)
 	drifts := p.Drifts()
 	if len(drifts) != 1 || drifts[0].StatusIs != 429 {

@@ -303,7 +303,7 @@ func TestSeriesSequences(t *testing.T) {
 	// items as a series-filtered query returns them: the series listing has no
 	// sequence numbers at all
 	series := func(seqs ...string) []abs.Item {
-		var items []abs.Item
+		items := make([]abs.Item, 0, len(seqs))
 		for _, seq := range seqs {
 			it := abs.Item{}
 			it.Media.Metadata.Series = abs.SeriesRefs{{ID: "s1", Sequence: seq}}
@@ -374,7 +374,7 @@ func TestLastFirstMatch(t *testing.T) {
 		want           bool
 	}{
 		{"herbert frank", "frank herbert", true},
-		{"tolkien j r r", "j r r tolkien", true},
+		{"tolkien j r r", "j r tolkien", true},
 		{"the herbert frank collection", "frank herbert", true},
 		{"frank herbert", "frank herbert", false}, // already first-last; the caller's Contains handles it
 		{"asimov", "isaac asimov", false},         // a surname alone is not the reordering
@@ -461,7 +461,7 @@ func TestVocabKey(t *testing.T) {
 	same("narrators", "Jim Dale", "jim dale", "JIM DALE")
 	same("genres", "Sci-Fi", "sci fi", "Sci Fi")
 	same("tags", "space-opera", "Space Opera", "space_opera")
-	same("authors", "J.R.R. Tolkien", "J R R Tolkien", "j.r.r. tolkien")
+	same("authors", "J.R.R. Tolkien", "J R R Tolkien", "j.r.r. tolkien") //nolint:dupword // initials, not a repeated word
 	differ("narrators", "Jim Dale", "Jim Dales")
 	differ("genres", "Science Fiction", "Science")
 

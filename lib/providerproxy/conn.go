@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -63,7 +63,7 @@ func (c *connResponse) WriteHeader(status int) {
 	for name := range c.Header() {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	for _, name := range names {
 		for _, v := range c.Header()[name] {
 			fmt.Fprintf(&b, "%s: %s\r\n", name, v)

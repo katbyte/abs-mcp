@@ -1,6 +1,7 @@
 package providerproxy
 
 import (
+	"bytes"
 	"crypto/tls"
 	"encoding/json"
 	"io"
@@ -35,14 +36,14 @@ func clientThrough(t *testing.T, p *Proxy) *http.Client {
 func writeCassette(t *testing.T, dir string, c cassette) {
 	t.Helper()
 
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	raw, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, hostFile(c.Host)), raw, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, hostFile(c.Host)), raw, 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -72,7 +73,11 @@ func TestReplayServesRecording(t *testing.T) {
 	}
 	defer func() { _ = p.Close() }()
 
-	resp, err := clientThrough(t, p).Get("https://api.audnex.us/authors?name=Isaac+Asimov")
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://api.audnex.us/authors?name=Isaac+Asimov", http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := clientThrough(t, p).Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +87,7 @@ func TestReplayServesRecording(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		t.Errorf("status = %d, want 200", resp.StatusCode)
 	}
 	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
@@ -107,7 +112,11 @@ func TestReplayMissIsLoud(t *testing.T) {
 	}
 	defer func() { _ = p.Close() }()
 
-	resp, err := clientThrough(t, p).Get("https://api.audible.com/1.0/catalog/products?keywords=nothing")
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://api.audible.com/1.0/catalog/products?keywords=nothing", http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := clientThrough(t, p).Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,6 +211,8 @@ func TestBodyStorage(t *testing.T) {
 //
 //	ABS_TEST_PROVIDERS_LIVE=1 go test ./lib/providerproxy/ -run Record -v
 func TestRecordAgainstRealProvider(t *testing.T) {
+	t.Parallel()
+
 	if os.Getenv("ABS_TEST_PROVIDERS_LIVE") == "" {
 		t.Skip("set ABS_TEST_PROVIDERS_LIVE=1 to record against the real providers")
 	}
@@ -212,13 +223,17 @@ func TestRecordAgainstRealProvider(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resp, err := clientThrough(t, p).Get("https://api.audnex.us/authors?name=Isaac%20Asimov")
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://api.audnex.us/authors?name=Isaac%20Asimov", http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := clientThrough(t, p).Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	body, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d: %s", resp.StatusCode, body)
 	}
 	if err := p.Close(); err != nil {
@@ -226,7 +241,7 @@ func TestRecordAgainstRealProvider(t *testing.T) {
 	}
 
 	// and the cassette it wrote must replay without touching the network
-	raw, err := os.ReadFile(filepath.Join(dir, "api.audnex.us.json"))
+	raw, err := os.ReadFile(filepath.Join(dir, "api.audnex.us.json")) //nolint:gosec // a path this test just wrote
 	if err != nil {
 		t.Fatalf("no cassette written: %v", err)
 	}
@@ -240,13 +255,17 @@ func TestRecordAgainstRealProvider(t *testing.T) {
 	}
 	defer func() { _ = replay.Close() }()
 
-	resp2, err := clientThrough(t, replay).Get("https://api.audnex.us/authors?name=Isaac%20Asimov")
+	req2, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://api.audnex.us/authors?name=Isaac%20Asimov", http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp2, err := clientThrough(t, replay).Do(req2)
 	if err != nil {
 		t.Fatal(err)
 	}
 	body2, _ := io.ReadAll(resp2.Body)
 	_ = resp2.Body.Close()
-	if string(body) != string(body2) {
+	if !bytes.Equal(body, body2) {
 		t.Error("replayed body differs from the recorded one")
 	}
 	if misses := replay.Misses(); len(misses) != 0 {

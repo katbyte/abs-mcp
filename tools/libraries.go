@@ -404,9 +404,9 @@ func registerLibraryTools(r *registry) {
 	})
 
 	type libEditIn struct {
-		Library  string `json:"library"             jsonschema:"library name or id"`
-		Name     string `json:"name,omitempty"      jsonschema:"new name"`
-		Provider string `json:"provider,omitempty"  jsonschema:"default metadata provider: audible, google, openlibrary, itunes..."`
+		Library  string `json:"library"            jsonschema:"library name or id"`
+		Name     string `json:"name,omitempty"     jsonschema:"new name"`
+		Provider string `json:"provider,omitempty" jsonschema:"default metadata provider: audible, google, openlibrary, itunes..."`
 		Icon     string `json:"icon,omitempty"`
 	}
 	type libEditOut struct {

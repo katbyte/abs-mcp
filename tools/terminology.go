@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/katbyte/abs-mcp/lib/abs"
@@ -116,7 +115,7 @@ func registerTerminologyTools(r *registry) {
 	}
 	type vocabOut struct {
 		Scanned      int          `json:"items_scanned"`
-		Found        int          `json:"total_findings" jsonschema:"groups with more than one spelling, before limit"`
+		Found        int          `json:"total_findings"                   jsonschema:"groups with more than one spelling, before limit"`
 		Groups       []vocabGroup `json:"groups"`
 		OddLanguages []spelling   `json:"unrecognized_languages,omitempty" jsonschema:"language values that are not a code or name this tool knows, e.g. a placeholder like XXX"`
 	}
@@ -184,7 +183,7 @@ func registerTerminologyTools(r *registry) {
 					keys = append(keys, k)
 				}
 			}
-			sort.Strings(keys)
+			slices.Sort(keys)
 
 			for _, k := range keys {
 				out.Found++
@@ -196,11 +195,11 @@ func registerTerminologyTools(r *registry) {
 					g.Spellings = append(g.Spellings, spelling{Value: v, Items: n})
 				}
 				// most used first, then alphabetical so the output is stable
-				sort.Slice(g.Spellings, func(a, b int) bool {
-					if g.Spellings[a].Items != g.Spellings[b].Items {
-						return g.Spellings[a].Items > g.Spellings[b].Items
+				slices.SortFunc(g.Spellings, func(a, b spelling) int {
+					if a.Items != b.Items {
+						return b.Items - a.Items
 					}
-					return g.Spellings[a].Value < g.Spellings[b].Value
+					return strings.Compare(a.Value, b.Value)
 				})
 				g.Keep = g.Spellings[0].Value
 				out.Groups = append(out.Groups, g)
@@ -217,8 +216,8 @@ func registerTerminologyTools(r *registry) {
 					}
 				}
 			}
-			sort.Slice(out.OddLanguages, func(a, b int) bool {
-				return out.OddLanguages[a].Value < out.OddLanguages[b].Value
+			slices.SortFunc(out.OddLanguages, func(a, b spelling) int {
+				return strings.Compare(a.Value, b.Value)
 			})
 		}
 

@@ -192,7 +192,7 @@ func registerAuthorTools(r *registry) {
 	type missingImageOut struct {
 		Scanned  int               `json:"authors_scanned"`
 		Found    int               `json:"total_findings"`
-		Findings []missingImageRow `json:"findings" jsonschema:"most books first: the authors worth fixing"`
+		Findings []missingImageRow `json:"findings"        jsonschema:"most books first: the authors worth fixing"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "audit_author_missing_image",

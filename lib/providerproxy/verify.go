@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"sort"
 	"strings"
 )
 
@@ -47,7 +46,7 @@ func (p *Proxy) Drifts() []Drift {
 	defer p.driftMu.Unlock()
 
 	out := append([]Drift(nil), p.drifts...)
-	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	slices.SortFunc(out, func(a, b Drift) int { return strings.Compare(a.Key, b.Key) })
 
 	return out
 }
@@ -105,7 +104,7 @@ func fieldPaths(body string) []string {
 	for k := range seen {
 		out = append(out, k)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 
 	return out
 }

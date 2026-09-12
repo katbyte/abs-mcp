@@ -24,7 +24,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"math/big"
@@ -32,6 +31,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -129,7 +129,8 @@ func New(opts Options) (*Proxy, error) {
 		},
 	}
 
-	ln, err := net.Listen("tcp", opts.Addr)
+	var lc net.ListenConfig
+	ln, err := lc.Listen(context.Background(), "tcp", opts.Addr)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +152,14 @@ func New(opts Options) (*Proxy, error) {
 func (p *Proxy) Addr() string { return p.listener.Addr().String() }
 
 // Port is the port the proxy is listening on.
-func (p *Proxy) Port() int { return p.listener.Addr().(*net.TCPAddr).Port }
+func (p *Proxy) Port() int {
+	addr, ok := p.listener.Addr().(*net.TCPAddr)
+	if !ok {
+		return 0
+	}
+
+	return addr.Port
+}
 
 // Misses returns the requests that had no recording, so a replay run can fail
 // with the list rather than leaving tests to pass on empty responses.
@@ -218,7 +226,7 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 		Certificates: []tls.Certificate{*cert},
 		MinVersion:   tls.VersionTLS12,
 	})
-	if err := conn.Handshake(); err != nil {
+	if err := conn.HandshakeContext(r.Context()); err != nil {
 		// the client hung up or refused our certificate; with
 		// NODE_TLS_REJECT_UNAUTHORIZED=0 the latter should not happen
 		return
@@ -294,7 +302,7 @@ func (p *Proxy) fetch(r *http.Request, host, k, path string) (*interaction, erro
 		target.Scheme = "http"
 	}
 
-	outReq, err := http.NewRequestWithContext(context.Background(), r.Method, target.String(), r.Body)
+	outReq, err := http.NewRequestWithContext(r.Context(), r.Method, target.String(), r.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -350,7 +358,7 @@ func writeInteraction(w http.ResponseWriter, i *interaction) {
 	for name, v := range i.Headers {
 		w.Header().Set(name, v)
 	}
-	w.Header().Set("Content-Length", fmt.Sprint(len(body)))
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	w.WriteHeader(i.Status)
 	_, _ = w.Write(body)
 }

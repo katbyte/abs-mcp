@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -160,7 +160,7 @@ func newStore(dir string) (*store, error) {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 			continue
 		}
-		raw, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		raw, err := os.ReadFile(filepath.Join(dir, e.Name())) //nolint:gosec // the cassette directory is ours, not caller input
 		if err != nil {
 			return nil, err
 		}
@@ -237,20 +237,20 @@ func (s *store) flush() error {
 	if len(s.dirty) == 0 {
 		return nil
 	}
-	if err := os.MkdirAll(s.dir, 0o755); err != nil {
+	if err := os.MkdirAll(s.dir, 0o750); err != nil {
 		return err
 	}
 	for host := range s.dirty {
 		c := s.byHost[host]
-		sort.Slice(c.Interactions, func(a, b int) bool {
-			return c.Interactions[a].Key < c.Interactions[b].Key
+		slices.SortFunc(c.Interactions, func(a, b *interaction) int {
+			return strings.Compare(a.Key, b.Key)
 		})
 		raw, err := json.MarshalIndent(c, "", "  ")
 		if err != nil {
 			return err
 		}
 		raw = append(raw, '\n')
-		if err := os.WriteFile(filepath.Join(s.dir, hostFile(host)), raw, 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(s.dir, hostFile(host)), raw, 0o600); err != nil {
 			return err
 		}
 	}

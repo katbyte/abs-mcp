@@ -444,11 +444,11 @@ func registerItemTools(r *registry) {
 	})
 
 	type batchEditIn struct {
-		Library string   `json:"library,omitempty" jsonschema:"library name or id, for resolving titles"`
-		Items   []string `json:"items"             jsonschema:"the books to change, by id or exact title"`
-		Genres  []string `json:"genres,omitempty"  jsonschema:"replacement genre list, applied to every item"`
-		Tags    []string `json:"tags,omitempty"    jsonschema:"replacement tag list, applied to every item"`
-		Authors []string `json:"authors,omitempty" jsonschema:"replacement author list"`
+		Library string   `json:"library,omitempty"   jsonschema:"library name or id, for resolving titles"`
+		Items   []string `json:"items"               jsonschema:"the books to change, by id or exact title"`
+		Genres  []string `json:"genres,omitempty"    jsonschema:"replacement genre list, applied to every item"`
+		Tags    []string `json:"tags,omitempty"      jsonschema:"replacement tag list, applied to every item"`
+		Authors []string `json:"authors,omitempty"   jsonschema:"replacement author list"`
 		Year    string   `json:"year,omitempty"`
 		Publish string   `json:"publisher,omitempty"`
 		Lang    string   `json:"language,omitempty"`
@@ -481,8 +481,7 @@ func registerItemTools(r *registry) {
 			val string
 		}{{&md.PublishedYear, in.Year}, {&md.Publisher, in.Publish}, {&md.Language, in.Lang}} {
 			if f.val != "" {
-				v := f.val
-				*f.dst = &v
+				*f.dst = new(f.val)
 				hasMeta = true
 			}
 		}
@@ -502,8 +501,7 @@ func registerItemTools(r *registry) {
 			}
 			upd := abs.MediaUpdate{Tags: in.Tags}
 			if hasMeta {
-				m := md
-				upd.Metadata = &m
+				upd.Metadata = new(md)
 			}
 			updates = append(updates, abs.BatchMediaUpdate{ID: it.ID, MediaPayload: upd})
 			out.Items = append(out.Items, it.Title())

@@ -15,15 +15,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// audit checks. Detection is code, correction is judgment: each check is a
-// cheap deterministic sweep that produces a worklist for the AI to act on
-// with item_match, item_edit or item_cover_set.
-const auditChecks = "unmatched (no asin and no isbn: never matched to a provider), cover, description, narrator, series, author, genres, year, publisher, language, " +
-	"chapters (multi-hour audio with no chapters), " +
-	"issues (folder missing or no playable media), no_audio (ebook-only), path (folder name disagrees with the metadata title/author), " +
-	"stale_feed (podcasts: no new episodes in 90 days or the feed was never checked), no_episodes (podcasts with nothing downloaded), " +
-	"author_as_title (the author field holds the title, a common import mistake)"
-
 // auditIn is what every audit takes: which library, and how much to return.
 // There is no check parameter - the tool name is the check.
 type auditIn struct {
@@ -54,22 +45,38 @@ type auditSpec struct {
 }
 
 var auditSpecs = []auditSpec{
-	{"audit_unmatched", "unmatched",
-		"Find books never matched to a metadata provider: no asin and no isbn, so nothing else can be filled in automatically. Fix with item_match then item_match_apply, or library_match_all for a whole library."},
-	{"audit_issues", "issues",
-		"Find items whose folder is missing from disk or holds no playable media. These are broken records rather than metadata gaps: remove them with library_remove_issues, or item_delete one at a time."},
-	{"audit_no_audio", "no_audio",
-		"Find items with no audio tracks at all, usually an ebook-only folder that landed in an audiobook library."},
-	{"audit_path", "path",
-		"Find items whose folder name disagrees with their title or author, which usually means the metadata was matched to the wrong book. Compare item_get with the path before fixing."},
-	{"audit_author_as_title", "author_as_title",
-		"Find items whose author field holds the title, a common import mistake that also creates a bogus author record. Fix with item_edit, then author_delete the stray author."},
-	{"audit_single_chapter", "single_chapter",
-		"Find long books carrying exactly one chapter that spans the whole recording, which is as unnavigable as having none but is not reported by audit_missing chapters. Fix with item_chapters_set, which can pull real chapters from Audible by asin."},
-	{"audit_stale_feed", "stale_feed",
-		"Find podcasts with no new episodes in 90 days, or whose feed was never checked. The show may have ended, or the feed url may be dead. Check with podcast_feed_episodes."},
-	{"audit_no_episodes", "no_episodes",
-		"Find podcasts with nothing downloaded. Fill them with podcast_feed_episodes then podcast_episode_download, or podcast_check_new."},
+	{
+		"audit_unmatched", "unmatched",
+		"Find books never matched to a metadata provider: no asin and no isbn, so nothing else can be filled in automatically. Fix with item_match then item_match_apply, or library_match_all for a whole library.",
+	},
+	{
+		"audit_issues", "issues",
+		"Find items whose folder is missing from disk or holds no playable media. These are broken records rather than metadata gaps: remove them with library_remove_issues, or item_delete one at a time.",
+	},
+	{
+		"audit_no_audio", "no_audio",
+		"Find items with no audio tracks at all, usually an ebook-only folder that landed in an audiobook library.",
+	},
+	{
+		"audit_path", "path",
+		"Find items whose folder name disagrees with their title or author, which usually means the metadata was matched to the wrong book. Compare item_get with the path before fixing.",
+	},
+	{
+		"audit_author_as_title", "author_as_title",
+		"Find items whose author field holds the title, a common import mistake that also creates a bogus author record. Fix with item_edit, then author_delete the stray author.",
+	},
+	{
+		"audit_single_chapter", "single_chapter",
+		"Find long books carrying exactly one chapter that spans the whole recording, which is as unnavigable as having none but is not reported by audit_missing chapters. Fix with item_chapters_set, which can pull real chapters from Audible by asin.",
+	},
+	{
+		"audit_stale_feed", "stale_feed",
+		"Find podcasts with no new episodes in 90 days, or whose feed was never checked. The show may have ended, or the feed url may be dead. Check with podcast_feed_episodes.",
+	},
+	{
+		"audit_no_episodes", "no_episodes",
+		"Find podcasts with nothing downloaded. Fill them with podcast_feed_episodes then podcast_episode_download, or podcast_check_new.",
+	},
 }
 
 // missingFields are the checks that are all the same question - is this field
@@ -164,8 +171,8 @@ func registerAuditTools(r *registry) {
 	type allOut struct {
 		Scanned int      `json:"items_scanned"`
 		Total   int      `json:"total_findings"`
-		Audits  []allRow `json:"audits" jsonschema:"every audit with something to report, worst first; call that audit for the worklist"`
-		Clean   []string `json:"clean"  jsonschema:"audits that found nothing"`
+		Audits  []allRow `json:"audits"         jsonschema:"every audit with something to report, worst first; call that audit for the worklist"`
+		Clean   []string `json:"clean"          jsonschema:"audits that found nothing"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "audit_all",
@@ -228,10 +235,10 @@ func registerAuditTools(r *registry) {
 	})
 
 	type coverRatioIn struct {
-		Library   string  `json:"library,omitempty"   jsonschema:"library name or id; default every library"`
-		Tolerance float64 `json:"tolerance,omitempty" jsonschema:"how far from square counts as square, default 0.1 (a 10% deviation)"`
+		Library   string  `json:"library,omitempty"    jsonschema:"library name or id; default every library"`
+		Tolerance float64 `json:"tolerance,omitempty"  jsonschema:"how far from square counts as square, default 0.1 (a 10% deviation)"`
 		MinPixels int     `json:"min_pixels,omitempty" jsonschema:"also report covers narrower than this, default 400"`
-		Limit     int     `json:"limit,omitempty"     jsonschema:"maximum findings, default 50"`
+		Limit     int     `json:"limit,omitempty"      jsonschema:"maximum findings, default 50"`
 	}
 	type coverRow struct {
 		ID     string `json:"id"`
@@ -380,12 +387,12 @@ func registerAuditTools(r *registry) {
 		Name    string   `json:"name"`
 		Author  string   `json:"author,omitempty"`
 		Books   int      `json:"books"`
-		Have    []string `json:"have"    jsonschema:"sequence numbers present, in order"`
-		Missing []string `json:"missing" jsonschema:"whole numbers absent between the lowest and the highest present"`
+		Have    []string `json:"have"             jsonschema:"sequence numbers present, in order"`
+		Missing []string `json:"missing"          jsonschema:"whole numbers absent between the lowest and the highest present"`
 	}
 	type gapsOut struct {
 		Scanned int         `json:"series_scanned"`
-		Found   int         `json:"found"                   jsonschema:"series with gaps, before limit"`
+		Found   int         `json:"found"          jsonschema:"series with gaps, before limit"`
 		Series  []seriesGap `json:"series"`
 	}
 	add(r, readTool, &mcp.Tool{
@@ -501,10 +508,7 @@ func seriesSequences(items []abs.Item, seriesID string) (have, missing []string)
 // filter when it has one (far cheaper than a sweep) and paging otherwise.
 func runCheck(ctx context.Context, client *abs.Client, libraryID string, check auditCheck, filter string, limit int, out *auditOut) error {
 	if filter != "" {
-		remaining := limit - len(out.Findings)
-		if remaining < 0 {
-			remaining = 0
-		}
+		remaining := max(limit-len(out.Findings), 0)
 		res, err := client.Items(ctx, libraryID, abs.ItemsOptions{Limit: remaining, Filter: filter, Minified: true})
 		if err != nil {
 			return err
@@ -654,7 +658,7 @@ var auditChecksByName = map[string]auditCheck{
 		if it.IsPodcast() || it.Media.NumChapters != 1 || it.Media.Duration < chapterlessMinHours*3600 {
 			return "", false
 		}
-		return fmt.Sprintf("one chapter covering all %s", fmtDuration(it.Media.Duration)), true
+		return "one chapter covering all " + fmtDuration(it.Media.Duration), true
 	},
 	"chapters": func(it *abs.Item) (string, bool) {
 		if it.IsPodcast() || it.Media.NumChapters > 0 || it.Media.Duration < chapterlessMinHours*3600 {

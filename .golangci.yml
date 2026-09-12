@@ -136,7 +136,9 @@ linters:
     nakedret:
       max-func-lines: 30
     misspell:
-      locale: "UK"
+      # no locale: this codebase is Canadian English, which takes -ize like the
+      # US but -our/-re like the UK, and misspell has no locale that matches.
+      # Without one it still catches genuine typos, just not regional variants.
       ignore-rules:
         - "color"
         - "organization"
