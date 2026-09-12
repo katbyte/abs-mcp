@@ -38,7 +38,6 @@ var EssentialTools = []string{
 	"library_search",
 	"library_items",
 	"item_get",
-	"item_chapters",
 	"user_in_progress",
 	"user_progress_get",
 	"user_progress_set",

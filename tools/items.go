@@ -39,6 +39,11 @@ func registerItemTools(r *registry) {
 		Error    string `json:"error,omitempty"`
 		Type     string `json:"type,omitempty"         jsonschema:"for non-audio files: ebook, image, text, metadata"`
 	}
+	type getIn struct {
+		itemRef
+		Chapters bool `json:"chapters,omitempty" jsonschema:"include the full chapter list; a long book can run to thousands of tokens, and chapter_count is always reported, so check that first"`
+		Files    bool `json:"files,omitempty"    jsonschema:"include every audio track with codec, bitrate, duration and any probe error, plus the non-audio files"`
+	}
 	type getOut struct {
 		itemSummary
 		Description   string           `json:"description,omitempty"`
@@ -52,11 +57,13 @@ func registerItemTools(r *registry) {
 		OtherFiles    []fileRow        `json:"other_files,omitempty"    jsonschema:"non-audio files in the folder"`
 		Episodes      []episodeSummary `json:"episodes,omitempty"       jsonschema:"podcasts: newest 25 episodes; podcast_episodes lists all"`
 		EpisodeTotal  int              `json:"episode_total,omitempty"`
+		ChapterList   *[]chapterRow    `json:"chapter_list,omitempty"   jsonschema:"only when chapters is true; an empty list means the book genuinely has none"`
+		TrackList     *[]fileRow       `json:"track_list,omitempty"     jsonschema:"only when files is true: audio files in play order"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "item_get",
-		Description: "One book or podcast in full: metadata with provider ids, description, files, listening progress, and for podcasts the newest episodes. Chapters and per-file details are in item_chapters and item_files.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in itemRef) (*mcp.CallToolResult, getOut, error) {
+		Description: "One book or podcast: metadata with provider ids, description, listening progress, how many chapters and tracks it has, and for podcasts the newest episodes. Set chapters or files to pull in the full lists - both are off by default because they are unbounded, and the counts in the default answer are usually enough to decide.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, getOut, error) {
 		it, err := resolveItem(ctx, client, in.Library, in.Item)
 		if err != nil {
 			return nil, getOut{}, err
@@ -92,76 +99,39 @@ func registerItemTools(r *registry) {
 			}
 		}
 
-		return nil, out, nil
-	})
-
-	type chaptersOut struct {
-		Item     string       `json:"item"`
-		Duration string       `json:"duration"`
-		Chapters []chapterRow `json:"chapters"`
-	}
-	add(r, readTool, &mcp.Tool{
-		Name:        "item_chapters",
-		Description: "A book's chapter list with start and end times. Separate from item_get because long books have hundreds of chapters.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in itemRef) (*mcp.CallToolResult, chaptersOut, error) {
-		it, err := resolveItem(ctx, client, in.Library, in.Item)
-		if err != nil {
-			return nil, chaptersOut{}, err
+		// the unbounded parts, only when asked for: a 300-chapter book is around
+		// 19 times the rest of this answer
+		if in.Chapters {
+			list := []chapterRow{}
+			for _, ch := range it.Media.Chapters {
+				list = append(list, chapterRow{Index: ch.ID, Title: ch.Title, Start: fmtDuration(ch.Start), End: fmtDuration(ch.End), Sec: ch.Start})
+			}
+			out.ChapterList = &list
 		}
-		if it.IsPodcast() {
-			return nil, chaptersOut{}, errors.New("podcasts have per-episode chapters; use podcast_episode_get")
-		}
-
-		out := chaptersOut{Item: it.Title(), Duration: fmtDuration(it.Media.Duration), Chapters: []chapterRow{}}
-		for _, ch := range it.Media.Chapters {
-			out.Chapters = append(out.Chapters, chapterRow{Index: ch.ID, Title: ch.Title, Start: fmtDuration(ch.Start), End: fmtDuration(ch.End), Sec: ch.Start})
-		}
-
-		return nil, out, nil
-	})
-
-	type filesOut struct {
-		Item   string    `json:"item"`
-		Path   string    `json:"path"`
-		Tracks []fileRow `json:"tracks"                jsonschema:"audio files in play order"`
-		Other  []fileRow `json:"other_files,omitempty"`
-	}
-	add(r, readTool, &mcp.Tool{
-		Name:        "item_files",
-		Description: "Every file in an item's folder: audio tracks in play order with codec, bitrate and duration (and any probe errors), plus ebook, image and text files.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in itemRef) (*mcp.CallToolResult, filesOut, error) {
-		it, err := resolveItem(ctx, client, in.Library, in.Item)
-		if err != nil {
-			return nil, filesOut{}, err
-		}
-
-		out := filesOut{Item: it.Title(), Path: it.Path, Tracks: []fileRow{}}
-		audio := it.Media.AudioFiles
-		if it.IsPodcast() {
-			for _, e := range it.Media.Episodes {
-				if e.AudioFile != nil {
-					audio = append(audio, *e.AudioFile)
+		if in.Files {
+			audio := it.Media.AudioFiles
+			if it.IsPodcast() {
+				for _, e := range it.Media.Episodes {
+					if e.AudioFile != nil {
+						audio = append(audio, *e.AudioFile)
+					}
 				}
 			}
-		}
-		for _, af := range audio {
-			out.Tracks = append(out.Tracks, fileRow{
-				Index:    af.Index,
-				Filename: af.Metadata.Filename,
-				Duration: fmtDuration(af.Duration),
-				SizeMB:   mb(af.Metadata.Size),
-				Codec:    af.Codec,
-				Bitrate:  af.BitRate / 1000,
-				Channels: af.Channels,
-				Excluded: af.Exclude,
-				Error:    af.Error,
-			})
-		}
-		for _, f := range it.LibraryFiles {
-			if f.FileType == "audio" {
-				continue
+			list := []fileRow{}
+			for _, af := range audio {
+				list = append(list, fileRow{
+					Index:    af.Index,
+					Filename: af.Metadata.Filename,
+					Duration: fmtDuration(af.Duration),
+					SizeMB:   mb(af.Metadata.Size),
+					Codec:    af.Codec,
+					Bitrate:  af.BitRate / 1000,
+					Channels: af.Channels,
+					Excluded: af.Exclude,
+					Error:    af.Error,
+				})
 			}
-			out.Other = append(out.Other, fileRow{Filename: f.Metadata.Filename, SizeMB: mb(f.Metadata.Size), Type: f.FileType})
+			out.TrackList = &list
 		}
 
 		return nil, out, nil
@@ -574,7 +544,7 @@ func registerItemTools(r *registry) {
 	type coverEditIn struct {
 		itemRef
 		URL  string `json:"url,omitempty"  jsonschema:"image url to download as the cover"`
-		File string `json:"file,omitempty" jsonschema:"instead of a url: the path of an image already in the item's folder (see item_files)"`
+		File string `json:"file,omitempty" jsonschema:"instead of a url: the path of an image already in the item's folder (item_get with files lists them)"`
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "item_cover_edit",

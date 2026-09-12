@@ -52,13 +52,19 @@ func TestItemGetUnknown(t *testing.T) {
 	}
 }
 
-func TestItemFiles(t *testing.T) {
-	out := call(t, "item_files", map[string]any{"item": "Foundation"})
-
-	if out["item"] != "Foundation" {
-		t.Errorf("item = %v", out["item"])
+// files are off by default and pulled in on request, because a real item's
+// track list is unbounded.
+func TestItemGetFiles(t *testing.T) {
+	if bare := call(t, "item_get", map[string]any{"item": "Foundation"}); bare["track_list"] != nil {
+		t.Errorf("track_list = %v, want none unless asked for", bare["track_list"])
 	}
-	tracks := rows(t, out["tracks"], "tracks")
+
+	out := call(t, "item_get", map[string]any{"item": "Foundation", "files": true})
+
+	if out["title"] != "Foundation" {
+		t.Errorf("title = %v", out["title"])
+	}
+	tracks := rows(t, out["track_list"], "track_list")
 	if len(tracks) != 1 {
 		t.Fatalf("tracks = %d, want the single fixture file", len(tracks))
 	}
@@ -72,14 +78,18 @@ func TestItemFiles(t *testing.T) {
 }
 
 // the fixtures are one-second files with no embedded chapters.
-func TestItemChapters(t *testing.T) {
-	out := call(t, "item_chapters", map[string]any{"item": "Foundation"})
-
-	if out["item"] != "Foundation" {
-		t.Errorf("item = %v", out["item"])
+func TestItemGetChapters(t *testing.T) {
+	if bare := call(t, "item_get", map[string]any{"item": "Foundation"}); bare["chapter_list"] != nil {
+		t.Errorf("chapter_list = %v, want none unless asked for", bare["chapter_list"])
 	}
-	if chapters := rows(t, out["chapters"], "chapters"); len(chapters) != 0 {
-		t.Errorf("chapters = %v, want none on the fixtures", chapters)
+
+	out := call(t, "item_get", map[string]any{"item": "Foundation", "chapters": true})
+
+	if out["title"] != "Foundation" {
+		t.Errorf("title = %v", out["title"])
+	}
+	if chapters := rows(t, out["chapter_list"], "chapter_list"); len(chapters) != 0 {
+		t.Errorf("chapter_list = %v, want none on the fixtures", chapters)
 	}
 }
 
@@ -102,8 +112,8 @@ func TestItemChaptersSetExplicit(t *testing.T) {
 		})
 	})
 
-	got := call(t, "item_chapters", map[string]any{"item": "War Is a Racket"})
-	chapters := rows(t, got["chapters"], "chapters")
+	got := call(t, "item_get", map[string]any{"item": "War Is a Racket", "chapters": true})
+	chapters := rows(t, got["chapter_list"], "chapter_list")
 	if len(chapters) != 2 {
 		t.Fatalf("read back %d chapters, want 2", len(chapters))
 	}

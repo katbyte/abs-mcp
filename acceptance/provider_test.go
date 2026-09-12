@@ -191,7 +191,7 @@ func TestItemChaptersSetFromASIN(t *testing.T) {
 		t.Fatalf("chapters = %d, want Audible's list", n)
 	}
 
-	got := rows(t, call(t, "item_chapters", map[string]any{"item": book})["chapters"], "chapters")
+	got := rows(t, call(t, "item_get", map[string]any{"item": book, "chapters": true})["chapter_list"], "chapter_list")
 	if len(got) != n {
 		t.Errorf("read back %d chapters, want %d", len(got), n)
 	}
