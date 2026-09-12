@@ -40,6 +40,9 @@ type Options struct {
 // working subset instead of all of them. The whole surface is around 33,000
 // tokens of schema before anyone has asked a question; core alone is 4,400.
 //
+// "all" is every tool, which is what the library does when no toolset is asked
+// for; the abs-mcp binary defaults to core instead (see cli.FlagData.ToolOptions).
+//
 // --toolsets also takes a resource family - item, podcast, library, user,
 // audit, author, series, narrator, collection, playlist, server - which is
 // every tool with that prefix. Those are derived from the registered names
@@ -250,6 +253,12 @@ func compileToolsets(raw, known []string) (map[string]bool, error) {
 
 	out := map[string]bool{}
 	for _, name := range asked {
+		if name == "all" {
+			for _, t := range known {
+				out[t] = true
+			}
+			continue
+		}
 		if tools, ok := Toolsets[name]; ok {
 			for _, t := range tools {
 				out[t] = true
@@ -264,7 +273,7 @@ func compileToolsets(raw, known []string) (map[string]bool, error) {
 			}
 		}
 		if !found {
-			return nil, fmt.Errorf("unknown toolset %q (sets: %s; or a resource family: %s)",
+			return nil, fmt.Errorf("unknown toolset %q (sets: all, %s; or a resource family: %s)",
 				name, strings.Join(setNames(), ", "), strings.Join(resourceFamilies(known), ", "))
 		}
 	}

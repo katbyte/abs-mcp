@@ -738,3 +738,31 @@ func TestToolsetsUnknown(t *testing.T) {
 		t.Errorf("the error should name the valid sets, got: %v", err)
 	}
 }
+
+// "all" is every tool, which is how someone gets the full surface back once
+// the binary defaults to core.
+func TestToolsetsAll(t *testing.T) {
+	t.Parallel()
+
+	all := register(t, Options{EnableDelete: true})
+	got := register(t, Options{EnableDelete: true, Toolsets: []string{"all"}})
+
+	if len(got) != len(all) {
+		t.Errorf("--toolsets all registered %d tools, want all %d", len(got), len(all))
+	}
+	// and it still composes with deny
+	less := register(t, Options{EnableDelete: true, Toolsets: []string{"all"}, Deny: []string{"*_delete"}})
+	if len(less) >= len(got) {
+		t.Errorf("deny had no effect on --toolsets all: %d vs %d", len(less), len(got))
+	}
+}
+
+// no toolset at all is every tool: the library stays unopinionated, and the
+// binary applies its own default on top (cli.DefaultToolsets).
+func TestToolsetsEmptyMeansEverything(t *testing.T) {
+	t.Parallel()
+
+	if got, all := register(t, Options{}), register(t, Options{Toolsets: []string{"all"}}); len(got) != len(all) {
+		t.Errorf("no toolsets registered %d, want %d", len(got), len(all))
+	}
+}

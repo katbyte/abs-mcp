@@ -31,7 +31,7 @@ func configureFlags(root *cobra.Command) error {
 	pflags.StringP("token", "t", "", "an Audiobookshelf API key (consider exporting to ABS_TOKEN instead)")
 	pflags.Bool("read-only", false, "register only tools that never change server state")
 	pflags.Bool("enable-delete", false, "register the tools that delete library items, episodes and authors")
-	pflags.StringSlice("toolsets", nil, "only register these groups of tools: core, listening, curation, podcasts, organise, admin (core is always included)")
+	pflags.StringSlice("toolsets", nil, "groups of tools to register: all, core (default), curation, listening, podcasts, organise, admin, or a resource family like item (core is always included)")
 	pflags.StringSlice("allow-tools", nil, "only register these tools: names, prefix globs like library_*, or the essential preset")
 	pflags.StringSlice("deny-tools", nil, "never register these tools: names or prefix globs like *_delete")
 	pflags.String("listen", "", "serve MCP over HTTP on this address (e.g. :8080) instead of stdio")
@@ -97,12 +97,24 @@ func (f *FlagData) NewClient() (*abs.Client, error) {
 	return abs.New(f.Server, f.Token)
 }
 
+// DefaultToolsets is what the binary registers when --toolsets is not given:
+// enough to find things and read them, and nothing that writes. The whole
+// surface is around 33,000 tokens of schema before a question is asked, which
+// is a poor thing to spend a client's context on by default. Ask for more with
+// --toolsets, or --toolsets all for everything.
+var DefaultToolsets = []string{"core"}
+
 // ToolOptions maps the flags onto the tool registration options.
 func (f *FlagData) ToolOptions() tools.Options {
+	sets := f.Toolsets
+	if len(sets) == 0 {
+		sets = DefaultToolsets
+	}
+
 	return tools.Options{
 		ReadOnly:     f.ReadOnly,
 		EnableDelete: f.EnableDelete,
-		Toolsets:     f.Toolsets,
+		Toolsets:     sets,
 		Allow:        f.AllowTools,
 		Deny:         f.DenyTools,
 	}

@@ -72,8 +72,9 @@ with its kind (read, write or delete) and what it does.
 
 Needs no server: it reports what would be registered, not what a server accepts.
 
-  abs-mcp tools                        # everything registered by default
-  abs-mcp tools --toolsets core        # just the base set
+  abs-mcp tools                        # the default set (core)
+  abs-mcp tools --toolsets all         # every tool
+  abs-mcp tools --toolsets curation    # audits and the tools that fix what they find
   abs-mcp tools --read-only            # only the tools that never change state
   abs-mcp tools -q                     # names only`,
 		Args:          cobra.NoArgs,
@@ -120,9 +121,10 @@ Needs no server: it reports what would be registered, not what a server accepts.
 			if !f.EnableDelete {
 				fmt.Println("delete tools are hidden; --enable-delete registers them")
 			}
-			fmt.Printf("\ntoolsets: %s\n", strings.Join(tools.ToolsetNames(), ", "))
+			fmt.Printf("\ntoolsets: all, %s\n", strings.Join(tools.ToolsetNames(), ", "))
 			fmt.Printf("families: %s\n", strings.Join(tools.FamilyNames(), ", "))
-			fmt.Println("select with --toolsets / ABS_TOOLSETS; core is always included")
+			fmt.Printf("select with --toolsets / ABS_TOOLSETS; core is always included. "+
+				"Default is %s - use --toolsets all for every tool.\n", strings.Join(DefaultToolsets, ","))
 
 			return nil
 		},

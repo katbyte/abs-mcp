@@ -64,7 +64,7 @@ All options can be passed as command-line flags, environment variables, or via a
 | `ABS_TOKEN` | `--token`, `-t` | API key (Settings → Users → API Keys) |
 | `ABS_READ_ONLY` | `--read-only` | register only tools that never change server state |
 | `ABS_ENABLE_DELETE` | `--enable-delete` | register the tools that delete items, episodes and authors |
-| `ABS_TOOLSETS` | `--toolsets` | only register these groups: `core`, `curation`, `listening`, `podcasts`, `organise`, `admin`, or a resource family like `item` (`core` is always included) |
+| `ABS_TOOLSETS` | `--toolsets` | groups of tools to register, default `core`: `all`, `core`, `curation`, `listening`, `podcasts`, `organise`, `admin`, or a resource family like `item` (`core` is always included) |
 | `ABS_ALLOW_TOOLS` | `--allow-tools` | only register these tools (names, `library_*` globs, or `essential`) |
 | `ABS_DENY_TOOLS` | `--deny-tools` | never register these tools (names or globs such as `*_delete`) |
 | `ABS_LOG` | | log level (`WARN` default; `DEBUG`, `TRACE`, ...) |
@@ -178,25 +178,31 @@ when called.
 
 ### Choosing which tools load
 
-The whole surface is about 33,000 tokens of schema before anyone asks a question. `--toolsets`
-/ `ABS_TOOLSETS` loads only the groups a session needs; `core` comes along with whatever else
-is asked for, because nothing else can find a library or open an item.
+**The default is `core`: five read-only tools, about 4,400 tokens.** The whole surface is
+around 33,000 tokens of schema before anyone asks a question, which is a poor way to spend a
+client's context by default. `--toolsets` / `ABS_TOOLSETS` loads the groups a session actually
+needs, and `core` comes along with whatever else is asked for, because nothing else can find a
+library or open an item.
+
+**Curating a library needs `ABS_TOOLSETS=curation`** - the audits and everything that fixes
+what they find. `ABS_TOOLSETS=all` restores every tool.
 
 | toolset | tools | with core | ~tokens |
 |---|---|---|---|
-| `core` | 5 | 5 | 4,400 |
+| `core` *(default)* | 5 | 5 | 4,400 |
 | `admin` | 13 | 18 | 7,200 |
 | `organise` | 12 | 17 | 8,000 |
 | `podcasts` | 11 | 16 | 8,200 |
 | `listening` | 9 | 14 | 8,500 |
 | `curation` | 38 | 43 | 18,500 |
-| *(default: everything)* | 88 | 88 | 33,000 |
+| `all` | 88 | 88 | 33,000 |
 
 `--toolsets` also takes a resource family - `item`, `podcast`, `library`, `user`, `audit`,
 `author`, `series`, `narrator`, `collection`, `playlist`, `server` - which is every tool with
 that prefix:
 
 ```sh
+ABS_TOOLSETS=all                # every tool, which was the default before 0.2.0
 ABS_TOOLSETS=curation           # audits plus everything that fixes what they find
 ABS_TOOLSETS=listening,podcasts # a client that plays things rather than curates them
 ABS_TOOLSETS=audit              # read-only detection, nothing that writes
@@ -207,7 +213,8 @@ ABS_TOOLSETS=core,item,series   # core plus two whole families
 server:
 
 ```sh
-abs-mcp tools --toolsets core   # what is in the base set
+abs-mcp tools                   # the default set
+abs-mcp tools --toolsets all    # every tool
 abs-mcp tools --read-only -q    # names only
 ```
 
