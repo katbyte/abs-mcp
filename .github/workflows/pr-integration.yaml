@@ -1,5 +1,5 @@
 ---
-name: Live tests
+name: live tests
 on:
   push:
     branches: [ 'main' ]

@@ -6,6 +6,7 @@
 ![build](https://github.com/katbyte/abs-mcp/actions/workflows/build.yaml/badge.svg)
 ![test](https://github.com/katbyte/abs-mcp/actions/workflows/pr-tests.yaml/badge.svg)
 ![lint](https://github.com/katbyte/abs-mcp/actions/workflows/pr-golangci-lint.yaml/badge.svg)
+[![coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/katbyte/abs-mcp/badges/coverage.json)](https://github.com/katbyte/abs-mcp/actions/workflows/coverage.yaml)
 
 An [MCP](https://modelcontextprotocol.io) server, CLI and Go SDK for curating an
 [Audiobookshelf](https://www.audiobookshelf.org) audiobook and podcast library: search it,
@@ -293,7 +294,13 @@ confirm what you already believed. Two suites, each in its own container:
 ```bash
 make testacc        # both, each in a throwaway container, torn down after
 make check-all      # build + unit + both live suites + every linter
+make cover          # all three suites, merged into one coverage number
 ```
+
+Coverage has to span all three or it lies: `go test -cover ./...` reports about 40% for
+`tools/`, because almost everything real happens in the live suites behind the `integration`
+tag. `make cover` runs each into its own binary coverage directory and merges them with
+`go tool covdata` - stdlib tooling, no third-party merger - which is what the badge reports.
 
 **All 88 tools and all 204 client methods are exercised**, 199 of them asserting a result
 rather than only that the call reached the server. The five that do not - sending an ebook by

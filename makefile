@@ -183,6 +183,47 @@ testacc-acceptance: ## Tool tests in a throwaway container
 
 testacc: testacc-integration testacc-acceptance ## Run both live suites, each in its own container
 
+# Coverage has to span all three suites or it lies: the unit tests alone report
+# around 40% for tools/, because almost everything real happens in the live
+# suites behind the integration tag. Each writes binary coverage into its own
+# directory and covdata merges them, which is stdlib tooling rather than a
+# third-party merger.
+COVERDIR?=.coverage
+COVERPKG=./tools/...,./lib/abs/...,./cli/...
+
+cover: ## Run every suite with coverage and report the total
+	@rm -rf $(COVERDIR)
+	@mkdir -p $(COVERDIR)/unit $(COVERDIR)/integration $(COVERDIR)/acceptance
+	@echo "==> unit..."
+	@go test -count=1 -coverpkg=$(COVERPKG) ./tools/ ./cli/ ./lib/... \
+		-args -test.gocoverdir=$(CURDIR)/$(COVERDIR)/unit >/dev/null
+	@echo "==> integration (SDK) with coverage..."
+	@set -e; \
+		ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_PORT=13379 ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk \
+			scripts/abs-testenv.sh up | grep '^export' > .testenv-sdk.sh; \
+		trap 'st=$$?; ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk \
+			scripts/abs-testenv.sh down; rm -f .testenv-sdk.sh; exit $$st' EXIT; \
+		. ./.testenv-sdk.sh; \
+		go test -tags integration -count=1 -coverpkg=$(COVERPKG) ./integration/... \
+			-timeout $(TEST_TIMEOUT) -args -test.gocoverdir=$(CURDIR)/$(COVERDIR)/integration
+	@echo "==> acceptance (tools) with coverage..."
+	@set -e; \
+		scripts/abs-testenv.sh up | grep '^export' > .testenv.sh; \
+		trap 'st=$$?; scripts/abs-testenv.sh down; rm -f .testenv.sh; exit $$st' EXIT; \
+		. ./.testenv.sh; \
+		go test -tags integration -count=1 -coverpkg=$(COVERPKG) ./acceptance/... \
+			-timeout $(TEST_TIMEOUT) -args -test.gocoverdir=$(CURDIR)/$(COVERDIR)/acceptance
+	@go tool covdata textfmt \
+		-i=$(COVERDIR)/unit,$(COVERDIR)/integration,$(COVERDIR)/acceptance \
+		-o=$(COVERDIR)/coverage.out
+	@echo
+	@go tool cover -func=$(COVERDIR)/coverage.out | tail -1
+	@echo "==> per package"
+	@go tool covdata percent -i=$(COVERDIR)/unit,$(COVERDIR)/integration,$(COVERDIR)/acceptance
+
+cover-html: cover ## Run every suite with coverage and open the HTML report
+	@go tool cover -html=$(COVERDIR)/coverage.out
+
 record-sdk: ## Re-record the SDK suite's provider cassettes against the real providers
 	@echo "==> recording the SDK cassettes (this hits the network)..."
 	@set -e; \
@@ -219,4 +260,4 @@ apicheck: ## Report how much of the Audiobookshelf API lib/abs covers
 
 check-all: build test testacc lint actionlint yamllint shellcheck depscheck apicheck ## Run build + tests (incl. integration) + all linters + depscheck
 
-.PHONY: default all help fmt goimports build docker lint lint-fix actionlint yamllint shellcheck depscheck check-all install tools test test-integration testacc record testenv-up testenv-down apicheck
+.PHONY: default all help fmt goimports build docker lint lint-fix actionlint yamllint shellcheck depscheck check-all install tools test test-integration testacc cover cover-html record testenv-up testenv-down apicheck

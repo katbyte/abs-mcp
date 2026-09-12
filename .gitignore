@@ -9,3 +9,4 @@ abs-mcp
 .abs-mcp
 .testenv.sh
 .testenv-sdk.sh
+.coverage/
