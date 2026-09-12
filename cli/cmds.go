@@ -59,8 +59,8 @@ Complete documentation is available at https://github.com/katbyte/abs-mcp`,
 		Long:          `Print the version number of abs-mcp`,
 		Args:          cobra.NoArgs,
 		SilenceErrors: true,
-		Run: func(_ *cobra.Command, _ []string) {
-			fmt.Println("abs-mcp " + version.Version)
+		Run: func(cmd *cobra.Command, _ []string) {
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "abs-mcp "+version.Version)
 		},
 	})
 
@@ -81,6 +81,7 @@ Needs no server: it reports what would be registered, not what a server accepts.
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
+			out := cmd.OutOrStdout()
 			quiet, _ := cmd.Flags().GetBool("quiet")
 
 			f := GetFlags()
@@ -91,7 +92,7 @@ Needs no server: it reports what would be registered, not what a server accepts.
 
 			if quiet {
 				for _, t := range list {
-					fmt.Println(t.Name)
+					_, _ = fmt.Fprintln(out, t.Name)
 				}
 				return nil
 			}
@@ -111,19 +112,19 @@ Needs no server: it reports what would be registered, not what a server accepts.
 				if len(in) == 0 {
 					continue
 				}
-				fmt.Printf("\n%s (%d)\n", set, len(in))
+				_, _ = fmt.Fprintf(out, "\n%s (%d)\n", set, len(in))
 				for _, t := range in {
-					fmt.Printf("  %-26s %-6s %s\n", t.Name, t.Kind, firstSentence(t.Description))
+					_, _ = fmt.Fprintf(out, "  %-26s %-6s %s\n", t.Name, t.Kind, firstSentence(t.Description))
 				}
 			}
-			fmt.Printf("\n%d tools: %d read, %d write, %d delete\n",
+			_, _ = fmt.Fprintf(out, "\n%d tools: %d read, %d write, %d delete\n",
 				len(list), counts["read"], counts["write"], counts["delete"])
 			if !f.EnableDelete {
-				fmt.Println("delete tools are hidden; --enable-delete registers them")
+				_, _ = fmt.Fprintln(out, "delete tools are hidden; --enable-delete registers them")
 			}
-			fmt.Printf("\ntoolsets: all, %s\n", strings.Join(tools.ToolsetNames(), ", "))
-			fmt.Printf("families: %s\n", strings.Join(tools.FamilyNames(), ", "))
-			fmt.Printf("select with --toolsets / ABS_TOOLSETS; core is always included. "+
+			_, _ = fmt.Fprintf(out, "\ntoolsets: all, %s\n", strings.Join(tools.ToolsetNames(), ", "))
+			_, _ = fmt.Fprintf(out, "families: %s\n", strings.Join(tools.FamilyNames(), ", "))
+			_, _ = fmt.Fprintf(out, "select with --toolsets / ABS_TOOLSETS; core is always included. "+
 				"Default is %s - use --toolsets all for every tool.\n", strings.Join(DefaultToolsets, ","))
 
 			return nil
@@ -142,6 +143,7 @@ Needs no server: it reports what would be registered, not what a server accepts.
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
+			out := cmd.OutOrStdout()
 
 			client, err := GetFlags().NewClient()
 			if err != nil {
@@ -163,9 +165,9 @@ Needs no server: it reports what would be registered, not what a server accepts.
 				return err
 			}
 
-			fmt.Printf("audiobookshelf %s at %s — user %s (%s)\n", status.ServerVersion, client.BaseURL(), me.Username, me.Type)
+			_, _ = fmt.Fprintf(out, "audiobookshelf %s at %s — user %s (%s)\n", status.ServerVersion, client.BaseURL(), me.Username, me.Type)
 			for _, l := range libs {
-				fmt.Printf("  library %q (%s) id %s\n", l.Name, l.MediaType, l.ID)
+				_, _ = fmt.Fprintf(out, "  library %q (%s) id %s\n", l.Name, l.MediaType, l.ID)
 			}
 			return nil
 		},

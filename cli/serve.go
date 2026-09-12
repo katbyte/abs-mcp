@@ -71,10 +71,11 @@ port can use every tool.`,
 // serveHTTP serves the MCP server over Streamable HTTP at /mcp (plus GET /healthz for
 // container health checks) until the context is cancelled or SIGINT/SIGTERM arrives,
 // then drains in-flight requests.
-func serveHTTP(ctx context.Context, server *mcp.Server, addr, authToken string) error {
-	ctx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
+// newMux builds the HTTP routes: the MCP endpoint behind the bearer check, and
+// an unauthenticated health probe for a container or a load balancer. It is
+// separate from serveHTTP so the routing and the auth can be tested without
+// binding a port.
+func newMux(server *mcp.Server, authToken string) *http.ServeMux {
 	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
 
 	mux := http.NewServeMux()
@@ -83,6 +84,15 @@ func serveHTTP(ctx context.Context, server *mcp.Server, addr, authToken string) 
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
 	})
+
+	return mux
+}
+
+func serveHTTP(ctx context.Context, server *mcp.Server, addr, authToken string) error {
+	ctx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	mux := newMux(server, authToken)
 
 	srv := &http.Server{
 		Addr:              addr,
