@@ -189,7 +189,7 @@ client, err := abs.New("http://nas:13378", os.Getenv("ABS_TOKEN"))
 items, err := client.Items(ctx, libraryID, abs.ItemsOptions{Limit: 50})
 ```
 
-It has 202 methods covering **every one of Audiobookshelf's 202 API routes** - libraries,
+It has 204 methods covering **every one of Audiobookshelf's 202 API routes** - libraries,
 items, authors, series, narrators, collections, playlists, progress, bookmarks, podcasts,
 provider search, RSS feeds, tags, genres, tasks, backups, playback sessions, notifications,
 email, API keys, sharing, settings and user administration. File downloads stream rather than
