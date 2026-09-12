@@ -1,6 +1,6 @@
 # Changelog
 
-## unreleased
+## 0.1.0 (2026-09-12)
 
 - CLI (`serve`, `info`, `version`) and MCP server over stdio or HTTP (`--listen`)
 - `lib/abs`: Audiobookshelf API client, stdlib only, covering all 202 API routes
