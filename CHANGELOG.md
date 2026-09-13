@@ -1,3 +1,52 @@
+## Unreleased
+
+### Breaking
+
+- one rename tool. `metadata_rename field=tags|genres|narrators|authors|languages|publishers`
+  replaces `server_tag_rename`, `narrator_edit` and `audit_terminology_rename`, and with
+  `remove` drops a tag, genre, narrator, language or publisher everywhere. `audit_terminology`
+  is now `audit_spelling`, and every group it reports is fixed by the one tool. 88 tools -> 86
+- `audit_no_episodes` and `audit_stale_feed` are `audit_podcast_no_episodes` and
+  `audit_podcast_stale_feed`, so the name says they only look at podcasts
+- `item_cover_edit` no longer removes the cover when called with neither `url` nor `file`:
+  pass `remove=true`. A call that forgot its url used to delete the cover
+- the README token table is now what the model sees. Most clients send only the description
+  and input schema to the model, not the output schema, which was 60% of the earlier figure
+
+### Added
+
+- `audit_unembedded`: books whose audio files carry no tags, or tags that disagree with the
+  current title, author, narrator, series, genres, year or publisher - what
+  `item_embed_metadata` is due for after a curation pass. It reads the expanded items in
+  batches of 50, so it runs apart from `audit_all`
+
+### Fixed
+
+- `item_edit clear` for `narrators`, `series`, `genres` and `tags` was a silent no-op: the
+  empty list was dropped from the request (`omitempty`), so the server saw nothing to change.
+  `lib/abs` list fields are now `omitzero`: nil leaves a field alone, an empty slice clears it
+- `audit_cover_ratio` measured the server's 400-pixel-wide cache copy rather than the cover
+  file, so every cover was "400 wide" and the too-small check could never fire. It now asks for
+  the raw file, reads only the image header instead of buffering the whole image, and skips
+  the request for items the listing already says have no cover
+- `audit_spelling` (then `audit_terminology`) never found narrator spellings: the sweep sees the minified item shape,
+  which carries narrators only as one joined `narratorName`, and only the expanded
+  `narrators` list was read
+- an audit with a server-side filter (`audit_missing`, `audit_issues`, `audit_no_audio`)
+  overran `limit` once an earlier library had filled it: the request for the next library was
+  sent with no limit, which the server reads as everything
+- `lib/abs` `DeleteAuthorImage` returned an empty record; the server answers with the author
+  under an `author` key, like the image and match routes
+
+### Changed
+
+- docker-free tests for the tools: an in-memory MCP session against a canned Audiobookshelf
+  (`tools/handlers_test.go`), covering what the live fixtures cannot reach - a library with
+  covers, inconsistent narrator spellings, more findings than the limit
+- `lib/abs` request and response-shape tests without a server: paging, streaming, multipart
+  upload, the vocabulary path encoding, the chapter and feed-episode unwrapping
+- `intParam`/`intQuery` and `narratorID`/`vocabularyID` were the same function twice
+
 ## 0.2.0 (2026-09-12)
 
 ### Breaking

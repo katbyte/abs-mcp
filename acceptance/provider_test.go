@@ -145,7 +145,7 @@ func TestItemCoverSearchAndSet(t *testing.T) {
 		if coverURL == "" {
 			t.Skip("item_cover_search produced no url")
 		}
-		t.Cleanup(func() { call(t, "item_cover_edit", map[string]any{"item": book}) })
+		t.Cleanup(func() { call(t, "item_cover_edit", map[string]any{"item": book, "remove": true}) })
 
 		out := call(t, "item_cover_edit", map[string]any{"item": book, "url": coverURL})
 		if done, _ := out["done"].(bool); !done {

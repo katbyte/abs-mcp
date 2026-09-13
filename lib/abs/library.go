@@ -2,7 +2,6 @@ package abs
 
 import (
 	"context"
-	"encoding/base64"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -234,12 +233,6 @@ func (c *Client) Narrators(ctx context.Context, libraryID string) ([]NarratorRow
 	return resp.Narrators, nil
 }
 
-// narratorID encodes a narrator name the way the server addresses it: base64
-// of the name, then percent-encoded into the path.
-func narratorID(name string) string {
-	return url.PathEscape(base64.StdEncoding.EncodeToString([]byte(name)))
-}
-
 // RenameNarrator renames a narrator on every book that carries them, across
 // the library. Renaming onto an existing narrator merges the two. Requires the
 // update permission; returns how many items changed.
@@ -247,7 +240,7 @@ func (c *Client) RenameNarrator(ctx context.Context, libraryID, from, to string)
 	var resp struct {
 		Updated int `json:"updated"`
 	}
-	path := "/api/libraries/" + url.PathEscape(libraryID) + "/narrators/" + narratorID(from)
+	path := "/api/libraries/" + url.PathEscape(libraryID) + "/narrators/" + vocabularyID(from)
 	if err := c.patch(ctx, path, map[string]string{"name": to}, &resp); err != nil {
 		return 0, err
 	}
@@ -261,7 +254,7 @@ func (c *Client) RemoveNarrator(ctx context.Context, libraryID, name string) (in
 		Updated int `json:"updated"`
 	}
 	// not c.del: that discards the body, and the count is in it
-	path := "/api/libraries/" + url.PathEscape(libraryID) + "/narrators/" + narratorID(name)
+	path := "/api/libraries/" + url.PathEscape(libraryID) + "/narrators/" + vocabularyID(name)
 	if err := c.do(ctx, http.MethodDelete, path, nil, nil, &resp); err != nil {
 		return 0, err
 	}

@@ -176,19 +176,19 @@ func TestMediaTypeDefaults(t *testing.T) {
 	}
 }
 
-// intParam and intQuery both omit a zero rather than sending it, because the
-// server treats an explicit 0 as a real limit.
-func TestIntParamsOmitZero(t *testing.T) {
+// intQuery omits a zero rather than sending it, because the server treats an
+// explicit 0 as a real limit.
+func TestIntQueryOmitsZero(t *testing.T) {
 	t.Parallel()
 
 	q := map[string][]string{}
-	intParam(q, "expiresIn", 0)
-	if _, present := q["expiresIn"]; present {
-		t.Error("intParam sent a zero")
+	intQuery(q, "limit", 0)
+	if _, present := q["limit"]; present {
+		t.Error("intQuery sent a zero")
 	}
-	intParam(q, "expiresIn", 5)
-	if q["expiresIn"][0] != "5" {
-		t.Errorf("intParam = %v", q["expiresIn"])
+	intQuery(q, "limit", 5)
+	if q["limit"][0] != "5" {
+		t.Errorf("intQuery = %v", q["limit"])
 	}
 }
 

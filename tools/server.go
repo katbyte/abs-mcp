@@ -214,7 +214,7 @@ func registerServerTools(r *registry) {
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "server_tags",
-		Description: "Every tag and genre in use across all libraries: the server-wide vocabulary to normalize against before merging with server_tag_rename. Admin only. library_filters is the per-library equivalent.",
+		Description: "Every tag and genre in use across all libraries: the server-wide vocabulary to normalize against before merging with metadata_rename. Admin only. library_filters is the per-library equivalent.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in tagsIn) (*mcp.CallToolResult, tagsOut, error) {
 		var out tagsOut
 		var err error
@@ -230,32 +230,5 @@ func registerServerTools(r *registry) {
 		}
 
 		return nil, out, nil
-	})
-
-	type renameIn struct {
-		Kind string `json:"kind" jsonschema:"tag or genre"`
-		From string `json:"from" jsonschema:"current name"`
-		To   string `json:"to"   jsonschema:"new name; merges into it if it already exists"`
-	}
-	type renameOut struct {
-		ItemsUpdated int `json:"items_updated"`
-	}
-	add(r, writeTool, &mcp.Tool{
-		Name:        "server_tag_rename",
-		Description: "Rename a tag or genre everywhere it is used, across all libraries (e.g. to merge 'Sci-Fi' into 'Science Fiction'). Admin only. Changes server state.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in renameIn) (*mcp.CallToolResult, renameOut, error) {
-		var n int
-		var err error
-		switch in.Kind {
-		case "genre", "genres":
-			n, err = client.RenameGenre(ctx, in.From, in.To)
-		default:
-			n, err = client.RenameTag(ctx, in.From, in.To)
-		}
-		if err != nil {
-			return nil, renameOut{}, err
-		}
-
-		return nil, renameOut{ItemsUpdated: n}, nil
 	})
 }

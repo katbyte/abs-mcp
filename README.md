@@ -13,7 +13,7 @@ An [MCP](https://modelcontextprotocol.io) server, CLI and Go SDK for curating an
 audit it for bad metadata, and fix what you find - from Claude Code, Claude Desktop, or any
 other MCP client.
 
-**94 tools**, including **16 audits** that sweep a whole library for the things that actually
+**87 tools**, including **16 audits** that sweep a whole library for the things that actually
 go wrong: books never matched to a provider, missing covers or chapters, duplicates, gaps in a
 series, folders that disagree with their metadata, near-duplicate genres and narrators
 (`Sci-Fi` vs `sci fi`, `Jim Dale` vs `jim dale`), podcasts whose feed has gone dead.
@@ -159,14 +159,15 @@ comes back as an error listing the candidates.
 
 | Resource | Tools |
 |---|---|
-| server | `server_info` (connectivity, permissions, libraries, providers and server-wide totals), `server_tasks`, `server_sessions`, `server_backups`, `server_backup_create`, `server_tags`, `server_tag_rename` |
+| server | `server_info` (connectivity, permissions, libraries, providers and server-wide totals), `server_tasks`, `server_sessions`, `server_backups`, `server_backup_create`, `server_tags` |
 | libraries | `library_list`, `library_get` (in depth, with statistics), `library_create`, `library_edit`, `library_search`, `library_items` (the server's own filters and sorts: genre, tag, author, series, narrator, progress, tracks...), `library_recent`, `library_filters`, `library_scan` |
-| audits | `audit_all` (every per-item audit in one sweep - start here after a scan), `audit_missing` (field: cover, description, narrator, series, author, genres, year, publisher, language, chapters), `audit_unmatched`, `audit_issues`, `audit_no_audio`, `audit_path`, `audit_author_as_title`, `audit_single_chapter`, `audit_stale_feed`, `audit_no_episodes`, `audit_duplicates`, `audit_series_gaps`, `audit_terminology` / `audit_terminology_rename`, `audit_cover_ratio`, `audit_author_missing_image` |
+| audits | `audit_all` (every per-item audit in one sweep - start here after a scan), `audit_missing` (field: cover, description, narrator, series, author, genres, year, publisher, language, chapters), `audit_unmatched`, `audit_issues`, `audit_no_audio`, `audit_path`, `audit_author_as_title`, `audit_single_chapter`, `audit_podcast_stale_feed`, `audit_podcast_no_episodes`, `audit_duplicates`, `audit_series_gaps`, `audit_spelling` (the same value spelled several ways), `audit_unembedded` (audio tags missing or behind the metadata: what item_embed_metadata is due for), `audit_cover_ratio`, `audit_author_missing_image` |
 | items | `item_get` (with optional `chapters` and `files`), `item_edit`, `item_batch_edit` (same fields across many books), `item_rescan`, `item_embed_metadata` |
-| matching | `item_match` (candidates from a provider), `item_match_apply`, `item_cover_search`, `item_cover_edit` (url, file, or removed), `item_chapters_set` (explicit list or from Audible by asin) |
+| matching | `item_match` (candidates from a provider), `item_match_apply`, `item_cover_search`, `item_cover_edit` (url, file, or `remove`), `item_chapters_set` (explicit list or from Audible by asin) |
 | authors | `author_list`, `author_get`, `author_edit` (rename to merge duplicates), `author_match`, `author_image_set` |
 | series | `series_list`, `series_get`, `series_edit` |
-| narrators | `narrator_list`, `narrator_edit` (rename to merge, or remove) |
+| narrators | `narrator_list` |
+| metadata | `metadata_rename` (a tag, genre, narrator, author, language or publisher, everywhere it is used; renaming onto an existing value merges, `remove` drops it) |
 | collections | `collection_list`, `collection_get`, `collection_create`, `collection_edit`, `collection_books_edit` (add or remove), `collection_delete` |
 | playlists | `playlist_list`, `playlist_get`, `playlist_create` (also from a collection), `playlist_edit`, `playlist_entries_edit` (add or remove), `playlist_delete` |
 | podcasts | `podcast_episodes` (one show, or the newest across the library), `podcast_episode_get`, `podcast_episode_edit`, `podcast_check_new`, `podcast_feed_episodes`, `podcast_episode_download`, `podcast_downloads`, `podcast_search`, `podcast_add`, `podcast_settings` |
@@ -174,14 +175,14 @@ comes back as an error listing the candidates.
 
 `item_delete`, `podcast_episode_delete`, `author_delete` and `library_issues_remove` are only
 registered when `--enable-delete` / `ABS_ENABLE_DELETE` is set. `--read-only` registers the
-50 read tools and nothing else, so a write tool is absent from `tools/list` rather than refused
+51 read tools and nothing else, so a write tool is absent from `tools/list` rather than refused
 when called.
 
 ### Choosing which tools load
 
-**The default is `core`: five read-only tools, about 4,400 tokens.** The whole surface is
-around 33,000 tokens of schema before anyone asks a question, which is a poor way to spend a
-client's context by default. `--toolsets` / `ABS_TOOLSETS` loads the groups a session actually
+**The default is `core`: five read-only tools, about 1,000 tokens.** The whole surface is
+around 12,000 tokens of tool definitions before anyone asks a question, which is a poor way to
+spend a client's context by default. `--toolsets` / `ABS_TOOLSETS` loads the groups a session actually
 needs, and `core` comes along with whatever else is asked for, because nothing else can find a
 library or open an item.
 
@@ -190,13 +191,18 @@ what they find. `ABS_TOOLSETS=all` restores every tool.
 
 | toolset | tools | with core | ~tokens |
 |---|---|---|---|
-| `core` *(default)* | 5 | 5 | 4,400 |
-| `admin` | 13 | 18 | 7,200 |
-| `organise` | 12 | 17 | 8,000 |
-| `podcasts` | 11 | 16 | 8,200 |
-| `listening` | 9 | 14 | 8,500 |
-| `curation` | 38 | 43 | 18,500 |
-| `all` | 88 | 88 | 33,000 |
+| `core` *(default)* | 5 | 5 | 1,000 |
+| `admin` | 13 | 18 | 2,200 |
+| `organise` | 12 | 17 | 2,100 |
+| `podcasts` | 11 | 16 | 2,600 |
+| `listening` | 9 | 14 | 2,400 |
+| `curation` | 37 | 42 | 6,600 |
+| `all` | 87 | 87 | 12,000 |
+
+Tokens are what the model sees: each tool's name, description and input schema, measured over
+a real `tools/list` at four bytes a token. Every tool also carries an output schema, another
+17,000 tokens across `all`, but clients keep that to themselves to validate results rather than
+sending it to the model.
 
 `--toolsets` also takes a resource family - `item`, `podcast`, `library`, `user`, `audit`,
 `author`, `series`, `narrator`, `collection`, `playlist`, `server` - which is every tool with
@@ -280,8 +286,13 @@ make check-all  # build + unit tests + both live suites (needs docker) + every l
 
 ### Tests
 
-`make test` is hermetic and fast: unit tests over the pure logic - filter encoding, formatting,
-gap arithmetic, the audit heuristics, tool registration.
+`make test` is hermetic and fast. It covers the pure logic - filter encoding, formatting, gap
+arithmetic, the audit heuristics, tool registration - and two things that need a server but not
+a real one: every `lib/abs` request shape and response decoding against a canned server
+(`lib/abs/requests_test.go`), and the tools end to end over an in-memory MCP session against a
+canned Audiobookshelf (`tools/handlers_test.go`). The second is where the cases the live
+fixtures cannot reach live: a library with covers, inconsistent spellings, tagged and untagged
+audio files, more findings than the limit.
 
 Everything else runs against **a real Audiobookshelf in Docker**, because a stub can only
 confirm what you already believed. Two suites, each in its own container:
@@ -302,7 +313,7 @@ Coverage has to span all three or it lies: `go test -cover ./...` reports about 
 tag. `make cover` runs each into its own binary coverage directory and merges them with
 `go tool covdata` - stdlib tooling, no third-party merger - which is what the badge reports.
 
-**All 88 tools and all 204 client methods are exercised**, 199 of them asserting a result
+**All 87 tools and all 204 client methods are exercised**, 199 of them asserting a result
 rather than only that the call reached the server. The five that do not - sending an ebook by
 email, firing a notification, closing a device session, unlinking OpenID, syncing an offline
 session - need infrastructure a throwaway container has not got, and say so where they are

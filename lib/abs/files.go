@@ -3,6 +3,7 @@ package abs
 import (
 	"context"
 	"io"
+	"net/http"
 	"net/url"
 	"strings"
 )
@@ -48,8 +49,8 @@ func (c *Client) Ebook(ctx context.Context, itemID, fileID string) (io.ReadClose
 // all that is wanted is the dimensions.
 func (c *Client) Cover(ctx context.Context, itemID string, width, height int, format string) (io.ReadCloser, error) {
 	q := url.Values{}
-	intParam(q, "width", width)
-	intParam(q, "height", height)
+	intQuery(q, "width", width)
+	intQuery(q, "height", height)
 	if format != "" {
 		q.Set("format", format)
 	}
@@ -59,18 +60,24 @@ func (c *Client) Cover(ctx context.Context, itemID string, width, height int, fo
 // AuthorImage streams an author's photo.
 func (c *Client) AuthorImage(ctx context.Context, authorID string, width, height int) (io.ReadCloser, error) {
 	q := url.Values{}
-	intParam(q, "width", width)
-	intParam(q, "height", height)
+	intQuery(q, "width", width)
+	intQuery(q, "height", height)
 	return c.stream(ctx, "/api/authors/"+url.PathEscape(authorID)+"/image", q)
 }
 
-// DeleteAuthorImage removes an author's photo.
+// DeleteAuthorImage removes an author's photo and returns the author as they
+// now stand. The server wraps the record in an author key, the way
+// SetAuthorImage and MatchAuthor do.
 func (c *Client) DeleteAuthorImage(ctx context.Context, authorID string) (*Author, error) {
-	var a Author
-	if err := c.del(ctx, "/api/authors/"+url.PathEscape(authorID)+"/image", nil); err != nil {
+	var resp struct {
+		Author Author `json:"author"`
+	}
+	// not c.del: that discards the body, and the author is in it
+	path := "/api/authors/" + url.PathEscape(authorID) + "/image"
+	if err := c.do(ctx, http.MethodDelete, path, nil, nil, &resp); err != nil {
 		return nil, err
 	}
-	return &a, nil
+	return &resp.Author, nil
 }
 
 // DownloadBackup streams a backup file.

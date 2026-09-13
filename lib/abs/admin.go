@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/url"
-	"strconv"
 )
 
 // Server administration: notifications, email, API keys, custom providers,
@@ -582,11 +581,4 @@ func (c *Client) CreatePodcastsFromOPML(ctx context.Context, libraryID, folderID
 // is lost.
 func (c *Client) ApplyBackup(ctx context.Context, id string) error {
 	return c.get(ctx, "/api/backups/"+url.PathEscape(id)+"/apply", nil, nil)
-}
-
-// intParam is a small helper for the query strings above.
-func intParam(q url.Values, key string, v int) {
-	if v > 0 {
-		q.Set(key, strconv.Itoa(v))
-	}
 }

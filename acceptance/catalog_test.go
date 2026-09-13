@@ -149,9 +149,10 @@ func TestAuthorDelete(t *testing.T) {
 	}
 }
 
-// narrator_list and narrator_edit use a different endpoint from every other
-// catalogue tool: the narrator id is base64 of the name, percent-encoded.
-func TestNarratorListAndEdit(t *testing.T) {
+// narrator_list and the narrator branch of metadata_rename use a different
+// endpoint from every other catalogue tool: the narrator id is base64 of the
+// name, percent-encoded.
+func TestNarratorListAndRename(t *testing.T) {
 	out := call(t, "narrator_list", map[string]any{"library": "Fiction"})
 
 	byName := map[string]int{}
@@ -164,15 +165,15 @@ func TestNarratorListAndEdit(t *testing.T) {
 	}
 
 	// rename, confirm, and rename back
-	edited := call(t, "narrator_edit", map[string]any{
-		"library": "Fiction", "narrator": "Jefferson Mays", "name": "J. Mays",
+	edited := call(t, "metadata_rename", map[string]any{
+		"library": "Fiction", "field": "narrators", "from": "Jefferson Mays", "to": "J. Mays",
 	})
 	if n := num(t, edited["items_updated"], "items_updated"); n != 2 {
 		t.Errorf("items_updated = %d, want 2", n)
 	}
 	t.Cleanup(func() {
-		call(t, "narrator_edit", map[string]any{
-			"library": "Fiction", "narrator": "J. Mays", "name": "Jefferson Mays",
+		call(t, "metadata_rename", map[string]any{
+			"library": "Fiction", "field": "narrators", "from": "J. Mays", "to": "Jefferson Mays",
 		})
 	})
 
@@ -188,11 +189,11 @@ func TestNarratorListAndEdit(t *testing.T) {
 	}
 }
 
-func TestNarratorEditValidation(t *testing.T) {
-	if msg := callErr(t, "narrator_edit", map[string]any{"library": "Fiction", "narrator": "Scott Brick"}); msg == "" {
-		t.Error("neither name nor remove should be refused")
+func TestNarratorRenameValidation(t *testing.T) {
+	if msg := callErr(t, "metadata_rename", map[string]any{"library": "Fiction", "field": "narrators", "from": "Scott Brick"}); msg == "" {
+		t.Error("neither to nor remove should be refused")
 	}
-	if msg := callErr(t, "narrator_edit", map[string]any{"library": "Fiction", "narrator": "", "name": "x"}); msg == "" {
-		t.Error("an empty narrator should be refused")
+	if msg := callErr(t, "metadata_rename", map[string]any{"library": "Fiction", "field": "narrators", "from": "", "to": "x"}); msg == "" {
+		t.Error("an empty from should be refused")
 	}
 }

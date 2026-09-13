@@ -178,8 +178,14 @@ func TestItemRescan(t *testing.T) {
 }
 
 // no cover was ever set, so removing one is a no-op that must still succeed.
+// Removal has to be asked for: a call with nothing to set is refused rather
+// than read as "take the cover away".
 func TestItemCoverRemove(t *testing.T) {
-	out := call(t, "item_cover_edit", map[string]any{"item": "A Brief History of Vice"})
+	if msg := callErr(t, "item_cover_edit", map[string]any{"item": "A Brief History of Vice"}); msg == "" {
+		t.Error("item_cover_edit with neither url, file nor remove should be refused")
+	}
+
+	out := call(t, "item_cover_edit", map[string]any{"item": "A Brief History of Vice", "remove": true})
 
 	if done, _ := out["done"].(bool); !done {
 		t.Errorf("item_cover_edit done = %v", out["done"])

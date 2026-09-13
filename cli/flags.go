@@ -99,8 +99,8 @@ func (f *FlagData) NewClient() (*abs.Client, error) {
 
 // DefaultToolsets is what the binary registers when --toolsets is not given:
 // enough to find things and read them, and nothing that writes. The whole
-// surface is around 33,000 tokens of schema before a question is asked, which
-// is a poor thing to spend a client's context on by default. Ask for more with
+// surface is around 12,000 tokens of tool definitions before a question is
+// asked, which is a poor thing to spend a client's context on by default. Ask for more with
 // --toolsets, or --toolsets all for everything.
 var DefaultToolsets = []string{"core"}
 

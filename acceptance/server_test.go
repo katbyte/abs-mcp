@@ -129,13 +129,15 @@ func TestServerTags(t *testing.T) {
 }
 
 // rename and rename back, so the rest of the suite still sees the original.
+// Tags are server-wide, which is why the rename lives in metadata_rename
+// rather than under server_.
 func TestServerRenameTag(t *testing.T) {
-	out := call(t, "server_tag_rename", map[string]any{"kind": "tag", "from": "humour", "to": "humor"})
+	out := call(t, "metadata_rename", map[string]any{"field": "tags", "from": "humour", "to": "humor"})
 	if n := num(t, out["items_updated"], "items_updated"); n != 1 {
 		t.Errorf("items_updated = %d, want 1", n)
 	}
 	t.Cleanup(func() {
-		call(t, "server_tag_rename", map[string]any{"kind": "tag", "from": "humor", "to": "humour"})
+		call(t, "metadata_rename", map[string]any{"field": "tags", "from": "humor", "to": "humour"})
 	})
 
 	if tags := strs(t, call(t, "server_tags", map[string]any{"kind": "tags"})["tags"], "tags"); !slices.Contains(tags, "humor") {

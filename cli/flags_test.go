@@ -8,7 +8,7 @@ import (
 )
 
 // The binary registers core and nothing else unless asked, so a client that
-// just points abs-mcp at a server does not spend 33,000 tokens of context on
+// just points abs-mcp at a server does not spend 12,000 tokens of context on
 // tools it will not call.
 func TestDefaultToolsetsIsCore(t *testing.T) {
 	t.Parallel()

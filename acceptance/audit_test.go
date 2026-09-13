@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // auditTools is every audit the server registers. TestEveryAuditRuns calls all
@@ -20,8 +21,8 @@ var auditTools = []string{
 	"audit_path",
 	"audit_author_as_title",
 	"audit_single_chapter",
-	"audit_stale_feed",
-	"audit_no_episodes",
+	"audit_podcast_stale_feed",
+	"audit_podcast_no_episodes",
 }
 
 // missingFields are the values audit_missing accepts. They are one tool rather
@@ -72,7 +73,7 @@ func TestEveryAuditRuns(t *testing.T) {
 		}
 		switch name {
 		case "audit_all", "audit_missing", "audit_duplicates", "audit_series_gaps",
-			"audit_terminology", "audit_terminology_rename",
+			"audit_spelling", "audit_unembedded",
 			"audit_cover_ratio", "audit_author_missing_image":
 			continue // asserted individually below
 		}
@@ -142,15 +143,15 @@ func TestAuditPath(t *testing.T) {
 
 // The podcast audits must read the podcast library and leave the books alone.
 func TestAuditPodcasts(t *testing.T) {
-	out := call(t, "audit_no_episodes", map[string]any{"library": "Podcasts"})
+	out := call(t, "audit_podcast_no_episodes", map[string]any{"library": "Podcasts"})
 	if found := num(t, out["total_findings"], "total_findings"); found != 0 {
-		t.Errorf("audit_no_episodes = %d, want 0 - both shows have episodes", found)
+		t.Errorf("audit_podcast_no_episodes = %d, want 0 - both shows have episodes", found)
 	}
 
 	// a book library has no podcasts to flag
-	out = call(t, "audit_stale_feed", map[string]any{"library": "Fiction"})
+	out = call(t, "audit_podcast_stale_feed", map[string]any{"library": "Fiction"})
 	if found := num(t, out["total_findings"], "total_findings"); found != 0 {
-		t.Errorf("audit_stale_feed on books = %d, want 0", found)
+		t.Errorf("audit_podcast_stale_feed on books = %d, want 0", found)
 	}
 }
 
@@ -236,14 +237,14 @@ func TestAuditDuplicates(t *testing.T) {
 	}
 }
 
-// audit_terminology groups spellings of the same value. The fixtures are
+// audit_spelling groups spellings of the same value. The fixtures are
 // consistent, so a clean result is the assertion - and the language alias
 // table must not invent a group out of a single spelling.
-func TestAuditTerminology(t *testing.T) {
-	out := call(t, "audit_terminology", nil)
+func TestAuditSpelling(t *testing.T) {
+	out := call(t, "audit_spelling", nil)
 
 	if groups := rows(t, out["groups"], "groups"); len(groups) != 0 {
-		t.Errorf("audit_terminology found %d groups in a consistent library: %v", len(groups), groups)
+		t.Errorf("audit_spelling found %d groups in a consistent library: %v", len(groups), groups)
 	}
 	// every fixture is English, which the alias table recognizes
 	if odd, present := out["unrecognized_languages"]; present {
@@ -251,7 +252,7 @@ func TestAuditTerminology(t *testing.T) {
 	}
 
 	// a bad field is an error naming the valid ones
-	if msg := callErr(t, "audit_terminology", map[string]any{"field": "nope"}); msg == "" {
+	if msg := callErr(t, "audit_spelling", map[string]any{"field": "nope"}); msg == "" {
 		t.Error("an unknown field should be refused")
 	}
 }
@@ -285,4 +286,52 @@ func TestAuditCoverRatio(t *testing.T) {
 		t.Errorf("skipped = %d, want 3 coverless items", skipped)
 	}
 	rows(t, out["findings"], "findings")
+}
+
+// The fixtures are silent files ffmpeg wrote with no tags, so every book is
+// unembedded until item_embed_metadata runs. The embed is a background task
+// and the scanner has to see the rewritten file, so the clearing is polled.
+func TestAuditUnembedded(t *testing.T) {
+	const item = "The Arms of Krupp"
+
+	out := call(t, "audit_unembedded", map[string]any{"library": "Non-Fiction"})
+	if scanned := num(t, out["items_scanned"], "items_scanned"); scanned != 3 {
+		t.Errorf("items_scanned = %d, want 3", scanned)
+	}
+	if found := num(t, out["total_findings"], "total_findings"); found != 3 {
+		t.Fatalf("total_findings = %d, want all 3 untagged fixtures: %v", found, out["findings"])
+	}
+	for _, f := range rows(t, out["findings"], "findings") {
+		if detail, _ := f["detail"].(string); !strings.Contains(detail, "no tags") {
+			t.Errorf("finding should say the files carry no tags: %v", f)
+		}
+	}
+
+	// a podcast library has nothing to embed
+	if pods := call(t, "audit_unembedded", map[string]any{"library": "Podcasts"}); num(t, pods["items_scanned"], "items_scanned") != 0 {
+		t.Errorf("podcasts were scanned: %v", pods)
+	}
+
+	call(t, "item_embed_metadata", map[string]any{"item": item})
+	deadline := time.Now().Add(90 * time.Second)
+	for {
+		call(t, "item_rescan", map[string]any{"item": item})
+		after := call(t, "audit_unembedded", map[string]any{"library": "Non-Fiction"})
+		flagged := false
+		for _, f := range rows(t, after["findings"], "findings") {
+			if f["title"] == item {
+				flagged = true
+			}
+		}
+		if !flagged {
+			if found := num(t, after["total_findings"], "total_findings"); found != 2 {
+				t.Errorf("total_findings after the embed = %d, want the 2 other fixtures", found)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%s is still unembedded 90s after item_embed_metadata: %v", item, after["findings"])
+		}
+		time.Sleep(3 * time.Second)
+	}
 }

@@ -122,8 +122,10 @@ func TestResolveAmbiguousAcrossLibraries(t *testing.T) {
 	const shared = "Isaac Asimov"
 	const book = "War Is a Racket" // Non-Fiction
 
-	if _, err := invoke("author_get", map[string]any{"author": shared}); err != nil {
-		t.Fatalf("%s should resolve in one library to begin with: %v", shared, err)
+	// call, not invoke: only call skips when there is no server, and this is
+	// the one test that ran into a nil session on a plain `go test`
+	if got := call(t, "author_get", map[string]any{"author": shared}); got["name"] != shared {
+		t.Fatalf("%s should resolve in one library to begin with: %v", shared, got)
 	}
 
 	call(t, "item_edit", map[string]any{"item": book, "authors": []any{shared}})

@@ -430,7 +430,7 @@ func TestProgressOf(t *testing.T) {
 }
 
 // vocabKey decides what counts as "the same value spelled differently", which
-// is the whole basis of audit_terminology. Languages are special: en, eng and
+// is the whole basis of audit_spelling. Languages are special: en, eng and
 // English are the same language but share no normalized spelling.
 func TestVocabKey(t *testing.T) {
 	t.Parallel()

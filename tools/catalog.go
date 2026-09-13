@@ -359,7 +359,7 @@ func registerNarratorTools(r *registry) {
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "narrator_list",
-		Description: "List a library's narrators with the number of books each reads. The vocabulary to normalize against: near-duplicates like 'Jim Dale' and 'jim dale' show up as separate entries, and narrator_edit merges them.",
+		Description: "List a library's narrators with the number of books each reads. The vocabulary to normalize against: near-duplicates like 'Jim Dale' and 'jim dale' show up as separate entries, and metadata_rename merges them.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in listIn) (*mcp.CallToolResult, listOut, error) {
 		lib, err := resolveLibrary(ctx, client, in.Library)
 		if err != nil {
@@ -376,46 +376,6 @@ func registerNarratorTools(r *registry) {
 		}
 
 		return nil, out, nil
-	})
-
-	type editIn struct {
-		Library  string `json:"library,omitempty" jsonschema:"library name or id; optional when the server has one library"`
-		Narrator string `json:"narrator"          jsonschema:"the narrator's current name, exactly as narrator_list reports it"`
-		Name     string `json:"name,omitempty"    jsonschema:"the new name; renaming onto an existing narrator merges the two"`
-		Remove   bool   `json:"remove,omitempty"  jsonschema:"instead of renaming, drop this narrator from every book"`
-	}
-	type editOut struct {
-		ItemsUpdated int `json:"items_updated"`
-	}
-	add(r, writeTool, &mcp.Tool{
-		Name:        "narrator_edit",
-		Description: "Rename a narrator on every book in the library that carries them, or with remove drop them entirely. Renaming onto a name that already exists merges the two, which is how to fix 'Jim Dale' vs 'jim dale'. Changes server state.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in editIn) (*mcp.CallToolResult, editOut, error) {
-		narrator := strings.TrimSpace(in.Narrator)
-		if narrator == "" {
-			return nil, editOut{}, errors.New("narrator is required")
-		}
-		name := strings.TrimSpace(in.Name)
-		if name == "" && !in.Remove {
-			return nil, editOut{}, errors.New("pass name to rename, or remove to drop the narrator")
-		}
-
-		lib, err := resolveLibrary(ctx, client, in.Library)
-		if err != nil {
-			return nil, editOut{}, err
-		}
-
-		var n int
-		if in.Remove {
-			n, err = client.RemoveNarrator(ctx, lib.ID, narrator)
-		} else {
-			n, err = client.RenameNarrator(ctx, lib.ID, narrator, name)
-		}
-		if err != nil {
-			return nil, editOut{}, err
-		}
-
-		return nil, editOut{ItemsUpdated: n}, nil
 	})
 }
 

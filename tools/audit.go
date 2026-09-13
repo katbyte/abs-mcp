@@ -70,11 +70,11 @@ var auditSpecs = []auditSpec{
 		"Find long books carrying exactly one chapter that spans the whole recording, which is as unnavigable as having none but is not reported by audit_missing chapters. Fix with item_chapters_set, which can pull real chapters from Audible by asin.",
 	},
 	{
-		"audit_stale_feed", "stale_feed",
+		"audit_podcast_stale_feed", "stale_feed",
 		"Find podcasts with no new episodes in 90 days, or whose feed was never checked. The show may have ended, or the feed url may be dead. Check with podcast_feed_episodes.",
 	},
 	{
-		"audit_no_episodes", "no_episodes",
+		"audit_podcast_no_episodes", "no_episodes",
 		"Find podcasts with nothing downloaded. Fill them with podcast_feed_episodes then podcast_episode_download, or podcast_check_new.",
 	},
 }
@@ -176,7 +176,7 @@ func registerAuditTools(r *registry) {
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "audit_all",
-		Description: "Run every per-item audit in a single sweep and return only the counts, so one call says where a library needs work. Call the individual audit for the worklist. Start here after a scan. Does not include audit_duplicates, audit_series_gaps or audit_terminology, which sweep differently; run those separately.",
+		Description: "Run every per-item audit in a single sweep and return only the counts, so one call says where a library needs work. Call the individual audit for the worklist. Start here after a scan. Does not include audit_duplicates, audit_series_gaps, audit_spelling or audit_unembedded, which sweep differently; run those separately.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in allIn) (*mcp.CallToolResult, allOut, error) {
 		libs, err := resolveLibraries(ctx, client, in.Library)
 		if err != nil {
@@ -256,7 +256,7 @@ func registerAuditTools(r *registry) {
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "audit_cover_ratio",
-		Description: "Find covers that are not square or are too small to look right in a client. Audiobook art is square by convention, so a tall book-jacket scan or a thumbnail stands out. This reads every cover's header, so it is far slower than the other audits: narrow it with library, or raise limit knowing the cost. Fix with item_cover_search then item_cover_edit.",
+		Description: "Find covers that are not square or are too small to look right in a client. Audiobook art is square by convention, so a tall book-jacket scan or a thumbnail stands out. This fetches the header of every cover file, one request per item that has one, so it is far slower than the other audits: narrow it with library. Fix with item_cover_search then item_cover_edit.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in coverRatioIn) (*mcp.CallToolResult, coverRatioOut, error) {
 		tolerance := in.Tolerance
 		if tolerance <= 0 {
@@ -278,9 +278,13 @@ func registerAuditTools(r *registry) {
 			if err := client.ItemsAll(ctx, libs[i].ID, abs.ItemsOptions{Minified: true}, func(items []abs.Item) bool {
 				for j := range items {
 					it := &items[j]
+					if !it.HasCover() {
+						out.Skipped++ // the listing already says so: no request needed
+						continue
+					}
 					w, h, err := client.CoverSize(ctx, it.ID)
 					if err != nil {
-						out.Skipped++ // no cover, or a format we cannot read
+						out.Skipped++ // a format we cannot read, or the file is gone
 						continue
 					}
 					out.Checked++
@@ -336,7 +340,9 @@ func registerAuditTools(r *registry) {
 			return nil, dupOut{}, err
 		}
 
-		groups := map[string][]abs.Item{}
+		// the summary rather than the item: a whole library is held here until
+		// the sweep ends, and the summary is what the answer carries anyway
+		groups := map[string][]itemSummary{}
 		for i := range libs {
 			if err := client.ItemsAll(ctx, libs[i].ID, abs.ItemsOptions{}, func(items []abs.Item) bool {
 				for i := range items {
@@ -351,7 +357,7 @@ func registerAuditTools(r *registry) {
 					default:
 						key = "title:" + strings.ToLower(strings.TrimSpace(m.Title)) + "|" + strings.ToLower(strings.TrimSpace(m.AuthorDisplay()))
 					}
-					groups[key] = append(groups[key], *it)
+					groups[key] = append(groups[key], summarize(it))
 				}
 				return true
 			}); err != nil {
@@ -372,7 +378,7 @@ func registerAuditTools(r *registry) {
 			if len(out.Groups) >= limit {
 				break
 			}
-			out.Groups = append(out.Groups, dupGroup{Key: k, Items: summarizeAll(groups[k])})
+			out.Groups = append(out.Groups, dupGroup{Key: k, Items: groups[k]})
 		}
 
 		return nil, out, nil
@@ -508,7 +514,9 @@ func seriesSequences(items []abs.Item, seriesID string) (have, missing []string)
 // filter when it has one (far cheaper than a sweep) and paging otherwise.
 func runCheck(ctx context.Context, client *abs.Client, libraryID string, check auditCheck, filter string, limit int, out *auditOut) error {
 	if filter != "" {
-		remaining := max(limit-len(out.Findings), 0)
+		// once the worklist is full only the count is wanted, and a limit of 0
+		// would mean "no limit" to the server: ask for one row and keep none
+		remaining := max(limit-len(out.Findings), 1)
 		res, err := client.Items(ctx, libraryID, abs.ItemsOptions{Limit: remaining, Filter: filter, Minified: true})
 		if err != nil {
 			return err
@@ -516,6 +524,9 @@ func runCheck(ctx context.Context, client *abs.Client, libraryID string, check a
 		out.Scanned += res.Total
 		out.Found += res.Total
 		for j := range res.Results {
+			if len(out.Findings) >= limit {
+				break
+			}
 			detail, _ := check(&res.Results[j])
 			out.Findings = append(out.Findings, finding(&res.Results[j], detail))
 		}

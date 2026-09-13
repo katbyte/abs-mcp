@@ -1,7 +1,7 @@
 package abs
 
 import (
-	"bytes"
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -9,7 +9,7 @@ import (
 	_ "image/gif"  // registered for image.DecodeConfig
 	_ "image/jpeg" // registered for image.DecodeConfig
 	_ "image/png"  // registered for image.DecodeConfig
-	"net/http"
+	"io"
 	"net/url"
 )
 
@@ -37,14 +37,17 @@ func (c *Client) ItemsBatch(ctx context.Context, ids []string) ([]Item, error) {
 
 // MetadataUpdate is the editable metadata for a book (or podcast: Title,
 // Author, Description, Genres, Language, Explicit, FeedURL, ...). Nil pointers
-// are left unchanged; a pointer to an empty string clears the field.
+// are left unchanged; a pointer to an empty string clears the field. The list
+// fields work the same way: nil is left alone, and an empty non-nil slice is
+// sent as [] and clears the list (omitzero, not omitempty, which would drop
+// the empty list and turn a clear into a no-op).
 type MetadataUpdate struct {
 	Title         *string     `json:"title,omitempty"`
 	Subtitle      *string     `json:"subtitle,omitempty"`
-	Authors       []NameRef   `json:"authors,omitempty"`   // books; {name} entries are created if new
-	Narrators     []string    `json:"narrators,omitempty"` // books
-	Series        []SeriesRef `json:"series,omitempty"`    // books; {name, sequence}
-	Genres        []string    `json:"genres,omitempty"`
+	Authors       []NameRef   `json:"authors,omitzero"`   // books; {name} entries are created if new
+	Narrators     []string    `json:"narrators,omitzero"` // books
+	Series        []SeriesRef `json:"series,omitzero"`    // books; {name, sequence}
+	Genres        []string    `json:"genres,omitzero"`
 	PublishedYear *string     `json:"publishedYear,omitempty"`
 	PublishedDate *string     `json:"publishedDate,omitempty"`
 	Publisher     *string     `json:"publisher,omitempty"`
@@ -63,10 +66,11 @@ type MetadataUpdate struct {
 	PodcastType *string `json:"type,omitempty"`
 }
 
-// MediaUpdate is the PATCH /api/items/:id/media payload.
+// MediaUpdate is the PATCH /api/items/:id/media payload. Tags follows the
+// MetadataUpdate list rule: nil leaves them alone, an empty slice clears them.
 type MediaUpdate struct {
 	Metadata *MetadataUpdate `json:"metadata,omitempty"`
-	Tags     []string        `json:"tags,omitempty"`
+	Tags     []string        `json:"tags,omitzero"`
 	// podcast settings
 	AutoDownloadEpisodes     *bool   `json:"autoDownloadEpisodes,omitempty"`
 	AutoDownloadSchedule     *string `json:"autoDownloadSchedule,omitempty"`
@@ -165,23 +169,29 @@ func (c *Client) DeleteItem(ctx context.Context, id string, hard bool) error {
 	return c.del(ctx, "/api/items/"+url.PathEscape(id), q)
 }
 
-// CoverSize returns the pixel dimensions of an item's cover without holding
-// the image: only the header is decoded, and the bytes are discarded. Returns
-// ErrNoCover when the item has none, and an unsupported-format error for
-// anything the standard library cannot read (webp, avif).
+// CoverSize returns the pixel dimensions of the cover file as it is on disk.
+// The request asks for the raw file: without that the server answers from its
+// cache, resized to 400 pixels wide, which is the wrong thing to measure. Only
+// the image header is read; the body is closed as soon as the dimensions are
+// known, so a multi-megabyte scan costs a few kilobytes. Returns ErrNoCover
+// when the item has none, and an unsupported-format error for anything the
+// standard library cannot read (webp, avif).
 func (c *Client) CoverSize(ctx context.Context, itemID string) (width, height int, err error) {
-	raw, err := c.doRaw(ctx, http.MethodGet, "/api/items/"+url.PathEscape(itemID)+"/cover", nil, nil)
+	q := url.Values{"raw": {"1"}}
+	body, err := c.stream(ctx, "/api/items/"+url.PathEscape(itemID)+"/cover", q)
 	if err != nil {
 		if IsNotFound(err) {
 			return 0, 0, ErrNoCover
 		}
 		return 0, 0, err
 	}
-	if len(raw) == 0 {
-		return 0, 0, ErrNoCover
-	}
+	defer func() { _ = body.Close() }()
 
-	cfg, _, err := image.DecodeConfig(bytes.NewReader(raw))
+	r := bufio.NewReader(body)
+	if _, err := r.Peek(1); errors.Is(err, io.EOF) {
+		return 0, 0, ErrNoCover // an empty body: nothing to measure
+	}
+	cfg, _, err := image.DecodeConfig(r)
 	if err != nil {
 		return 0, 0, fmt.Errorf("decoding cover for %s: %w", itemID, err)
 	}

@@ -288,9 +288,8 @@ func (c *Client) DeleteGenre(ctx context.Context, genre string) (int, error) {
 	return resp.NumItemsUpdated, nil
 }
 
-// vocabularyID addresses a tag or genre the way the server does: base64 of the
-// value, percent-encoded into the path, the same encoding the narrator
-// endpoints use.
+// vocabularyID addresses a tag, genre or narrator the way the server does:
+// base64 of the value, percent-encoded into the path.
 func vocabularyID(value string) string {
 	return url.PathEscape(base64.StdEncoding.EncodeToString([]byte(value)))
 }

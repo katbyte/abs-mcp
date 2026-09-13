@@ -469,7 +469,10 @@ func registerItemTools(r *registry) {
 			if it.IsPodcast() {
 				return nil, batchEditOut{}, fmt.Errorf("%s is a podcast; item_batch_edit is for books", it.Title())
 			}
-			upd := abs.MediaUpdate{Tags: in.Tags}
+			upd := abs.MediaUpdate{}
+			if len(in.Tags) > 0 {
+				upd.Tags = in.Tags // an explicit empty list would clear them
+			}
 			if hasMeta {
 				upd.Metadata = new(md)
 			}
@@ -543,13 +546,19 @@ func registerItemTools(r *registry) {
 	}
 	type coverEditIn struct {
 		itemRef
-		URL  string `json:"url,omitempty"  jsonschema:"image url to download as the cover"`
-		File string `json:"file,omitempty" jsonschema:"instead of a url: the path of an image already in the item's folder (item_get with files lists them)"`
+		URL    string `json:"url,omitempty"    jsonschema:"image url to download as the cover"`
+		File   string `json:"file,omitempty"   jsonschema:"instead of a url: the path of an image already in the item's folder (item_get with files lists them)"`
+		Remove bool   `json:"remove,omitempty" jsonschema:"instead of setting one: delete the current cover"`
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "item_cover_edit",
-		Description: "Set an item's cover from a url (e.g. from item_cover_search) or from an image file already in its folder, or remove the cover by passing neither. Changes server state.",
+		Description: "Set an item's cover from a url (e.g. from item_cover_search) or from an image file already in its folder, or with remove delete the current cover. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in coverEditIn) (*mcp.CallToolResult, doneOut, error) {
+		// removal has to be asked for: a call that forgot its url must not
+		// take the cover away
+		if in.URL == "" && in.File == "" && !in.Remove {
+			return nil, doneOut{}, errors.New("pass url or file to set the cover, or remove to delete it")
+		}
 		it, err := resolveItem(ctx, client, in.Library, in.Item)
 		if err != nil {
 			return nil, doneOut{}, err
@@ -561,7 +570,6 @@ func registerItemTools(r *registry) {
 		case in.File != "":
 			err = client.SetCoverFromFile(ctx, it.ID, in.File)
 		default:
-			// neither means there is no cover to set: take the current one away
 			err = client.RemoveCover(ctx, it.ID)
 		}
 		if err != nil {
@@ -638,7 +646,7 @@ func registerItemTools(r *registry) {
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "item_embed_metadata",
-		Description: "Write the item's metadata and chapters into its audio files' tags so they travel with the files. Admin only. Changes the files on disk; runs in the background (see server_tasks).",
+		Description: "Write the item's metadata and chapters into its audio files' tags so they travel with the files. audit_unembedded lists the books where this is due. Admin only. Changes the files on disk; runs in the background (see server_tasks).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in embedIn) (*mcp.CallToolResult, scanStartedOut, error) {
 		it, err := resolveItem(ctx, client, in.Library, in.Item)
 		if err != nil {
