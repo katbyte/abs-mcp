@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/lib/version"
 	"github.com/katbyte/abs-mcp/tools"
+	"github.com/katbyte/go-kt/version"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

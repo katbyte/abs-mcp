@@ -6,8 +6,8 @@ import (
 	"os"
 
 	"github.com/katbyte/abs-mcp/lib/abs"
-	"github.com/katbyte/abs-mcp/lib/clog"
 	"github.com/katbyte/abs-mcp/tools"
+	"github.com/katbyte/go-kt/clog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

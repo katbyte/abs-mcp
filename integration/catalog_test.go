@@ -3,8 +3,9 @@
 package integration
 
 import (
-	"github.com/katbyte/abs-mcp/lib/abs"
 	"testing"
+
+	"github.com/katbyte/abs-mcp/lib/abs"
 )
 
 // --- catalogue ----------------------------------------------------------

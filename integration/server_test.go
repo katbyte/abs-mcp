@@ -3,10 +3,11 @@
 package integration
 
 import (
-	"github.com/katbyte/abs-mcp/lib/abs"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/katbyte/abs-mcp/lib/abs"
 )
 
 // --- connectivity and identity ------------------------------------------

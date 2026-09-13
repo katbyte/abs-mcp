@@ -10,9 +10,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/katbyte/abs-mcp/lib/clog"
-	"github.com/katbyte/abs-mcp/lib/version"
 	"github.com/katbyte/abs-mcp/tools"
+	"github.com/katbyte/go-kt/clog"
+	"github.com/katbyte/go-kt/version"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
 )
