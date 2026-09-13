@@ -116,6 +116,60 @@ func valuesOf(field string, it *abs.Item) []string {
 	return nil
 }
 
+// spellingCounts gathers, per field, every spelling of every value and how
+// many items carry it: field -> normalized key -> spelling -> count.
+type spellingCounts map[string]map[string]map[string]int
+
+func newSpellingCounts(fields []string) spellingCounts {
+	c := spellingCounts{}
+	for _, f := range fields {
+		c[f] = map[string]map[string]int{}
+	}
+	return c
+}
+
+// add counts the item's values for every field being gathered.
+func (c spellingCounts) add(it *abs.Item) {
+	for f, byKey := range c {
+		for _, v := range valuesOf(f, it) {
+			v = strings.TrimSpace(v)
+			if v == "" {
+				continue
+			}
+			k := vocabKey(f, v)
+			if k == "" {
+				continue
+			}
+			if byKey[k] == nil {
+				byKey[k] = map[string]int{}
+			}
+			byKey[k][v]++
+		}
+	}
+}
+
+// groups returns a field's keys that are spelled more than one way, sorted.
+func (c spellingCounts) groups(field string) []string {
+	keys := make([]string, 0, len(c[field]))
+	for k, spellings := range c[field] {
+		if len(spellings) > 1 {
+			keys = append(keys, k)
+		}
+	}
+	slices.Sort(keys)
+	return keys
+}
+
+// groupCount is how many groups every field gathered has, for a count-only
+// summary.
+func (c spellingCounts) groupCount() int {
+	n := 0
+	for f := range c {
+		n += len(c.groups(f))
+	}
+	return n
+}
+
 func registerSpellingTools(r *registry) {
 	client := r.client
 
@@ -160,35 +214,16 @@ func registerSpellingTools(r *registry) {
 			return nil, vocabOut{}, err
 		}
 
-		// field -> key -> spelling -> count. The sweep is the reliable source:
-		// the server's own filter data is cached and is not invalidated by an
-		// edit or a rescan, so it goes stale as soon as anything is fixed.
-		counts := map[string]map[string]map[string]int{}
-		for _, f := range fields {
-			counts[f] = map[string]map[string]int{}
-		}
-
+		// The sweep is the reliable source: the server's own filter data is
+		// cached and is not invalidated by an edit or a rescan, so it goes
+		// stale as soon as anything is fixed.
+		counts := newSpellingCounts(fields)
 		out := vocabOut{Groups: []vocabGroup{}}
 		for i := range libs {
 			if err := client.ItemsAll(ctx, libs[i].ID, abs.ItemsOptions{}, func(items []abs.Item) bool {
 				for j := range items {
 					out.Scanned++
-					for _, f := range fields {
-						for _, v := range valuesOf(f, &items[j]) {
-							v = strings.TrimSpace(v)
-							if v == "" {
-								continue
-							}
-							k := vocabKey(f, v)
-							if k == "" {
-								continue
-							}
-							if counts[f][k] == nil {
-								counts[f][k] = map[string]int{}
-							}
-							counts[f][k][v]++
-						}
-					}
+					counts.add(&items[j])
 				}
 				return true
 			}); err != nil {
@@ -198,15 +233,7 @@ func registerSpellingTools(r *registry) {
 
 		limit := limitOr(in.Limit, 50)
 		for _, f := range fields {
-			keys := make([]string, 0, len(counts[f]))
-			for k, spellings := range counts[f] {
-				if len(spellings) > 1 {
-					keys = append(keys, k)
-				}
-			}
-			slices.Sort(keys)
-
-			for _, k := range keys {
+			for _, k := range counts.groups(f) {
 				out.Found++
 				if len(out.Groups) >= limit {
 					continue

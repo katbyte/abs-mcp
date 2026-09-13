@@ -95,6 +95,13 @@ func TestItemMatchAndApply(t *testing.T) {
 		}
 	})
 
+	t.Run("item_match_apply needs a candidate", func(t *testing.T) {
+		msg := callErr(t, "item_match_apply", map[string]any{"item": book, "provider": "audible", "override_details": true})
+		if !strings.Contains(msg, "candidate") {
+			t.Errorf("a match naming no candidate, asin or isbn was not refused: %s", msg)
+		}
+	})
+
 	t.Run("item_match_apply", func(t *testing.T) {
 		if asin == "" {
 			t.Skip("item_match produced no asin")

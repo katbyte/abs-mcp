@@ -92,3 +92,21 @@ func TestMuxRoutes(t *testing.T) {
 		t.Error("POST /healthz answered 200; the route is registered GET-only")
 	}
 }
+
+// --listen with no bearer token is an open port, so it is refused unless the
+// operator said so in as many words.
+func TestServeNeedsAnAuthToken(t *testing.T) {
+	t.Parallel()
+
+	if err := checkAuth("", false); err == nil {
+		t.Error("no token and no --allow-no-auth was not refused")
+	} else if !strings.Contains(err.Error(), "ABS_AUTH_TOKEN") || !strings.Contains(err.Error(), "allow-no-auth") {
+		t.Errorf("the refusal does not say how to fix it: %v", err)
+	}
+	if err := checkAuth("", true); err != nil {
+		t.Errorf("--allow-no-auth was refused: %v", err)
+	}
+	if err := checkAuth(testToken, false); err != nil {
+		t.Errorf("a token was refused: %v", err)
+	}
+}

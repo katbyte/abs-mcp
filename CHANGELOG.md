@@ -1,3 +1,43 @@
+## Unreleased
+
+### Breaking
+
+- `item_match_apply` requires `candidate`, `asin` or `isbn`. With none of them it applied the
+  provider's first hit unseen, and with `override_details` replaced the metadata with it
+- `serve --listen` refuses to start without `ABS_AUTH_TOKEN`. A blank token in a copied
+  `.env` used to come up serving every tool to the whole network behind one warning line;
+  `--allow-no-auth` (`ABS_ALLOW_NO_AUTH=true`) is how to say that is wanted
+- `audit_all` runs every audit: `audit_duplicates`, `audit_spelling`, `audit_series_gaps` and
+  `audit_author_missing_image` now count alongside the per-item checks, and `deep=true` adds
+  `audit_cover_ratio` and `audit_unembedded`, the two that fetch something for every item;
+  without it they are listed under `skipped` rather than silently left out
+- `audit_series_gaps` and `audit_duplicates` report `total_findings` like every other audit
+  (`audit_series_gaps` called it `found`; `audit_duplicates` had no count before the limit)
+
+### Fixed
+
+- a title lookup took a lone search hit as the item even when the title did not contain the
+  words asked for. The server's search also answers on subtitle, asin and isbn (and older
+  servers on authors and narrators) without saying which field matched, so `item_delete
+  item=B0DUNE` deleted whichever book carried that asin. A hit whose title does not contain
+  the query is now refused with the id on offer. This covers every tool that takes an item by
+  title
+- an author past the first 500 in a library could not be found by name: `author_edit`,
+  `author_delete`, `author_get`, `metadata_rename field=authors` and
+  `audit_author_missing_image` read one page and stopped
+- a negative `offset` to `podcast_episodes` indexed past the end of the list and, with no
+  recover in the MCP transport, took the server down
+- audits the server filters for (`audit_missing` most fields, `audit_issues`, `audit_no_audio`)
+  reported `items_scanned` equal to the findings, and asked podcast libraries with book
+  filters their podcast filters do not know. `items_scanned` is now the library's size, and
+  checks that never fire for a podcast skip podcast libraries
+
+### Changed
+
+- `docker-compose.yml` no longer pins `dns: 1.1.1.1`. On a user-defined network that sends
+  every lookup to the public resolver, so a LAN name like `nas` in `ABS_SERVER` could not
+  resolve; the container now uses the host's resolver like any other
+
 ## 0.3.0 (2026-09-13)
 
 ### Breaking
@@ -5,7 +45,7 @@
 - one rename tool. `metadata_rename field=tags|genres|narrators|authors|languages|publishers`
   replaces `server_tag_rename`, `narrator_edit` and `audit_terminology_rename`, and with
   `remove` drops a tag, genre, narrator, language or publisher everywhere. `audit_terminology`
-  is now `audit_spelling`, and every group it reports is fixed by the one tool. 88 tools -> 86
+  is now `audit_spelling`, and every group it reports is fixed by the one tool. 88 tools -> 87
 - `audit_no_episodes` and `audit_stale_feed` are `audit_podcast_no_episodes` and
   `audit_podcast_stale_feed`, so the name says they only look at podcasts
 - `item_cover_edit` no longer removes the cover when called with neither `url` nor `file`:

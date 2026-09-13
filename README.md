@@ -31,7 +31,8 @@ tools, so a model can browse your library and read your progress. This one does 
 
 - **It audits.** 16 sweeps over a whole library, each one looking for a specific thing that
   goes wrong in a real collection, returning a worklist rather than a dump. `audit_all` runs
-  every per-item check in a single pass and tells you where to start.
+  all of them in one call (the two that fetch something per item only with `deep`) and tells
+  you where to start.
 - **It is also a Go SDK.** `lib/abs` is a complete Audiobookshelf API client with no
   dependencies outside the standard library and no knowledge of MCP - useful on its own,
   whether or not you care about AI.
@@ -70,7 +71,8 @@ All options can be passed as command-line flags, environment variables, or via a
 | `ABS_DENY_TOOLS` | `--deny-tools` | never register these tools (names or globs such as `*_delete`) |
 | `ABS_LOG` | | log level (`WARN` default; `DEBUG`, `TRACE`, ...) |
 | `ABS_LISTEN` | `--listen` | serve MCP over HTTP on this address (e.g. `:8080`) instead of stdio |
-| `ABS_AUTH_TOKEN` | `--auth-token` | bearer token required on the HTTP endpoint |
+| `ABS_AUTH_TOKEN` | `--auth-token` | bearer token required on the HTTP endpoint (required with `--listen`) |
+| `ABS_ALLOW_NO_AUTH` | `--allow-no-auth` | serve HTTP with no bearer token at all: anyone who can reach the port can use every tool |
 
 An API key acts as exactly one Audiobookshelf user and inherits that user's permissions: a key
 for a normal account cannot see libraries that account cannot see, and cannot scan, match or
@@ -123,8 +125,9 @@ claude mcp add audiobookshelf -e ABS_SERVER=http://nas:13378 -e ABS_TOKEN=... --
 ### Run as a service (HTTP transport)
 
 `serve --listen :8080` serves the MCP Streamable HTTP transport at `/mcp` (plus `GET /healthz`)
-instead of stdio. Set `ABS_AUTH_TOKEN` so clients must send `Authorization: Bearer <token>`;
-without it anyone who can reach the port can use every tool. Register it from any machine:
+instead of stdio. `ABS_AUTH_TOKEN` is required: clients must send `Authorization: Bearer
+<token>`, and the server refuses to start without one unless `ABS_ALLOW_NO_AUTH=true` says
+that anyone who can reach the port may use every tool. Register it from any machine:
 
 ```bash
 claude mcp add --transport http audiobookshelf http://nas:8080/mcp \
@@ -161,7 +164,7 @@ comes back as an error listing the candidates.
 |---|---|
 | server | `server_info` (connectivity, permissions, libraries, providers and server-wide totals), `server_tasks`, `server_sessions`, `server_backups`, `server_backup_create`, `server_tags` |
 | libraries | `library_list`, `library_get` (in depth, with statistics), `library_create`, `library_edit`, `library_search`, `library_items` (the server's own filters and sorts: genre, tag, author, series, narrator, progress, tracks...), `library_recent`, `library_filters`, `library_scan` |
-| audits | `audit_all` (every per-item audit in one sweep - start here after a scan), `audit_missing` (field: cover, description, narrator, series, author, genres, year, publisher, language, chapters), `audit_unmatched`, `audit_issues`, `audit_no_audio`, `audit_path`, `audit_author_as_title`, `audit_single_chapter`, `audit_podcast_stale_feed`, `audit_podcast_no_episodes`, `audit_duplicates`, `audit_series_gaps`, `audit_spelling` (the same value spelled several ways), `audit_unembedded` (audio tags missing or behind the metadata: what item_embed_metadata is due for), `audit_cover_ratio`, `audit_author_missing_image` |
+| audits | `audit_all` (every audit in one call, counts only - start here after a scan; `deep` adds the two slow ones), `audit_missing` (field: cover, description, narrator, series, author, genres, year, publisher, language, chapters), `audit_unmatched`, `audit_issues`, `audit_no_audio`, `audit_path`, `audit_author_as_title`, `audit_single_chapter`, `audit_podcast_stale_feed`, `audit_podcast_no_episodes`, `audit_duplicates`, `audit_series_gaps`, `audit_spelling` (the same value spelled several ways), `audit_unembedded` (audio tags missing or behind the metadata: what item_embed_metadata is due for), `audit_cover_ratio`, `audit_author_missing_image` |
 | items | `item_get` (with optional `chapters` and `files`), `item_edit`, `item_batch_edit` (same fields across many books), `item_rescan`, `item_embed_metadata` |
 | matching | `item_match` (candidates from a provider), `item_match_apply`, `item_cover_search`, `item_cover_edit` (url, file, or `remove`), `item_chapters_set` (explicit list or from Audible by asin) |
 | authors | `author_list`, `author_get`, `author_edit` (rename to merge duplicates), `author_match`, `author_image_set` |

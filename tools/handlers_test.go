@@ -392,55 +392,112 @@ func TestAuditMissingLimitHoldsAcrossLibraries(t *testing.T) {
 	if got := list(t, out["findings"]); len(got) != 1 {
 		t.Errorf("findings = %d, want the limit of 1", len(got))
 	}
-	second := f.requests("/api/libraries/" + libB + "/items")
-	if len(second) != 1 || !strings.Contains(second[0].Query, "limit=1") {
-		t.Errorf("second library asked with %v, want limit=1", second)
+	// the second library is asked twice: once for its size, once filtered,
+	// and the filtered request carries the limit
+	var filtered []request
+	for _, r := range f.requests("/api/libraries/" + libB + "/items") {
+		if strings.Contains(r.Query, "filter=") {
+			filtered = append(filtered, r)
+		}
+	}
+	if len(filtered) != 1 || !strings.Contains(filtered[0].Query, "limit=1") {
+		t.Errorf("second library asked with %v, want one filtered request with limit=1", filtered)
 	}
 }
 
-// The audits under audit_all agree with the individual tools on the same
-// canned library, which is the property the live suite asserts on fixtures
-// that happen to be clean.
+// audit_all agrees with the individual tools on the same library, covers the
+// cross-item audits too, and names the two it leaves out unless asked to go
+// deep.
 func TestAuditAllMatchesTheAudits(t *testing.T) {
 	t.Parallel()
 
 	f := newFakeABS(t)
 	oneLibrary(f)
 	f.json("GET /api/libraries/"+libID+"/items", page(
-		item("i1", "Dune", `"authorName":"Frank Herbert","asin":"B0"`, `"coverPath":"/c.jpg","numTracks":1,"numAudioFiles":1`),
+		item("i1", "Dune", `"authorName":"Frank Herbert","asin":"B0","genres":["Sci-Fi"]`, `"coverPath":"/c.jpg","numTracks":1,"numAudioFiles":1`),
 		item("i2", "Neuromancer", `"authorName":"Neuromancer"`, ""),
+		item("i3", "Dune", `"authorName":"Frank Herbert","asin":"b0","genres":["sci fi"]`, `"coverPath":"/c.jpg","numTracks":1,"numAudioFiles":1`),
 	))
+	f.json("GET /api/libraries/"+libID+"/series", `{"results":[],"total":0}`)
+	f.json("GET /api/libraries/"+libID+"/authors", `{"results":[{"id":"a1","name":"Frank Herbert","numBooks":2}],"total":1}`)
+	tiny := pngOf(t, 100, 100)
+	f.mux.HandleFunc("GET /api/items/{id}/cover", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, tiny)
+	})
+	f.json("POST /api/items/batch/get", `{"libraryItems":[`+item("i1", "Dune", "", `"audioFiles":[{"index":1,"metaTags":{}}]`)+`]}`)
 	call := toolCaller(t, f)
+
+	counts := func(out map[string]any) map[string]int {
+		found := map[string]int{}
+		for _, row := range list(t, out["audits"]) {
+			name := str(t, row["audit"])
+			if field := str(t, row["field"]); field != "" {
+				name += " " + field
+			}
+			found[name] = num(t, row["found"])
+		}
+		return found
+	}
 
 	all, err := call("audit_all", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := num(t, all["items_scanned"]); got != 2 {
+	if got := num(t, all["items_scanned"]); got != 3 {
 		t.Errorf("items_scanned = %d", got)
 	}
-	found := map[string]int{}
-	for _, row := range list(t, all["audits"]) {
-		name := str(t, row["audit"])
-		if field := str(t, row["field"]); field != "" {
-			name += " " + field
+	found := counts(all)
+	for name, want := range map[string]int{
+		"audit_unmatched": 1, "audit_author_as_title": 1, "audit_missing cover": 1, "audit_no_audio": 1,
+		"audit_duplicates": 1, "audit_spelling": 1, "audit_author_missing_image": 1,
+	} {
+		if found[name] != want {
+			t.Errorf("%s = %d, want %d (all: %v)", name, found[name], want, found)
 		}
-		found[name] = num(t, row["found"])
-	}
-	if found["audit_unmatched"] != 1 || found["audit_author_as_title"] != 1 || found["audit_missing cover"] != 1 || found["audit_no_audio"] != 1 {
-		t.Errorf("audit_all found %v", found)
 	}
 	clean, ok := all["clean"].([]any)
-	if !ok || !slices.Contains(clean, any("audit_issues")) {
-		t.Errorf("audit_issues should be clean: %v", all["clean"])
+	if !ok {
+		t.Fatalf("clean is %T, want a list", all["clean"])
+	}
+	for _, name := range []string{"audit_issues", "audit_series_gaps"} {
+		if !slices.Contains(clean, any(name)) {
+			t.Errorf("%s should be clean: %v", name, all["clean"])
+		}
+	}
+	skipped, ok := all["skipped"].([]any)
+	if !ok {
+		t.Fatalf("skipped is %T, want a list", all["skipped"])
+	}
+	if !slices.Equal(skipped, []any{"audit_cover_ratio", "audit_unembedded"}) {
+		t.Errorf("skipped = %v, want the two per-item-request audits", all["skipped"])
+	}
+	if _, ran := found["audit_cover_ratio"]; ran || slices.Contains(clean, any("audit_cover_ratio")) {
+		t.Errorf("audit_cover_ratio was reported without deep: %v", all)
+	}
+	if got := f.requests("/api/items/i1/cover"); len(got) != 0 {
+		t.Errorf("a cover was fetched without deep: %v", got)
 	}
 
-	one, err := call("audit_author_as_title", nil)
+	deep, err := call("audit_all", map[string]any{"deep": true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := num(t, one["total_findings"]); got != found["audit_author_as_title"] {
-		t.Errorf("audit_author_as_title says %d, audit_all said %d", got, found["audit_author_as_title"])
+	if _, present := deep["skipped"]; present {
+		t.Errorf("deep still skipped something: %v", deep["skipped"])
+	}
+	if deepFound := counts(deep); deepFound["audit_cover_ratio"] != 2 || deepFound["audit_unembedded"] != 1 {
+		t.Errorf("deep found %v, want 2 tiny covers and 1 unembedded book", deepFound)
+	}
+
+	// and every count is what the audit itself says
+	for _, name := range []string{"audit_author_as_title", "audit_duplicates", "audit_spelling", "audit_author_missing_image"} {
+		one, err := call(name, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := num(t, one["total_findings"]); got != found[name] {
+			t.Errorf("%s says %d, audit_all said %d", name, got, found[name])
+		}
 	}
 }
 
@@ -703,5 +760,167 @@ func TestEmbedMismatches(t *testing.T) {
 		if got := sameList(tag, []string{"SF", "Classic"}); got != want {
 			t.Errorf("sameList(%q) = %v", tag, got)
 		}
+	}
+}
+
+// The server's search also answers on subtitle, asin and isbn (and older
+// servers on authors and narrators), without saying which field matched. A
+// lone hit whose title does not contain the words asked for is not the item
+// that was named: it is refused with the id on offer, never acted on.
+func TestResolveItemRejectsNonTitleMatch(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	oneLibrary(f)
+	f.json("GET /api/libraries/"+libID+"/search", `{"book":[{"libraryItem":`+item(itemID, "Dune Messiah", `"asin":"B0DUNE"`, "")+`}]}`)
+	f.json("GET /api/items/"+itemID, item(itemID, "Dune Messiah", `"asin":"B0DUNE"`, ""))
+	f.json("DELETE /api/items/"+itemID, `{}`)
+	call := toolCaller(t, f)
+
+	_, err := call("item_delete", map[string]any{"item": "B0DUNE"})
+	if err == nil {
+		t.Fatal("an item whose title does not contain the query was resolved, and deleted")
+	}
+	if !strings.Contains(err.Error(), "another field") || !strings.Contains(err.Error(), itemID) {
+		t.Errorf("the refusal does not say what matched or offer the id: %v", err)
+	}
+	if got := f.requests("/api/items/" + itemID); len(got) != 0 {
+		t.Errorf("the item was touched: %v", got)
+	}
+
+	// a title that contains the words asked for is the partial match a
+	// lookup has always accepted when it is the only one
+	out, err := call("item_get", map[string]any{"item": "Messiah"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := str(t, out["id"]); got != itemID {
+		t.Errorf("resolved %q, want %s", got, itemID)
+	}
+}
+
+// A match with nothing to name the book would take the provider's first hit
+// unseen; the omitted argument is an error, not a quick match.
+func TestItemMatchApplyNeedsACandidate(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/items/"+itemID, item(itemID, "Dune", `"authorName":"Frank Herbert"`, ""))
+	f.json("POST /api/items/"+itemID+"/match", `{"updated":true}`)
+	call := toolCaller(t, f)
+
+	if _, err := call("item_match_apply", map[string]any{"item": itemID, "override_details": true}); err == nil {
+		t.Error("a match naming no candidate, asin or isbn was not refused")
+	}
+	if got := f.requests("/api/items/" + itemID + "/match"); len(got) != 0 {
+		t.Errorf("the match was sent anyway: %v", got)
+	}
+
+	if _, err := call("item_match_apply", map[string]any{"item": itemID, "asin": "B0"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.requests("/api/items/" + itemID + "/match"); len(got) != 1 || !strings.Contains(got[0].Body, `"asin":"B0"`) {
+		t.Errorf("asin sent %v, want one POST carrying it", got)
+	}
+}
+
+// An author on the second page of the listing is still an author: a name
+// lookup pages until the server has no more.
+func TestResolveAuthorPagesPastTheFirst(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	oneLibrary(f)
+	f.mux.HandleFunc("GET /api/libraries/"+libID+"/authors", func(w http.ResponseWriter, r *http.Request) {
+		var rows []string
+		if r.URL.Query().Get("page") == "0" {
+			for i := range authorPageSize {
+				rows = append(rows, fmt.Sprintf(`{"id":"a%d","name":"Author %d"}`, i, i))
+			}
+		} else {
+			rows = append(rows, `{"id":"a-zed","name":"Zed Last"}`)
+		}
+		_, _ = fmt.Fprintf(w, `{"results":[%s],"total":%d}`, strings.Join(rows, ","), authorPageSize+1)
+	})
+	f.json("GET /api/authors/a-zed", `{"id":"a-zed","name":"Zed Last","libraryItems":[]}`)
+	call := toolCaller(t, f)
+
+	out, err := call("author_get", map[string]any{"author": "Zed Last"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := str(t, out["id"]); got != "a-zed" {
+		t.Errorf("resolved %q, want a-zed", got)
+	}
+	if got := f.requests("/api/libraries/" + libID + "/authors"); len(got) != 2 {
+		t.Errorf("fetched %d author pages, want 2", len(got))
+	}
+}
+
+// A negative offset used to index past the end of the episode list, and the
+// MCP transport has no recover: one bad argument took the whole server down.
+func TestPodcastEpisodesOffsetBelowZero(t *testing.T) {
+	t.Parallel()
+
+	const podID = "33333333-3333-4333-8333-333333333333"
+	f := newFakeABS(t)
+	f.json("GET /api/items/"+podID, `{"id":"`+podID+`","libraryId":"`+libID+`","mediaType":"podcast","media":{"metadata":{"title":"Pod"},"episodes":[{"id":"e1","title":"One"},{"id":"e2","title":"Two"}]}}`)
+	call := toolCaller(t, f)
+
+	out, err := call("podcast_episodes", map[string]any{"item": podID, "offset": -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := list(t, out["episodes"]); len(got) != 2 {
+		t.Errorf("episodes = %d, want both from the start", len(got))
+	}
+	if out, err := call("podcast_episodes", map[string]any{"item": podID, "offset": 5}); err != nil || len(list(t, out["episodes"])) != 0 {
+		t.Errorf("offset past the end = %v, %v; want none", out, err)
+	}
+}
+
+// An audit the server can filter for reports the library's size as scanned,
+// not the number of hits, and a check that never fires for a podcast does not
+// ask a podcast library with a book filter it does not know.
+func TestNativeAuditCountsTheLibrary(t *testing.T) {
+	t.Parallel()
+
+	const podLib = "44444444-4444-4444-8444-444444444444"
+	f := newFakeABS(t)
+	f.json("GET /api/libraries", `{"libraries":[{"id":"`+libID+`","name":"Books","mediaType":"book"},{"id":"`+podLib+`","name":"Pods","mediaType":"podcast"}]}`)
+	f.mux.HandleFunc("GET /api/libraries/"+libID+"/items", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("filter") != "" {
+			_, _ = io.WriteString(w, `{"results":[`+item("i2", "Quiet", "", "")+`],"total":1}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"results":[`+item("i1", "Dune", "", "")+`],"total":3}`)
+	})
+	f.mux.HandleFunc("GET /api/libraries/"+podLib+"/items", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("filter") != "" {
+			_, _ = io.WriteString(w, `{"results":[],"total":0}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"results":[],"total":5}`)
+	})
+	call := toolCaller(t, f)
+
+	out, err := call("audit_missing", map[string]any{"field": "narrator"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scanned, found := num(t, out["items_scanned"]), num(t, out["total_findings"]); scanned != 3 || found != 1 {
+		t.Errorf("narrator: scanned %d found %d, want 3 and 1", scanned, found)
+	}
+	if got := f.requests("/api/libraries/" + podLib + "/items"); len(got) != 0 {
+		t.Errorf("the podcast library was asked about narrators: %v", got)
+	}
+
+	// a field podcasts have too still covers the podcast library
+	out, err = call("audit_missing", map[string]any{"field": "cover"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scanned, found := num(t, out["items_scanned"]), num(t, out["total_findings"]); scanned != 8 || found != 1 {
+		t.Errorf("cover: scanned %d found %d, want 3+5 and 1", scanned, found)
 	}
 }

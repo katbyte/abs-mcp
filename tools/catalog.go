@@ -11,11 +11,30 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// authorPageSize is how many authors one listing request asks for. A lookup
+// pages until the server has no more: a library can hold far more than one
+// page, and an author on the second one is still an author.
+const authorPageSize = 500
+
+// allAuthors lists every author in a library, a page at a time, in the order
+// opts asks for.
+func allAuthors(ctx context.Context, client *abs.Client, libraryID string, opts abs.ListOptions) ([]abs.Author, error) {
+	opts.Limit = authorPageSize
+	var all []abs.Author
+	for opts.Page = 0; ; opts.Page++ {
+		authors, total, err := client.Authors(ctx, libraryID, opts)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, authors...)
+		if len(authors) == 0 || len(authors) < authorPageSize || len(all) >= total {
+			return all, nil
+		}
+	}
+}
+
 // resolveAuthor finds an author by id or name, searching the named library or
 // all of them.
-// authorResolveLimit caps the author listing a name lookup pages through.
-const authorResolveLimit = 500
-
 func resolveAuthor(ctx context.Context, client *abs.Client, library, nameOrID string) (*abs.Author, error) {
 	nameOrID = strings.TrimSpace(nameOrID)
 	if nameOrID == "" {
@@ -34,7 +53,7 @@ func resolveAuthor(ctx context.Context, client *abs.Client, library, nameOrID st
 		// the live authors endpoint, not FilterData: the server caches filter
 		// data and does not invalidate it on an edit or a scan, so a renamed
 		// author would not be found there
-		authors, _, err := client.Authors(ctx, libs[i].ID, abs.ListOptions{Limit: authorResolveLimit})
+		authors, err := allAuthors(ctx, client, libs[i].ID, abs.ListOptions{})
 		if err != nil {
 			return nil, err
 		}
@@ -183,17 +202,6 @@ func registerAuthorTools(r *registry) {
 		Library string `json:"library,omitempty" jsonschema:"library name or id; default every library"`
 		Limit   int    `json:"limit,omitempty"   jsonschema:"maximum findings, default 100"`
 	}
-	type missingImageRow struct {
-		ID    string `json:"id"`
-		Name  string `json:"name"`
-		Books int    `json:"books"`
-		ASIN  string `json:"asin,omitempty" jsonschema:"present means author_match already ran and found no photo"`
-	}
-	type missingImageOut struct {
-		Scanned  int               `json:"authors_scanned"`
-		Found    int               `json:"total_findings"`
-		Findings []missingImageRow `json:"findings"        jsonschema:"most books first: the authors worth fixing"`
-	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "audit_author_missing_image",
 		Description: "Find authors with no photo, most-published first. Fix with author_match, which looks them up on Audible, or author_image_set with a url when that finds nothing. An author that already has an asin but no image is one author_match has tried.",
@@ -205,23 +213,8 @@ func registerAuthorTools(r *registry) {
 
 		out := missingImageOut{Findings: []missingImageRow{}}
 		for i := range libs {
-			if libs[i].MediaType == "podcast" {
-				continue
-			}
-			authors, _, err := client.Authors(ctx, libs[i].ID, abs.ListOptions{Limit: authorResolveLimit, Sort: "numBooks", Desc: true})
-			if err != nil {
+			if err := sweepAuthorImages(ctx, client, &libs[i], &out); err != nil {
 				return nil, missingImageOut{}, err
-			}
-			for j := range authors {
-				a := &authors[j]
-				out.Scanned++
-				if a.ImagePath != "" {
-					continue
-				}
-				out.Found++
-				out.Findings = append(out.Findings, missingImageRow{
-					ID: a.ID, Name: a.Name, Books: a.NumBooks, ASIN: a.ASIN,
-				})
 			}
 		}
 
@@ -528,4 +521,42 @@ func registerSeriesTools(r *registry) {
 
 		return nil, editOut{ID: updated.ID, Name: updated.Name}, nil
 	})
+}
+
+type missingImageRow struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Books int    `json:"books"`
+	ASIN  string `json:"asin,omitempty" jsonschema:"present means author_match already ran and found no photo"`
+}
+
+type missingImageOut struct {
+	Scanned  int               `json:"authors_scanned"`
+	Found    int               `json:"total_findings"`
+	Findings []missingImageRow `json:"findings"        jsonschema:"most books first: the authors worth fixing"`
+}
+
+// sweepAuthorImages adds a book library's authors without a photo to out,
+// unsorted; a podcast library has no authors worth a photo and is skipped.
+func sweepAuthorImages(ctx context.Context, client *abs.Client, lib *abs.Library, out *missingImageOut) error {
+	if lib.IsPodcast() {
+		return nil
+	}
+	authors, err := allAuthors(ctx, client, lib.ID, abs.ListOptions{Sort: "numBooks", Desc: true})
+	if err != nil {
+		return err
+	}
+	for j := range authors {
+		a := &authors[j]
+		out.Scanned++
+		if a.ImagePath != "" {
+			continue
+		}
+		out.Found++
+		out.Findings = append(out.Findings, missingImageRow{
+			ID: a.ID, Name: a.Name, Books: a.NumBooks, ASIN: a.ASIN,
+		})
+	}
+
+	return nil
 }

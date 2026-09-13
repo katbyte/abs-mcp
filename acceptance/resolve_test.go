@@ -158,3 +158,21 @@ func TestResolveAmbiguousAcrossLibraries(t *testing.T) {
 		t.Errorf("by id = %v, want %s", got["name"], shared)
 	}
 }
+
+// The server's search also answers on subtitle, asin and isbn, without saying
+// which field matched. A lone hit on one of those is not the title that was
+// named, so it is refused with the id on offer rather than acted on.
+func TestResolveRejectsNonTitleMatch(t *testing.T) {
+	const book, asin = "The Arms of Krupp", "B0KRUPPZQ1"
+	call(t, "item_edit", map[string]any{"item": book, "asin": asin})
+	t.Cleanup(func() { call(t, "item_edit", map[string]any{"item": book, "clear": []any{"asin"}}) })
+
+	msg := callErr(t, "item_get", map[string]any{"item": asin})
+	if !strings.Contains(msg, "another field") {
+		t.Errorf("an asin hit was not refused as a non-title match: %s", msg)
+	}
+	id, _ := call(t, "item_get", map[string]any{"item": book})["id"].(string)
+	if id == "" || !strings.Contains(msg, id) {
+		t.Errorf("the refusal does not offer the id %q: %s", id, msg)
+	}
+}

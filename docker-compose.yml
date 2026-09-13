@@ -20,8 +20,9 @@ services:
         max-file: "1"
     networks:
       net:
-    dns:
-      - 1.1.1.1
+    # no dns override: the container uses Docker's resolver, which forwards to
+    # the host's, so a LAN name like nas in ABS_SERVER resolves the way it does
+    # on the host. Pinning a public resolver here would break exactly that
     ports:
       - "8080:8080"
     env_file:

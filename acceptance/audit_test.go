@@ -176,11 +176,40 @@ func TestAuditAll(t *testing.T) {
 	}
 	clean := strs(t, all["clean"], "clean")
 
-	// every audit appears exactly once, in one list or the other
-	for _, name := range auditTools {
+	// every audit appears exactly once, in one list or the other; the two
+	// that fetch something per item are named as skipped instead
+	crossItem := []string{"audit_duplicates", "audit_spelling", "audit_series_gaps", "audit_author_missing_image"}
+	for _, name := range slices.Concat(auditTools, crossItem) {
 		_, reported := counts[name]
 		if reported == slices.Contains(clean, name) {
 			t.Errorf("%s is in both lists or neither: found=%v clean=%v", name, reported, slices.Contains(clean, name))
+		}
+	}
+	perItem := []string{"audit_cover_ratio", "audit_unembedded"}
+	if skipped := strs(t, all["skipped"], "skipped"); !slices.Equal(skipped, perItem) {
+		t.Errorf("skipped = %v, want %v", skipped, perItem)
+	}
+	for _, name := range perItem {
+		if _, reported := counts[name]; reported || slices.Contains(clean, name) {
+			t.Errorf("%s ran without deep", name)
+		}
+	}
+
+	// with deep those two run as well, and agree with the tools themselves
+	deep := call(t, "audit_all", map[string]any{"library": "Fiction", "deep": true})
+	if _, present := deep["skipped"]; present {
+		t.Errorf("deep still skipped %v", deep["skipped"])
+	}
+	deepCounts := map[string]int{}
+	for _, row := range rows(t, deep["audits"], "audits") {
+		if name, _ := row["audit"].(string); slices.Contains(perItem, name) {
+			deepCounts[name] = num(t, row["found"], "found")
+		}
+	}
+	for _, name := range perItem {
+		one := call(t, name, map[string]any{"library": "Fiction"})
+		if got := num(t, one["total_findings"], "total_findings"); got != deepCounts[name] {
+			t.Errorf("%s: audit_all deep says %d, the audit itself says %d", name, deepCounts[name], got)
 		}
 	}
 

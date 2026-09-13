@@ -132,8 +132,11 @@ func registerPodcastTools(r *registry) {
 
 		eps := it.Media.Episodes
 		limit := limitOr(in.Limit, 50)
+		// a negative offset would index past the end of the list; treat it as
+		// the start, like an offset past the end yields nothing
+		offset := max(in.Offset, 0)
 		out := episodesOut{Podcast: it.Title(), Total: len(eps), Episodes: []episodeSummary{}}
-		for i := len(eps) - 1 - in.Offset; i >= 0 && len(out.Episodes) < limit; i-- {
+		for i := len(eps) - 1 - offset; i >= 0 && len(out.Episodes) < limit; i-- {
 			e := &eps[i]
 			e.Progress = progress[e.ID]
 			out.Episodes = append(out.Episodes, summarizeEpisode(e, "", false))

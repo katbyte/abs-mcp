@@ -368,8 +368,15 @@ func registerItemTools(r *registry) {
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "item_match_apply",
-		Description: "Apply a match: pull metadata and cover from the provider for a candidate from item_match (or an asin/isbn you already know) into the item. By default only empty fields are filled; set override_details to replace. Changes server state.",
+		Description: "Apply a match: pull metadata and cover from the provider into the item, for a candidate from item_match or an asin/isbn you already know (one of candidate, asin or isbn is required: the match is never left to the provider's first guess). By default only empty fields are filled; set override_details to replace. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in applyIn) (*mcp.CallToolResult, applyOut, error) {
+		// a match with nothing to name the book would take the provider's
+		// first hit unseen, and with override_details replace the metadata
+		// with it; the omitted argument is an error, not a quick match
+		if in.Candidate == nil && strings.TrimSpace(in.ASIN) == "" && strings.TrimSpace(in.ISBN) == "" {
+			return nil, applyOut{}, errors.New("pass candidate (an index from item_match), asin or isbn to say which book to apply")
+		}
+
 		it, err := resolveItem(ctx, client, in.Library, in.Item)
 		if err != nil {
 			return nil, applyOut{}, err
@@ -395,9 +402,6 @@ func registerItemTools(r *registry) {
 				// providers without ids: match by the candidate's exact title/author
 				opts.Title, opts.Author = c.Title, c.Author
 			}
-		}
-		if opts.ASIN == "" && opts.ISBN == "" && opts.Title == "" {
-			opts.Title, opts.Author = title, author
 		}
 
 		res, err := client.Match(ctx, it.ID, opts)

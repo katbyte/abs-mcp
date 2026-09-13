@@ -40,6 +40,9 @@ func write(t *testing.T, dir, body string) {
 	}
 }
 
+// on is how a boolean is switched on from the environment.
+const on = "true"
+
 // A .abs-mcp in the working directory is documented as per-project settings,
 // which it only is if it is found before the one in $HOME. viper reads the
 // first file it finds, and $HOME used to be on the search path first, so a
@@ -102,10 +105,11 @@ func TestEnvironmentBindings(t *testing.T) {
 	}{
 		{"ABS_SERVER", testServer, func(f *FlagData) bool { return f.Server == testServer }},
 		{"ABS_TOKEN", "tok", func(f *FlagData) bool { return f.Token == "tok" }},
-		{"ABS_READ_ONLY", "true", func(f *FlagData) bool { return f.ReadOnly }},
-		{"ABS_ENABLE_DELETE", "true", func(f *FlagData) bool { return f.EnableDelete }},
+		{"ABS_READ_ONLY", on, func(f *FlagData) bool { return f.ReadOnly }},
+		{"ABS_ENABLE_DELETE", on, func(f *FlagData) bool { return f.EnableDelete }},
 		{"ABS_LISTEN", ":8080", func(f *FlagData) bool { return f.Listen == ":8080" }},
 		{"ABS_AUTH_TOKEN", "bearer", func(f *FlagData) bool { return f.AuthToken == "bearer" }},
+		{"ABS_ALLOW_NO_AUTH", on, func(f *FlagData) bool { return f.AllowNoAuth }},
 		{"ABS_TOOLSETS", "curation", func(f *FlagData) bool { return len(f.Toolsets) == 1 && f.Toolsets[0] == "curation" }},
 		{"ABS_ALLOW_TOOLS", testTool, func(f *FlagData) bool { return len(f.AllowTools) == 1 && f.AllowTools[0] == testTool }},
 		{"ABS_DENY_TOOLS", "*_delete", func(f *FlagData) bool { return len(f.DenyTools) == 1 && f.DenyTools[0] == "*_delete" }},

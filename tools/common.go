@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -166,7 +167,12 @@ func resolveItem(ctx context.Context, client *abs.Client, library, idOrTitle str
 		return nil, err
 	}
 
-	var exact, partial []abs.Item
+	// the server searches more than the title (subtitle, asin and isbn, and on
+	// older servers authors and narrators too) and does not say which field
+	// matched, so the title is judged here: a hit whose title does not even
+	// contain the words asked for is not the item that was named, however
+	// alone it is
+	var exact, partial, other []abs.Item
 	for i := range libs {
 		res, err := client.Search(ctx, libs[i].ID, idOrTitle, 10)
 		if err != nil {
@@ -174,10 +180,14 @@ func resolveItem(ctx context.Context, client *abs.Client, library, idOrTitle str
 		}
 		matches := res.Items()
 		for i := range matches {
-			if strings.EqualFold(matches[i].LibraryItem.Title(), idOrTitle) {
-				exact = append(exact, matches[i].LibraryItem)
-			} else {
-				partial = append(partial, matches[i].LibraryItem)
+			it := matches[i].LibraryItem
+			switch {
+			case strings.EqualFold(it.Title(), idOrTitle):
+				exact = append(exact, it)
+			case titleContains(it.Title(), idOrTitle):
+				partial = append(partial, it)
+			default:
+				other = append(other, it)
 			}
 		}
 	}
@@ -187,18 +197,34 @@ func resolveItem(ctx context.Context, client *abs.Client, library, idOrTitle str
 		return client.Item(ctx, exact[0].ID)
 	case len(exact) == 0 && len(partial) == 1:
 		return client.Item(ctx, partial[0].ID)
-	case len(exact)+len(partial) == 0:
+	case len(exact)+len(partial)+len(other) == 0:
 		return nil, fmt.Errorf("no item titled %q", idOrTitle)
+	case len(exact)+len(partial) == 0:
+		return nil, fmt.Errorf("no item titled %q; %d matched on another field (subtitle, asin or isbn), pass an id if one of them is meant: %s",
+			idOrTitle, len(other), itemNames(other))
 	}
 
-	all := append(exact, partial...) //nolint:gocritic // building the candidate list for the error
-	names := make([]string, 0, len(all))
-	for i := range all {
-		it := &all[i]
+	all := slices.Concat(exact, partial, other)
+
+	return nil, fmt.Errorf("%d items match %q; pass an id: %s", len(all), idOrTitle, itemNames(all))
+}
+
+// titleContains reports whether a title carries the words asked for, the way
+// the server's own title search matches: anywhere, ignoring case.
+func titleContains(title, query string) bool {
+	return strings.Contains(strings.ToLower(title), strings.ToLower(query))
+}
+
+// itemNames lists items as "title" by author (id), for an error a caller can
+// pick an id out of.
+func itemNames(items []abs.Item) string {
+	names := make([]string, 0, len(items))
+	for i := range items {
+		it := &items[i]
 		names = append(names, fmt.Sprintf("%q by %s (%s)", it.Title(), it.Media.Metadata.AuthorDisplay(), it.ID))
 	}
 
-	return nil, fmt.Errorf("%d items match %q; pass an id: %s", len(all), idOrTitle, strings.Join(names, "; "))
+	return strings.Join(names, "; ")
 }
 
 // strPtr returns a pointer for non-empty strings so "unset" and "clear" can

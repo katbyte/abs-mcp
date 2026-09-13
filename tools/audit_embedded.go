@@ -34,46 +34,57 @@ func registerEmbeddedAudit(r *registry) {
 		out := auditOut{Check: "unembedded", Findings: []auditFinding{}}
 		limit := limitOr(in.Limit, 100)
 		for i := range libs {
-			if libs[i].IsPodcast() {
-				continue
-			}
-			// the cheap sweep picks the candidates: books with audio
-			var ids []string
-			if err := client.ItemsAll(ctx, libs[i].ID, abs.ItemsOptions{}, func(items []abs.Item) bool {
-				for j := range items {
-					it := &items[j]
-					if it.IsPodcast() || (it.Media.NumAudioFiles == 0 && it.Media.NumTracks == 0) {
-						continue
-					}
-					ids = append(ids, it.ID)
-				}
-				return true
-			}); err != nil {
+			if err := sweepUnembedded(ctx, client, &libs[i], limit, &out); err != nil {
 				return nil, auditOut{}, err
-			}
-
-			// then the expanded shape, a batch at a time, for the tags
-			for chunk := range slices.Chunk(ids, embedBatchSize) {
-				items, err := client.ItemsBatch(ctx, chunk)
-				if err != nil {
-					return nil, auditOut{}, err
-				}
-				for j := range items {
-					out.Scanned++
-					detail, suspect := checkEmbedded(&items[j])
-					if !suspect {
-						continue
-					}
-					out.Found++
-					if len(out.Findings) < limit {
-						out.Findings = append(out.Findings, finding(&items[j], detail))
-					}
-				}
 			}
 		}
 
 		return nil, out, nil
 	})
+}
+
+// sweepUnembedded adds a book library's never- or stale-embedded books to
+// out, keeping at most limit of them as findings but counting every one. A
+// podcast library is skipped: nothing embeds into a podcast.
+func sweepUnembedded(ctx context.Context, client *abs.Client, lib *abs.Library, limit int, out *auditOut) error {
+	if lib.IsPodcast() {
+		return nil
+	}
+	// the cheap sweep picks the candidates: books with audio
+	var ids []string
+	if err := client.ItemsAll(ctx, lib.ID, abs.ItemsOptions{}, func(items []abs.Item) bool {
+		for j := range items {
+			it := &items[j]
+			if it.IsPodcast() || (it.Media.NumAudioFiles == 0 && it.Media.NumTracks == 0) {
+				continue
+			}
+			ids = append(ids, it.ID)
+		}
+		return true
+	}); err != nil {
+		return err
+	}
+
+	// then the expanded shape, a batch at a time, for the tags
+	for chunk := range slices.Chunk(ids, embedBatchSize) {
+		items, err := client.ItemsBatch(ctx, chunk)
+		if err != nil {
+			return err
+		}
+		for j := range items {
+			out.Scanned++
+			detail, suspect := checkEmbedded(&items[j])
+			if !suspect {
+				continue
+			}
+			out.Found++
+			if len(out.Findings) < limit {
+				out.Findings = append(out.Findings, finding(&items[j], detail))
+			}
+		}
+	}
+
+	return nil
 }
 
 // checkEmbedded reports whether any of an item's audio files lacks the
