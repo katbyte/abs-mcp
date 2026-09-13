@@ -8,45 +8,56 @@
 ![lint](https://github.com/katbyte/abs-mcp/actions/workflows/pr-golangci-lint.yaml/badge.svg)
 [![coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/katbyte/abs-mcp/badges/coverage.json)](https://github.com/katbyte/abs-mcp/actions/workflows/coverage.yaml)
 
-An [MCP](https://modelcontextprotocol.io) server, CLI and Go SDK for curating an
-[Audiobookshelf](https://www.audiobookshelf.org) audiobook and podcast library: search it,
-audit it for bad metadata, and fix what you find - from Claude Code, Claude Desktop, or any
-other MCP client.
-
-**87 tools**, including **16 audits** that sweep a whole library for the things that actually
-go wrong: books never matched to a provider, missing covers or chapters, duplicates, gaps in a
-series, folders that disagree with their metadata, near-duplicate genres and narrators
-(`Sci-Fi` vs `sci fi`, `Jim Dale` vs `jim dale`), podcasts whose feed has gone dead.
-
-It is two things in one repo: a **standalone Go client for the Audiobookshelf API**
-(`lib/abs` - 204 methods over all 202 routes, no dependencies outside the standard library,
-usable entirely on its own) and the MCP server built on top of it. Both are tested against a
-real Audiobookshelf in Docker, not a stub.
-
-### What makes this different
+An [MCP](https://modelcontextprotocol.io) server, CLI and Go SDK that **audits an
+[Audiobookshelf](https://www.audiobookshelf.org) library for the things that actually go wrong,
+and fixes what it finds** - from Claude Code, Claude Desktop, or any other MCP client.
 
 There are several Audiobookshelf MCP servers, and they do a useful thing: expose the API as
-tools, so a model can browse your library and read your progress. This one does that too - all
-202 routes are covered - but the reason it exists is the layer above:
+tools, so a model can browse your library and read your progress. This one does that too, but
+the reason it exists is the layer above: **16 audits**, each a sweep over the whole library
+for one specific thing that goes wrong in a real collection, returning a worklist rather than
+a dump, and naming the tool that fixes it.
 
-- **It audits.** 16 sweeps over a whole library, each one looking for a specific thing that
-  goes wrong in a real collection, returning a worklist rather than a dump. `audit_all` runs
-  all of them in one call (the two that fetch something per item only with `deep`) and tells
-  you where to start.
-- **It is also a Go SDK.** `lib/abs` is a complete Audiobookshelf API client with no
-  dependencies outside the standard library and no knowledge of MCP - useful on its own,
-  whether or not you care about AI.
-- **It is tested against a real server.** Every tool and every client method runs against an
-  actual Audiobookshelf in Docker, and the suite fails if a registered tool has no test. Seven
-  response-shape bugs in this client were found that way and could not have been found any
-  other way, because Audiobookshelf publishes no OpenAPI spec and its public API docs say they
-  are unmaintained.
+### The audits
+
+| audit | what it catches |
+|---|---|
+| `audit_all` | every audit in one call, counts only, so one call says where a library needs work - start here after a scan (`deep` adds the two slow ones) |
+| `audit_unmatched` | books never matched to a metadata provider: no asin and no isbn, so nothing else can be filled in automatically |
+| `audit_missing` | items with one metadata field left empty - `field` is cover, description, narrator, series, author, genres, year, publisher, language or chapters |
+| `audit_issues` | items whose folder is missing from disk or holds no playable media: broken records, not metadata gaps |
+| `audit_no_audio` | items with no audio tracks at all, usually an ebook-only folder that landed in an audiobook library |
+| `audit_path` | items whose folder name disagrees with their title or author, which usually means the metadata was matched to the wrong book |
+| `audit_single_chapter` | long books carrying exactly one chapter spanning the whole recording, as unnavigable as none but invisible to `audit_missing` |
+| `audit_duplicates` | items that appear to be the same work: identical asin, isbn, or title+author, each group listing every copy with size, duration and path |
+| `audit_series_gaps` | series missing a book: sequence numbers absent between the lowest and highest the library has, interior gaps only |
+| `audit_spelling` | the same value spelled several ways across genres, tags, languages and publishers: `Sci-Fi` vs `sci fi`, `en` vs `eng` vs `English`, `HarperAudio` vs `Harper Audio`, and spellings a letter apart such as `Romance` vs `Romances` |
+| `audit_authors` | everything wrong with authors: a book whose author field holds its title; records never matched, with no photo, with no books, or whose biography opens with someone else's name (a wrong match: `Sarah Diemer` carrying `Sarah Miller began writing...`); and records that are one name spelled two ways (`C Z Dunn` vs `Christian Dunn`) |
+| `audit_narrators` | everything wrong with the narrator field: names that wrote some books and read others (one volume written and the rest of the series read is author and narrator swapped on import; one written and many read is a narrator credited as co-author), and the spelling checks on narrators - `Read by Jim Dale`, `Narrator....Jim Dale`, `Fajer Al` vs `Fajer Al-Kaisi`, two names in one value, a stray `Ph.D.` |
+| `audit_unembedded` | books whose audio files do not carry the library's metadata in their tags, never embedded or stale since the last edit: what `item_embed_metadata` is due for |
+| `audit_cover_ratio` | covers that are not square or too small to look right in a client (fetches every cover's header, so `audit_all` runs it only with `deep`) |
+| `audit_podcast_stale_feed` | podcasts with no new episodes in 90 days, or whose feed was never checked: the show ended, or the feed url is dead |
+| `audit_podcast_no_episodes` | podcasts with nothing downloaded |
 
 The design principle: **detection is code, correction is judgment.** The server runs cheap
 deterministic checks over the whole library and produces worklists; the AI reasons only about
 the anomalies. Every response is a trimmed projection of what a decision needs, never the raw
 API object (an expanded library item carries every audio file, track and chapter with full
 ffprobe output).
+
+### What else is in the box
+
+- **The whole API, as tools.** 88 tools over all 202 Audiobookshelf routes, so everything an
+  audit finds can be fixed from the same session: matching, covers, chapters, embedding,
+  renaming a genre everywhere it is used, merging duplicate authors.
+- **A Go SDK.** `lib/abs` is a complete Audiobookshelf API client - 204 methods, no
+  dependencies outside the standard library, no knowledge of MCP - useful on its own, whether
+  or not you care about AI.
+- **Tested against a real server.** Every tool and every client method runs against an
+  actual Audiobookshelf in Docker, and the suite fails if a registered tool has no test. Seven
+  response-shape bugs in this client were found that way and could not have been found any
+  other way, because Audiobookshelf publishes no OpenAPI spec and its public API docs say they
+  are unmaintained.
 
 ## Installation
 
@@ -164,10 +175,10 @@ comes back as an error listing the candidates.
 |---|---|
 | server | `server_info` (connectivity, permissions, libraries, providers and server-wide totals), `server_tasks`, `server_sessions`, `server_backups`, `server_backup_create`, `server_tags` |
 | libraries | `library_list`, `library_get` (in depth, with statistics), `library_create`, `library_edit`, `library_search`, `library_items` (the server's own filters and sorts: genre, tag, author, series, narrator, progress, tracks...), `library_recent`, `library_filters`, `library_scan` |
-| audits | `audit_all` (every audit in one call, counts only - start here after a scan; `deep` adds the two slow ones), `audit_missing` (field: cover, description, narrator, series, author, genres, year, publisher, language, chapters), `audit_unmatched`, `audit_issues`, `audit_no_audio`, `audit_path`, `audit_author_as_title`, `audit_single_chapter`, `audit_podcast_stale_feed`, `audit_podcast_no_episodes`, `audit_duplicates`, `audit_series_gaps`, `audit_spelling` (the same value spelled several ways), `audit_unembedded` (audio tags missing or behind the metadata: what item_embed_metadata is due for), `audit_cover_ratio`, `audit_author_missing_image` |
+| audits | the 16 audits in [the table above](#the-audits): `audit_all`, `audit_unmatched`, `audit_missing`, `audit_issues`, `audit_no_audio`, `audit_path`, `audit_single_chapter`, `audit_duplicates`, `audit_series_gaps`, `audit_spelling`, `audit_authors`, `audit_narrators`, `audit_unembedded`, `audit_cover_ratio`, `audit_podcast_stale_feed`, `audit_podcast_no_episodes` |
 | items | `item_get` (with optional `chapters` and `files`), `item_edit`, `item_batch_edit` (same fields across many books), `item_rescan`, `item_embed_metadata` |
 | matching | `item_match` (candidates from a provider), `item_match_apply`, `item_cover_search`, `item_cover_edit` (url, file, or `remove`), `item_chapters_set` (explicit list or from Audible by asin) |
-| authors | `author_list`, `author_get`, `author_edit` (rename to merge duplicates), `author_match`, `author_image_set` |
+| authors | `author_list`, `author_get`, `author_edit` (rename to merge duplicates), `author_match` → `author_match_apply` (look up on Audible, check the candidate, then apply by asin), `author_image_set` |
 | series | `series_list`, `series_get`, `series_edit` |
 | narrators | `narrator_list` |
 | metadata | `metadata_rename` (a tag, genre, narrator, author, language or publisher, everywhere it is used; renaming onto an existing value merges, `remove` drops it) |
@@ -199,8 +210,8 @@ what they find. `ABS_TOOLSETS=all` restores every tool.
 | `organise` | 12 | 17 | 2,100 |
 | `podcasts` | 11 | 16 | 2,600 |
 | `listening` | 9 | 14 | 2,400 |
-| `curation` | 37 | 42 | 6,600 |
-| `all` | 87 | 87 | 12,000 |
+| `curation` | 38 | 43 | 6,900 |
+| `all` | 88 | 88 | 12,300 |
 
 Tokens are what the model sees: each tool's name, description and input schema, measured over
 a real `tools/list` at four bytes a token. Every tool also carries an output schema, another
@@ -316,7 +327,7 @@ Coverage has to span all three or it lies: `go test -cover ./...` reports about 
 tag. `make cover` runs each into its own binary coverage directory and merges them with
 `go tool covdata` - stdlib tooling, no third-party merger - which is what the badge reports.
 
-**All 87 tools and all 204 client methods are exercised**, 199 of them asserting a result
+**All 88 tools and all 204 client methods are exercised**, 199 of them asserting a result
 rather than only that the call reached the server. The five that do not - sending an ebook by
 email, firing a notification, closing a device session, unlinking OpenID, syncing an offline
 session - need infrastructure a throwaway container has not got, and say so where they are

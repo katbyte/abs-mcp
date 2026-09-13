@@ -491,3 +491,38 @@ func TestItemRequests(t *testing.T) {
 		t.Errorf("ItemsBatch: %d items via %s with %s", len(items), s.path, s.body)
 	}
 }
+
+// The author lookup route answers with the bare provider record, or null
+// when nobody is close enough; an earlier decode expected a results list and
+// always came back empty.
+func TestSearchAuthorDecodesOneRecordOrNull(t *testing.T) {
+	t.Parallel()
+
+	body := `{"asin":"B003RY2ISS","name":"Isaac Asimov","description":"Wrote a lot.","image":"https://img/asimov.jpg"}`
+	s := newJSONServer(t, func(r *http.Request) (int, string) {
+		if r.URL.Query().Get("q") == "Isaac Asimov" {
+			return http.StatusOK, body
+		}
+		return http.StatusOK, `null`
+	})
+	c := newClient(t, s)
+
+	cand, err := c.SearchAuthor(t.Context(), "Isaac Asimov")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.method != http.MethodGet || s.path != "/api/search/authors" {
+		t.Errorf("sent %s %s", s.method, s.path)
+	}
+	if cand == nil || cand.ASIN != "B003RY2ISS" || cand.Name != "Isaac Asimov" || cand.Image == "" {
+		t.Errorf("candidate = %+v", cand)
+	}
+
+	none, err := c.SearchAuthor(t.Context(), "Nobody Atall")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if none != nil {
+		t.Errorf("a null answer decoded as %+v", none)
+	}
+}

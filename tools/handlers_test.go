@@ -163,6 +163,17 @@ func num(t *testing.T, v any) int {
 	return int(n)
 }
 
+func boolOf(t *testing.T, v any) bool {
+	t.Helper()
+
+	b, ok := v.(bool)
+	if !ok {
+		t.Fatalf("%v is %T, want a bool", v, v)
+	}
+
+	return b
+}
+
 // str reads a string field, treating an absent one as empty.
 func str(t *testing.T, v any) string {
 	t.Helper()
@@ -353,19 +364,16 @@ func TestAuditSpellingReadsMinifiedNarrators(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	groups := list(t, out["groups"])
-	if len(groups) != 2 {
-		t.Fatalf("groups = %v, want one for narrators and one for authors", groups)
+	if groups := list(t, out["groups"]); len(groups) != 0 {
+		t.Fatalf("groups = %v, want none: authors and narrators belong to their own audits", groups)
 	}
-	byField := map[string]map[string]any{}
-	for _, g := range groups {
-		byField[str(t, g["field"])] = g
+	out, err = call("audit_narrators", nil)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if byField["narrators"]["keep"] != "Jim Dale" {
-		t.Errorf("narrators group = %v, want Jim Dale kept over jim dale", byField["narrators"])
-	}
-	if byField["authors"]["keep"] != "A. Writer" {
-		t.Errorf("authors group = %v", byField["authors"])
+	names := list(t, out["names"])
+	if len(names) != 1 || names[0]["keep"] != "Jim Dale" {
+		t.Errorf("narrator names = %v, want Jim Dale kept over jim dale", names)
 	}
 }
 
@@ -448,8 +456,8 @@ func TestAuditAllMatchesTheAudits(t *testing.T) {
 	}
 	found := counts(all)
 	for name, want := range map[string]int{
-		"audit_unmatched": 1, "audit_author_as_title": 1, "audit_missing cover": 1, "audit_no_audio": 1,
-		"audit_duplicates": 1, "audit_spelling": 1, "audit_author_missing_image": 1,
+		"audit_unmatched": 1, "audit_missing cover": 1, "audit_no_audio": 1,
+		"audit_duplicates": 1, "audit_spelling": 1, "audit_authors": 2,
 	} {
 		if found[name] != want {
 			t.Errorf("%s = %d, want %d (all: %v)", name, found[name], want, found)
@@ -490,7 +498,7 @@ func TestAuditAllMatchesTheAudits(t *testing.T) {
 	}
 
 	// and every count is what the audit itself says
-	for _, name := range []string{"audit_author_as_title", "audit_duplicates", "audit_spelling", "audit_author_missing_image"} {
+	for _, name := range []string{"audit_duplicates", "audit_spelling", "audit_authors"} {
 		one, err := call(name, nil)
 		if err != nil {
 			t.Fatal(err)
@@ -806,7 +814,7 @@ func TestItemMatchApplyNeedsACandidate(t *testing.T) {
 
 	f := newFakeABS(t)
 	f.json("GET /api/items/"+itemID, item(itemID, "Dune", `"authorName":"Frank Herbert"`, ""))
-	f.json("POST /api/items/"+itemID+"/match", `{"updated":true}`)
+	f.json("POST /api/items/"+itemID+"/match", `{"updated":true,"libraryItem":`+item(itemID, "Dune", `"authorName":"Frank Herbert","asin":"B9"`, "")+`}`)
 	call := toolCaller(t, f)
 
 	if _, err := call("item_match_apply", map[string]any{"item": itemID, "override_details": true}); err == nil {
@@ -816,11 +824,20 @@ func TestItemMatchApplyNeedsACandidate(t *testing.T) {
 		t.Errorf("the match was sent anyway: %v", got)
 	}
 
-	if _, err := call("item_match_apply", map[string]any{"item": itemID, "asin": "B0"}); err != nil {
+	out, err := call("item_match_apply", map[string]any{"item": itemID, "asin": "B0"})
+	if err != nil {
 		t.Fatal(err)
 	}
 	if got := f.requests("/api/items/" + itemID + "/match"); len(got) != 1 || !strings.Contains(got[0].Body, `"asin":"B0"`) {
 		t.Errorf("asin sent %v, want one POST carrying it", got)
+	}
+	// what was applied is echoed, and an id the item did not take is called out
+	applied, ok := out["applied"].(map[string]any)
+	if !ok || str(t, applied["asin"]) != "B0" {
+		t.Errorf("applied = %v, want the asin sent", out["applied"])
+	}
+	if !strings.Contains(str(t, out["warning"]), "B0") {
+		t.Errorf("warning = %q, want one saying the item kept its asin", out["warning"])
 	}
 }
 
@@ -922,5 +939,172 @@ func TestNativeAuditCountsTheLibrary(t *testing.T) {
 	}
 	if scanned, found := num(t, out["items_scanned"]), num(t, out["total_findings"]); scanned != 8 || found != 1 {
 		t.Errorf("cover: scanned %d found %d, want 3+5 and 1", scanned, found)
+	}
+}
+
+// clear is how a wrong author_match is undone: an empty description and asin
+// have to reach the server as empty strings, and the photo has its own route.
+func TestAuthorEditClear(t *testing.T) {
+	t.Parallel()
+
+	const authorID = "55555555-5555-4555-8555-555555555555"
+	author := `{"id":"` + authorID + `","name":"Emily Andras","asin":"B00OKO2VB8","description":"someone else","imagePath":"/a.jpg","libraryItems":[]}`
+	f := newFakeABS(t)
+	f.json("GET /api/authors/"+authorID, author)
+	f.json("PATCH /api/authors/"+authorID, `{"author":`+author+`,"merged":false}`)
+	f.json("DELETE /api/authors/"+authorID+"/image", `{"author":`+author+`}`)
+	call := toolCaller(t, f)
+
+	if _, err := call("author_edit", map[string]any{"author": authorID, "clear": []any{"name"}}); err == nil {
+		t.Error("clearing a field that cannot be blank was not refused")
+	}
+
+	if _, err := call("author_edit", map[string]any{"author": authorID, "clear": []any{"asin", "description", "image"}}); err != nil {
+		t.Fatal(err)
+	}
+	patched := f.requests("/api/authors/" + authorID)
+	if len(patched) != 2 || patched[1].Method != http.MethodPatch {
+		t.Fatalf("author requests = %v, want a GET then a PATCH", patched)
+	}
+	var body map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(patched[1].Body), &body); err != nil {
+		t.Fatal(err)
+	}
+	if string(body["asin"]) != `""` || string(body["description"]) != `""` {
+		t.Errorf("PATCH sent %s, want asin and description as empty strings", patched[1].Body)
+	}
+	if _, present := body["name"]; present {
+		t.Errorf("the name was sent: %s", patched[1].Body)
+	}
+	if got := f.requests("/api/authors/" + authorID + "/image"); len(got) != 1 || got[0].Method != http.MethodDelete {
+		t.Errorf("image requests = %v, want one DELETE", got)
+	}
+
+	// clearing only the image sends no PATCH at all
+	if _, err := call("author_edit", map[string]any{"author": authorID, "clear": []any{"image"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.requests("/api/authors/" + authorID); len(got) != 3 || got[2].Method != http.MethodGet {
+		t.Errorf("author requests after an image-only clear = %v, want only one more GET", got)
+	}
+}
+
+// an author with no photo can still have their image cleared: the server
+// answers 400 to a DELETE with nothing to remove, so that route is not called.
+func TestAuthorEditClearImageWithoutOne(t *testing.T) {
+	t.Parallel()
+
+	const authorID = "55555555-5555-4555-8555-555555555556"
+	author := `{"id":"` + authorID + `","name":"Steve Wolf","asin":"B002BMG2T8","description":"","imagePath":"","libraryItems":[]}`
+	f := newFakeABS(t)
+	f.json("GET /api/authors/"+authorID, author)
+	f.json("PATCH /api/authors/"+authorID, `{"author":`+author+`,"merged":false}`)
+	call := toolCaller(t, f)
+
+	if _, err := call("author_edit", map[string]any{"author": authorID, "clear": []any{"asin", "description", "image"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.requests("/api/authors/" + authorID); len(got) != 2 || got[1].Method != http.MethodPatch {
+		t.Errorf("author requests = %v, want a GET then a PATCH", got)
+	}
+	if got := f.requests("/api/authors/" + authorID + "/image"); len(got) != 0 {
+		t.Errorf("image requests = %v, want none for an author with no photo", got)
+	}
+}
+
+// author_match only looks: the provider's name lookup is tolerant, so it can
+// hand back someone else, and what it found is returned for a decision, never
+// applied. author_match_apply is the write, by asin.
+func TestAuthorMatchLooksAndApplyWrites(t *testing.T) {
+	t.Parallel()
+
+	const authorID = "66666666-6666-4666-8666-666666666666"
+	author := `{"id":"` + authorID + `","name":"Sarah Diemer","libraryItems":[]}`
+	f := newFakeABS(t)
+	f.json("GET /api/authors/"+authorID, author)
+	f.mux.HandleFunc("GET /api/search/authors", func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Query().Get("q") {
+		case "Sarah Diemer":
+			_, _ = io.WriteString(w, `{"asin":"B002LTD1MC","name":"Sarah Miller","description":"Wrote The Borden Murders.","image":"https://img/miller.jpg"}`)
+		case "S. Diemer":
+			_, _ = io.WriteString(w, `{"asin":"B0DIEMER","name":"Sarah Diemer","description":"Wrote The Dark Wife.","image":""}`)
+		default:
+			_, _ = io.WriteString(w, `null`)
+		}
+	})
+	f.json("POST /api/authors/"+authorID+"/match", `{"updated":true,"author":`+author+`}`)
+	call := toolCaller(t, f)
+
+	// someone else: offered, flagged, not applied
+	out, err := call("author_match", map[string]any{"author": authorID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cand, ok := out["candidate"].(map[string]any)
+	if !ok {
+		t.Fatalf("candidate = %T, want the author Audible found", out["candidate"])
+	}
+	if str(t, cand["name"]) != "Sarah Miller" || str(t, cand["asin"]) != "B002LTD1MC" || !boolOf(t, cand["has_image"]) || boolOf(t, cand["name_matches"]) {
+		t.Errorf("candidate = %v", cand)
+	}
+
+	// the author's own name: still only offered, with name_matches set
+	out, err = call("author_match", map[string]any{"author": authorID, "query": "S. Diemer"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cand, ok := out["candidate"].(map[string]any); !ok || !boolOf(t, cand["name_matches"]) {
+		t.Errorf("own name: candidate = %v, want name_matches", out["candidate"])
+	}
+
+	// nobody close enough: no candidate, no error
+	out, err = call("author_match", map[string]any{"author": authorID, "query": "Nobody Atall"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, offered := out["candidate"]; offered {
+		t.Errorf("a lookup that found nobody offered %v", out["candidate"])
+	}
+	if got := f.requests("/api/authors/" + authorID + "/match"); len(got) != 0 {
+		t.Fatalf("author_match wrote something: %v", got)
+	}
+
+	// applying is a separate call, by asin, and nothing else
+	if _, err := call("author_match_apply", map[string]any{"author": authorID}); err == nil {
+		t.Error("author_match_apply with no asin was not refused")
+	}
+	out, err = call("author_match_apply", map[string]any{"author": authorID, "asin": "B0DIEMER", "region": "uk"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !boolOf(t, out["updated"]) {
+		t.Errorf("apply reported no update: %v", out)
+	}
+	sent := f.requests("/api/authors/" + authorID + "/match")
+	if len(sent) != 1 || !strings.Contains(sent[0].Body, `"asin":"B0DIEMER"`) || !strings.Contains(sent[0].Body, `"region":"uk"`) || strings.Contains(sent[0].Body, `"q"`) {
+		t.Errorf("apply sent %v, want one POST by asin and region, no name query", sent)
+	}
+	if got := f.requests("/api/search/authors"); len(got) != 3 {
+		t.Errorf("lookups = %d, want the 3 from author_match: apply needs none", len(got))
+	}
+}
+
+func TestSameName(t *testing.T) {
+	t.Parallel()
+
+	for _, c := range []struct {
+		a, b string
+		same bool
+	}{
+		{"Ursula K. Le Guin", "ursula k le guin", true},
+		{"N. K. Jemisin", "N.K. Jemisin", true},
+		{"isaac asimov", "Isaac Asimov", true},
+		{"Emily Andras", "Emily Adrian", false},
+		{"Sarah Diemer", "Sarah Miller", false},
+		{"Smedley D. Butler", "Smedley Butler", false},
+	} {
+		if got := sameName(c.a, c.b); got != c.same {
+			t.Errorf("sameName(%q, %q) = %v", c.a, c.b, got)
+		}
 	}
 }

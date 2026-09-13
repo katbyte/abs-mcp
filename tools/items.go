@@ -361,9 +361,16 @@ func registerItemTools(r *registry) {
 		OverrideDetails bool   `json:"override_details,omitempty" jsonschema:"replace existing metadata fields instead of only filling empty ones"`
 		OverrideCover   bool   `json:"override_cover,omitempty"   jsonschema:"replace the existing cover"`
 	}
+	type appliedRef struct {
+		Title  string `json:"title,omitempty"`
+		Author string `json:"author,omitempty"`
+		ASIN   string `json:"asin,omitempty"`
+		ISBN   string `json:"isbn,omitempty"`
+	}
 	type applyOut struct {
 		Updated bool         `json:"updated"`
 		Warning string       `json:"warning,omitempty"`
+		Applied *appliedRef  `json:"applied,omitempty" jsonschema:"the candidate that was applied; check it against item"`
 		Item    *itemSummary `json:"item,omitempty"    jsonschema:"the item after matching"`
 	}
 	add(r, writeTool, &mcp.Tool{
@@ -387,6 +394,7 @@ func registerItemTools(r *registry) {
 
 		provider, title, author := matchQuery(ctx, client, it, in.Provider, in.Title, in.Author)
 		opts := abs.MatchOptions{Provider: provider, ASIN: in.ASIN, ISBN: in.ISBN, OverrideCover: in.OverrideCover, OverrideDetails: in.OverrideDetails}
+		var applied appliedRef
 
 		if in.Candidate != nil && opts.ASIN == "" && opts.ISBN == "" {
 			results, serr := client.SearchBooks(ctx, provider, title, author, it.ID)
@@ -398,20 +406,33 @@ func registerItemTools(r *registry) {
 			}
 			c := results[*in.Candidate]
 			opts.ASIN, opts.ISBN = c.ASIN, c.ISBN
+			applied.Title, applied.Author = c.Title, c.Author
 			if opts.ASIN == "" && opts.ISBN == "" {
-				// providers without ids: match by the candidate's exact title/author
+				// providers without ids: the server searches again by the
+				// candidate's exact title and author and takes its first
+				// hit, which is the one place a match is not pinned to an id
 				opts.Title, opts.Author = c.Title, c.Author
 			}
 		}
+		applied.ASIN, applied.ISBN = opts.ASIN, opts.ISBN
 
 		res, err := client.Match(ctx, it.ID, opts)
 		if err != nil {
 			return nil, applyOut{}, err
 		}
-		out := applyOut{Updated: res.Updated, Warning: res.Warning}
+		out := applyOut{Updated: res.Updated, Warning: res.Warning, Applied: &applied}
 		if res.LibraryItem != nil {
 			s := summarize(res.LibraryItem)
 			out.Item = &s
+			// say when the id asked for is not the one the item ended up
+			// with: without override_details a field already set is kept
+			got := res.LibraryItem.Media.Metadata
+			switch {
+			case applied.ASIN != "" && !strings.EqualFold(got.ASIN, applied.ASIN):
+				out.Warning = joinWarnings(out.Warning, fmt.Sprintf("the item's asin is %q, not the applied %s; set override_details to replace it", got.ASIN, applied.ASIN))
+			case applied.ISBN != "" && got.ISBN != applied.ISBN:
+				out.Warning = joinWarnings(out.Warning, fmt.Sprintf("the item's isbn is %q, not the applied %s; set override_details to replace it", got.ISBN, applied.ISBN))
+			}
 		}
 
 		return nil, out, nil
@@ -706,4 +727,12 @@ func matchQuery(ctx context.Context, client *abs.Client, it *abs.Item, provider,
 		}
 	}
 	return provider, title, author
+}
+
+// joinWarnings adds a warning to whatever the server already said.
+func joinWarnings(have, add string) string {
+	if have == "" {
+		return add
+	}
+	return have + "; " + add
 }

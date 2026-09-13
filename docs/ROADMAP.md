@@ -21,7 +21,7 @@ Design rules, in priority order:
 | Area | Tools | Answers |
 |---|---|---|
 | know the library | `server_info`, `library_list`, `library_get`, `library_create`, `library_edit`, `narrator_list`, `library_search`, `library_items`, `library_filters`, `library_recent`, `item_get` | "what do I have, and what shape is it in" |
-| curation | `audit_all` + `audit_missing` + 8 per-item audits, `audit_duplicates`, `item_match` → `item_match_apply`, `item_cover_search` → `item_cover_edit`, `item_chapters_set`, `item_edit`, `author_match`, `author_edit` (merge), `author_image_set`, `metadata_rename` (merge a tag, genre, narrator, author, language or publisher), `item_batch_edit`, `audit_series_gaps`, `audit_spelling`, `audit_unembedded`, `audit_cover_ratio`, `audit_author_missing_image` | "what is wrong, and fix it" |
+| curation | `audit_all` + `audit_missing` + 7 per-item audits, `audit_duplicates`, `item_match` → `item_match_apply`, `item_cover_search` → `item_cover_edit`, `item_chapters_set`, `item_edit`, `author_match` → `author_match_apply`, `author_edit` (merge), `author_image_set`, `metadata_rename` (merge a tag, genre, narrator, author, language or publisher), `item_batch_edit`, `audit_series_gaps`, `audit_spelling`, `audit_authors`, `audit_narrators`, `audit_unembedded`, `audit_cover_ratio` | "what is wrong, and fix it" |
 | maintenance | `library_scan`, `item_rescan`, `item_embed_metadata`, `server_tasks`, `server_backups`, `server_tags` → `metadata_rename` | "keep it healthy" |
 | listening | `user_in_progress`, `user_progress_*`, `user_bookmark*`, `user_history`, `user_stats`, `user_list`, `server_sessions` | "what am I / are they listening to" |
 | organise | `collection_*`, `playlist_*` | "group these" |
@@ -36,6 +36,10 @@ Design rules, in priority order:
 | `feed_open` / `feed_close` | `/api/feeds/*` | "make an RSS feed for this series" |
 | `user_create` / `user_edit` | `/api/users` | account admin |
 | `item_encode_m4b` | `/api/tools/item/:id/encode-m4b` | "merge these mp3s into one m4b" |
+| `metadata_rename` sweep for podcasts | `PATCH /api/items/:id/media` per podcast item | the batch update answered 502 for two podcasts carrying language `eng` while the same change through `item_edit` went through; the sweep should send podcast items one at a time or with a podcast-shaped payload |
+| `author_match` photo fallback * | Wikipedia `pageimages` when Audnexus has no image | "give the 88 photo-less authors a photo" |
+
+\* Audible holds no photo or bio for many authors, and the provider faithfully returns a bare name; on 2026-09-13 the photos were found by hand instead, one Wikipedia lookup per author, with the extract read to confirm the person. Worth automating only if it recurs.
 
 ## Guarded / deliberately excluded
 

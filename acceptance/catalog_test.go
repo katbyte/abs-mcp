@@ -49,15 +49,18 @@ func TestAuthorEditAndMerge(t *testing.T) {
 	call(t, "author_edit", map[string]any{
 		"library": "Fiction", "author": "Tad Williams", "description": "Author of Otherland.",
 	})
-	t.Cleanup(func() {
-		call(t, "author_edit", map[string]any{
-			"library": "Fiction", "author": "Tad Williams", "description": " ",
-		})
-	})
-
 	got := call(t, "author_get", map[string]any{"library": "Fiction", "author": "Tad Williams"})
 	if desc, _ := got["description"].(string); desc != "Author of Otherland." {
 		t.Errorf("description = %q", desc)
+	}
+
+	// and clear blanks it, which a plain edit cannot say
+	call(t, "author_edit", map[string]any{
+		"library": "Fiction", "author": "Tad Williams", "clear": []any{"description"},
+	})
+	got = call(t, "author_get", map[string]any{"library": "Fiction", "author": "Tad Williams"})
+	if desc, _ := got["description"].(string); desc != "" {
+		t.Errorf("description after clear = %q", desc)
 	}
 
 	// rename away and back, checking merged is reported honestly

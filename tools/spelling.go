@@ -18,6 +18,11 @@ import (
 // merges them, and both take the field by these names.
 var vocabFields = []string{"genres", "tags", "narrators", "languages", "publishers", "authors"}
 
+// spellingFields are the ones audit_spelling reports on: the vocabulary. People
+// have audits of their own, audit_authors and audit_narrators, which run the
+// same detectors on their names beside checks only a person needs.
+var spellingFields = []string{"genres", "tags", "languages", "publishers"}
+
 // vocabField maps what a caller wrote (tag, Tags, narrator...) onto the name
 // in vocabFields, or returns "" for anything else.
 func vocabField(s string) string {
@@ -58,7 +63,7 @@ var languageAliases = map[string]string{
 
 // vocabKey is the value two spellings must share to count as the same thing.
 func vocabKey(field, value string) string {
-	n := norm(value)
+	n, _ := nameCore(field, norm(value))
 	if field != "languages" {
 		return n
 	}
@@ -130,42 +135,191 @@ func newSpellingCounts(fields []string) spellingCounts {
 
 // add counts the item's values for every field being gathered.
 func (c spellingCounts) add(it *abs.Item) {
-	for f, byKey := range c {
+	for f := range c {
 		for _, v := range valuesOf(f, it) {
-			v = strings.TrimSpace(v)
-			if v == "" {
-				continue
-			}
-			k := vocabKey(f, v)
-			if k == "" {
-				continue
-			}
-			if byKey[k] == nil {
-				byKey[k] = map[string]int{}
-			}
-			byKey[k][v]++
+			c.addValue(f, v, 1)
 		}
 	}
 }
 
-// groups returns a field's keys that are spelled more than one way, sorted.
-func (c spellingCounts) groups(field string) []string {
-	keys := make([]string, 0, len(c[field]))
-	for k, spellings := range c[field] {
-		if len(spellings) > 1 {
-			keys = append(keys, k)
+// addValue counts one spelling of a field's value n times: what a sweep over
+// author records feeds in, with the record's book count.
+func (c spellingCounts) addValue(field, v string, n int) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return
+	}
+	k := vocabKey(field, v)
+	if k == "" {
+		return
+	}
+	if c[field][k] == nil {
+		c[field][k] = map[string]int{}
+	}
+	c[field][k][v] += n
+}
+
+type spelling struct {
+	Value string `json:"value"`
+	Items int    `json:"items" jsonschema:"how many items carry this exact spelling"`
+
+	affixed bool // wrapped in "read by" or the like; never the one to keep
+}
+
+type vocabGroup struct {
+	Field     string     `json:"field"           jsonschema:"pass to metadata_rename"`
+	Kind      string     `json:"kind"            jsonschema:"spelling: one value spelled several ways; affix: a name wrapped in 'read by', 'narrator' or the like; contains: one value is another cut short or without its middle initials; near: a letter or two apart, a typo or two people; split: two names in one value, fix with item_edit; fragment: a credential or leftover such as Ph.D., fix with metadata_rename remove"`
+	Keep      string     `json:"keep,omitempty"  jsonschema:"the spelling to merge into: the most used clean one, or for affix the name with the wrapper cut off"`
+	Spellings []spelling `json:"spellings"       jsonschema:"every spelling involved, the one to keep first"`
+	Parts     []string   `json:"parts,omitempty" jsonschema:"split only: the names inside the value"`
+}
+
+// spellingsOf lists one key's spellings, the one to keep first: a clean
+// spelling over an affixed one, then the most used, then alphabetical so the
+// output is stable.
+func (c spellingCounts) spellingsOf(field, key string) []spelling {
+	out := make([]spelling, 0, len(c[field][key]))
+	for v, n := range c[field][key] {
+		_, affixed := nameCore(field, norm(v))
+		out = append(out, spelling{Value: v, Items: n, affixed: affixed})
+	}
+	sortSpellings(out)
+	return out
+}
+
+func sortSpellings(sp []spelling) {
+	slices.SortFunc(sp, func(a, b spelling) int {
+		if a.affixed != b.affixed {
+			if a.affixed {
+				return 1
+			}
+			return -1
 		}
+		if a.Items != b.Items {
+			return b.Items - a.Items
+		}
+		return strings.Compare(a.Value, b.Value)
+	})
+}
+
+// report is everything audit_spelling has to say about one field: the keys
+// spelled more than one way (or once, wrapped in an affix), then the values
+// that are not a name at all, then the pairs of keys that are one another cut
+// short or a typo apart. Stable order, so two runs read the same.
+func (c spellingCounts) report(field string) []vocabGroup {
+	keys := make([]string, 0, len(c[field]))
+	for k := range c[field] {
+		keys = append(keys, k)
 	}
 	slices.Sort(keys)
-	return keys
+
+	var out []vocabGroup
+	for _, k := range keys {
+		sp := c.spellingsOf(field, k)
+		affixed := slices.ContainsFunc(sp, func(s spelling) bool { return s.affixed })
+		if len(sp) < 2 && !affixed {
+			continue
+		}
+		g := vocabGroup{Field: field, Kind: "spelling", Keep: sp[0].Value, Spellings: sp}
+		if affixed {
+			g.Kind = "affix"
+			if sp[0].affixed { // nobody spelled it clean: offer the name with the wrapper cut off
+				n := norm(sp[0].Value)
+				core, _ := nameCore(field, n)
+				g.Keep = cleanName(sp[0].Value, len(strings.Fields(n))-len(strings.Fields(core)))
+			}
+		}
+		out = append(out, g)
+	}
+
+	if personFields[field] {
+		for _, k := range keys {
+			sp := c.spellingsOf(field, k)
+			switch {
+			case fragments[k] || len(k) <= 2:
+				out = append(out, vocabGroup{Field: field, Kind: "fragment", Spellings: sp})
+			case splitValue(field, sp[0].Value, k):
+				out = append(out, vocabGroup{Field: field, Kind: "split", Spellings: sp, Parts: splitParts(sp[0].Value)})
+			}
+		}
+	}
+
+	if field != "languages" { // codes are short and a letter apart by design
+		// pairs that are one another cut short or a typo apart, then joined
+		// into clusters so that Audiobook, Audio Book and Audiobooks are one
+		// group rather than three overlapping ones
+		parent := map[string]string{}
+		find := func(k string) string {
+			for parent[k] != "" && parent[k] != k {
+				k = parent[k]
+			}
+			return k
+		}
+		kinds := map[string]string{}
+		for i, a := range keys {
+			for _, b := range keys[i+1:] {
+				short, long := a, b
+				if len(short) > len(long) {
+					short, long = b, a
+				}
+				var kind string
+				switch {
+				case nameFields[field] && truncationOf(short, long), personFields[field] && initialsOf(short, long):
+					kind = "contains"
+				case typoApart(a, b):
+					kind = "near"
+				default:
+					continue
+				}
+				ra, rb := find(a), find(b)
+				if ra != rb {
+					parent[ra] = rb
+				}
+				root := find(a)
+				if kinds[root] == "" || kind == "contains" { // a cluster with a truncation in it is reported as one
+					kinds[root] = kind
+				}
+			}
+		}
+		clusters := map[string][]string{}
+		for _, k := range keys {
+			if parent[k] != "" || slices.ContainsFunc(keys, func(o string) bool { return parent[o] == k }) {
+				clusters[find(k)] = append(clusters[find(k)], k)
+			}
+		}
+		roots := make([]string, 0, len(clusters))
+		for r := range clusters {
+			roots = append(roots, r)
+		}
+		slices.Sort(roots)
+		for _, r := range roots {
+			kind := kinds[r]
+			for _, k := range clusters[r] { // a kind recorded under a member that was merged in later
+				if kinds[k] == "contains" {
+					kind = "contains"
+				}
+			}
+			var sp []spelling
+			for _, k := range clusters[r] {
+				sp = append(sp, c.spellingsOf(field, k)...)
+			}
+			sortSpellings(sp)
+			if kind == "contains" && personFields[field] { // a person's name cut short: the longer one is the whole name
+				slices.SortFunc(sp, func(x, y spelling) int { return len(norm(y.Value)) - len(norm(x.Value)) })
+			}
+			out = append(out, vocabGroup{Field: field, Kind: kind, Keep: sp[0].Value, Spellings: sp})
+		}
+	}
+
+	return out
 }
 
-// groupCount is how many groups every field gathered has, for a count-only
-// summary.
-func (c spellingCounts) groupCount() int {
+// findingCount is how many groups every field gathered reports, for a
+// count-only summary.
+func (c spellingCounts) findingCount() int {
 	n := 0
 	for f := range c {
-		n += len(c.groups(f))
+		n += len(c.report(f))
 	}
 	return n
 }
@@ -173,38 +327,35 @@ func (c spellingCounts) groupCount() int {
 func registerSpellingTools(r *registry) {
 	client := r.client
 
-	type spelling struct {
-		Value string `json:"value"`
-		Items int    `json:"items" jsonschema:"how many items carry this exact spelling"`
-	}
-	type vocabGroup struct {
-		Field     string     `json:"field"     jsonschema:"pass to metadata_rename"`
-		Keep      string     `json:"keep"      jsonschema:"the most used spelling, the obvious one to merge into"`
-		Spellings []spelling `json:"spellings" jsonschema:"every spelling of the same value, most used first"`
-	}
 	type vocabIn struct {
 		Library string `json:"library,omitempty" jsonschema:"library name or id; default every library"`
-		Field   string `json:"field,omitempty"   jsonschema:"genres, tags, narrators, languages, publishers or authors; default all of them"`
+		Field   string `json:"field,omitempty"   jsonschema:"genres, tags, languages or publishers; default all of them (authors: audit_authors, narrators: audit_narrators)"`
 		Limit   int    `json:"limit,omitempty"   jsonschema:"maximum groups to return, default 50"`
 	}
 	type vocabOut struct {
 		Scanned      int          `json:"items_scanned"`
-		Found        int          `json:"total_findings"                   jsonschema:"groups with more than one spelling, before limit"`
+		Found        int          `json:"total_findings"                   jsonschema:"groups of every kind, before limit"`
 		Groups       []vocabGroup `json:"groups"`
 		OddLanguages []spelling   `json:"unrecognized_languages,omitempty" jsonschema:"language values that are not a code or name this tool knows, e.g. a placeholder like XXX"`
 	}
 
 	add(r, readTool, &mcp.Tool{
 		Name: "audit_spelling",
-		Description: "Find values that mean the same thing but are spelled differently, across genres, tags, narrators, languages, publishers and authors: 'Jim Dale' and 'jim dale', 'Sci-Fi' and 'sci fi', 'en' and 'eng' and 'English'. " +
-			"Merge any group with metadata_rename, passing the field and the spellings as reported here. " +
+		Description: "Find values that mean the same thing but are spelled differently, across genres, tags, languages and publishers: 'Sci-Fi' and 'sci fi', 'en' and 'eng' and 'English', 'Harper Audio' and 'HarperAudio'. " +
+			"Publishers also get one name that is another cut short ('Recorded Books' and 'Recorded Books, Inc.') and two a typo apart, and every field gets spellings a letter or two apart ('Romance' and 'Romances'). Each group says which kind it is. Authors and narrators get the same treatment, and more, from audit_authors and audit_narrators. " +
+			"Merge any group with metadata_rename, passing the field and the spellings as reported here; a near group can also be two different people, so read both names first. " +
 			"Language values that are not a code or name this tool recognizes are reported separately, which is how placeholders like XXX surface.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in vocabIn) (*mcp.CallToolResult, vocabOut, error) {
-		fields := vocabFields
+		fields := spellingFields
 		if f := strings.ToLower(strings.TrimSpace(in.Field)); f != "" && f != "all" {
 			f = vocabField(f)
-			if f == "" {
-				return nil, vocabOut{}, fmt.Errorf("unknown field %q; choose one of: %s", in.Field, strings.Join(vocabFields, ", "))
+			switch f {
+			case "":
+				return nil, vocabOut{}, fmt.Errorf("unknown field %q; choose one of: %s", in.Field, strings.Join(spellingFields, ", "))
+			case "narrators":
+				return nil, vocabOut{}, errors.New("narrators are audited by audit_narrators, which reports their spellings beside its role check")
+			case "authors":
+				return nil, vocabOut{}, errors.New("authors are audited by audit_authors, which reports their spellings beside the record checks")
 			}
 			fields = []string{f}
 		}
@@ -233,24 +384,11 @@ func registerSpellingTools(r *registry) {
 
 		limit := limitOr(in.Limit, 50)
 		for _, f := range fields {
-			for _, k := range counts.groups(f) {
+			for _, g := range counts.report(f) {
 				out.Found++
-				if len(out.Groups) >= limit {
-					continue
+				if len(out.Groups) < limit {
+					out.Groups = append(out.Groups, g)
 				}
-				g := vocabGroup{Field: f}
-				for v, n := range counts[f][k] {
-					g.Spellings = append(g.Spellings, spelling{Value: v, Items: n})
-				}
-				// most used first, then alphabetical so the output is stable
-				slices.SortFunc(g.Spellings, func(a, b spelling) int {
-					if a.Items != b.Items {
-						return b.Items - a.Items
-					}
-					return strings.Compare(a.Value, b.Value)
-				})
-				g.Keep = g.Spellings[0].Value
-				out.Groups = append(out.Groups, g)
 			}
 		}
 
@@ -376,8 +514,10 @@ func renameVocabulary(ctx context.Context, client *abs.Client, field, from, to s
 }
 
 // renameBySweep replaces a language or publisher on every item that carries
-// it, which the server has no endpoint for: it walks the library and sends
-// one batch update. An empty to clears the value.
+// it, which the server has no endpoint for: it walks the library and batch
+// updates the items that carry from, spelled exactly that way (a rename of
+// "english" must not touch the 400 books that say "English"). An empty to
+// clears the value.
 func renameBySweep(ctx context.Context, client *abs.Client, library, field, from, to string) (updated int, titles []string, err error) {
 	libs, err := resolveLibraries(ctx, client, library)
 	if err != nil {
@@ -394,9 +534,9 @@ func renameBySweep(ctx context.Context, client *abs.Client, library, field, from
 				var carries bool
 				switch field {
 				case "languages":
-					carries = strings.EqualFold(strings.TrimSpace(m.Language), from)
+					carries = strings.TrimSpace(m.Language) == from
 				case "publishers":
-					carries = strings.EqualFold(strings.TrimSpace(m.Publisher), from)
+					carries = strings.TrimSpace(m.Publisher) == from
 				}
 				if !carries {
 					continue
@@ -425,10 +565,18 @@ func renameBySweep(ctx context.Context, client *abs.Client, library, field, from
 		return 0, nil, fmt.Errorf("nothing carries %s %q", field, from)
 	}
 
-	updated, err = client.BatchUpdate(ctx, updates)
-	if err != nil {
-		return 0, nil, err
+	// in pages: one request carrying hundreds of items is what a reverse
+	// proxy times out on
+	for start := 0; start < len(updates); start += sweepBatchSize {
+		n, err := client.BatchUpdate(ctx, updates[start:min(start+sweepBatchSize, len(updates))])
+		if err != nil {
+			return updated, titles, err
+		}
+		updated += n
 	}
 
 	return updated, titles, nil
 }
+
+// sweepBatchSize is how many items one batch update carries.
+const sweepBatchSize = 100

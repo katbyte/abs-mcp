@@ -2,6 +2,37 @@
   "host": "api.audnex.us",
   "interactions": [
     {
+      "key": "GET api.audnex.us/authors/B003RY2ISS",
+      "method": "GET",
+      "host": "api.audnex.us",
+      "path": "/authors/B003RY2ISS",
+      "status": 200,
+      "headers": {
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "max-age=86400",
+        "Content-Security-Policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+        "Content-Type": "application/json; charset=utf-8",
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Cross-Origin-Resource-Policy": "same-origin",
+        "Last-Modified": "Tue, 08 Sep 2026 01:32:16 GMT",
+        "Origin-Agent-Cluster": "?1",
+        "Referrer-Policy": "no-referrer",
+        "Server": "cloudflare",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+        "Vary": "Accept-Encoding",
+        "X-Content-Type-Options": "nosniff",
+        "X-Dns-Prefetch-Control": "off",
+        "X-Download-Options": "noopen",
+        "X-Frame-Options": "SAMEORIGIN",
+        "X-Permitted-Cross-Domain-Policies": "none",
+        "X-Ratelimit-Limit": "300",
+        "X-Ratelimit-Remaining": "299",
+        "X-Ratelimit-Reset": "60",
+        "X-Xss-Protection": "0"
+      },
+      "body": "{\"asin\":\"B003RY2ISS\",\"description\":\"Isaac Asimov (/ˈaɪzᵻk ˈæzᵻmɒv/; born Isaak Yudovich Ozimov; circa January 2, 1920 – April 6, 1992) was an American author and professor of biochemistry at Boston University, best known for his works of science fiction and for his popular science books. Asimov was prolific and wrote or edited more than 500 books and an estimated 90,000 letters and postcards. His books have been published in 9 of the 10 major categories of the Dewey Decimal Classification. Asimov wrote hard science fiction and, along with Robert A. Heinlein and Arthur C. Clarke, he was considered one of the \\\"Big Three\\\" science fiction writers during his lifetime. Asimov's most famous work is the Foundation Series; his other major series are the Galactic Empire series and the Robot series. The Galactic Empire novels are explicitly set in earlier history of the same fictional universe as the Foundation series. Later, beginning with Foundation's Edge, he linked this distant future to the Robot and Spacer stories, creating a unified \\\"future history\\\" for his stories much like those pioneered by Robert A. Heinlein and previously produced by Cordwainer Smith and Poul Anderson. He wrote hundreds of short stories, including the social science fiction \\\"Nightfall\\\", which in 1964 was voted by the Science Fiction Writers of America the best short science fiction story of all time. Asimov wrote the Lucky Starr series of juvenile science-fiction novels using the pen name Paul French. Asimov also wrote mysteries and fantasy, as well as much nonfiction. Most of his popular science books explain scientific concepts in a historical way, going as far back as possible to a time when the science in question was at its simplest stage. He often provides nationalities, birth dates, and death dates for the scientists he mentions, as well as etymologies and pronunciation guides for technical terms. Examples include Guide to Science, the three-volume set Understanding Physics, and Asimov's Chronology of Science and Discovery, as well as works on astronomy, mathematics, history, William Shakespeare's writing, and chemistry. Asimov was a long-time member and vice president of Mensa International, albeit reluctantly; he described some members of that organization as \\\"brain-proud and aggressive about their IQs\\\". He took more joy in being president of the American Humanist Association. The asteroid 5020 Asimov, a crater on the planet Mars, a Brooklyn elementary school, and a literary award are named in his honor. Bio from Wikipedia, the free encyclopedia. Photo by Phillip Leonian from New York World-Telegram \u0026 Sun [Public domain], via Wikimedia Commons.\",\"genres\":[{\"asin\":\"18574426011\",\"name\":\"Literature \u0026 Fiction\",\"type\":\"genre\"},{\"asin\":\"18580606011\",\"name\":\"Science Fiction \u0026 Fantasy\",\"type\":\"genre\"},{\"asin\":\"18580540011\",\"name\":\"Science \u0026 Engineering\",\"type\":\"genre\"}],\"image\":\"https://images-na.ssl-images-amazon.com/images/S/amzn-author-media-prod/6ce4rnjgpci8m81tu3aibtlf5r.jpg\",\"name\":\"Isaac Asimov\",\"region\":\"us\",\"similar\":[{\"asin\":\"B000APF21M\",\"name\":\"Arthur C. Clarke\"},{\"asin\":\"B007JP96JU\",\"name\":\"Cixin Liu\"},{\"asin\":\"B000APQZD6\",\"name\":\"Dan Simmons\"},{\"asin\":\"B000APO5OM\",\"name\":\"Frank Herbert\"},{\"asin\":\"B004AQ1W8Y\",\"name\":\"James S. A. Corey\"},{\"asin\":\"B00BRTKOEA\",\"name\":\"Philip K. Dick\"},{\"asin\":\"B005GDIOHM\",\"name\":\"Robert Heinlein\"},{\"asin\":\"B000AP5DM0\",\"name\":\"William Gibson\"}]}"
+    },
+    {
       "key": "GET api.audnex.us/authors/B003RY2ISS?region=us",
       "method": "GET",
       "host": "api.audnex.us",
@@ -32,6 +63,35 @@
         "X-Xss-Protection": "0"
       },
       "body": "{\"asin\":\"B003RY2ISS\",\"description\":\"Isaac Asimov (/ˈaɪzᵻk ˈæzᵻmɒv/; born Isaak Yudovich Ozimov; circa January 2, 1920 – April 6, 1992) was an American author and professor of biochemistry at Boston University, best known for his works of science fiction and for his popular science books. Asimov was prolific and wrote or edited more than 500 books and an estimated 90,000 letters and postcards. His books have been published in 9 of the 10 major categories of the Dewey Decimal Classification. Asimov wrote hard science fiction and, along with Robert A. Heinlein and Arthur C. Clarke, he was considered one of the \\\"Big Three\\\" science fiction writers during his lifetime. Asimov's most famous work is the Foundation Series; his other major series are the Galactic Empire series and the Robot series. The Galactic Empire novels are explicitly set in earlier history of the same fictional universe as the Foundation series. Later, beginning with Foundation's Edge, he linked this distant future to the Robot and Spacer stories, creating a unified \\\"future history\\\" for his stories much like those pioneered by Robert A. Heinlein and previously produced by Cordwainer Smith and Poul Anderson. He wrote hundreds of short stories, including the social science fiction \\\"Nightfall\\\", which in 1964 was voted by the Science Fiction Writers of America the best short science fiction story of all time. Asimov wrote the Lucky Starr series of juvenile science-fiction novels using the pen name Paul French. Asimov also wrote mysteries and fantasy, as well as much nonfiction. Most of his popular science books explain scientific concepts in a historical way, going as far back as possible to a time when the science in question was at its simplest stage. He often provides nationalities, birth dates, and death dates for the scientists he mentions, as well as etymologies and pronunciation guides for technical terms. Examples include Guide to Science, the three-volume set Understanding Physics, and Asimov's Chronology of Science and Discovery, as well as works on astronomy, mathematics, history, William Shakespeare's writing, and chemistry. Asimov was a long-time member and vice president of Mensa International, albeit reluctantly; he described some members of that organization as \\\"brain-proud and aggressive about their IQs\\\". He took more joy in being president of the American Humanist Association. The asteroid 5020 Asimov, a crater on the planet Mars, a Brooklyn elementary school, and a literary award are named in his honor. Bio from Wikipedia, the free encyclopedia. Photo by Phillip Leonian from New York World-Telegram \u0026 Sun [Public domain], via Wikimedia Commons.\",\"genres\":[{\"asin\":\"18574426011\",\"name\":\"Literature \u0026 Fiction\",\"type\":\"genre\"},{\"asin\":\"18580606011\",\"name\":\"Science Fiction \u0026 Fantasy\",\"type\":\"genre\"},{\"asin\":\"18580540011\",\"name\":\"Science \u0026 Engineering\",\"type\":\"genre\"}],\"image\":\"https://images-na.ssl-images-amazon.com/images/S/amzn-author-media-prod/6ce4rnjgpci8m81tu3aibtlf5r.jpg\",\"name\":\"Isaac Asimov\",\"region\":\"us\",\"similar\":[{\"asin\":\"B000APF21M\",\"name\":\"Arthur C. Clarke\"},{\"asin\":\"B007JP96JU\",\"name\":\"Cixin Liu\"},{\"asin\":\"B000APQZD6\",\"name\":\"Dan Simmons\"},{\"asin\":\"B000APO5OM\",\"name\":\"Frank Herbert\"},{\"asin\":\"B004AQ1W8Y\",\"name\":\"James S. A. Corey\"},{\"asin\":\"B00BRTKOEA\",\"name\":\"Philip K. Dick\"},{\"asin\":\"B005GDIOHM\",\"name\":\"Robert Heinlein\"},{\"asin\":\"B000AP5DM0\",\"name\":\"William Gibson\"}]}"
+    },
+    {
+      "key": "GET api.audnex.us/authors?name=Isaac+Asimov",
+      "method": "GET",
+      "host": "api.audnex.us",
+      "path": "/authors",
+      "query": "name=Isaac+Asimov",
+      "status": 200,
+      "headers": {
+        "Content-Security-Policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+        "Content-Type": "application/json; charset=utf-8",
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Cross-Origin-Resource-Policy": "same-origin",
+        "Origin-Agent-Cluster": "?1",
+        "Referrer-Policy": "no-referrer",
+        "Server": "cloudflare",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+        "Vary": "Accept-Encoding",
+        "X-Content-Type-Options": "nosniff",
+        "X-Dns-Prefetch-Control": "off",
+        "X-Download-Options": "noopen",
+        "X-Frame-Options": "SAMEORIGIN",
+        "X-Permitted-Cross-Domain-Policies": "none",
+        "X-Ratelimit-Limit": "300",
+        "X-Ratelimit-Remaining": "292",
+        "X-Ratelimit-Reset": "14",
+        "X-Xss-Protection": "0"
+      },
+      "body": "[{\"asin\":\"B003RY2ISS\",\"name\":\"Isaac Asimov\"},{\"asin\":\"B003RY2ISS\",\"name\":\"Isaac Asimov\"},{\"asin\":\"B003RY2ISS\",\"name\":\"Isaac Asimov\"},{\"asin\":\"B003RY2ISS\",\"name\":\"Isaac Asimov\"},{\"asin\":\"B003RY2ISS\",\"name\":\"Isaac Asimov\"},{\"asin\":\"B003RY2ISS\",\"name\":\"Isaac Asimov\"},{\"asin\":\"B003RY2ISS\",\"name\":\"Isaac Asimov\"},{\"asin\":\"B003RY2ISS\",\"name\":\"Isaac Asimov\"},{\"asin\":\"B003RY2ISS\",\"name\":\"Isaac Asimov\"},{\"asin\":\"B09FQ92PLT\",\"name\":\"Isaac Steele and the Forever Man: The Isaac Steele Chronicles\"},{\"asin\":\"B09FFKY691\",\"name\":\"Aelina Isaacs\"},{\"asin\":\"B007H9UUCK\",\"name\":\"Jane Isaac\"},{\"asin\":\"B001HPEDFK\",\"name\":\"Janet Asimov\"},{\"asin\":\"B0713RG35V\",\"name\":\"Isaac Kronenberg\"},{\"asin\":\"B06VXL857Y\",\"name\":\"Isaac Sacolick\"},{\"asin\":\"B001HPEDFK\",\"name\":\"Janet Asimov\"},{\"asin\":\"B001H6Q85M\",\"name\":\"Isaac Mizrahi\"},{\"asin\":\"B079WTJPSG\",\"name\":\"Isaac Daly\"},{\"asin\":\"B001KDJHWS\",\"name\":\"William Isaacs\"},{\"asin\":\"B001H9VHXM\",\"name\":\"Isaac Deutscher\"},{\"asin\":\"B01CV3WT5C\",\"name\":\"Kara Isaac\"},{\"asin\":\"B0CV4VZLXH\",\"name\":\"Isaac Lee\"},{\"asin\":\"B01BPGHMQ2\",\"name\":\"Jason Isaacs\"},{\"asin\":\"B07CSWV9M7\",\"name\":\"Danielle Isaac\"},{\"asin\":\"B09NZ9FJYZ\",\"name\":\"Isaac Blum\"}]"
     },
     {
       "key": "GET api.audnex.us/authors?name=Isaac+Asimov\u0026region=us",

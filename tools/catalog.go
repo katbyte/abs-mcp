@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/katbyte/abs-mcp/lib/abs"
@@ -198,44 +197,12 @@ func registerAuthorTools(r *registry) {
 		return nil, getOut{authorRow: authorRowOf(a, true), Books: summarizeAll(a.LibraryItems)}, nil
 	})
 
-	type missingImageIn struct {
-		Library string `json:"library,omitempty" jsonschema:"library name or id; default every library"`
-		Limit   int    `json:"limit,omitempty"   jsonschema:"maximum findings, default 100"`
-	}
-	add(r, readTool, &mcp.Tool{
-		Name:        "audit_author_missing_image",
-		Description: "Find authors with no photo, most-published first. Fix with author_match, which looks them up on Audible, or author_image_set with a url when that finds nothing. An author that already has an asin but no image is one author_match has tried.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in missingImageIn) (*mcp.CallToolResult, missingImageOut, error) {
-		libs, err := resolveLibraries(ctx, client, in.Library)
-		if err != nil {
-			return nil, missingImageOut{}, err
-		}
-
-		out := missingImageOut{Findings: []missingImageRow{}}
-		for i := range libs {
-			if err := sweepAuthorImages(ctx, client, &libs[i], &out); err != nil {
-				return nil, missingImageOut{}, err
-			}
-		}
-
-		slices.SortFunc(out.Findings, func(x, y missingImageRow) int {
-			if x.Books != y.Books {
-				return y.Books - x.Books
-			}
-			return strings.Compare(x.Name, y.Name)
-		})
-		if limit := limitOr(in.Limit, 100); len(out.Findings) > limit {
-			out.Findings = out.Findings[:limit]
-		}
-
-		return nil, out, nil
-	})
-
 	type editIn struct {
 		authorIn
-		Name        string `json:"name,omitempty"        jsonschema:"rename; renaming to an existing author's name merges them"`
-		Description string `json:"description,omitempty"`
-		ASIN        string `json:"asin,omitempty"`
+		Name        string   `json:"name,omitempty"        jsonschema:"rename; renaming to an existing author's name merges them"`
+		Description string   `json:"description,omitempty"`
+		ASIN        string   `json:"asin,omitempty"`
+		Clear       []string `json:"clear,omitempty"       jsonschema:"fields to blank: description, asin, image. How to undo an author_match that found the wrong person"`
 	}
 	type editOut struct {
 		Merged bool      `json:"merged" jsonschema:"true when the rename merged into an existing author"`
@@ -243,19 +210,43 @@ func registerAuthorTools(r *registry) {
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "author_edit",
-		Description: "Rename an author, or set their description or asin. Renaming to a name that already exists merges the two authors (the way to fix 'J.R.R. Tolkien' vs 'J. R. Tolkien'). Changes server state.",
+		Description: "Rename an author, set their description or asin, or blank those and the photo with clear. Renaming to a name that already exists merges the two authors (the way to fix 'J.R.R. Tolkien' vs 'J. R. Tolkien'); clear=[asin, description, image] undoes an author_match that found the wrong person. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in editIn) (*mcp.CallToolResult, editOut, error) {
+		upd := abs.AuthorUpdate{Name: strPtr(in.Name), Description: strPtr(in.Description), ASIN: strPtr(in.ASIN)}
+		var clearImage bool
+		empty := ""
+		for _, c := range in.Clear {
+			switch strings.ToLower(strings.TrimSpace(c)) {
+			case "description":
+				upd.Description = &empty
+			case "asin":
+				upd.ASIN = &empty
+			case "image":
+				clearImage = true
+			default:
+				return nil, editOut{}, fmt.Errorf("cannot clear %q: choose from description, asin, image", c)
+			}
+		}
+		if upd.Name == nil && upd.Description == nil && upd.ASIN == nil && !clearImage {
+			return nil, editOut{}, errors.New("nothing to change: pass name, description or asin, or list fields in clear")
+		}
+
 		a, err := resolveAuthor(ctx, client, in.Library, in.Author)
 		if err != nil {
 			return nil, editOut{}, err
 		}
-		upd := abs.AuthorUpdate{Name: strPtr(in.Name), Description: strPtr(in.Description), ASIN: strPtr(in.ASIN)}
-		if upd.Name == nil && upd.Description == nil && upd.ASIN == nil {
-			return nil, editOut{}, errors.New("nothing to change: pass name, description or asin")
+		updated, merged := a, false
+		if upd.Name != nil || upd.Description != nil || upd.ASIN != nil {
+			if updated, merged, err = client.UpdateAuthor(ctx, a.ID, upd); err != nil {
+				return nil, editOut{}, err
+			}
 		}
-		updated, merged, err := client.UpdateAuthor(ctx, a.ID, upd)
-		if err != nil {
-			return nil, editOut{}, err
+		// the server answers 400 to removing a photo that is not there, and
+		// clearing what is already blank is not a failure
+		if clearImage && a.ImagePath != "" {
+			if updated, err = client.DeleteAuthorImage(ctx, a.ID); err != nil {
+				return nil, editOut{}, err
+			}
 		}
 
 		return nil, editOut{Merged: merged, Author: authorRowOf(updated, true)}, nil
@@ -289,32 +280,78 @@ func registerAuthorTools(r *registry) {
 
 	type matchIn struct {
 		authorIn
-		Query  string `json:"query,omitempty"  jsonschema:"name to look up; default the author's name"`
-		ASIN   string `json:"asin,omitempty"   jsonschema:"look up by Audible author asin instead"`
-		Region string `json:"region,omitempty" jsonschema:"Audible region: us (default), uk, ca, au, de, fr, it, es, jp, in"`
+		Query string `json:"query,omitempty" jsonschema:"name to look up; default the author's name"`
+	}
+	type matchCandidate struct {
+		ASIN        string `json:"asin"`
+		Name        string `json:"name"`
+		Description string `json:"description,omitempty"`
+		HasImage    bool   `json:"has_image"`
+		NameMatches bool   `json:"name_matches"          jsonschema:"the candidate's name is the author's own, case and punctuation aside; false means look closely before applying"`
 	}
 	type matchOut struct {
-		Updated bool      `json:"updated"`
-		Author  authorRow `json:"author"`
+		Author    authorRow       `json:"author"`
+		Candidate *matchCandidate `json:"candidate,omitempty" jsonschema:"who Audible has for the name; absent when nobody is close enough. Nothing is applied: pass the asin to author_match_apply"`
 	}
-	add(r, writeTool, &mcp.Tool{
-		Name:        "author_match",
-		Description: "Look the author up on Audible (via Audnexus) and fill in their asin, description and photo. Changes server state.",
+	add(r, readTool, &mcp.Tool{
+		Name: "author_match",
+		Description: "Look the author up on Audible (via Audnexus) and return who it found, without changing anything. " +
+			"The lookup is by name and tolerant of small differences, so the candidate can be someone else (Emily Andras came back as Emily Adrian): " +
+			"check name_matches and the description, then author_match_apply with the asin to take it.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in matchIn) (*mcp.CallToolResult, matchOut, error) {
 		a, err := resolveAuthor(ctx, client, in.Library, in.Author)
 		if err != nil {
 			return nil, matchOut{}, err
 		}
-		q := in.Query
+		q := strings.TrimSpace(in.Query)
 		if q == "" {
 			q = a.Name
 		}
-		updated, changed, err := client.MatchAuthor(ctx, a.ID, q, in.ASIN, in.Region)
+		cand, err := client.SearchAuthor(ctx, q)
 		if err != nil {
 			return nil, matchOut{}, err
 		}
 
-		return nil, matchOut{Updated: changed, Author: authorRowOf(updated, true)}, nil
+		out := matchOut{Author: authorRowOf(a, true)}
+		if cand != nil {
+			out.Candidate = &matchCandidate{
+				ASIN: cand.ASIN, Name: cand.Name,
+				Description: clip(plain(cand.Description), descriptionCap),
+				HasImage:    cand.Image != "",
+				NameMatches: sameName(cand.Name, a.Name),
+			}
+		}
+
+		return nil, out, nil
+	})
+
+	type applyIn struct {
+		authorIn
+		ASIN   string `json:"asin"             jsonschema:"the Audible author asin to apply, from author_match"`
+		Region string `json:"region,omitempty" jsonschema:"Audible region: us (default), uk, ca, au, de, fr, it, es, jp, in"`
+	}
+	type applyOut struct {
+		Updated bool      `json:"updated"`
+		Author  authorRow `json:"author"`
+	}
+	add(r, writeTool, &mcp.Tool{
+		Name:        "author_match_apply",
+		Description: "Apply an Audible author to the record: their asin, description and photo. Pass the asin of the candidate author_match returned, once its name and description say it is the right person. Changes server state.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in applyIn) (*mcp.CallToolResult, applyOut, error) {
+		asin := strings.TrimSpace(in.ASIN)
+		if asin == "" {
+			return nil, applyOut{}, errors.New("pass the asin of the candidate to apply; author_match finds it")
+		}
+		a, err := resolveAuthor(ctx, client, in.Library, in.Author)
+		if err != nil {
+			return nil, applyOut{}, err
+		}
+		updated, changed, err := client.MatchAuthor(ctx, a.ID, "", asin, in.Region)
+		if err != nil {
+			return nil, applyOut{}, err
+		}
+
+		return nil, applyOut{Updated: changed, Author: authorRowOf(updated, true)}, nil
 	})
 
 	type deleteOut struct {
@@ -523,40 +560,9 @@ func registerSeriesTools(r *registry) {
 	})
 }
 
-type missingImageRow struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Books int    `json:"books"`
-	ASIN  string `json:"asin,omitempty" jsonschema:"present means author_match already ran and found no photo"`
-}
-
-type missingImageOut struct {
-	Scanned  int               `json:"authors_scanned"`
-	Found    int               `json:"total_findings"`
-	Findings []missingImageRow `json:"findings"        jsonschema:"most books first: the authors worth fixing"`
-}
-
-// sweepAuthorImages adds a book library's authors without a photo to out,
-// unsorted; a podcast library has no authors worth a photo and is skipped.
-func sweepAuthorImages(ctx context.Context, client *abs.Client, lib *abs.Library, out *missingImageOut) error {
-	if lib.IsPodcast() {
-		return nil
-	}
-	authors, err := allAuthors(ctx, client, lib.ID, abs.ListOptions{Sort: "numBooks", Desc: true})
-	if err != nil {
-		return err
-	}
-	for j := range authors {
-		a := &authors[j]
-		out.Scanned++
-		if a.ImagePath != "" {
-			continue
-		}
-		out.Found++
-		out.Findings = append(out.Findings, missingImageRow{
-			ID: a.ID, Name: a.Name, Books: a.NumBooks, ASIN: a.ASIN,
-		})
-	}
-
-	return nil
+// sameName reports whether two author names are the same name: case,
+// punctuation and spacing aside, so "Ursula K. Le Guin" is "ursula k le guin",
+// but "Emily Andras" is not "Emily Adrian".
+func sameName(a, b string) bool {
+	return strings.Join(strings.Fields(norm(a)), " ") == strings.Join(strings.Fields(norm(b)), " ")
 }

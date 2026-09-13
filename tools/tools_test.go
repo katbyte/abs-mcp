@@ -356,7 +356,7 @@ func TestNorm(t *testing.T) {
 		"Foundation_and-Empire":  "foundation and empire",
 		"A.B.C.":                 "a b c",
 		"  spaced   out  ":       "spaced out",
-		"Gödel, Escher, Bach":    "gdel escher bach",
+		"Gödel, Escher, Bach":    "godel escher bach",
 		"2001: A Space Odyssey":  "2001 a space odyssey",
 		"!!!":                    "",
 	} {
@@ -615,6 +615,12 @@ func TestAuditSpecsAreComplete(t *testing.T) {
 		}
 		byCheck[field] = "audit_missing"
 	}
+	// the one per-item check that lives inside a wider audit rather than a
+	// spec of its own
+	if prev, dup := byCheck["author_as_title"]; dup {
+		t.Errorf("check author_as_title is exposed by both %s and audit_authors", prev)
+	}
+	byCheck["author_as_title"] = "audit_authors"
 	for check := range auditChecksByName {
 		if _, ok := byCheck[check]; !ok {
 			t.Errorf("check %q has no audit tool, so audit_all never reports it", check)

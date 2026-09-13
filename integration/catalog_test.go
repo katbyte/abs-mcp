@@ -171,13 +171,23 @@ func TestCatalogueMethods(t *testing.T) {
 	}
 }
 
-// SearchAuthors looks a name up on the provider without writing anything,
-// where MatchAuthor applies the result. It goes through the proxy.
-func TestSearchAuthors(t *testing.T) {
+// SearchAuthor looks a name up on the provider without writing anything,
+// where MatchAuthor applies the result. It goes through the proxy. The server
+// answers with the bare provider record (or null), not a results list, which
+// an earlier decode missed: every lookup came back empty and this test, which
+// only checked the error, passed anyway.
+func TestSearchAuthor(t *testing.T) {
 	ctx := skipUnlessLive(t)
 	library(t)
 
-	if _, err := client.SearchAuthors(ctx, "Isaac Asimov"); err != nil {
-		t.Errorf("SearchAuthors: %v", err)
+	cand, err := client.SearchAuthor(ctx, "Isaac Asimov")
+	if err != nil {
+		t.Fatalf("SearchAuthor: %v", err)
+	}
+	if cand == nil {
+		t.Fatal("SearchAuthor found nobody for Isaac Asimov")
+	}
+	if cand.Name != "Isaac Asimov" || cand.ASIN == "" {
+		t.Errorf("candidate = %+v, want Isaac Asimov with an asin", cand)
 	}
 }

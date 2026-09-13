@@ -62,10 +62,6 @@ var auditSpecs = []auditSpec{
 		"Find items whose folder name disagrees with their title or author, which usually means the metadata was matched to the wrong book. Compare item_get with the path before fixing.",
 	},
 	{
-		"audit_author_as_title", "author_as_title",
-		"Find items whose author field holds the title, a common import mistake that also creates a bogus author record. Fix with item_edit, then author_delete the stray author.",
-	},
-	{
 		"audit_single_chapter", "single_chapter",
 		"Find long books carrying exactly one chapter that spans the whole recording, which is as unnavigable as having none but is not reported by audit_missing chapters. Fix with item_chapters_set, which can pull real chapters from Audible by asin.",
 	},
@@ -177,7 +173,7 @@ func registerAuditTools(r *registry) {
 	add(r, readTool, &mcp.Tool{
 		Name: "audit_all",
 		Description: "Run every audit and return only the counts, so one call says where a library needs work; call the individual audit for the worklist. Start here after a scan. " +
-			"The per-item checks, audit_missing for every field, audit_duplicates, audit_spelling, audit_series_gaps and audit_author_missing_image all run. " +
+			"The per-item checks, audit_missing for every field, audit_duplicates, audit_spelling, audit_authors, audit_narrators and audit_series_gaps all run. " +
 			"audit_cover_ratio and audit_unembedded fetch something for every item, so they run only with deep and are reported as skipped otherwise.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in allIn) (*mcp.CallToolResult, allOut, error) {
 		libs, err := resolveLibraries(ctx, client, in.Library)
@@ -187,9 +183,13 @@ func registerAuditTools(r *registry) {
 
 		found := map[string]int{}
 		dups := dupCollector{}
-		spellings := newSpellingCounts(vocabFields)
+		spellings := newSpellingCounts(spellingFields)
+		roles := newRoleCounts()
+		narrators := newSpellingCounts([]string{"narrators"})
 		var gaps gapsOut
-		var images missingImageOut
+		var authors authorsOut
+		authorNames := newSpellingCounts([]string{"authors"})
+		authorAsTitle := auditChecksByName["author_as_title"]
 		var covers coverRatioOut
 		var embedded auditOut
 		out := allOut{Audits: []allRow{}, Clean: []string{}}
@@ -211,8 +211,13 @@ func registerAuditTools(r *registry) {
 							found["audit_missing/"+field]++
 						}
 					}
+					if _, suspect := authorAsTitle(it); suspect {
+						authors.Counts.AuthorAsTitle++
+					}
 					dups.add(it)
 					spellings.add(it)
+					roles.add(it)
+					narrators.add(it)
 				}
 				return true
 			}); err != nil {
@@ -220,12 +225,12 @@ func registerAuditTools(r *registry) {
 			}
 
 			// the audits that need more than the listing: one query per
-			// multi-book series, and the author list, both small next to
-			// the sweep. A limit of 0 keeps the counts and no rows.
+			// multi-book series, and the author records, both small next
+			// to the sweep. A limit of 0 keeps the counts and no rows.
 			if err := sweepSeriesGaps(ctx, client, lib, 0, &gaps); err != nil {
 				return nil, allOut{}, err
 			}
-			if err := sweepAuthorImages(ctx, client, lib, &images); err != nil {
+			if err := authorRecords(ctx, client, lib, &authors, authorNames); err != nil {
 				return nil, allOut{}, err
 			}
 			if in.Deep {
@@ -238,9 +243,10 @@ func registerAuditTools(r *registry) {
 			}
 		}
 		found["audit_duplicates"] = len(dups.groups())
-		found["audit_spelling"] = spellings.groupCount()
+		found["audit_spelling"] = spellings.findingCount()
+		found["audit_narrators"] = len(roles.findings()) + narrators.findingCount()
 		found["audit_series_gaps"] = gaps.Found
-		found["audit_author_missing_image"] = images.Found
+		found["audit_authors"] = authors.Counts.AuthorAsTitle + len(authors.Records) + authorNames.findingCount()
 		if in.Deep {
 			found["audit_cover_ratio"] = covers.Found
 			found["audit_unembedded"] = embedded.Found
@@ -266,7 +272,7 @@ func registerAuditTools(r *registry) {
 		for _, field := range missingFields {
 			report("audit_missing", field)
 		}
-		for _, tool := range []string{"audit_duplicates", "audit_spelling", "audit_series_gaps", "audit_author_missing_image"} {
+		for _, tool := range []string{"audit_duplicates", "audit_spelling", "audit_authors", "audit_narrators", "audit_series_gaps"} {
 			report(tool, "")
 		}
 		if in.Deep {
@@ -904,9 +910,28 @@ func norm(s string) string {
 			b.WriteRune(r)
 		case r == '_' || r == '-' || r == '.':
 			b.WriteRune(' ')
+		case r > 127:
+			b.WriteString(foldLetter(r)) // Nesbø is Nesbo, not Nesb
 		}
 	}
 	return strings.Join(strings.Fields(b.String()), " ")
+}
+
+// foldLetter is the plain-ASCII spelling of an accented Latin letter, or
+// nothing for a rune that is not one. Enough for the names a library holds.
+func foldLetter(r rune) string {
+	for ascii, accented := range foldTable {
+		if strings.ContainsRune(accented, r) {
+			return ascii
+		}
+	}
+	return ""
+}
+
+var foldTable = map[string]string{
+	"a": "àáâãäåāąă", "ae": "æ", "c": "çćčċ", "d": "ďđð", "e": "èéêëēęěė", "g": "ğģ",
+	"i": "ìíîïīıį", "l": "łļľ", "n": "ñńňņ", "o": "òóôõöøōőœ", "r": "řŗ", "s": "šşśș", "ss": "ß",
+	"t": "ťţț", "th": "þ", "u": "ùúûüūůűų", "y": "ýÿ", "z": "žźż",
 }
 
 // errNotBook is returned by tools that only make sense for books.

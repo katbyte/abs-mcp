@@ -19,7 +19,6 @@ var auditTools = []string{
 	"audit_issues",
 	"audit_no_audio",
 	"audit_path",
-	"audit_author_as_title",
 	"audit_single_chapter",
 	"audit_podcast_stale_feed",
 	"audit_podcast_no_episodes",
@@ -74,7 +73,7 @@ func TestEveryAuditRuns(t *testing.T) {
 		switch name {
 		case "audit_all", "audit_missing", "audit_duplicates", "audit_series_gaps",
 			"audit_spelling", "audit_unembedded",
-			"audit_cover_ratio", "audit_author_missing_image":
+			"audit_cover_ratio", "audit_authors", "audit_narrators":
 			continue // asserted individually below
 		}
 		if !slices.Contains(auditTools, name) {
@@ -178,7 +177,7 @@ func TestAuditAll(t *testing.T) {
 
 	// every audit appears exactly once, in one list or the other; the two
 	// that fetch something per item are named as skipped instead
-	crossItem := []string{"audit_duplicates", "audit_spelling", "audit_series_gaps", "audit_author_missing_image"}
+	crossItem := []string{"audit_duplicates", "audit_spelling", "audit_authors", "audit_narrators", "audit_series_gaps"}
 	for _, name := range slices.Concat(auditTools, crossItem) {
 		_, reported := counts[name]
 		if reported == slices.Contains(clean, name) {
@@ -286,20 +285,40 @@ func TestAuditSpelling(t *testing.T) {
 	}
 }
 
-func TestAuditAuthorMissingImage(t *testing.T) {
-	out := call(t, "audit_author_missing_image", map[string]any{"library": "Fiction"})
+func TestAuditAuthors(t *testing.T) {
+	out := call(t, "audit_authors", map[string]any{"library": "Fiction"})
 
-	// no author was ever matched, so all three lack a photo
-	if found := num(t, out["total_findings"], "total_findings"); found != 3 {
-		t.Errorf("total_findings = %d, want 3", found)
+	// no author was ever matched, so all three lack an asin and a photo
+	counts, ok := out["counts"].(map[string]any)
+	if !ok {
+		t.Fatalf("counts = %v, want an object", out["counts"])
 	}
-	findings := rows(t, out["findings"], "findings")
-	if len(findings) == 0 {
-		t.Fatal("no findings returned")
+	if got := num(t, counts["no_photo"], "counts.no_photo"); got != 3 {
+		t.Errorf("counts.no_photo = %d, want 3", got)
 	}
-	// most-published first
-	if books := num(t, findings[0]["books"], "books"); books != 3 {
-		t.Errorf("first finding has %d books, want Asimov's 3 (sorted most first)", books)
+	if got := num(t, counts["unmatched"], "counts.unmatched"); got != 3 {
+		t.Errorf("counts.unmatched = %d, want 3", got)
+	}
+	records := rows(t, out["records"], "records")
+	if len(records) != 3 {
+		t.Fatalf("records = %d, want 3", len(records))
+	}
+	// most-published first within the same problems
+	if books := num(t, records[0]["books"], "books"); books != 3 {
+		t.Errorf("first record has %d books, want Asimov's 3 (sorted most first)", books)
+	}
+	if got := num(t, out["total_findings"], "total_findings"); got != 3 {
+		t.Errorf("total_findings = %d, want the three records and nothing else", got)
+	}
+}
+
+func TestAuditNarrators(t *testing.T) {
+	out := call(t, "audit_narrators", map[string]any{"library": "Fiction"})
+	if _, ok := out["roles"]; !ok {
+		t.Error("no roles section")
+	}
+	if _, ok := out["names"]; !ok {
+		t.Error("no names section")
 	}
 }
 

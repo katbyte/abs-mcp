@@ -207,35 +207,97 @@ func TestItemChaptersSetFromASIN(t *testing.T) {
 	}
 }
 
-// author_match fills in asin, description and photo from Audnexus.
-func TestAuthorMatch(t *testing.T) {
+// author_match looks the name up and author_match_apply takes the asin it
+// found: two calls, with the candidate in between for a decision.
+func TestAuthorMatchAndApply(t *testing.T) {
 	requireProviders(t)
 
 	t.Cleanup(func() {
 		call(t, "author_edit", map[string]any{
-			"library": "Fiction", "author": "Isaac Asimov", "description": " ", "asin": " ",
+			"library": "Fiction", "author": "Isaac Asimov", "clear": []any{"description", "asin", "image"},
 		})
 	})
 
 	out := call(t, "author_match", map[string]any{
-		"library": "Fiction", "author": "Isaac Asimov", "query": "Isaac Asimov", "region": "us",
+		"library": "Fiction", "author": "Isaac Asimov", "query": "Isaac Asimov",
 	})
-	if updated, _ := out["updated"].(bool); !updated {
-		t.Errorf("author_match reported no update: %v", out)
+	cand, ok := out["candidate"].(map[string]any)
+	if !ok {
+		t.Fatalf("candidate = %T, want who Audible has for Isaac Asimov", out["candidate"])
+	}
+	if name, _ := cand["name"].(string); name != "Isaac Asimov" {
+		t.Errorf("candidate name = %q", name)
+	}
+	if matches, _ := cand["name_matches"].(bool); !matches {
+		t.Errorf("the author's own name was not flagged as matching: %v", cand)
+	}
+	asin, _ := cand["asin"].(string)
+	if asin == "" {
+		t.Fatal("candidate has no asin")
+	}
+	// nothing applied by the lookup
+	if got := call(t, "author_get", map[string]any{"library": "Fiction", "author": "Isaac Asimov"}); got["asin"] != nil && got["asin"] != "" {
+		t.Errorf("author_match changed the record: asin = %v", got["asin"])
 	}
 
+	out = call(t, "author_match_apply", map[string]any{
+		"library": "Fiction", "author": "Isaac Asimov", "asin": asin, "region": "us",
+	})
+	if updated, _ := out["updated"].(bool); !updated {
+		t.Errorf("author_match_apply reported no update: %v", out)
+	}
 	author, ok := out["author"].(map[string]any)
 	if !ok {
 		t.Fatalf("author = %T", out["author"])
 	}
-	if name, _ := author["name"].(string); name != "Isaac Asimov" {
-		t.Errorf("name = %q", name)
-	}
-	if asin, _ := author["asin"].(string); asin == "" {
-		t.Error("author_match set no asin")
+	if got, _ := author["asin"].(string); got != asin {
+		t.Errorf("asin = %q, want %s", got, asin)
 	}
 	if desc, _ := author["description"].(string); desc == "" {
-		t.Error("author_match set no description")
+		t.Error("author_match_apply set no description")
+	}
+}
+
+// The provider's name lookup is tolerant, so it can return someone else. The
+// candidate says so through name_matches, and applying it is still a choice.
+func TestAuthorMatchFlagsADifferentName(t *testing.T) {
+	requireProviders(t)
+
+	t.Cleanup(func() {
+		call(t, "author_edit", map[string]any{
+			"library": "Fiction", "author": "Tad Williams", "clear": []any{"description", "asin", "image"},
+		})
+	})
+
+	// a query that finds a real author who is not this one
+	out := call(t, "author_match", map[string]any{
+		"library": "Fiction", "author": "Tad Williams", "query": "Isaac Asimov",
+	})
+	cand, ok := out["candidate"].(map[string]any)
+	if !ok {
+		t.Fatalf("candidate = %T, want the author Audible found", out["candidate"])
+	}
+	if name, _ := cand["name"].(string); name != "Isaac Asimov" {
+		t.Errorf("candidate name = %q", name)
+	}
+	if matches, _ := cand["name_matches"].(bool); matches {
+		t.Errorf("Isaac Asimov was flagged as Tad Williams's own name: %v", cand)
+	}
+	asin, _ := cand["asin"].(string)
+	if asin == "" {
+		t.Fatal("candidate has no asin to apply")
+	}
+
+	// the asin applies whoever it names, on purpose
+	out = call(t, "author_match_apply", map[string]any{
+		"library": "Fiction", "author": "Tad Williams", "asin": asin,
+	})
+	if updated, _ := out["updated"].(bool); !updated {
+		t.Errorf("applying by asin reported no update: %v", out)
+	}
+	author, _ := out["author"].(map[string]any)
+	if got, _ := author["asin"].(string); got != asin {
+		t.Errorf("asin after apply = %q, want %s", got, asin)
 	}
 }
 

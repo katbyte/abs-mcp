@@ -354,15 +354,25 @@ func (c *Client) RemoveItemFromPlaylist(ctx context.Context, id, itemID, episode
 	return &pl, nil
 }
 
-// SearchAuthors looks an author up on the provider by name, without applying
-// anything. MatchAuthor is the form that writes the result to a record.
-func (c *Client) SearchAuthors(ctx context.Context, query string) ([]Author, error) {
+// AuthorCandidate is what the provider knows about an author: the record a
+// name lookup returns, before anything is applied to a library record.
+type AuthorCandidate struct {
+	ASIN        string `json:"asin"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Image       string `json:"image"`
+}
+
+// SearchAuthor looks a name up on the provider without applying anything,
+// and returns nil when nobody close enough exists (the server answers null).
+// The lookup is tolerant of small spelling differences, so the name that
+// comes back is not necessarily the one asked for. MatchAuthor is the form
+// that writes a result to a record.
+func (c *Client) SearchAuthor(ctx context.Context, query string) (*AuthorCandidate, error) {
 	q := url.Values{"q": {query}}
-	var resp struct {
-		Results []Author `json:"results"`
-	}
-	if err := c.get(ctx, "/api/search/authors", q, &resp); err != nil {
+	var cand *AuthorCandidate
+	if err := c.get(ctx, "/api/search/authors", q, &cand); err != nil {
 		return nil, err
 	}
-	return resp.Results, nil
+	return cand, nil
 }
