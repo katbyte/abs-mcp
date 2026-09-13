@@ -4,7 +4,7 @@ SHELL := /bin/bash
 GIT_COMMIT=$(shell git describe --always --long --dirty)
 # the fallback has to guard git describe itself, not the pipeline: sed exits 0
 # on empty input, so "describe | sed || echo dev" yields an empty string in a
-# clone with no tags, which then overrides the "dev" default in lib/version
+# clone with no tags, which then overrides the "dev" default in go-kt/version
 GIT_DESCRIBE=$(shell git describe --tags --dirty 2>/dev/null || echo dev)
 GIT_VERSION=$(shell printf '%s' '$(GIT_DESCRIBE)' | sed 's/-\([0-9]*\)-g/+\1@g/')
 TEST_TIMEOUT?=15m
