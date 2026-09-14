@@ -14,28 +14,41 @@ and fixes what it finds** - from Claude Code, Claude Desktop, or any other MCP c
 
 There are several Audiobookshelf MCP servers, and they do a useful thing: expose the API as
 tools, so a model can browse your library and read your progress. This one does that too, but
-the reason it exists is the layer above: **16 audits**, each a sweep over the whole library
+the reason it exists is the layer above: **17 audits**, each a sweep over the whole library
 for one specific thing that goes wrong in a real collection, returning a worklist rather than
 a dump, and naming the tool that fixes it.
+
+This is not a demo. It has been battle-tested on a real collection: a large library,
+collected over years from every source and matched by hand or not at all, was cleaned up with
+these tools driven from Claude Code. Hundreds of titles were matched to the right store
+edition and checked against it, wrong matches caught by the folder the collector had named,
+author and narrator records merged and photographed, genres and tags brought to one
+vocabulary, and series names, numbering and titles brought to one style across the whole
+shelf in a sitting - every "The" dropped from a series label, every series past nine books
+zero-padded, every book linked to the series its folder names, every title that was really a
+series name replaced with the one the folder carried. Each pass was an audit, a review of the
+worklist, and a batch of edits. Most of the audits exist because that library had the problem.
 
 ### The audits
 
 | audit | what it catches |
 |---|---|
 | `audit_all` | every audit in one call, counts only, so one call says where a library needs work - start here after a scan (`deep` adds the two slow ones) |
-| `audit_unmatched` | books never matched to a metadata provider: no asin and no isbn, so nothing else can be filled in automatically |
-| `audit_missing` | items with one metadata field left empty - `field` is cover, description, narrator, series, author, genres, year, publisher, language or chapters |
+| `audit_unmatched` | books never matched to a metadata provider: no asin and no isbn, so nothing else can be filled in automatically; a book tagged `zz-provider:none`, checked and found on no provider, is not reported |
+| `audit_missing` | items with one metadata field left empty - `field` is cover, description, narrator, series, author, genres, year, publisher, language or chapters; description also catches a stub, a credit line such as "Read by Paul Heck", or a bare url |
 | `audit_issues` | items whose folder is missing from disk or holds no playable media: broken records, not metadata gaps |
 | `audit_no_audio` | items with no audio tracks at all, usually an ebook-only folder that landed in an audiobook library |
-| `audit_path` | items whose folder name disagrees with their title or author, which usually means the metadata was matched to the wrong book |
+| `audit_path` | items whose folder name disagrees with their title or author once subtitles, series prefixes and edition markers are set aside: a wrong match, a chapter tag left as the title, a pen name, or a book filed under another author; with `files` the audio filenames are compared too |
 | `audit_single_chapter` | long books carrying exactly one chapter spanning the whole recording, as unnavigable as none but invisible to `audit_missing` |
 | `audit_duplicates` | items that appear to be the same work: identical asin, isbn, or title+author, each group listing every copy with size, duration and path |
-| `audit_series_gaps` | series missing a book: sequence numbers absent between the lowest and highest the library has, interior gaps only |
+| `audit_series` | everything wrong with series: a book missing between the lowest and highest number the library has (interior gaps only), with the unlinked book on the shelf that fills it when there is one, and what is still missing once two spellings are read as one series; two series that are one series spelled two ways (`The Chronicles of Amber` vs `Chronicles of Amber`), each with its author, fixed by `series_merge`; a book whose folder says ` - 1 - ` while its series says #4, a book whose folder puts it in a series it is not linked to, or two titles at one number; names that are not series names, ending in the word Series, called what the author is called, carrying a book number, or with a stray ™ or a space before a colon; titles that are the series name with a number, or carry it beside the real title, where the folder says what the title is; and with `articles=true` the names that open with The, A or An |
 | `audit_spelling` | the same value spelled several ways across genres, tags, languages and publishers: `Sci-Fi` vs `sci fi`, `en` vs `eng` vs `English`, `HarperAudio` vs `Harper Audio`, and spellings a letter apart such as `Romance` vs `Romances` |
 | `audit_authors` | everything wrong with authors: a book whose author field holds its title; records never matched, with no photo, with no books, or whose biography opens with someone else's name (a wrong match: `Sarah Diemer` carrying `Sarah Miller began writing...`); and records that are one name spelled two ways (`C Z Dunn` vs `Christian Dunn`) |
 | `audit_narrators` | everything wrong with the narrator field: names that wrote some books and read others (one volume written and the rest of the series read is author and narrator swapped on import; one written and many read is a narrator credited as co-author), and the spelling checks on narrators - `Read by Jim Dale`, `Narrator....Jim Dale`, `Fajer Al` vs `Fajer Al-Kaisi`, two names in one value, a stray `Ph.D.` |
+| `audit_genres` | genres and tags against one rule, genres broad and few, tags fine and many: placeholders like `Audiobook` in either field, a category path written as one value (`Science Fiction & Fantasy, Fantasy`) with its parts, genres on too few books to be a genre, tags that repeat the book's genre, books with no genre; each with the `metadata_rename` call that fixes it |
 | `audit_unembedded` | books whose audio files do not carry the library's metadata in their tags, never embedded or stale since the last edit: what `item_embed_metadata` is due for |
-| `audit_cover_ratio` | covers that are not square or too small to look right in a client (fetches every cover's header, so `audit_all` runs it only with `deep`) |
+| `audit_covers` | everything wrong with cover art: missing, not square, or too small (reads every cover's header, so `audit_all` runs it only with `deep`); with `banner=true`, the "Only from Audible" ribbon across the bottom-right corner, found by colour and angle; and with `store=true`, compared with the store the book was matched to by perceptual hash: the same picture bigger is an `upgrade` with the full-size url, another picture is `differs` with both images to look at, a page of matched books per call |
+| `audit_matched` | matched books whose asin is not the recording on disk: the provider's record for the asin compared on title, duration and narrator, so a match applied by title alone shows up as `duration_off` or `narrator_differs`; with `fields` every field is compared and the differences listed with both values, which is what `override_details` would change (one provider request per book, so it pages and `audit_all` runs it only with `deep`) |
 | `audit_podcast_stale_feed` | podcasts with no new episodes in 90 days, or whose feed was never checked: the show ended, or the feed url is dead |
 | `audit_podcast_no_episodes` | podcasts with nothing downloaded |
 
@@ -47,7 +60,7 @@ ffprobe output).
 
 ### What else is in the box
 
-- **The whole API, as tools.** 88 tools over all 202 Audiobookshelf routes, so everything an
+- **The whole API, as tools.** 92 tools over all 202 Audiobookshelf routes, so everything an
   audit finds can be fixed from the same session: matching, covers, chapters, embedding,
   renaming a genre everywhere it is used, merging duplicate authors.
 - **A Go SDK.** `lib/abs` is a complete Audiobookshelf API client - 204 methods, no
@@ -77,6 +90,8 @@ All options can be passed as command-line flags, environment variables, or via a
 | `ABS_TOKEN` | `--token`, `-t` | API key (Settings → Users → API Keys) |
 | `ABS_READ_ONLY` | `--read-only` | register only tools that never change server state |
 | `ABS_ENABLE_DELETE` | `--enable-delete` | register the tools that delete items, episodes and authors |
+| `ABS_PROVIDERS` | `--providers` | metadata providers to ask in order when a call names none, the store the books were bought from first: `audible.ca,audible`; default the library's own provider |
+| `ABS_PROVIDER_TAG` | `--provider-tag` | prefix of the tag that records which store a match came from, `zz-provider:` by default so it sorts last in the tag list; `off` writes and reads none |
 | `ABS_TOOLSETS` | `--toolsets` | groups of tools to register, default `core`: `all`, `core`, `curation`, `listening`, `podcasts`, `organise`, `admin`, or a resource family like `item` (`core` is always included) |
 | `ABS_ALLOW_TOOLS` | `--allow-tools` | only register these tools (names, `library_*` globs, or `essential`) |
 | `ABS_DENY_TOOLS` | `--deny-tools` | never register these tools (names or globs such as `*_delete`) |
@@ -175,11 +190,11 @@ comes back as an error listing the candidates.
 |---|---|
 | server | `server_info` (connectivity, permissions, libraries, providers and server-wide totals), `server_tasks`, `server_sessions`, `server_backups`, `server_backup_create`, `server_tags` |
 | libraries | `library_list`, `library_get` (in depth, with statistics), `library_create`, `library_edit`, `library_search`, `library_items` (the server's own filters and sorts: genre, tag, author, series, narrator, progress, tracks...), `library_recent`, `library_filters`, `library_scan` |
-| audits | the 16 audits in [the table above](#the-audits): `audit_all`, `audit_unmatched`, `audit_missing`, `audit_issues`, `audit_no_audio`, `audit_path`, `audit_single_chapter`, `audit_duplicates`, `audit_series_gaps`, `audit_spelling`, `audit_authors`, `audit_narrators`, `audit_unembedded`, `audit_cover_ratio`, `audit_podcast_stale_feed`, `audit_podcast_no_episodes` |
-| items | `item_get` (with optional `chapters` and `files`), `item_edit`, `item_batch_edit` (same fields across many books), `item_rescan`, `item_embed_metadata` |
-| matching | `item_match` (candidates from a provider), `item_match_apply`, `item_cover_search`, `item_cover_edit` (url, file, or `remove`), `item_chapters_set` (explicit list or from Audible by asin) |
+| audits | the 16 audits in [the table above](#the-audits): `audit_all`, `audit_unmatched`, `audit_missing`, `audit_issues`, `audit_no_audio`, `audit_path`, `audit_single_chapter`, `audit_duplicates`, `audit_series`, `audit_spelling`, `audit_authors`, `audit_narrators`, `audit_unembedded`, `audit_covers`, `audit_matched`, `audit_podcast_stale_feed`, `audit_podcast_no_episodes` |
+| items | `item_get` (with optional `chapters` and `files`), `item_edit`, `item_batch_edit` (same fields across many books; `add_tags` and `remove_tags` edit each book's own list), `item_rescan`, `item_embed_metadata` |
+| matching | `item_match` (candidates from a provider), `item_match_apply`, `item_match_batch` → `item_match_apply_batch` (a page of books scored against the provider, then the accepted rows applied by asin; both apply tools take `override_details` with a `keep` list of fields to put back afterwards, or `smart`, which fills the empty fields and then decides each remaining difference by rule, writing file-tag titles and company narrators over, keeping curated series and plain years, and reporting the rest for review; `preview` shows the decisions without changing anything. Every applied match records its store as a `zz-provider:` tag, which the audits and the batch search ask first, and `item_match_tag` backfills it for books matched before the tag existed), `item_cover_search`, `item_cover_edit` (url, file, or `remove`), `item_cover_upgrade` (the store's full-size cover when it is bigger and the same picture), `item_chapters_set` (explicit list or from Audible by asin) |
 | authors | `author_list`, `author_get`, `author_edit` (rename to merge duplicates), `author_match` → `author_match_apply` (look up on Audible, check the candidate, then apply by asin), `author_image_set` |
-| series | `series_list`, `series_get`, `series_edit` |
+| series | `series_list`, `series_get`, `series_edit`, `series_merge` (one series into another, numbers and other series kept) |
 | narrators | `narrator_list` |
 | metadata | `metadata_rename` (a tag, genre, narrator, author, language or publisher, everywhere it is used; renaming onto an existing value merges, `remove` drops it) |
 | collections | `collection_list`, `collection_get`, `collection_create`, `collection_edit`, `collection_books_edit` (add or remove), `collection_delete` |
@@ -210,8 +225,8 @@ what they find. `ABS_TOOLSETS=all` restores every tool.
 | `organise` | 12 | 17 | 2,100 |
 | `podcasts` | 11 | 16 | 2,600 |
 | `listening` | 9 | 14 | 2,400 |
-| `curation` | 38 | 43 | 6,900 |
-| `all` | 88 | 88 | 12,300 |
+| `curation` | 41 | 46 | 7,600 |
+| `all` | 91 | 91 | 13,000 |
 
 Tokens are what the model sees: each tool's name, description and input schema, measured over
 a real `tools/list` at four bytes a token. Every tool also carries an output schema, another
@@ -262,7 +277,7 @@ tool.
 3. `audit_missing field=cover` and `item_cover_search` / `item_cover_edit` fill the gaps.
 4. `audit_missing field=chapters` finds long books with no chapters; `item_chapters_set` pulls
    them from Audible by asin.
-5. `audit_duplicates` and `audit_series_gaps` show what to prune and what is missing.
+5. `audit_duplicates` and `audit_series` show what to prune and what is missing.
 
 ## Using the client on its own
 
@@ -327,7 +342,7 @@ Coverage has to span all three or it lies: `go test -cover ./...` reports about 
 tag. `make cover` runs each into its own binary coverage directory and merges them with
 `go tool covdata` - stdlib tooling, no third-party merger - which is what the badge reports.
 
-**All 88 tools and all 204 client methods are exercised**, 199 of them asserting a result
+**All 92 tools and all 204 client methods are exercised**, 199 of them asserting a result
 rather than only that the call reached the server. The five that do not - sending an ebook by
 email, firing a notification, closing a device session, unlinking OpenID, syncing an offline
 session - need infrastructure a throwaway container has not got, and say so where they are

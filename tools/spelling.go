@@ -64,6 +64,9 @@ var languageAliases = map[string]string{
 // vocabKey is the value two spellings must share to count as the same thing.
 func vocabKey(field, value string) string {
 	n, _ := nameCore(field, norm(value))
+	if field == "series" { // "The Chronicles of Amber", "Chronicles of Amber" and "Chronicles of Amber Series" are one series
+		n = strings.TrimSuffix(strings.TrimPrefix(n, "the "), " series")
+	}
 	if field != "languages" {
 		return n
 	}
@@ -160,8 +163,9 @@ func (c spellingCounts) addValue(field, v string, n int) {
 }
 
 type spelling struct {
-	Value string `json:"value"`
-	Items int    `json:"items" jsonschema:"how many items carry this exact spelling"`
+	Value  string `json:"value"`
+	Items  int    `json:"items"            jsonschema:"how many items carry this exact spelling"`
+	Author string `json:"author,omitempty" jsonschema:"series only: whose series this spelling is"`
 
 	affixed bool // wrapped in "read by" or the like; never the one to keep
 }
@@ -264,7 +268,7 @@ func (c spellingCounts) report(field string) []vocabGroup {
 				}
 				var kind string
 				switch {
-				case nameFields[field] && truncationOf(short, long), personFields[field] && initialsOf(short, long):
+				case nameFields[field] && field != "series" && truncationOf(short, long), personFields[field] && initialsOf(short, long):
 					kind = "contains"
 				case typoApart(a, b):
 					kind = "near"
@@ -411,11 +415,13 @@ func registerSpellingTools(r *registry) {
 	})
 
 	type renameIn struct {
-		Field   string `json:"field"             jsonschema:"tags, genres, narrators, authors, languages or publishers, as audit_spelling reports it"`
-		From    string `json:"from"              jsonschema:"the value to replace, exactly as it is spelled now"`
-		To      string `json:"to,omitempty"      jsonschema:"the value to keep; renaming onto one that already exists merges the two"`
-		Remove  bool   `json:"remove,omitempty"  jsonschema:"instead of renaming: drop the value from every item that carries it (not authors)"`
-		Library string `json:"library,omitempty" jsonschema:"library name or id; default every library. Tags and genres are server-wide and refuse it"`
+		Field   string   `json:"field"             jsonschema:"tags, genres, narrators, authors, languages or publishers, as audit_spelling reports it"`
+		From    string   `json:"from"              jsonschema:"the value to replace, exactly as it is spelled now"`
+		To      string   `json:"to,omitempty"      jsonschema:"the value to keep; renaming onto one that already exists merges the two"`
+		Remove  bool     `json:"remove,omitempty"  jsonschema:"instead of renaming: drop the value from every item that carries it (not authors)"`
+		Library string   `json:"library,omitempty" jsonschema:"library name or id; default every library. Tags and genres are server-wide and refuse it"`
+		Into    []string `json:"into,omitempty"   jsonschema:"tags and genres: split the value into these, so \"Science Fiction & Fantasy, Fantasy\" becomes two; with to_field the parts land in the other field"`
+		ToField string   `json:"to_field,omitempty" jsonschema:"tags and genres: move the value (or the into parts) to the other field, genres or tags, dropping it from this one"`
 	}
 	type renameOut struct {
 		Field        string   `json:"field"`
@@ -427,6 +433,7 @@ func registerSpellingTools(r *registry) {
 		Name: "metadata_rename",
 		Description: "Rename one metadata value everywhere it is used - a tag, genre, narrator, author, language or publisher - or with remove drop it from every item. " +
 			"Renaming onto a value that already exists merges the two, which is how a group from audit_spelling is fixed ('jim dale' into 'Jim Dale', 'Sci-Fi' into 'Science Fiction'). " +
+			"For tags and genres, into splits one value into several and to_field moves a value to the other field, which is how audit_genres findings are fixed. " +
 			"Tags and genres are server-wide; the rest can be narrowed to one library. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in renameIn) (*mcp.CallToolResult, renameOut, error) {
 		field := vocabField(in.Field)
@@ -439,8 +446,16 @@ func registerSpellingTools(r *registry) {
 			return nil, renameOut{}, errors.New("from is required")
 		case in.Remove && to != "":
 			return nil, renameOut{}, errors.New("pass either to or remove, not both")
-		case !in.Remove && to == "":
-			return nil, renameOut{}, errors.New("to is required unless remove is set")
+		case (len(in.Into) > 0 || in.ToField != "") && (in.Remove || to != ""):
+			return nil, renameOut{}, errors.New("into and to_field are a split or a move; they do not combine with to or remove")
+		case (len(in.Into) > 0 || in.ToField != "") && field != "tags" && field != "genres":
+			return nil, renameOut{}, errors.New("into and to_field are for tags and genres")
+		case in.ToField != "" && vocabField(in.ToField) != "tags" && vocabField(in.ToField) != "genres":
+			return nil, renameOut{}, fmt.Errorf("to_field must be tags or genres, not %q", in.ToField)
+		case in.ToField != "" && vocabField(in.ToField) == field:
+			return nil, renameOut{}, fmt.Errorf("to_field is the field the value is already in; use to or into")
+		case !in.Remove && to == "" && len(in.Into) == 0 && in.ToField == "":
+			return nil, renameOut{}, errors.New("to is required unless remove, into or to_field is set")
 		case in.Remove && field == "authors":
 			return nil, renameOut{}, errors.New("an author cannot be removed here: author_delete removes the record")
 		}
@@ -450,6 +465,14 @@ func registerSpellingTools(r *registry) {
 		case "tags", "genres":
 			if in.Library != "" {
 				return nil, renameOut{}, fmt.Errorf("%s are server-wide: omit library", field)
+			}
+			if len(in.Into) > 0 || in.ToField != "" {
+				n, err := splitVocabulary(ctx, client, field, from, in.Into, vocabField(in.ToField))
+				if err != nil {
+					return nil, renameOut{}, err
+				}
+				out.ItemsUpdated = n
+				break
 			}
 			n, err := renameVocabulary(ctx, client, field, from, to, in.Remove)
 			if err != nil {
@@ -511,6 +534,73 @@ func renameVocabulary(ctx context.Context, client *abs.Client, field, from, to s
 	default:
 		return client.RenameGenre(ctx, from, to)
 	}
+}
+
+// splitVocabulary replaces one tag or genre with several, or moves it to the
+// other field, on every item that carries it. The server's rename endpoints
+// map one value to one value in one field, so this walks every library and
+// batch-updates the items. An item that already carries a part keeps one copy.
+func splitVocabulary(ctx context.Context, client *abs.Client, field, from string, into []string, toField string) (int, error) {
+	if toField == "" {
+		toField = field
+	}
+	parts := make([]string, 0, len(into))
+	for _, p := range into {
+		if p = strings.TrimSpace(p); p != "" && !slices.Contains(parts, p) {
+			parts = append(parts, p)
+		}
+	}
+	if len(parts) == 0 {
+		parts = []string{from}
+	}
+	libs, err := resolveLibraries(ctx, client, "")
+	if err != nil {
+		return 0, err
+	}
+	var updates []abs.BatchMediaUpdate
+	for i := range libs {
+		if err := client.ItemsAll(ctx, libs[i].ID, abs.ItemsOptions{}, func(items []abs.Item) bool {
+			for j := range items {
+				it := &items[j]
+				genres, tags := slices.Clone(it.Media.Metadata.Genres), slices.Clone(it.Media.Tags)
+				src, dst := &genres, &genres
+				if field == "tags" {
+					src = &tags
+				}
+				if toField == "tags" {
+					dst = &tags
+				}
+				if !slices.Contains(*src, from) {
+					continue
+				}
+				*src = slices.DeleteFunc(*src, func(v string) bool { return v == from })
+				for _, p := range parts {
+					if !slices.ContainsFunc(*dst, func(v string) bool { return strings.EqualFold(v, p) }) {
+						*dst = append(*dst, p)
+					}
+				}
+				if genres == nil {
+					genres = []string{}
+				}
+				if tags == nil {
+					tags = []string{}
+				}
+				updates = append(updates, abs.BatchMediaUpdate{ID: it.ID, MediaPayload: abs.MediaUpdate{Tags: tags, Metadata: &abs.MetadataUpdate{Genres: genres}}})
+			}
+			return true
+		}); err != nil {
+			return 0, err
+		}
+	}
+	updated := 0
+	for chunk := range slices.Chunk(updates, 50) {
+		n, err := client.BatchUpdate(ctx, chunk)
+		if err != nil {
+			return updated, err
+		}
+		updated += n
+	}
+	return updated, nil
 }
 
 // renameBySweep replaces a language or publisher on every item that carries

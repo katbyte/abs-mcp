@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/katbyte/abs-mcp/lib/abs"
@@ -409,6 +410,95 @@ func registerNarratorTools(r *registry) {
 	})
 }
 
+// seriesBooks is a series' books in sequence order, each with its whole
+// series list. An item listing filtered by series comes back with that field
+// collapsed to the one series matched (docs/README.md), which is fine for the
+// sequence but not for anything that writes the list back: four Stormlight
+// books lost their Cosmere link to an edit built from it. So the order and
+// the sequence come from the filtered listing and the series lists from one
+// batch fetch of the same ids.
+func seriesBooks(ctx context.Context, client *abs.Client, s *abs.Series) ([]abs.Item, error) {
+	page, err := client.Items(ctx, s.LibraryID, abs.ItemsOptions{Limit: 500, Sort: "sequence", Filter: abs.EncodeFilter("series", s.ID), Minified: true})
+	if err != nil {
+		return nil, err
+	}
+	if err := fullSeriesLists(ctx, client, page.Results); err != nil {
+		return nil, err
+	}
+	return page.Results, nil
+}
+
+// fullSeriesLists puts every series each item is in back onto items that came
+// from a listing filtered by series, with one batch fetch of their ids.
+func fullSeriesLists(ctx context.Context, client *abs.Client, items []abs.Item) error {
+	if len(items) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(items))
+	for i := range items {
+		ids = append(ids, items[i].ID)
+	}
+	full, err := client.ItemsBatch(ctx, ids)
+	if err != nil {
+		return err
+	}
+	refs := make(map[string]abs.SeriesRefs, len(full))
+	for i := range full {
+		refs[full[i].ID] = full[i].Media.Metadata.Series
+	}
+	for i := range items {
+		it := &items[i]
+		if all, ok := refs[it.ID]; ok && len(all) > 0 {
+			it.Media.Metadata.Series = all
+			it.Media.Metadata.SeriesName = ""
+		}
+	}
+	return nil
+}
+
+// mergeSeriesRefs is a book's series list with from replaced by into, in
+// its place: the from entry's number goes to into unless into is already
+// there with a number of its own, in which case the from entry just goes.
+// Every other series is kept as it was.
+func mergeSeriesRefs(refs []abs.SeriesRef, from, into *abs.Series) []abs.SeriesRef {
+	sameSeries := func(ref abs.SeriesRef, s *abs.Series) bool {
+		return (ref.ID != "" && ref.ID == s.ID) || strings.EqualFold(strings.TrimSpace(ref.Name), strings.TrimSpace(s.Name))
+	}
+	out := make([]abs.SeriesRef, 0, len(refs))
+	seq, fromAt, intoAt := "", -1, -1
+	for _, ref := range refs {
+		switch {
+		case sameSeries(ref, from):
+			seq, fromAt = ref.Sequence, len(out)
+			out = append(out, abs.SeriesRef{Name: into.Name})
+		case sameSeries(ref, into):
+			intoAt = len(out)
+			out = append(out, ref)
+		default:
+			out = append(out, ref)
+		}
+	}
+	switch {
+	case fromAt < 0:
+		return out
+	case intoAt < 0:
+		out[fromAt].Sequence = seq
+	default:
+		if out[intoAt].Sequence == "" {
+			out[intoAt].Sequence = seq
+		}
+		out = slices.Delete(out, fromAt, fromAt+1)
+	}
+	return out
+}
+
+func seqSuffix(seq string) string {
+	if seq == "" {
+		return ""
+	}
+	return " #" + seq
+}
+
 func registerSeriesTools(r *registry) {
 	client := r.client
 
@@ -422,6 +512,7 @@ func registerSeriesTools(r *registry) {
 	type seriesRow struct {
 		ID       string   `json:"id"`
 		Name     string   `json:"name"`
+		Library  string   `json:"library,omitempty"  jsonschema:"when more than one library is listed"`
 		Books    int      `json:"books"`
 		Duration string   `json:"duration,omitempty"`
 		Author   string   `json:"author,omitempty"`
@@ -433,9 +524,9 @@ func registerSeriesTools(r *registry) {
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "series_list",
-		Description: "List a library's series with book counts and the sequence numbers present, so gaps (missing books) stand out.",
+		Description: "List series with book counts and the sequence numbers present, so gaps (missing books) stand out. One library by name or id, or every book library when none is given; limit and offset page each library.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in listIn) (*mcp.CallToolResult, listOut, error) {
-		lib, err := resolveLibrary(ctx, client, in.Library)
+		libs, err := resolveLibraries(ctx, client, in.Library)
 		if err != nil {
 			return nil, listOut{}, err
 		}
@@ -444,27 +535,37 @@ func registerSeriesTools(r *registry) {
 			sortBy = in.Sort
 		}
 		limit := limitOr(in.Limit, 50)
-		series, total, err := client.SeriesList(ctx, lib.ID, abs.ListOptions{Limit: limit, Page: in.Offset / limit, Sort: sortBy, Desc: in.Desc})
-		if err != nil {
-			return nil, listOut{}, err
-		}
 
-		out := listOut{Total: total, Series: []seriesRow{}}
-		for i := range series {
-			s := &series[i]
-			row := seriesRow{ID: s.ID, Name: s.Name, Books: len(s.Books), Duration: fmtDuration(s.TotalDuration)}
-			for j := range s.Books {
-				m := &s.Books[j].Media.Metadata
-				if row.Author == "" {
-					row.Author = m.AuthorDisplay()
+		out := listOut{Series: []seriesRow{}}
+		for i := range libs {
+			lib := &libs[i]
+			if lib.IsPodcast() {
+				continue
+			}
+			series, total, err := client.SeriesList(ctx, lib.ID, abs.ListOptions{Limit: limit, Page: in.Offset / limit, Sort: sortBy, Desc: in.Desc})
+			if err != nil {
+				return nil, listOut{}, err
+			}
+			out.Total += total
+			for j := range series {
+				s := &series[j]
+				row := seriesRow{ID: s.ID, Name: s.Name, Books: len(s.Books), Duration: fmtDuration(s.TotalDuration)}
+				if len(libs) > 1 {
+					row.Library = lib.Name
 				}
-				for _, ref := range m.Series {
-					if ref.ID == s.ID && ref.Sequence != "" {
-						row.Sequence = append(row.Sequence, ref.Sequence)
+				for k := range s.Books {
+					m := &s.Books[k].Media.Metadata
+					if row.Author == "" {
+						row.Author = m.AuthorDisplay()
+					}
+					for _, ref := range m.Series {
+						if ref.ID == s.ID && ref.Sequence != "" {
+							row.Sequence = append(row.Sequence, ref.Sequence)
+						}
 					}
 				}
+				out.Series = append(out.Series, row)
 			}
-			out.Series = append(out.Series, row)
 		}
 
 		return nil, out, nil
@@ -489,17 +590,13 @@ func registerSeriesTools(r *registry) {
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "series_get",
-		Description: "A series' books in order with sequence numbers and which ones the API key's user has finished.",
+		Description: "A series' books in order with sequence numbers and which ones the API key's user has finished. Each book's series list is complete, every series it is in and not only this one, so it is safe to build an item_edit series= list from.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, getOut, error) {
 		s, err := resolveSeries(ctx, client, in.Library, in.Series)
 		if err != nil {
 			return nil, getOut{}, err
 		}
-		lib, err := client.Library(ctx, s.LibraryID)
-		if err != nil {
-			return nil, getOut{}, err
-		}
-		page, err := client.Items(ctx, lib.ID, abs.ItemsOptions{Limit: 200, Sort: "sequence", Filter: abs.EncodeFilter("series", s.ID), Minified: true})
+		books, err := seriesBooks(ctx, client, s)
 		if err != nil {
 			return nil, getOut{}, err
 		}
@@ -512,11 +609,11 @@ func registerSeriesTools(r *registry) {
 		}
 
 		out := getOut{ID: s.ID, Name: s.Name, Description: clip(plain(s.Description), descriptionCap), Books: []bookRow{}}
-		for i := range page.Results {
-			it := &page.Results[i]
+		for i := range books {
+			it := &books[i]
 			row := bookRow{itemSummary: summarize(it), Finished: finished[it.ID]}
 			for _, ref := range it.Media.Metadata.Series {
-				if ref.ID == s.ID || ref.Name == s.Name {
+				if ref.ID == s.ID || strings.EqualFold(ref.Name, s.Name) {
 					row.Sequence = ref.Sequence
 				}
 			}
@@ -551,12 +648,83 @@ func registerSeriesTools(r *registry) {
 		if upd.Name == nil && upd.Description == nil {
 			return nil, editOut{}, errors.New("nothing to change: pass name or description")
 		}
+		if upd.Name != nil {
+			// two series with one name is not a merge, it is two series
+			// with one name; series_merge is how books move
+			fd, ferr := client.FilterData(ctx, s.LibraryID)
+			if ferr != nil {
+				return nil, editOut{}, ferr
+			}
+			for _, other := range fd.Series {
+				if other.ID != s.ID && strings.EqualFold(strings.TrimSpace(other.Name), strings.TrimSpace(in.Name)) {
+					return nil, editOut{}, fmt.Errorf("a series named %q already exists (%s): series_merge from=%q into=%q moves the books there instead", other.Name, other.ID, s.Name, other.Name)
+				}
+			}
+		}
 		updated, err := client.UpdateSeries(ctx, s.ID, upd)
 		if err != nil {
 			return nil, editOut{}, err
 		}
 
 		return nil, editOut{ID: updated.ID, Name: updated.Name}, nil
+	})
+
+	type mergeIn struct {
+		From    string `json:"from"              jsonschema:"series id or exact name whose books move; it is empty afterwards and goes away"`
+		Into    string `json:"into"              jsonschema:"series id or exact name the books move into"`
+		Library string `json:"library,omitempty" jsonschema:"narrow a name lookup to one library"`
+	}
+	type mergeOut struct {
+		From   string   `json:"from"`
+		Into   string   `json:"into"`
+		IntoID string   `json:"into_id"`
+		Moved  int      `json:"moved"`
+		Books  []string `json:"books"   jsonschema:"each book as it now stands in the series, 'Title #2'"`
+	}
+	add(r, writeTool, &mcp.Tool{
+		Name: "series_merge",
+		Description: "Move every book of one series into another, keeping each book's number and every other series it is in; the emptied series goes away. " +
+			"For two spellings of one series that audit_series names reports ('The Wheel of Time' into 'Wheel of Time'), and for a one-book 'Skyward Series' beside 'Skyward'. " +
+			"A book already in both keeps its number in the target, or takes the one it had if the target had none. Changes server state.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in mergeIn) (*mcp.CallToolResult, mergeOut, error) {
+		from, err := resolveSeries(ctx, client, in.Library, in.From)
+		if err != nil {
+			return nil, mergeOut{}, fmt.Errorf("from: %w", err)
+		}
+		into, err := resolveSeries(ctx, client, in.Library, in.Into)
+		if err != nil {
+			return nil, mergeOut{}, fmt.Errorf("into: %w", err)
+		}
+		if from.ID == into.ID {
+			return nil, mergeOut{}, fmt.Errorf("%q is one series: nothing to merge", from.Name)
+		}
+		books, err := seriesBooks(ctx, client, from)
+		if err != nil {
+			return nil, mergeOut{}, err
+		}
+		if len(books) == 0 {
+			return nil, mergeOut{}, fmt.Errorf("%q has no books", from.Name)
+		}
+
+		out := mergeOut{From: from.Name, Into: into.Name, IntoID: into.ID, Books: make([]string, 0, len(books))}
+		updates := make([]abs.BatchMediaUpdate, 0, len(books))
+		for i := range books {
+			it := &books[i]
+			refs := mergeSeriesRefs(it.Media.Metadata.Series, from, into)
+			updates = append(updates, abs.BatchMediaUpdate{ID: it.ID, MediaPayload: abs.MediaUpdate{Metadata: &abs.MetadataUpdate{Series: refs}}})
+			for _, ref := range refs {
+				if strings.EqualFold(ref.Name, into.Name) {
+					out.Books = append(out.Books, it.Title()+seqSuffix(ref.Sequence))
+				}
+			}
+		}
+		n, err := client.BatchUpdate(ctx, updates)
+		if err != nil {
+			return nil, mergeOut{}, err
+		}
+		out.Moved = n
+
+		return nil, out, nil
 	})
 }
 

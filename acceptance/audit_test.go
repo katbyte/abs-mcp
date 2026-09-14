@@ -71,9 +71,9 @@ func TestEveryAuditRuns(t *testing.T) {
 			continue
 		}
 		switch name {
-		case "audit_all", "audit_missing", "audit_duplicates", "audit_series_gaps",
+		case "audit_all", "audit_missing", "audit_duplicates", "audit_series",
 			"audit_spelling", "audit_unembedded",
-			"audit_cover_ratio", "audit_authors", "audit_narrators":
+			"audit_covers", "audit_authors", "audit_narrators", "audit_matched", "audit_genres":
 			continue // asserted individually below
 		}
 		if !slices.Contains(auditTools, name) {
@@ -177,14 +177,14 @@ func TestAuditAll(t *testing.T) {
 
 	// every audit appears exactly once, in one list or the other; the two
 	// that fetch something per item are named as skipped instead
-	crossItem := []string{"audit_duplicates", "audit_spelling", "audit_authors", "audit_narrators", "audit_series_gaps"}
+	crossItem := []string{"audit_duplicates", "audit_spelling", "audit_authors", "audit_narrators", "audit_series", "audit_genres"}
 	for _, name := range slices.Concat(auditTools, crossItem) {
 		_, reported := counts[name]
 		if reported == slices.Contains(clean, name) {
 			t.Errorf("%s is in both lists or neither: found=%v clean=%v", name, reported, slices.Contains(clean, name))
 		}
 	}
-	perItem := []string{"audit_cover_ratio", "audit_unembedded"}
+	perItem := []string{"audit_covers", "audit_unembedded", "audit_matched"}
 	if skipped := strs(t, all["skipped"], "skipped"); !slices.Equal(skipped, perItem) {
 		t.Errorf("skipped = %v, want %v", skipped, perItem)
 	}
@@ -227,13 +227,13 @@ func TestAuditAll(t *testing.T) {
 	}
 }
 
-// audit_series_gaps must find both shapes of hole, invent none in a complete
+// audit_series must find both shapes of hole, invent none in a complete
 // series, and skip the podcast library without erroring.
 func TestAuditSeriesGaps(t *testing.T) {
-	out := call(t, "audit_series_gaps", nil)
+	out := call(t, "audit_series", nil)
 
 	got := map[string][]string{}
-	for _, row := range rows(t, out["series"], "series") {
+	for _, row := range rows(t, out["gaps"], "gaps") {
 		name, _ := row["name"].(string)
 		got[name] = strs(t, row["missing"], "missing")
 	}
@@ -324,14 +324,14 @@ func TestAuditNarrators(t *testing.T) {
 
 // Every fixture cover is absent, so this audit has nothing to measure - which
 // still has to come back as a well-formed empty result rather than an error.
-func TestAuditCoverRatio(t *testing.T) {
-	out := call(t, "audit_cover_ratio", map[string]any{"library": "Non-Fiction"})
+func TestAuditCovers(t *testing.T) {
+	out := call(t, "audit_covers", map[string]any{"library": "Non-Fiction"})
 
 	if checked := num(t, out["covers_checked"], "covers_checked"); checked != 0 {
 		t.Errorf("covers_checked = %d, want 0 - no fixture has a cover", checked)
 	}
-	if skipped := num(t, out["skipped"], "skipped"); skipped != 3 {
-		t.Errorf("skipped = %d, want 3 coverless items", skipped)
+	if found := num(t, out["total_findings"], "total_findings"); found != 3 {
+		t.Errorf("total_findings = %d, want 3 missing covers", found)
 	}
 	rows(t, out["findings"], "findings")
 }

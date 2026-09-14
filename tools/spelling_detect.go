@@ -15,7 +15,7 @@ import (
 
 // nameFields hold people or organisations, where a value is a name and the
 // truncation and initials checks make sense (they do not for a genre).
-var nameFields = map[string]bool{"narrators": true, "authors": true, "publishers": true}
+var nameFields = map[string]bool{"narrators": true, "authors": true, "publishers": true, "series": true}
 
 // personFields hold people, where importers leave "Read by" and "Ph.D." behind.
 var personFields = map[string]bool{"narrators": true, "authors": true}

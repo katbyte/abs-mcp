@@ -296,7 +296,7 @@ func pngOf(t *testing.T, w, h int) string {
 
 // The cover audit measures the file on disk (raw=1, not the server's 400-wide
 // cache), and does not ask for a cover the listing already says is absent.
-func TestAuditCoverRatioMeasuresTheFile(t *testing.T) {
+func TestAuditCoversMeasuresTheFile(t *testing.T) {
 	t.Parallel()
 
 	f := newFakeABS(t)
@@ -317,23 +317,31 @@ func TestAuditCoverRatioMeasuresTheFile(t *testing.T) {
 	})
 	call := toolCaller(t, f)
 
-	out, err := call("audit_cover_ratio", nil)
+	out, err := call("audit_covers", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := num(t, out["covers_checked"]); got != 3 {
 		t.Errorf("covers_checked = %d, want 3", got)
 	}
-	if got := num(t, out["skipped"]); got != 1 {
-		t.Errorf("skipped = %d, want the one with no cover", got)
+	if _, skipped := out["skipped"]; skipped {
+		t.Errorf("skipped = %v, want none: a missing cover is a finding, not a skip", out["skipped"])
 	}
 	if got := f.requests("/api/items/i4/cover"); len(got) != 0 {
 		t.Errorf("a coverless item was fetched: %v", got)
 	}
 
 	why := map[string]string{}
+	problem := map[string]string{}
 	for _, row := range list(t, out["findings"]) {
 		why[str(t, row["id"])] = str(t, row["why"])
+		problem[str(t, row["id"])] = str(t, row["problem"])
+	}
+	if problem["i4"] != "missing" {
+		t.Errorf("the coverless item: %q %q", problem["i4"], why["i4"])
+	}
+	if problem["i2"] != "ratio" || problem["i3"] != "small" {
+		t.Errorf("problems = %v", problem)
 	}
 	if !strings.HasPrefix(why["i2"], "not square") {
 		t.Errorf("the tall cover: %q", why["i2"])
@@ -467,7 +475,7 @@ func TestAuditAllMatchesTheAudits(t *testing.T) {
 	if !ok {
 		t.Fatalf("clean is %T, want a list", all["clean"])
 	}
-	for _, name := range []string{"audit_issues", "audit_series_gaps"} {
+	for _, name := range []string{"audit_issues", "audit_series"} {
 		if !slices.Contains(clean, any(name)) {
 			t.Errorf("%s should be clean: %v", name, all["clean"])
 		}
@@ -476,11 +484,11 @@ func TestAuditAllMatchesTheAudits(t *testing.T) {
 	if !ok {
 		t.Fatalf("skipped is %T, want a list", all["skipped"])
 	}
-	if !slices.Equal(skipped, []any{"audit_cover_ratio", "audit_unembedded"}) {
-		t.Errorf("skipped = %v, want the two per-item-request audits", all["skipped"])
+	if !slices.Equal(skipped, []any{"audit_covers", "audit_unembedded", "audit_matched"}) {
+		t.Errorf("skipped = %v, want the three per-item-request audits", all["skipped"])
 	}
-	if _, ran := found["audit_cover_ratio"]; ran || slices.Contains(clean, any("audit_cover_ratio")) {
-		t.Errorf("audit_cover_ratio was reported without deep: %v", all)
+	if _, ran := found["audit_covers"]; ran || slices.Contains(clean, any("audit_covers")) {
+		t.Errorf("audit_covers was reported without deep: %v", all)
 	}
 	if got := f.requests("/api/items/i1/cover"); len(got) != 0 {
 		t.Errorf("a cover was fetched without deep: %v", got)
@@ -493,8 +501,8 @@ func TestAuditAllMatchesTheAudits(t *testing.T) {
 	if _, present := deep["skipped"]; present {
 		t.Errorf("deep still skipped something: %v", deep["skipped"])
 	}
-	if deepFound := counts(deep); deepFound["audit_cover_ratio"] != 2 || deepFound["audit_unembedded"] != 1 {
-		t.Errorf("deep found %v, want 2 tiny covers and 1 unembedded book", deepFound)
+	if deepFound := counts(deep); deepFound["audit_covers"] != 3 || deepFound["audit_unembedded"] != 1 {
+		t.Errorf("deep found %v, want 2 tiny covers plus 1 missing, and 1 unembedded book", deepFound)
 	}
 
 	// and every count is what the audit itself says
@@ -1105,6 +1113,26 @@ func TestSameName(t *testing.T) {
 	} {
 		if got := sameName(c.a, c.b); got != c.same {
 			t.Errorf("sameName(%q, %q) = %v", c.a, c.b, got)
+		}
+	}
+}
+
+// A description that says nothing is as missing as none.
+func TestStubDescription(t *testing.T) {
+	t.Parallel()
+
+	for text, want := range map[string]string{
+		"":                             "no description",
+		"  <p></p> ":                   "no description",
+		"Read by Paul Heck":            "credit line",
+		"<b>Narrated by</b> Jim Dale.": "credit line",
+		"https://example.com/book":     "only a url",
+		"Unabridged.":                  "stub, 11 characters",
+		strings.Repeat("A real description of the book. ", 5): "",
+	} {
+		detail, flagged := stubDescription(text)
+		if (want == "") == flagged || !strings.Contains(detail, want) {
+			t.Errorf("stubDescription(%q) = %q, %v; want %q", text, detail, flagged, want)
 		}
 	}
 }

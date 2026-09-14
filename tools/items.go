@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/katbyte/abs-mcp/lib/abs"
@@ -143,7 +145,9 @@ func registerItemTools(r *registry) {
 		Subtitle      string   `json:"subtitle,omitempty"`
 		Authors       []string `json:"authors,omitempty"        jsonschema:"replacement author list (books); new names are created"`
 		Narrators     []string `json:"narrators,omitempty"      jsonschema:"replacement narrator list (books)"`
-		Series        []string `json:"series,omitempty"         jsonschema:"replacement series list as 'Name' or 'Name #2' (books)"`
+		Series        []string `json:"series,omitempty"         jsonschema:"replacement series list as 'Name' or 'Name #2' (books); every series not listed is dropped, so use add_series to link one more"`
+		AddSeries     []string `json:"add_series,omitempty"     jsonschema:"series to add to the item's own as 'Name' or 'Name #2', keeping the rest; a series it is already in takes the number given"`
+		RemoveSeries  []string `json:"remove_series,omitempty"  jsonschema:"series to take the item out of, by name, keeping the rest"`
 		Genres        []string `json:"genres,omitempty"         jsonschema:"replacement genre list"`
 		Tags          []string `json:"tags,omitempty"           jsonschema:"replacement tag list"`
 		Year          string   `json:"year,omitempty"           jsonschema:"published year"`
@@ -210,9 +214,19 @@ func registerItemTools(r *registry) {
 		}
 		if len(in.Series) > 0 {
 			for _, s := range in.Series {
-				name, seq, _ := strings.Cut(s, " #")
-				md.Series = append(md.Series, abs.SeriesRef{Name: strings.TrimSpace(name), Sequence: strings.TrimSpace(seq)})
+				md.Series = append(md.Series, parseSeriesRef(s))
 			}
+			fields = append(fields, "series")
+		}
+		if len(in.AddSeries) > 0 || len(in.RemoveSeries) > 0 {
+			if len(in.Series) > 0 || slices.ContainsFunc(in.Clear, func(c string) bool { return strings.EqualFold(c, "series") }) {
+				return nil, editOut{}, errors.New("series replaces the list; add_series and remove_series edit it. One or the other")
+			}
+			refs, serr := editSeriesList(it.Media.Metadata.Series, in.AddSeries, in.RemoveSeries)
+			if serr != nil {
+				return nil, editOut{}, serr
+			}
+			md.Series = refs
 			fields = append(fields, "series")
 		}
 		if len(in.Genres) > 0 {
@@ -339,9 +353,9 @@ func registerItemTools(r *registry) {
 			}
 			for _, s := range res.Series {
 				if s.Sequence != "" {
-					c.Series = append(c.Series, s.Name+" #"+s.Sequence)
+					c.Series = append(c.Series, s.Title()+" #"+s.Sequence)
 				} else {
-					c.Series = append(c.Series, s.Name)
+					c.Series = append(c.Series, s.Title())
 				}
 			}
 			out.Candidates = append(out.Candidates, c)
@@ -352,14 +366,17 @@ func registerItemTools(r *registry) {
 
 	type applyIn struct {
 		itemRef
-		Provider        string `json:"provider,omitempty"         jsonschema:"must match the provider used in item_match"`
-		Candidate       *int   `json:"candidate,omitempty"        jsonschema:"index from item_match; the candidate's asin/isbn is used to match exactly"`
-		ASIN            string `json:"asin,omitempty"             jsonschema:"match this asin directly instead of a candidate"`
-		ISBN            string `json:"isbn,omitempty"             jsonschema:"match this isbn directly instead of a candidate"`
-		Title           string `json:"title,omitempty"            jsonschema:"must match the title override used in item_match"`
-		Author          string `json:"author,omitempty"           jsonschema:"must match the author override used in item_match"`
-		OverrideDetails bool   `json:"override_details,omitempty" jsonschema:"replace existing metadata fields instead of only filling empty ones"`
-		OverrideCover   bool   `json:"override_cover,omitempty"   jsonschema:"replace the existing cover"`
+		Provider        string   `json:"provider,omitempty"         jsonschema:"must match the provider used in item_match"`
+		Candidate       *int     `json:"candidate,omitempty"        jsonschema:"index from item_match; the candidate's asin/isbn is used to match exactly"`
+		ASIN            string   `json:"asin,omitempty"             jsonschema:"match this asin directly instead of a candidate"`
+		ISBN            string   `json:"isbn,omitempty"             jsonschema:"match this isbn directly instead of a candidate"`
+		Title           string   `json:"title,omitempty"            jsonschema:"must match the title override used in item_match"`
+		Author          string   `json:"author,omitempty"           jsonschema:"must match the author override used in item_match"`
+		OverrideDetails bool     `json:"override_details,omitempty" jsonschema:"replace existing metadata fields instead of only filling empty ones"`
+		OverrideCover   bool     `json:"override_cover,omitempty"   jsonschema:"replace the existing cover"`
+		Keep            []string `json:"keep,omitempty"             jsonschema:"with override_details: fields to put back as they were after the match: title, subtitle, authors, narrators, series, genres, tags, publisher, year, language, description"`
+		Smart           bool     `json:"smart,omitempty"            jsonschema:"fill the empty fields, then decide each remaining difference by rule: a file-tag title, a company in the narrator field or a timestamp year is written; a curated series, a plain year or an honorific-only difference is kept; anything else is reported for review with both values. Cannot combine with override_details"`
+		Preview         bool     `json:"preview,omitempty"          jsonschema:"with smart: report the decisions and change nothing"`
 	}
 	type appliedRef struct {
 		Title  string `json:"title,omitempty"`
@@ -368,10 +385,13 @@ func registerItemTools(r *registry) {
 		ISBN   string `json:"isbn,omitempty"`
 	}
 	type applyOut struct {
-		Updated bool         `json:"updated"`
-		Warning string       `json:"warning,omitempty"`
-		Applied *appliedRef  `json:"applied,omitempty" jsonschema:"the candidate that was applied; check it against item"`
-		Item    *itemSummary `json:"item,omitempty"    jsonschema:"the item after matching"`
+		Updated bool            `json:"updated"`
+		Kept    []string        `json:"kept,omitempty"    jsonschema:"fields restored after the match"`
+		Fields  []fieldDecision `json:"fields,omitempty"  jsonschema:"with smart: every field the provider would write differently and what was done about it"`
+		Counts  map[string]int  `json:"counts,omitempty"  jsonschema:"with smart: decisions by action"`
+		Warning string          `json:"warning,omitempty"`
+		Applied *appliedRef     `json:"applied,omitempty" jsonschema:"the candidate that was applied; check it against item"`
+		Item    *itemSummary    `json:"item,omitempty"    jsonschema:"the item after matching"`
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "item_match_apply",
@@ -390,6 +410,20 @@ func registerItemTools(r *registry) {
 		}
 		if it.IsPodcast() {
 			return nil, applyOut{}, errNotBook
+		}
+
+		keep, err := parseKeep(in.Keep)
+		if err != nil {
+			return nil, applyOut{}, err
+		}
+		if len(keep) > 0 && !in.OverrideDetails {
+			return nil, applyOut{}, errors.New("keep only means something with override_details: without it nothing already set is replaced")
+		}
+		if in.Smart && in.OverrideDetails {
+			return nil, applyOut{}, errors.New("smart and override_details are two answers to the same question; pick one")
+		}
+		if in.Preview && !in.Smart {
+			return nil, applyOut{}, errors.New("preview only means something with smart")
 		}
 
 		provider, title, author := matchQuery(ctx, client, it, in.Provider, in.Title, in.Author)
@@ -416,11 +450,50 @@ func registerItemTools(r *registry) {
 		}
 		applied.ASIN, applied.ISBN = opts.ASIN, opts.ISBN
 
+		if in.Smart {
+			if opts.ASIN == "" && opts.ISBN == "" {
+				return nil, applyOut{}, errors.New("smart needs an asin or isbn to fetch the provider's record")
+			}
+			decisions, res, err := smartApply(ctx, client, it, provider, opts.ASIN, opts.ISBN, in.Preview)
+			if err != nil {
+				return nil, applyOut{}, err
+			}
+			out := applyOut{Applied: &applied, Fields: decisions, Counts: smartCounts(decisions)}
+			if in.Preview {
+				return nil, out, nil
+			}
+			out.Updated, out.Warning = res.Updated, res.Warning
+			if err := tagProvider(ctx, client, it.ID, it.Media.Tags, provider); err != nil {
+				out.Warning = joinWarnings(out.Warning, "recording the provider tag failed: "+err.Error())
+			}
+			if after, aerr := client.Item(ctx, it.ID); aerr == nil {
+				s := summarize(after)
+				out.Item = &s
+			}
+			return nil, out, nil
+		}
+
 		res, err := client.Match(ctx, it.ID, opts)
 		if err != nil {
 			return nil, applyOut{}, err
 		}
 		out := applyOut{Updated: res.Updated, Warning: res.Warning, Applied: &applied}
+		tags := it.Media.Tags
+		if res.LibraryItem != nil && !slices.Contains(keep, "tags") {
+			tags = res.LibraryItem.Media.Tags
+		}
+		if err := restoreKept(ctx, client, it, keep); err != nil {
+			return nil, applyOut{}, fmt.Errorf("matched, but restoring %s failed: %w", strings.Join(keep, ", "), err)
+		}
+		out.Kept = keep
+		if err := tagProvider(ctx, client, it.ID, tags, provider); err != nil {
+			out.Warning = joinWarnings(out.Warning, "recording the provider tag failed: "+err.Error())
+		}
+		// the match result predates the restored fields and the provider
+		// tag; the item as it is now is one more read
+		if after, aerr := client.Item(ctx, it.ID); aerr == nil {
+			res.LibraryItem = after
+		}
 		if res.LibraryItem != nil {
 			s := summarize(res.LibraryItem)
 			out.Item = &s
@@ -439,11 +512,15 @@ func registerItemTools(r *registry) {
 	})
 
 	type batchEditIn struct {
-		Library string   `json:"library,omitempty"   jsonschema:"library name or id, for resolving titles"`
-		Items   []string `json:"items"               jsonschema:"the books to change, by id or exact title"`
-		Genres  []string `json:"genres,omitempty"    jsonschema:"replacement genre list, applied to every item"`
-		Tags    []string `json:"tags,omitempty"      jsonschema:"replacement tag list, applied to every item"`
-		Authors []string `json:"authors,omitempty"   jsonschema:"replacement author list"`
+		Library string   `json:"library,omitempty"       jsonschema:"library name or id, for resolving titles"`
+		Items   []string `json:"items"                   jsonschema:"the books to change, by id or exact title"`
+		Genres  []string `json:"genres,omitempty"        jsonschema:"replacement genre list, applied to every item"`
+		Tags    []string `json:"tags,omitempty"          jsonschema:"replacement tag list, applied to every item"`
+		AddTags []string `json:"add_tags,omitempty"      jsonschema:"tags to add to each item's own, keeping the rest; zz-provider:none marks a book as checked with nothing to match"`
+		DropTag []string `json:"remove_tags,omitempty"   jsonschema:"tags to remove from each item, keeping the rest"`
+		AddSer  []string `json:"add_series,omitempty"    jsonschema:"series to add to each item's own as 'Name' or 'Name #2', keeping the rest: 'Cosmere' on every Sanderson book"`
+		DropSer []string `json:"remove_series,omitempty" jsonschema:"series to take each item out of, by name, keeping the rest"`
+		Authors []string `json:"authors,omitempty"       jsonschema:"replacement author list"`
 		Year    string   `json:"year,omitempty"`
 		Publish string   `json:"publisher,omitempty"`
 		Lang    string   `json:"language,omitempty"`
@@ -454,7 +531,7 @@ func registerItemTools(r *registry) {
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "item_batch_edit",
-		Description: "Apply the same metadata to many books in one call - a genre on forty titles, a publisher on a series. Every field given replaces that field on every item listed; fields left out are untouched. Use item_edit for one item, or for fields that differ per item. Changes server state.",
+		Description: "Apply the same metadata to many books in one call - a genre on forty titles, a publisher on a series. Every field given replaces that field on every item listed, except add_tags, remove_tags, add_series and remove_series, which edit each item's own list; fields left out are untouched. Use item_edit for one item, or for fields that differ per item. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in batchEditIn) (*mcp.CallToolResult, batchEditOut, error) {
 		if len(in.Items) == 0 {
 			return nil, batchEditOut{}, errors.New("at least one item is required")
@@ -480,8 +557,12 @@ func registerItemTools(r *registry) {
 				hasMeta = true
 			}
 		}
-		if len(in.Tags) == 0 && !hasMeta {
-			return nil, batchEditOut{}, errors.New("nothing to change: pass genres, tags, authors, year, publisher or language")
+		editSeries := len(in.AddSer) > 0 || len(in.DropSer) > 0
+		if len(in.Tags) == 0 && len(in.AddTags) == 0 && len(in.DropTag) == 0 && !hasMeta && !editSeries {
+			return nil, batchEditOut{}, errors.New("nothing to change: pass genres, tags, add_tags, remove_tags, add_series, remove_series, authors, year, publisher or language")
+		}
+		if len(in.Tags) > 0 && (len(in.AddTags) > 0 || len(in.DropTag) > 0) {
+			return nil, batchEditOut{}, errors.New("tags replaces the list; add_tags and remove_tags edit it. One or the other")
 		}
 
 		out := batchEditOut{Items: make([]string, 0, len(in.Items))}
@@ -498,8 +579,30 @@ func registerItemTools(r *registry) {
 			if len(in.Tags) > 0 {
 				upd.Tags = in.Tags // an explicit empty list would clear them
 			}
-			if hasMeta {
+			if len(in.AddTags) > 0 || len(in.DropTag) > 0 {
+				tags := slices.Clone(it.Media.Tags)
+				for _, t := range in.AddTags {
+					if t = strings.TrimSpace(t); t != "" && !slices.ContainsFunc(tags, func(x string) bool { return strings.EqualFold(x, t) }) {
+						tags = append(tags, t)
+					}
+				}
+				tags = slices.DeleteFunc(tags, func(x string) bool {
+					return slices.ContainsFunc(in.DropTag, func(d string) bool { return strings.EqualFold(strings.TrimSpace(d), x) })
+				})
+				if tags == nil {
+					tags = []string{}
+				}
+				upd.Tags = tags
+			}
+			if hasMeta || editSeries {
 				upd.Metadata = new(md)
+			}
+			if editSeries {
+				refs, err := editSeriesList(it.Media.Metadata.Series, in.AddSer, in.DropSer)
+				if err != nil {
+					return nil, batchEditOut{}, err
+				}
+				upd.Metadata.Series = refs
 			}
 			updates = append(updates, abs.BatchMediaUpdate{ID: it.ID, MediaPayload: upd})
 			out.Items = append(out.Items, it.Title())
@@ -721,6 +824,9 @@ func matchQuery(ctx context.Context, client *abs.Client, it *abs.Item, provider,
 	if author == "" {
 		author = it.Media.Metadata.AuthorDisplay()
 	}
+	if provider == "" && len(defaultProviders) > 0 {
+		provider = defaultProviders[0]
+	}
 	if provider == "" {
 		if lib, err := client.Library(ctx, it.LibraryID); err == nil {
 			provider = lib.Provider
@@ -735,4 +841,59 @@ func joinWarnings(have, add string) string {
 		return add
 	}
 	return have + "; " + add
+}
+
+// parseSeriesRef reads "Name #2" or "Name" as a series entry.
+func parseSeriesRef(s string) abs.SeriesRef {
+	name, seq, _ := strings.Cut(s, " #")
+	return abs.SeriesRef{Name: strings.TrimSpace(name), Sequence: strings.TrimSpace(seq)}
+}
+
+// editSeriesList is a book's series list with some added and some removed,
+// the rest untouched. The whole list is what the server takes, so an edit
+// that only meant to add one series has to send the others back: four
+// Stormlight books lost their Cosmere link to a replacement built from a
+// listing that showed one series per book. An added series the book is
+// already in takes the number given, or keeps its own when none is.
+func editSeriesList(have []abs.SeriesRef, add, remove []string) ([]abs.SeriesRef, error) {
+	out := slices.Clone(have)
+	if out == nil {
+		out = []abs.SeriesRef{}
+	}
+	same := func(a, b string) bool { return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b)) }
+	for _, s := range add {
+		ref := parseSeriesRef(s)
+		if ref.Name == "" {
+			return nil, fmt.Errorf("add_series %q names no series", s)
+		}
+		if i := slices.IndexFunc(out, func(r abs.SeriesRef) bool { return same(r.Name, ref.Name) }); i >= 0 {
+			if ref.Sequence != "" {
+				out[i].Sequence = ref.Sequence
+			}
+			continue
+		}
+		out = append(out, ref)
+	}
+	for _, s := range remove {
+		name := parseSeriesRef(s).Name
+		if name == "" {
+			return nil, fmt.Errorf("remove_series %q names no series", s)
+		}
+		if !slices.ContainsFunc(out, func(r abs.SeriesRef) bool { return same(r.Name, name) }) {
+			return nil, fmt.Errorf("remove_series: the item is not in %q (it is in %s)", name, seriesNamesOf(have))
+		}
+		out = slices.DeleteFunc(out, func(r abs.SeriesRef) bool { return same(r.Name, name) })
+	}
+	return out, nil
+}
+
+func seriesNamesOf(refs []abs.SeriesRef) string {
+	if len(refs) == 0 {
+		return "no series"
+	}
+	names := make([]string, 0, len(refs))
+	for _, r := range refs {
+		names = append(names, strconv.Quote(r.Name))
+	}
+	return strings.Join(names, ", ")
 }

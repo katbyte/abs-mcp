@@ -239,6 +239,11 @@ func registerLibraryTools(r *registry) {
 		if err != nil {
 			return nil, itemsOut{}, err
 		}
+		if strings.HasPrefix(filter, "series.") { // the listing collapses each book's series to the one filtered on
+			if err := fullSeriesLists(ctx, client, res.Results); err != nil {
+				return nil, itemsOut{}, err
+			}
+		}
 
 		return nil, itemsOut{Total: res.Total, Offset: page * limit, Items: summarizeAll(res.Results)}, nil
 	})

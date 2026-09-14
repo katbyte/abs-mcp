@@ -501,7 +501,7 @@ func TestEveryAuditTripsAndClears(t *testing.T) {
 	// a book with nothing wrong with it
 	clean := func() *abs.Item {
 		return book(abs.Metadata{
-			Title: "Dune", AuthorName: "Frank Herbert", ASIN: "B0", Description: "A book.",
+			Title: "Dune", AuthorName: "Frank Herbert", ASIN: "B0", Description: "Set on the desert planet Arrakis, Dune is the story of Paul Atreides, heir to a noble family tasked with ruling an inhospitable world where the only thing of value is the spice.",
 			NarratorName: "Scott Brick", SeriesName: "Dune", Genres: []string{"Science Fiction"},
 			PublishedYear: "1965", Publisher: "Bantam", Language: "English",
 		}, abs.Media{Duration: 3600, NumTracks: 3, NumChapters: 20, NumAudioFiles: 3, CoverPath: "/c.jpg"})

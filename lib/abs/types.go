@@ -737,26 +737,43 @@ type MatchResult struct {
 	Warning     string `json:"warning"`
 }
 
+// SearchSeries is a series on a provider hit. The built-in providers write the
+// series name under "series" ({"series": "Discworld", "sequence": "3"}); a
+// custom provider may write "name", the way the item metadata does.
+type SearchSeries struct {
+	Series   string `json:"series"`
+	Name     string `json:"name"`
+	Sequence string `json:"sequence"`
+}
+
+// Title is the series name, whichever key carried it.
+func (s SearchSeries) Title() string {
+	if s.Series != "" {
+		return s.Series
+	}
+	return s.Name
+}
+
 // BookSearchResult is one provider hit from GET /api/search/books.
 type BookSearchResult struct {
-	Title         string      `json:"title"`
-	Subtitle      string      `json:"subtitle"`
-	Author        string      `json:"author"`
-	Narrator      string      `json:"narrator"`
-	Publisher     string      `json:"publisher"`
-	PublishedYear FlexString  `json:"publishedYear"`
-	Description   string      `json:"description"`
-	Cover         string      `json:"cover"`
-	ASIN          string      `json:"asin"`
-	ISBN          string      `json:"isbn"`
-	Genres        []string    `json:"genres"`
-	Tags          []string    `json:"tags"`
-	Series        []SeriesRef `json:"series"`
-	Language      string      `json:"language"`
-	Duration      float64     `json:"duration"` // minutes
-	Region        string      `json:"region"`
-	Rating        FlexString  `json:"rating"`
-	Abridged      bool        `json:"abridged"`
+	Title         string         `json:"title"`
+	Subtitle      string         `json:"subtitle"`
+	Author        string         `json:"author"`
+	Narrator      string         `json:"narrator"`
+	Publisher     string         `json:"publisher"`
+	PublishedYear FlexString     `json:"publishedYear"`
+	Description   string         `json:"description"`
+	Cover         string         `json:"cover"`
+	ASIN          string         `json:"asin"`
+	ISBN          string         `json:"isbn"`
+	Genres        []string       `json:"genres"`
+	Tags          []string       `json:"tags"`
+	Series        []SearchSeries `json:"series"`
+	Language      string         `json:"language"`
+	Duration      float64        `json:"duration"` // minutes
+	Region        string         `json:"region"`
+	Rating        FlexString     `json:"rating"`
+	Abridged      bool           `json:"abridged"`
 	// custom providers may return an id
 	ID FlexString `json:"id"`
 }

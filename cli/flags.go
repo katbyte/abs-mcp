@@ -23,6 +23,8 @@ type FlagData struct {
 	Listen       string   `mapstructure:"listen"`
 	AuthToken    string   `mapstructure:"auth-token"`
 	AllowNoAuth  bool     `mapstructure:"allow-no-auth"`
+	ProviderTag  string   `mapstructure:"provider-tag"`
+	Providers    []string `mapstructure:"providers"`
 }
 
 func configureFlags(root *cobra.Command) error {
@@ -38,6 +40,8 @@ func configureFlags(root *cobra.Command) error {
 	pflags.String("listen", "", "serve MCP over HTTP on this address (e.g. :8080) instead of stdio")
 	pflags.String("auth-token", "", "bearer token required on the HTTP endpoint (consider exporting to ABS_AUTH_TOKEN instead)")
 	pflags.Bool("allow-no-auth", false, "serve HTTP with no bearer token: anyone who can reach the port can use every tool")
+	pflags.StringSlice("providers", nil, "metadata providers to ask in order when a call names none, the store the books were bought from first: audible.ca,audible (default: the library's own provider)")
+	pflags.String("provider-tag", "zz-provider:", "prefix of the tag that records which store a match came from (zz-provider:audible.ca, sorted last in the tag list); off writes none")
 
 	// binding map for viper/pflag -> env
 	m := map[string]string{ //nolint:gosec // G101: these are env var names, not credentials
@@ -51,6 +55,8 @@ func configureFlags(root *cobra.Command) error {
 		"listen":        "ABS_LISTEN",
 		"auth-token":    "ABS_AUTH_TOKEN",
 		"allow-no-auth": "ABS_ALLOW_NO_AUTH",
+		"provider-tag":  "ABS_PROVIDER_TAG",
+		"providers":     "ABS_PROVIDERS",
 	}
 
 	for name, env := range m {
@@ -120,5 +126,7 @@ func (f *FlagData) ToolOptions() tools.Options {
 		Toolsets:     sets,
 		Allow:        f.AllowTools,
 		Deny:         f.DenyTools,
+		ProviderTag:  f.ProviderTag,
+		Providers:    f.Providers,
 	}
 }

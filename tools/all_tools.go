@@ -34,6 +34,13 @@ type Options struct {
 	Allow []string
 	// Deny removes matching tools from whatever Allow left.
 	Deny []string
+	// ProviderTag is the prefix of the tag that records which store a match
+	// came from, "zz-provider:" by default; "off" writes and reads none.
+	ProviderTag string
+	// Providers is the default order of metadata providers to ask when a call
+	// names none: the store the books were bought from first, then the rest,
+	// [audible.ca, audible]. Empty means the library's own provider alone.
+	Providers []string
 }
 
 // Toolsets group the tools by the job someone is doing, so a client can load a
@@ -69,12 +76,12 @@ var Toolsets = map[string][]string{
 	"curation": {
 		"audit_all", "audit_missing", "audit_unmatched", "audit_issues", "audit_no_audio",
 		"audit_podcast_no_episodes", "audit_single_chapter", "audit_authors",
-		"audit_path", "audit_cover_ratio", "audit_podcast_stale_feed",
-		"audit_duplicates", "audit_series_gaps", "audit_spelling", "audit_narrators", "audit_unembedded", "metadata_rename",
-		"item_edit", "item_batch_edit", "item_match", "item_match_apply",
-		"item_cover_search", "item_cover_edit", "item_chapters_set",
+		"audit_path", "audit_covers", "audit_podcast_stale_feed",
+		"audit_duplicates", "audit_series", "audit_spelling", "audit_narrators", "audit_genres", "audit_unembedded", "audit_matched", "metadata_rename",
+		"item_edit", "item_batch_edit", "item_match", "item_match_apply", "item_match_batch", "item_match_apply_batch", "item_match_tag",
+		"item_cover_search", "item_cover_edit", "item_cover_upgrade", "item_chapters_set",
 		"author_list", "author_get", "author_edit", "author_match", "author_match_apply", "author_image_set",
-		"narrator_list", "series_list", "series_get", "series_edit",
+		"narrator_list", "series_list", "series_get", "series_edit", "series_merge",
 		"library_get", "library_filters", "library_recent", "server_tags",
 	},
 	// subscribe, catch up and back-fill. Same tools as the "podcast" family;
@@ -162,6 +169,10 @@ func add[In, Out any](r *registry, kind toolKind, t *mcp.Tool, h mcp.ToolHandler
 // the names registered. It fails when an allow/deny pattern matches no tool,
 // so a typo cannot silently hide one.
 func RegisterAll(server *mcp.Server, client *abs.Client, opts Options) ([]string, error) {
+	if opts.ProviderTag != "" {
+		providerTagPrefix = opts.ProviderTag
+	}
+	defaultProviders = opts.Providers
 	r := &registry{server: server, client: client, opts: opts}
 	queueTools(r)
 
@@ -192,10 +203,17 @@ func queueTools(r *registry) {
 	registerServerTools(r)
 	registerLibraryTools(r)
 	registerAuditTools(r)
+	registerPathAudit(r)
+	registerCoverAudit(r)
 	registerEmbeddedAudit(r)
 	registerSpellingTools(r)
 	registerNarratorAudit(r)
 	registerAuthorAudit(r)
+	registerSeriesAudit(r)
+	registerMatchedAudit(r)
+	registerGenresAudit(r)
+	registerMatchBatchTools(r)
+	registerMatchTagTool(r)
 	registerItemTools(r)
 	registerAuthorTools(r)
 	registerNarratorTools(r)

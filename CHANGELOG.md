@@ -1,101 +1,75 @@
-## Unreleased
+## 0.4.0 (unreleased)
 
 ### Breaking
 
-- `audit_author_as_title` and `audit_author_missing_image` are folded into `audit_authors`,
-  which is every author check in one place: the item whose author field holds its title;
-  records never matched (no asin), with no photo, with no books, and whose biography reads as
-  someone else's (it opens with a name and never mentions the author's surname: Sarah Diemer's
-  record said "Sarah Miller began writing", Reba Buhr's "Reba Bale writes", and no audit
-  noticed); and author records that are one name spelled two ways, which `audit_spelling` no
-  longer reports. `counts` says how many of each. 89 tools -> 88
-
-- `item_match_apply` requires `candidate`, `asin` or `isbn`. With none of them it applied the
-  provider's first hit unseen, and with `override_details` replaced the metadata with it
-- `serve --listen` refuses to start without `ABS_AUTH_TOKEN`. A blank token in a copied
-  `.env` used to come up serving every tool to the whole network behind one warning line;
-  `--allow-no-auth` (`ABS_ALLOW_NO_AUTH=true`) is how to say that is wanted
-- `audit_all` runs every audit: `audit_duplicates`, `audit_spelling`, `audit_series_gaps`,
-  `audit_authors` and `audit_narrators` now count alongside the per-item checks, and `deep=true` adds
-  `audit_cover_ratio` and `audit_unembedded`, the two that fetch something for every item;
-  without it they are listed under `skipped` rather than silently left out
-- `audit_series_gaps` and `audit_duplicates` report `total_findings` like every other audit
-  (`audit_series_gaps` called it `found`; `audit_duplicates` had no count before the limit)
-
-- `author_match` looks and `author_match_apply` applies, the way `item_match` and
-  `item_match_apply` work. The provider's name lookup tolerates a few letters of difference,
-  so "Emily Andras" came back as Emily Adrian and "Sarah Diemer" as Sarah Miller, and the
-  one-step tool wrote a stranger's photo and biography onto the record with no way to say
-  no. Now `author_match` returns the candidate with `name_matches`, a description and
-  whether there is a photo, and nothing changes until `author_match_apply` is given that
-  asin. `lib/abs` `SearchAuthors` is `SearchAuthor`: the server answers one record or null,
-  and the old list decode always came back empty. 87 tools -> 88
-- `item_match_apply` reports `applied`, the candidate it sent, and warns when the item's
-  asin or isbn is not that one afterwards (a field already set is kept unless
-  `override_details`), so what was applied can be checked against the item rather than
-  assumed
+- `audit_series_gaps` is `audit_series`: gaps, names (one series spelled two ways, with authors),
+  numbering (folder vs series number, unlinked, duplicates, zero padding), odd names, and titles
+  that are really the series name. Gap rows carry `unlinked` (the book is on the shelf) and
+  `merged` (what is left once spellings are one series); `articles=true` lists names opening
+  with The, A or An
+- `audit_author_as_title` and `audit_author_missing_image` are folded into `audit_authors`, which
+  also finds records with no asin, no photo, no books, a stranger's biography, or a name spelled
+  two ways
+- `audit_cover_ratio` is `audit_covers`: missing, not square, too small. `store=true` compares each
+  matched book's cover with its store's by perceptual hash: `upgrade` (same picture, bigger),
+  `differs` (another picture), a jacket scan as `ratio` with the store's square art attached.
+  `banner=true` finds the "Only from Audible" ribbon
+- `item_match_apply` requires `candidate`, `asin` or `isbn`
+- `serve --listen` refuses to start without `ABS_AUTH_TOKEN`; `--allow-no-auth` opts out
+- `audit_all` runs every audit; `deep=true` adds the three that fetch per item, otherwise `skipped`
+- `author_match` looks and `author_match_apply` applies; `lib/abs` `SearchAuthors` is `SearchAuthor`
+- the gaps audit and `audit_duplicates` report `total_findings` like the rest
+- 87 tools -> 91
 
 ### Added
 
-- `audit_narrators`: everything wrong with the narrator field, in two parts. Roles: a name that
-  wrote some books and read others in the same library, an author reading their own book not
-  counted. The two shapes it catches were found by hand first: four light novels imported with
-  author and narrator swapped (the author of volume 2 was the narrator of 1, 3 and 4), and a
-  narrator credited as co-author on one book. Names: the spelling checks below, run on
-  narrators, which `audit_spelling` no longer covers. Runs in `audit_all`. 88 tools -> 89
-  (then 88 again with the author audits folded, above)
-- `audit_spelling` sees more than case and punctuation. For names it also reports an
-  importer's wrapper left on (`introduction by Jane Doe`, and for narrators
-  `Narrator..........Sean Barrett`, `Read by Jim Dale`), one name that is another cut short or
-  without its initials (`Harper Audio` and `HarperAudio`, `Fajer Al` and `Fajer Al-Kaisi`, `Jack
-  Evans` and `Jack R. R. Evans`), two names a typo apart (`Peter Whickam` and `Peter Wickham`),
-  two names in one value (`A. Reader/B. Reader`, with the parts listed) and leftovers that are
-  not a name (`Ph.D.`, `Dc`). Every group carries `kind`, and `keep` is the clean spelling even
-  when the wrapped one is on more books. Spellings a typo apart from one another come back as
-  one cluster (`Audiobook`, `Audio Book`, `Audiobooks`), not a pair per edge. A narrator list
-  with all of these in it came back with zero findings before
-
-- `author_edit clear=[description, asin, image]` blanks those fields and removes the photo,
-  which is how an `author_match` that found the wrong person is undone. Before, an empty
-  value was "nothing to change" and nothing could remove a photo at all
+- `item_match_batch` scores a page of books against a provider (`exact`, `likely`, `edition`,
+  `unsure`, `none`); `item_match_apply_batch` applies an explicit list of item and asin pairs
+- `item_match_apply` `smart`: fill the empty fields, then decide each difference by rule, with
+  `preview`; `keep` restores named fields after `override_details`; results report `applied`
+  and warn when the item's asin is not the one applied
+- `zz-provider:` tag records the store a match came from, `zz-provider:none` marks a book checked
+  and unmatchable, `item_match_tag` backfills; `--provider-tag` / `ABS_PROVIDER_TAG`
+- `--providers` / `ABS_PROVIDERS`: the store order every match and audit asks
+- `audit_matched`: is each asin the recording on disk (title, duration, narrator); `fields=true`
+  lists every field that differs, with both values
+- `audit_narrators`: names that both wrote and read, and the spelling checks on narrators
+- `audit_genres`: placeholders, compound values, narrow genres, tags repeating genres, books with
+  no genre; every finding carries its `metadata_rename`
+- `audit_spelling` finds importer wrappers ("Read by"), truncations, typos, two names in one
+  value, and leftovers such as "Ph.D."
+- `audit_missing description` also reports stubs under 120 characters, credit lines and bare urls
+- `audit_path files=true` compares audio filenames as well
+- `series_merge` moves one series into another, keeping numbers and other series; `series_edit`
+  refuses a rename onto an existing name
+- `item_edit` and `item_batch_edit`: `add_series`, `remove_series`, `add_tags`, `remove_tags`
+- `item_cover_upgrade`: the store's full-size cover when bigger and the same picture; `square`
+  for jacket scans, `any_picture`, `preview`; a ribboned store copy never replaces a clean cover
+- `metadata_rename` `into` splits a value; `to_field` moves it between genres and tags
+- `author_edit clear=[description, asin, image]`
+- `series_list` lists every book library when none is named
 
 ### Fixed
 
-- a title lookup took a lone search hit as the item even when the title did not contain the
-  words asked for. The server's search also answers on subtitle, asin and isbn (and older
-  servers on authors and narrators) without saying which field matched, so `item_delete
-  item=B0DUNE` deleted whichever book carried that asin. A hit whose title does not contain
-  the query is now refused with the id on offer. This covers every tool that takes an item by
-  title
-- an author past the first 500 in a library could not be found by name: `author_edit`,
-  `author_delete`, `author_get`, `metadata_rename field=authors` and the author photo audit
-  read one page and stopped
-- a negative `offset` to `podcast_episodes` indexed past the end of the list and, with no
-  recover in the MCP transport, took the server down
-- audits the server filters for (`audit_missing` most fields, `audit_issues`, `audit_no_audio`)
-  reported `items_scanned` equal to the findings, and asked podcast libraries with book
-  filters their podcast filters do not know. `items_scanned` is now the library's size, and
-  checks that never fire for a podcast skip podcast libraries
-- the name normalizer behind every audit dropped accented letters, so `Jo Nesbø` was `jo nesb`
-  and did not match `Jo Nesbo`, and `Étienne` was `tienne`. Accented Latin letters now fold to
-  their plain spelling
-- `metadata_rename` of a language or publisher matched case-insensitively, so renaming
-  `english` to `English` sent every book that already said `English` back to the server in one
-  request of several hundred items, which the reverse proxy answered with a 502, and reported
-  50 titles for one change. It now touches only the spelling asked for and sends the updates
-  in pages of 100
-- `author_edit clear=[image]` failed with the server's 400 when the author had no photo, after
-  the asin and description had already been blanked. An author with no photo is now left as
-  they are rather than asked to lose one
+- `series_get`, and `library_items` with a series filter, show every series a book is in, not
+  only the one asked for; an edit built from the old output dropped links
+- `audit_series` reads a "The X Series" folder as series X
+- the `smart` match no longer writes bare co-authors (illustrators, translators, pen names)
+- `audit_path` reported writing style as a mismatch: 393 findings, a dozen real, now 16
+- a title lookup took a search hit whose title did not contain the query
+- an author past the first 500 in a library could not be found by name
+- a negative `offset` to `podcast_episodes` took the server down
+- server-filtered audits reported `items_scanned` wrong and sent book filters to podcast libraries
+- `item_match` candidates lost their series name
+- the name normalizer dropped accented letters
+- `metadata_rename` on languages and publishers matched case-insensitively and sent hundreds of
+  items in one request
+- `author_edit clear=[image]` failed on an author with no photo
 
 ### Changed
 
-- `audit_authors` says what an asin without a photo means: Audible holds no photo for that
-  author, so the fix is a photo from elsewhere through `author_image_set`
-
-- `docker-compose.yml` no longer pins `dns: 1.1.1.1`. On a user-defined network that sends
-  every lookup to the public resolver, so a LAN name like `nas` in `ABS_SERVER` could not
-  resolve; the container now uses the host's resolver like any other
+- `audit_authors` says an asin without a photo means Audible has none
+- `docker-compose.yml` no longer pins `dns: 1.1.1.1`
 
 ## 0.3.0 (2026-09-13)
 

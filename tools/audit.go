@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"path"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -47,7 +47,7 @@ type auditSpec struct {
 var auditSpecs = []auditSpec{
 	{
 		"audit_unmatched", "unmatched",
-		"Find books never matched to a metadata provider: no asin and no isbn, so nothing else can be filled in automatically. Fix with item_match to see the candidates, then item_match_apply on the one that is actually the right book.",
+		"Find books never matched to a metadata provider: no asin and no isbn, so nothing else can be filled in automatically. Fix with item_match to see the candidates, then item_match_apply on the one that is actually the right book. A book that has been looked at and has nothing to match, a recording no provider sells, is tagged zz-provider:none (item_batch_edit add_tags) and is not reported again.",
 	},
 	{
 		"audit_issues", "issues",
@@ -59,7 +59,7 @@ var auditSpecs = []auditSpec{
 	},
 	{
 		"audit_path", "path",
-		"Find items whose folder name disagrees with their title or author, which usually means the metadata was matched to the wrong book. Compare item_get with the path before fixing.",
+		"Find items whose folder name disagrees with their title or author: a wrong match, a chapter tag or series placeholder left as the title, a pen name under the real name's folder, or a book filed under another author. Subtitles, series prefixes, disc and edition markers are set aside first, and series, genre and lowercase shelf folders are not taken for author folders. Compare item_get with the path before fixing: the folder is usually right, and item_edit sets the title.",
 	},
 	{
 		"audit_single_chapter", "single_chapter",
@@ -100,6 +100,9 @@ func registerAuditTools(r *registry) {
 		if _, ok := auditChecksByName[spec.Check]; !ok {
 			panic("audit spec references unknown check " + spec.Check) // a build-time mistake
 		}
+		if spec.Tool == "audit_path" {
+			continue // registerPathAudit, for its files option
+		}
 
 		add(r, readTool, &mcp.Tool{
 			Name:        spec.Tool,
@@ -124,11 +127,11 @@ func registerAuditTools(r *registry) {
 
 	type missingIn struct {
 		auditIn
-		Field string `json:"field" jsonschema:"cover, description, narrator, series, author, genres, year, publisher, language or chapters"`
+		Field string `json:"field" jsonschema:"cover, description, narrator, series, author, genres, year, publisher, language or chapters. description also reports a stub: under 120 characters, or a credit line such as 'Read by Paul Heck', or only the title"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name: "audit_missing",
-		Description: "Find items with a metadata field left empty: " + strings.Join(missingFields, ", ") + ". " +
+		Description: "Find items with a metadata field left empty: " + strings.Join(missingFields, ", ") + "; for description, also one that says nothing (under 120 characters, a credit line such as 'Read by Paul Heck', or a bare url). " +
 			"chapters only reports books over two hours, where the absence actually hurts. " +
 			"Fix most of them with item_match_apply, covers with item_cover_search then item_cover_edit, chapters with item_chapters_set, " +
 			"and anything the providers cannot supply with item_edit or item_batch_edit.",
@@ -161,20 +164,20 @@ func registerAuditTools(r *registry) {
 	}
 	type allIn struct {
 		Library string `json:"library,omitempty" jsonschema:"library name or id; default every library"`
-		Deep    bool   `json:"deep,omitempty"    jsonschema:"also run audit_cover_ratio and audit_unembedded, which fetch something for every item and can take minutes on a large library"`
+		Deep    bool   `json:"deep,omitempty"    jsonschema:"also run audit_covers and audit_unembedded, which fetch something for every item and can take minutes on a large library"`
 	}
 	type allOut struct {
 		Scanned int      `json:"items_scanned"`
 		Total   int      `json:"total_findings"`
 		Audits  []allRow `json:"audits"            jsonschema:"every audit with something to report, worst first; call that audit for the worklist"`
 		Clean   []string `json:"clean"             jsonschema:"audits that found nothing"`
-		Skipped []string `json:"skipped,omitempty" jsonschema:"audits not run: the two that fetch something for every item, unless deep is set"`
+		Skipped []string `json:"skipped,omitempty" jsonschema:"audits not run: the three that fetch something for every item, unless deep is set"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name: "audit_all",
 		Description: "Run every audit and return only the counts, so one call says where a library needs work; call the individual audit for the worklist. Start here after a scan. " +
-			"The per-item checks, audit_missing for every field, audit_duplicates, audit_spelling, audit_authors, audit_narrators and audit_series_gaps all run. " +
-			"audit_cover_ratio and audit_unembedded fetch something for every item, so they run only with deep and are reported as skipped otherwise.",
+			"The per-item checks, audit_missing for every field, audit_duplicates, audit_spelling, audit_authors, audit_narrators, audit_series and audit_genres all run. " +
+			"audit_covers, audit_unembedded and audit_matched fetch something for every item, so they run only with deep and are reported as skipped otherwise.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in allIn) (*mcp.CallToolResult, allOut, error) {
 		libs, err := resolveLibraries(ctx, client, in.Library)
 		if err != nil {
@@ -187,11 +190,17 @@ func registerAuditTools(r *registry) {
 		roles := newRoleCounts()
 		narrators := newSpellingCounts([]string{"narrators"})
 		var gaps gapsOut
+		var series seriesOut
+		seriesNamesCount := newSpellingCounts([]string{"series"})
+		seriesAuthors := map[string]string{}
+		numbering := newNumberingCollector()
 		var authors authorsOut
 		authorNames := newSpellingCounts([]string{"authors"})
+		genres := newGenresCollector()
 		authorAsTitle := auditChecksByName["author_as_title"]
-		var covers coverRatioOut
+		var covers coversOut
 		var embedded auditOut
+		var matched matchedOut
 		out := allOut{Audits: []allRow{}, Clean: []string{}}
 		for i := range libs {
 			lib := &libs[i]
@@ -218,6 +227,8 @@ func registerAuditTools(r *registry) {
 					spellings.add(it)
 					roles.add(it)
 					narrators.add(it)
+					genres.add(it)
+					numbering.add(it)
 				}
 				return true
 			}); err != nil {
@@ -230,14 +241,20 @@ func registerAuditTools(r *registry) {
 			if err := sweepSeriesGaps(ctx, client, lib, 0, &gaps); err != nil {
 				return nil, allOut{}, err
 			}
+			if err := seriesNames(ctx, client, lib, &series, seriesNamesCount, seriesAuthors, false); err != nil {
+				return nil, allOut{}, err
+			}
 			if err := authorRecords(ctx, client, lib, &authors, authorNames); err != nil {
 				return nil, allOut{}, err
 			}
 			if in.Deep {
-				if err := sweepCoverRatio(ctx, client, lib.ID, defaultCoverTolerance, defaultCoverMinPixels, 0, &covers); err != nil {
+				if err := sweepCoverLocal(ctx, client, lib.ID, coverLocalScope{Tolerance: defaultCoverTolerance, MinPixels: defaultCoverMinPixels}, &covers); err != nil {
 					return nil, allOut{}, err
 				}
 				if err := sweepUnembedded(ctx, client, lib, 0, &embedded); err != nil {
+					return nil, allOut{}, err
+				}
+				if _, err := sweepMatched(ctx, client, lib, matchedScope{}, &matched); err != nil {
 					return nil, allOut{}, err
 				}
 			}
@@ -245,13 +262,15 @@ func registerAuditTools(r *registry) {
 		found["audit_duplicates"] = len(dups.groups())
 		found["audit_spelling"] = spellings.findingCount()
 		found["audit_narrators"] = len(roles.findings()) + narrators.findingCount()
-		found["audit_series_gaps"] = gaps.Found
+		found["audit_series"] = gaps.Found + len(withSeriesAuthors(seriesNamesCount.report("series"), seriesAuthors)) + len(series.Odd) + len(numbering.findings()) + len(numbering.titleFindings())
 		found["audit_authors"] = authors.Counts.AuthorAsTitle + len(authors.Records) + authorNames.findingCount()
+		found["audit_genres"] = genres.findings(5, 0).Found
 		if in.Deep {
-			found["audit_cover_ratio"] = covers.Found
+			found["audit_covers"] = covers.Found
 			found["audit_unembedded"] = embedded.Found
+			found["audit_matched"] = matched.Found
 		} else {
-			out.Skipped = []string{"audit_cover_ratio", "audit_unembedded"}
+			out.Skipped = []string{"audit_covers", "audit_unembedded", "audit_matched"}
 		}
 
 		report := func(tool, field string) {
@@ -272,12 +291,13 @@ func registerAuditTools(r *registry) {
 		for _, field := range missingFields {
 			report("audit_missing", field)
 		}
-		for _, tool := range []string{"audit_duplicates", "audit_spelling", "audit_authors", "audit_narrators", "audit_series_gaps"} {
+		for _, tool := range []string{"audit_duplicates", "audit_spelling", "audit_authors", "audit_narrators", "audit_series", "audit_genres"} {
 			report(tool, "")
 		}
 		if in.Deep {
-			report("audit_cover_ratio", "")
+			report("audit_covers", "")
 			report("audit_unembedded", "")
+			report("audit_matched", "")
 		}
 		slices.SortFunc(out.Audits, func(a, b allRow) int {
 			if a.Found != b.Found {
@@ -285,41 +305,6 @@ func registerAuditTools(r *registry) {
 			}
 			return strings.Compare(a.Audit, b.Audit)
 		})
-
-		return nil, out, nil
-	})
-
-	type coverRatioIn struct {
-		Library   string  `json:"library,omitempty"    jsonschema:"library name or id; default every library"`
-		Tolerance float64 `json:"tolerance,omitempty"  jsonschema:"how far from square counts as square, default 0.1 (a 10% deviation)"`
-		MinPixels int     `json:"min_pixels,omitempty" jsonschema:"also report covers narrower than this, default 400"`
-		Limit     int     `json:"limit,omitempty"      jsonschema:"maximum findings, default 50"`
-	}
-	add(r, readTool, &mcp.Tool{
-		Name:        "audit_cover_ratio",
-		Description: "Find covers that are not square or are too small to look right in a client. Audiobook art is square by convention, so a tall book-jacket scan or a thumbnail stands out. This fetches the header of every cover file, one request per item that has one, so it is far slower than the other audits and runs in audit_all only with deep: narrow it with library. Fix with item_cover_search then item_cover_edit.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in coverRatioIn) (*mcp.CallToolResult, coverRatioOut, error) {
-		tolerance := in.Tolerance
-		if tolerance <= 0 {
-			tolerance = defaultCoverTolerance
-		}
-		minPixels := in.MinPixels
-		if minPixels <= 0 {
-			minPixels = defaultCoverMinPixels
-		}
-		limit := limitOr(in.Limit, 50)
-
-		libs, err := resolveLibraries(ctx, client, in.Library)
-		if err != nil {
-			return nil, coverRatioOut{}, err
-		}
-
-		out := coverRatioOut{Findings: []coverRow{}}
-		for i := range libs {
-			if err := sweepCoverRatio(ctx, client, libs[i].ID, tolerance, minPixels, limit, &out); err != nil {
-				return nil, coverRatioOut{}, err
-			}
-		}
 
 		return nil, out, nil
 	})
@@ -360,95 +345,6 @@ func registerAuditTools(r *registry) {
 		}
 
 		return nil, out, nil
-	})
-
-	type gapsIn struct {
-		Library string `json:"library,omitempty" jsonschema:"library name or id; default every book library"`
-		Limit   int    `json:"limit,omitempty"   jsonschema:"maximum series to return, default 50"`
-	}
-	add(r, readTool, &mcp.Tool{
-		Name:        "audit_series_gaps",
-		Description: "Find series missing a book: sequence numbers absent between the lowest and the highest the library has. Only interior gaps are reported, so a series whose first book is #3 is not flagged for #1-2, and novella numbering (4.5) never creates one. series_get shows what is present.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in gapsIn) (*mcp.CallToolResult, gapsOut, error) {
-		libs, err := resolveLibraries(ctx, client, in.Library)
-		if err != nil {
-			return nil, gapsOut{}, err
-		}
-
-		out := gapsOut{Series: []seriesGap{}}
-		limit := limitOr(in.Limit, 50)
-		for i := range libs {
-			if err := sweepSeriesGaps(ctx, client, &libs[i], limit, &out); err != nil {
-				return nil, gapsOut{}, err
-			}
-		}
-
-		return nil, out, nil
-	})
-}
-
-const (
-	defaultCoverTolerance = 0.1
-	defaultCoverMinPixels = 400
-)
-
-type coverRow struct {
-	ID     string `json:"id"`
-	Title  string `json:"title"`
-	Width  int    `json:"width"`
-	Height int    `json:"height"`
-	Ratio  string `json:"ratio"`
-	Why    string `json:"why"`
-}
-
-type coverRatioOut struct {
-	Checked  int        `json:"covers_checked"`
-	Skipped  int        `json:"skipped,omitempty" jsonschema:"items with no cover, or in a format Go cannot read (webp)"`
-	Found    int        `json:"total_findings"`
-	Findings []coverRow `json:"findings"`
-}
-
-// sweepCoverRatio measures every cover in a library, counting the ones that
-// are not square within tolerance or narrower than minPixels, and keeping at
-// most limit of them as findings.
-func sweepCoverRatio(ctx context.Context, client *abs.Client, libraryID string, tolerance float64, minPixels, limit int, out *coverRatioOut) error {
-	return client.ItemsAll(ctx, libraryID, abs.ItemsOptions{Minified: true}, func(items []abs.Item) bool {
-		for j := range items {
-			it := &items[j]
-			if !it.HasCover() {
-				out.Skipped++ // the listing already says so: no request needed
-				continue
-			}
-			w, h, err := client.CoverSize(ctx, it.ID)
-			if err != nil {
-				out.Skipped++ // a format we cannot read, or the file is gone
-				continue
-			}
-			out.Checked++
-
-			var why string
-			switch {
-			case h == 0 || w == 0:
-				why = "cover has no dimensions"
-			case math.Abs(float64(w)/float64(h)-1) > tolerance:
-				why = fmt.Sprintf("not square (%dx%d)", w, h)
-			case w < minPixels:
-				why = fmt.Sprintf("only %dpx wide", w)
-			}
-			if why == "" {
-				continue
-			}
-
-			out.Found++
-			if len(out.Findings) >= limit {
-				continue
-			}
-			out.Findings = append(out.Findings, coverRow{
-				ID: it.ID, Title: it.Title(), Width: w, Height: h,
-				Ratio: fmt.Sprintf("%.2f", float64(w)/float64(h)), Why: why,
-			})
-		}
-		return true
 	})
 }
 
@@ -495,12 +391,29 @@ func (d dupCollector) groups() []string {
 }
 
 type seriesGap struct {
-	ID      string   `json:"id"`
-	Name    string   `json:"name"`
-	Author  string   `json:"author,omitempty"`
-	Books   int      `json:"books"`
-	Have    []string `json:"have"             jsonschema:"sequence numbers present, in order"`
-	Missing []string `json:"missing"          jsonschema:"whole numbers absent between the lowest and the highest present"`
+	ID       string        `json:"id"`
+	Name     string        `json:"name"`
+	Author   string        `json:"author,omitempty"`
+	Books    int           `json:"books"`
+	Have     []string      `json:"have"               jsonschema:"sequence numbers present, in order"`
+	Missing  []string      `json:"missing"            jsonschema:"whole numbers absent between the lowest and the highest present"`
+	Unlinked []gapUnlinked `json:"unlinked,omitempty" jsonschema:"audit_series only: books already in the library whose folder carries a missing number but which are not in the series; suggest is the series value for item_edit add_series"`
+	Merged   *gapMerged    `json:"merged,omitempty"   jsonschema:"audit_series only: when names reports this series as one of several spellings, what is still missing once they are one series"`
+}
+
+// gapUnlinked is a missing number that is not missing at all: the book is on
+// the shelf under the right folder and simply not linked to the series.
+type gapUnlinked struct {
+	Missing string `json:"missing"`
+	ID      string `json:"id"`
+	Path    string `json:"path"`
+	Suggest string `json:"suggest" jsonschema:"the series value for item_edit add_series"`
+}
+
+// gapMerged is a gap read across every spelling of the series at once.
+type gapMerged struct {
+	With    []string `json:"with"    jsonschema:"the other spellings the names section joins this series with"`
+	Missing []string `json:"missing" jsonschema:"numbers still absent once the spellings are one series; empty when the other spelling fills every gap"`
 }
 
 type gapsOut struct {
@@ -597,13 +510,27 @@ func seriesSequences(items []abs.Item, seriesID string) (have, missing []string)
 		have = append(have, seen[n])
 	}
 
+	return have, missingBetween(nums)
+}
+
+// missingBetween is the whole numbers absent between the lowest and the
+// highest of a sorted list: interior gaps only, and a fraction such as 4.5
+// never opens one.
+func missingBetween(nums []float64) []string {
+	if len(nums) == 0 {
+		return nil
+	}
+	seen := make(map[float64]bool, len(nums))
+	for _, n := range nums {
+		seen[n] = true
+	}
+	var missing []string
 	for n := math.Ceil(nums[0]); n < nums[len(nums)-1]; n++ {
-		if _, ok := seen[n]; !ok {
+		if !seen[n] {
 			missing = append(missing, strconv.FormatFloat(n, 'f', -1, 64))
 		}
 	}
-
-	return have, missing
+	return missing
 }
 
 // bookOnlyChecks never fire for a podcast, so a podcast library is neither
@@ -677,17 +604,16 @@ func finding(it *abs.Item, detail string) auditFinding {
 // nativeFilter maps checks the server can filter itself to the encoded
 // filter value.
 var nativeFilter = map[string]string{
-	"issues":      "issues",
-	"cover":       abs.EncodeFilter("missing", "cover"),
-	"description": abs.EncodeFilter("missing", "description"),
-	"narrator":    abs.EncodeFilter("missing", "narrators"),
-	"series":      abs.EncodeFilter("missing", "series"),
-	"author":      abs.EncodeFilter("missing", "authors"),
-	"genres":      abs.EncodeFilter("missing", "genres"),
-	"year":        abs.EncodeFilter("missing", "publishedYear"),
-	"publisher":   abs.EncodeFilter("missing", "publisher"),
-	"language":    abs.EncodeFilter("missing", "language"),
-	"no_audio":    abs.EncodeFilter("tracks", "none"),
+	"issues":    "issues",
+	"cover":     abs.EncodeFilter("missing", "cover"),
+	"narrator":  abs.EncodeFilter("missing", "narrators"),
+	"series":    abs.EncodeFilter("missing", "series"),
+	"author":    abs.EncodeFilter("missing", "authors"),
+	"genres":    abs.EncodeFilter("missing", "genres"),
+	"year":      abs.EncodeFilter("missing", "publishedYear"),
+	"publisher": abs.EncodeFilter("missing", "publisher"),
+	"language":  abs.EncodeFilter("missing", "language"),
+	"no_audio":  abs.EncodeFilter("tracks", "none"),
 }
 
 const (
@@ -698,7 +624,7 @@ const (
 
 var auditChecksByName = map[string]auditCheck{
 	"unmatched": func(it *abs.Item) (string, bool) {
-		if it.IsPodcast() {
+		if it.IsPodcast() || markedUnmatchable(it) {
 			return "", false
 		}
 		m := it.Media.Metadata
@@ -730,10 +656,7 @@ var auditChecksByName = map[string]auditCheck{
 		return "", false
 	},
 	"description": func(it *abs.Item) (string, bool) {
-		if strings.TrimSpace(it.Media.Metadata.Description) == "" {
-			return "no description", true
-		}
-		return "", false
+		return stubDescription(it.Media.Metadata.Description)
 	},
 	"narrator": func(it *abs.Item) (string, bool) {
 		if !it.IsPodcast() && it.Media.Metadata.NarratorDisplay() == "" {
@@ -840,57 +763,6 @@ var auditChecksByName = map[string]auditCheck{
 	},
 }
 
-// checkPath flags items whose folder name does not contain the title and
-// whose parent folder does not name an author: a sign of a wrong match or a
-// misfiled folder in an Author/Title or Author/Series/Title layout.
-func checkPath(it *abs.Item) (string, bool) {
-	if it.IsPodcast() || it.RelPath == "" || it.IsFile {
-		return "", false
-	}
-	m := it.Media.Metadata
-	rel := strings.Trim(it.RelPath, "/")
-	folder := norm(path.Base(rel))
-	title := norm(m.Title)
-	if title == "" {
-		return "", false
-	}
-
-	titleOK := strings.Contains(folder, title) || strings.Contains(title, folder)
-	authorOK := true
-	if parent := path.Dir(rel); parent != "." && parent != "/" {
-		authorOK = false
-		parts := strings.SplitSeq(parent, "/")
-		for p := range parts {
-			np := norm(p)
-			if np == "" {
-				continue
-			}
-			for a := range strings.SplitSeq(m.AuthorDisplay(), ",") {
-				na := norm(a)
-				if na != "" && (strings.Contains(np, na) || strings.Contains(na, np) || lastFirstMatch(np, na)) {
-					authorOK = true
-				}
-			}
-			for _, s := range m.SeriesDisplay() {
-				if ns := norm(strings.Split(s, " #")[0]); ns != "" && strings.Contains(np, ns) {
-					authorOK = true
-				}
-			}
-		}
-	}
-
-	switch {
-	case !titleOK && !authorOK:
-		return fmt.Sprintf("folder %q does not match title %q or author %q", rel, m.Title, m.AuthorDisplay()), true
-	case !titleOK:
-		return fmt.Sprintf("folder %q does not contain title %q", path.Base(rel), m.Title), true
-	case !authorOK:
-		return fmt.Sprintf("parent folder %q does not name author %q", path.Dir(rel), m.AuthorDisplay()), true
-	}
-
-	return "", false
-}
-
 // lastFirstMatch treats "Last, First" folders as matching "First Last".
 func lastFirstMatch(folder, author string) bool {
 	parts := strings.Fields(author)
@@ -936,3 +808,31 @@ var foldTable = map[string]string{
 
 // errNotBook is returned by tools that only make sense for books.
 var errNotBook = errors.New("this item is a podcast, not a book")
+
+// The description field is where importers leave notes: "Read by Paul Heck",
+// "Unabridged", the title again, a bare url. None of those is a description,
+// and audit_missing description reports them beside the empty ones. HTML is
+// stripped first, since the server stores descriptions with markup.
+var (
+	descriptionTags    = regexp.MustCompile(`<[^>]*>`)
+	descriptionCredit  = regexp.MustCompile(`(?i)^(read|narrated|performed|narration|introduction|foreword)\s+by\b`)
+	descriptionOnlyURL = regexp.MustCompile(`(?i)^https?://\S+$`)
+)
+
+// stubDescription reports a description that says nothing: empty, shorter
+// than descriptionStub, a credit line, or a bare url.
+func stubDescription(raw string) (string, bool) {
+	text := strings.TrimSpace(descriptionTags.ReplaceAllString(raw, " "))
+	text = strings.Join(strings.Fields(text), " ")
+	switch {
+	case text == "":
+		return "no description", true
+	case descriptionCredit.MatchString(text):
+		return fmt.Sprintf("description is a credit line: %q", clip(text, 80)), true
+	case descriptionOnlyURL.MatchString(text):
+		return fmt.Sprintf("description is only a url: %q", clip(text, 80)), true
+	case len(text) < descriptionStub:
+		return fmt.Sprintf("description is a stub, %d characters: %q", len(text), clip(text, 80)), true
+	}
+	return "", false
+}
