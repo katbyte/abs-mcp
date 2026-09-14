@@ -10,6 +10,8 @@ import (
 // metadata said. The first block was reported by the audit and was fine; the
 // second block is what the audit is for.
 func TestCheckPathStyles(t *testing.T) {
+	t.Parallel()
+
 	type row struct {
 		rel, title, author string
 		series, genres     []string
@@ -83,6 +85,8 @@ func TestCheckPathStyles(t *testing.T) {
 }
 
 func TestFileStem(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		names []string
 		want  string
@@ -105,6 +109,8 @@ func TestFileStem(t *testing.T) {
 }
 
 func TestCheckFiles(t *testing.T) {
+	t.Parallel()
+
 	item := func(rel, title string, isFile bool, files ...string) *abs.Item {
 		it := &abs.Item{MediaType: "book", RelPath: rel, IsFile: isFile, Media: abs.Media{Metadata: abs.Metadata{Title: title, AuthorName: "Frank Herbert"}}}
 		for _, f := range files {
@@ -135,7 +141,7 @@ func TestCheckFiles(t *testing.T) {
 	bad := []*abs.Item{
 		item("Frank Herbert/Dune", "Dune", false, "Neuromancer - 01.mp3", "Neuromancer - 02.mp3"),
 		item("Frank Herbert/Neuromancer.m4b", "Dune", true, "Neuromancer.m4b"),
-		item("Terry Pratchett/Discworld - 26 - Thief of Time", "Thief of Time", false, "Theif of Time - 01.mp3", "Theif of Time - 02.mp3"),
+		item("Terry Pratchett/Discworld - 26 - Thief of Time", "Thief of Time", false, "Theif of Time - 01.mp3", "Theif of Time - 02.mp3"), //nolint:misspell // the misspelt filename is the case under test
 	}
 	for _, it := range bad {
 		if _, flagged := checkFiles(it); !flagged {

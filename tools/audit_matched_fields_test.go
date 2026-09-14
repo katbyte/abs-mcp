@@ -7,6 +7,8 @@ import (
 )
 
 func TestFieldDiffs(t *testing.T) {
+	t.Parallel()
+
 	it := &abs.Item{MediaType: "book", RelPath: "K. Patrick/Mrs S", Media: abs.Media{Metadata: abs.Metadata{
 		Title: "Mrs. S .mp3", AuthorName: "K. Patrick", NarratorName: "Nicolette Chin",
 		Series: abs.SeriesRefs{{Name: "Nemesis", Sequence: "2"}}, Genres: []string{"Fiction", "LGBTQ+"},

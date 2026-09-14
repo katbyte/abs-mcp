@@ -74,8 +74,8 @@ func folderNames(s string) []string {
 	names := pathNameSet{}
 	names.add(s)
 	segs := pathSegment.Split(s, -1)
-	for i := len(segs) - 1; i >= 0; i-- {
-		if names.add(segs[i]) {
+	for _, seg := range slices.Backward(segs) {
+		if names.add(seg) {
 			break
 		}
 	}
@@ -104,7 +104,7 @@ type pathNameSet struct {
 func (n *pathNameSet) add(v string) bool {
 	v = pathWords(v)
 	hasLetter := strings.ContainsFunc(v, func(r rune) bool { return r >= 'a' && r <= 'z' })
-	if v == "" || n.seen[v] || !(hasLetter || pathYearLike.MatchString(v)) {
+	if v == "" || n.seen[v] || (!hasLetter && !pathYearLike.MatchString(v)) {
 		return false
 	}
 	if n.seen == nil {

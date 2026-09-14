@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -63,6 +64,9 @@ var languageAliases = map[string]string{
 
 // vocabKey is the value two spellings must share to count as the same thing.
 func vocabKey(field, value string) string {
+	if field == "authors" || field == "narrators" {
+		value = firstLast(value) // "Sanderson, Brandon" is Brandon Sanderson
+	}
 	n, _ := nameCore(field, norm(value))
 	if field == "series" { // "The Chronicles of Amber", "Chronicles of Amber" and "Chronicles of Amber Series" are one series
 		n = strings.TrimSuffix(strings.TrimPrefix(n, "the "), " series")
@@ -75,6 +79,24 @@ func vocabKey(field, value string) string {
 	}
 
 	return n
+}
+
+// nameSuffix is what may follow a comma in a name without being the first
+// name: "Martin Luther King, Jr."
+var nameSuffix = regexp.MustCompile(`(?i)^(jr|sr|ii|iii|iv|phd|md|esq|dds)\.?$`)
+
+// firstLast turns a "Last, First" name round. A name with more than one
+// comma is several names, or a list, and is left alone.
+func firstLast(value string) string {
+	last, first, ok := strings.Cut(value, ",")
+	if !ok || strings.Contains(first, ",") {
+		return value
+	}
+	first, last = strings.TrimSpace(first), strings.TrimSpace(last)
+	if first == "" || last == "" || nameSuffix.MatchString(first) {
+		return value
+	}
+	return first + " " + last
 }
 
 // knownLanguage reports whether a language value is one this tool recognizes.
@@ -415,12 +437,12 @@ func registerSpellingTools(r *registry) {
 	})
 
 	type renameIn struct {
-		Field   string   `json:"field"             jsonschema:"tags, genres, narrators, authors, languages or publishers, as audit_spelling reports it"`
-		From    string   `json:"from"              jsonschema:"the value to replace, exactly as it is spelled now"`
-		To      string   `json:"to,omitempty"      jsonschema:"the value to keep; renaming onto one that already exists merges the two"`
-		Remove  bool     `json:"remove,omitempty"  jsonschema:"instead of renaming: drop the value from every item that carries it (not authors)"`
-		Library string   `json:"library,omitempty" jsonschema:"library name or id; default every library. Tags and genres are server-wide and refuse it"`
-		Into    []string `json:"into,omitempty"   jsonschema:"tags and genres: split the value into these, so \"Science Fiction & Fantasy, Fantasy\" becomes two; with to_field the parts land in the other field"`
+		Field   string   `json:"field"              jsonschema:"tags, genres, narrators, authors, languages or publishers, as audit_spelling reports it"`
+		From    string   `json:"from"               jsonschema:"the value to replace, exactly as it is spelled now"`
+		To      string   `json:"to,omitempty"       jsonschema:"the value to keep; renaming onto one that already exists merges the two"`
+		Remove  bool     `json:"remove,omitempty"   jsonschema:"instead of renaming: drop the value from every item that carries it (not authors)"`
+		Library string   `json:"library,omitempty"  jsonschema:"library name or id; default every library. Tags and genres are server-wide and refuse it"`
+		Into    []string `json:"into,omitempty"     jsonschema:"tags and genres: split the value into these, so \"Science Fiction & Fantasy, Fantasy\" becomes two; with to_field the parts land in the other field"`
 		ToField string   `json:"to_field,omitempty" jsonschema:"tags and genres: move the value (or the into parts) to the other field, genres or tags, dropping it from this one"`
 	}
 	type renameOut struct {
@@ -453,7 +475,7 @@ func registerSpellingTools(r *registry) {
 		case in.ToField != "" && vocabField(in.ToField) != "tags" && vocabField(in.ToField) != "genres":
 			return nil, renameOut{}, fmt.Errorf("to_field must be tags or genres, not %q", in.ToField)
 		case in.ToField != "" && vocabField(in.ToField) == field:
-			return nil, renameOut{}, fmt.Errorf("to_field is the field the value is already in; use to or into")
+			return nil, renameOut{}, errors.New("to_field is the field the value is already in; use to or into")
 		case !in.Remove && to == "" && len(in.Into) == 0 && in.ToField == "":
 			return nil, renameOut{}, errors.New("to is required unless remove, into or to_field is set")
 		case in.Remove && field == "authors":

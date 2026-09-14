@@ -4,7 +4,6 @@ import (
 	"context"
 	"regexp"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/katbyte/abs-mcp/lib/abs"
@@ -125,20 +124,20 @@ func (c *genresCollector) add(it *abs.Item) {
 	}
 	c.books++
 	ref := genreRef{ID: it.ID, Title: it.Title()}
-	real := 0
+	named := 0
 	for _, g := range it.Media.Metadata.Genres {
 		if g = strings.TrimSpace(g); g == "" {
 			continue
 		}
 		note(c.genres, g, ref)
 		if !genrePlaceholder.MatchString(g) {
-			real++
+			named++
 		}
 	}
 	switch {
 	case len(it.Media.Metadata.Genres) == 0:
 		c.noGenres = append(c.noGenres, ref)
-	case real == 0:
+	case named == 0:
 		c.placeholder++
 	}
 	for _, t := range it.Media.Tags {
@@ -172,11 +171,11 @@ func (c *genresCollector) findings(minItems, limit int) genresOut {
 		for _, u := range uses {
 			values = append(values, u)
 		}
-		sort.Slice(values, func(i, j int) bool {
-			if values[i].items != values[j].items {
-				return values[i].items > values[j].items
+		slices.SortFunc(values, func(a, b *genreUse) int {
+			if a.items != b.items {
+				return b.items - a.items
 			}
-			return values[i].value < values[j].value
+			return strings.Compare(a.value, b.value)
 		})
 		for _, u := range values {
 			v := u.value
@@ -184,12 +183,16 @@ func (c *genresCollector) findings(minItems, limit int) genresOut {
 			case field == "tags" && genreMarker.MatchString(v):
 				out.Markers = append(out.Markers, v)
 			case genrePlaceholder.MatchString(v):
-				out.Placeholders = append(out.Placeholders, genreValue{Field: field, Value: v, Items: u.items, Sample: u.refs,
-					Suggest: "metadata_rename field=" + field + " from=" + quote(v) + " remove=true"})
+				out.Placeholders = append(out.Placeholders, genreValue{
+					Field: field, Value: v, Items: u.items, Sample: u.refs,
+					Suggest: "metadata_rename field=" + field + " from=" + quote(v) + " remove=true",
+				})
 			case genrePlaceholderPrefix.MatchString(v):
 				rest := strings.TrimSpace(genrePlaceholderPrefix.ReplaceAllString(v, ""))
-				out.Placeholders = append(out.Placeholders, genreValue{Field: field, Value: v, Items: u.items, Sample: u.refs,
-					Suggest: "metadata_rename field=" + field + " from=" + quote(v) + " to=" + quote(rest)})
+				out.Placeholders = append(out.Placeholders, genreValue{
+					Field: field, Value: v, Items: u.items, Sample: u.refs,
+					Suggest: "metadata_rename field=" + field + " from=" + quote(v) + " to=" + quote(rest),
+				})
 			case len(genreJoin.Split(v, -1)) > 1:
 				parts := genreJoin.Split(v, -1)
 				comp := genreCompound{Field: field, Value: v, Items: u.items, Sample: u.refs}
@@ -210,8 +213,10 @@ func (c *genresCollector) findings(minItems, limit int) genresOut {
 				}
 				out.Compound = append(out.Compound, comp)
 			case field == "genres" && u.items < minItems:
-				out.Narrow = append(out.Narrow, genreValue{Field: field, Value: v, Items: u.items, Sample: u.refs,
-					Suggest: "metadata_rename field=genres from=" + quote(v) + " to_field=tags"})
+				out.Narrow = append(out.Narrow, genreValue{
+					Field: field, Value: v, Items: u.items, Sample: u.refs,
+					Suggest: "metadata_rename field=genres from=" + quote(v) + " to_field=tags",
+				})
 			}
 		}
 	}
@@ -219,12 +224,14 @@ func (c *genresCollector) findings(minItems, limit int) genresOut {
 	for _, u := range c.redundant {
 		redundant = append(redundant, u)
 	}
-	sort.Slice(redundant, func(i, j int) bool { return redundant[i].items > redundant[j].items })
+	slices.SortFunc(redundant, func(a, b *genreUse) int { return b.items - a.items })
 	for _, u := range redundant {
-		out.Redundant = append(out.Redundant, genreValue{Field: "tags", Value: u.value, Items: u.items, Sample: u.refs,
-			Suggest: "metadata_rename field=tags from=" + quote(u.value) + " remove=true"})
+		out.Redundant = append(out.Redundant, genreValue{
+			Field: "tags", Value: u.value, Items: u.items, Sample: u.refs,
+			Suggest: "metadata_rename field=tags from=" + quote(u.value) + " remove=true",
+		})
 	}
-	sort.Strings(out.Markers)
+	slices.Sort(out.Markers)
 	out.Counts.Placeholders, out.Counts.Compound, out.Counts.Narrow = len(out.Placeholders), len(out.Compound), len(out.Narrow)
 	out.Counts.Redundant, out.Counts.Markers = len(out.Redundant), len(out.Markers)
 	out.NoGenres = c.noGenres[:min(len(c.noGenres), limit)]

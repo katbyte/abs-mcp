@@ -7,6 +7,8 @@ import (
 )
 
 func TestParseKeep(t *testing.T) {
+	t.Parallel()
+
 	got, err := parseKeep([]string{"Series", "narrator", "series", "Tags"})
 	if err != nil {
 		t.Fatal(err)
@@ -20,6 +22,8 @@ func TestParseKeep(t *testing.T) {
 }
 
 func TestKeptUpdate(t *testing.T) {
+	t.Parallel()
+
 	before := &abs.Item{ID: "i1", Media: abs.Media{Tags: []string{"lgbtq"}, Metadata: abs.Metadata{
 		Title:  "Mrs. S .mp3",
 		Series: abs.SeriesRefs{{ID: "s1", Name: "Nemesis", Sequence: "2"}},

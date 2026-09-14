@@ -256,20 +256,22 @@ func TestAuditSeriesGaps(t *testing.T) {
 	}
 }
 
-// Nothing in the catalogue is a duplicate of anything else.
+// Nothing in the clean libraries is a duplicate of anything else; the Messy
+// library's pair is asserted in messy_test.go.
 func TestAuditDuplicates(t *testing.T) {
-	out := call(t, "audit_duplicates", nil)
+	out := call(t, "audit_duplicates", map[string]any{"library": "Fiction"})
 
 	if groups := rows(t, out["groups"], "groups"); len(groups) != 0 {
 		t.Errorf("audit_duplicates found %d groups in a clean library: %v", len(groups), groups)
 	}
 }
 
-// audit_spelling groups spellings of the same value. The fixtures are
+// audit_spelling groups spellings of the same value. The clean fixtures are
 // consistent, so a clean result is the assertion - and the language alias
-// table must not invent a group out of a single spelling.
+// table must not invent a group out of a single spelling. The Messy library
+// has the inconsistent ones.
 func TestAuditSpelling(t *testing.T) {
-	out := call(t, "audit_spelling", nil)
+	out := call(t, "audit_spelling", map[string]any{"library": "Fiction"})
 
 	if groups := rows(t, out["groups"], "groups"); len(groups) != 0 {
 		t.Errorf("audit_spelling found %d groups in a consistent library: %v", len(groups), groups)
@@ -322,18 +324,42 @@ func TestAuditNarrators(t *testing.T) {
 	}
 }
 
-// Every fixture cover is absent, so this audit has nothing to measure - which
-// still has to come back as a well-formed empty result rather than an error.
+// The non-fiction covers are one of each shape: square, a jacket scan, and
+// one too small to keep. The audit reads the files themselves, so the sizes it
+// reports are the ones the seed script wrote.
 func TestAuditCovers(t *testing.T) {
 	out := call(t, "audit_covers", map[string]any{"library": "Non-Fiction"})
 
-	if checked := num(t, out["covers_checked"], "covers_checked"); checked != 0 {
-		t.Errorf("covers_checked = %d, want 0 - no fixture has a cover", checked)
+	if checked := num(t, out["covers_checked"], "covers_checked"); checked != 3 {
+		t.Errorf("covers_checked = %d, want 3", checked)
 	}
-	if found := num(t, out["total_findings"], "total_findings"); found != 3 {
-		t.Errorf("total_findings = %d, want 3 missing covers", found)
+	if found := num(t, out["total_findings"], "total_findings"); found != 2 {
+		t.Errorf("total_findings = %d, want the jacket and the small one", found)
 	}
-	rows(t, out["findings"], "findings")
+	problems := map[string]string{}
+	for _, row := range rows(t, out["findings"], "findings") {
+		title, _ := row["title"].(string)
+		problem, _ := row["problem"].(string)
+		problems[title] = problem
+		if num(t, row["width"], "width") == 0 {
+			t.Errorf("%s: no width measured", title)
+		}
+	}
+	if problems["A Brief History of Vice"] != "ratio" {
+		t.Errorf("the 400x600 jacket is %q, want ratio", problems["A Brief History of Vice"])
+	}
+	if problems["War Is a Racket"] != "small" {
+		t.Errorf("the 200x200 cover is %q, want small", problems["War Is a Racket"])
+	}
+	if _, flagged := problems["The Arms of Krupp"]; flagged {
+		t.Errorf("the 600x600 cover was flagged: %v", problems)
+	}
+
+	// Fiction has no covers at all, which is a finding per book
+	out = call(t, "audit_covers", map[string]any{"library": "Fiction"})
+	if found := num(t, out["total_findings"], "total_findings"); found != 7 {
+		t.Errorf("Fiction total_findings = %d, want 7 missing covers", found)
+	}
 }
 
 // The fixtures are silent files ffmpeg wrote with no tags, so every book is

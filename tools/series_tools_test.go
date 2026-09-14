@@ -601,3 +601,24 @@ func TestAuditSeriesTitles(t *testing.T) {
 		}
 	}
 }
+
+// An author or narrator written "Last, First" is the same person as "First
+// Last"; a suffix after the comma is not a first name.
+func TestVocabKeyTurnsLastFirstRound(t *testing.T) {
+	t.Parallel()
+
+	if vocabKey("authors", "Sanderson, Brandon") != vocabKey("authors", "Brandon Sanderson") {
+		t.Error("Sanderson, Brandon is Brandon Sanderson")
+	}
+	if vocabKey("narrators", "Kramer, Michael") != vocabKey("narrators", "Michael Kramer") {
+		t.Error("Kramer, Michael is Michael Kramer")
+	}
+	for _, same := range []string{"Martin Luther King, Jr.", "Bray, R. C., Scott Brick"} {
+		if firstLast(same) != same {
+			t.Errorf("firstLast(%q) = %q, want it left alone", same, firstLast(same))
+		}
+	}
+	if vocabKey("series", "Wheel, The") == vocabKey("series", "The Wheel") {
+		t.Error("a series name is not turned round")
+	}
+}

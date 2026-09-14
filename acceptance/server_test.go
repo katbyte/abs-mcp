@@ -49,8 +49,8 @@ func TestServerInfoTotals(t *testing.T) {
 	if !ok {
 		t.Fatalf("totals = %T, want an object for an admin key: %v", out["totals"], out["note"])
 	}
-	if books := num(t, totals["books"], "books"); books != 10 {
-		t.Errorf("books = %d, want 10", books)
+	if got := num(t, totals["books"], "books"); got != len(books)+len(messyBooks) {
+		t.Errorf("books = %d, want %d", got, len(books)+len(messyBooks))
 	}
 	if podcasts := num(t, totals["podcasts"], "podcasts"); podcasts != 2 {
 		t.Errorf("podcasts = %d, want 2", podcasts)

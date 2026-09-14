@@ -7,6 +7,8 @@ import (
 )
 
 func TestGenresCollector(t *testing.T) {
+	t.Parallel()
+
 	book := func(id string, genres, tags []string) *abs.Item {
 		return &abs.Item{ID: id, MediaType: "book", Media: abs.Media{Tags: tags, Metadata: abs.Metadata{Title: id, Genres: genres}}}
 	}

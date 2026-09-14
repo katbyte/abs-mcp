@@ -42,7 +42,7 @@ type matchedOut struct {
 	Counts      matchedCounts    `json:"counts"`
 	FieldCounts map[string]int   `json:"field_counts,omitempty" jsonschema:"with fields: how many books differ on each field"`
 	Findings    []matchedFinding `json:"findings"`
-	NextPage    *int             `json:"next_page,omitempty" jsonschema:"pass as page to check the next books; absent when every matched book has been checked"`
+	NextPage    *int             `json:"next_page,omitempty"    jsonschema:"pass as page to check the next books; absent when every matched book has been checked"`
 }
 
 // checkMatched compares one matched book with the provider's record for its

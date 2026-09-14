@@ -364,8 +364,12 @@ Fixtures are generated, never committed: `scripts/abs-testenv.sh` writes one-sec
 with `ffmpeg` under `~/.cache/abs-mcp` (`ABS_TEST_DATA` to move them - not `$TMPDIR`, which
 Docker Desktop does not share), creates the libraries through `library_create`, fills them
 with `library_scan` and sets the metadata with `item_edit` - so building the fixtures is itself
-part of the coverage. `scripts/abs-testenv.sh fixtures` writes just the audio tree if you want
-to look at the layout. Requires docker, ffmpeg and jq; the suites skip when `ABS_SERVER` and
+part of the coverage. Three libraries are clean, so the audits have something to leave alone;
+the fourth, `Messy`, is seeded with every defect they exist to find - a series spelled two
+ways, a gap whose missing book sits unlinked in a series folder, a narrator's name misspelt on
+half the books, a folder naming another book, a duplicate, a cover wearing the ribbon - and
+each audit has a test against it. `scripts/abs-testenv.sh fixtures` writes just the audio tree
+if you want to look at the layout. Requires docker, ffmpeg and jq; the suites skip when `ABS_SERVER` and
 `ABS_TOKEN` are unset, so they never fail for want of a daemon.
 
 The Audiobookshelf API reference is the server source, not the public docs; see

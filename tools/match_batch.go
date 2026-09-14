@@ -141,6 +141,75 @@ func (c *batchCounts) add(confidence string) {
 	}
 }
 
+// applyResult is one row of item_match_apply_batch.
+type applyResult struct {
+	Item    string          `json:"item"`
+	Title   string          `json:"title,omitempty"`
+	ASIN    string          `json:"asin,omitempty"`
+	ISBN    string          `json:"isbn,omitempty"`
+	Updated bool            `json:"updated"`
+	Kept    []string        `json:"kept,omitempty"    jsonschema:"fields restored after the match"`
+	Fields  []fieldDecision `json:"fields,omitempty"  jsonschema:"with smart: every field the provider would write differently and what was done about it"`
+	Warning string          `json:"warning,omitempty"`
+	Error   string          `json:"error,omitempty"`
+}
+
+// smartRow runs the smart match for one row of a batch: the decisions land on
+// the row, and so does what happened.
+func smartRow(ctx context.Context, client *abs.Client, it *abs.Item, provider string, res *applyResult, preview bool) {
+	decisions, r, err := smartApply(ctx, client, it, provider, res.ASIN, res.ISBN, preview)
+	res.Fields = decisions
+	switch {
+	case err != nil:
+		res.Error = err.Error()
+	case preview:
+	default:
+		res.Updated, res.Warning = r.Updated, r.Warning
+		if terr := tagProvider(ctx, client, it.ID, it.Media.Tags, provider); terr != nil {
+			res.Warning = joinWarnings(res.Warning, "recording the provider tag failed: "+terr.Error())
+		}
+	}
+}
+
+// matchRow runs a plain match for one row of a batch, then restores the kept
+// fields and records the store. opts carries the override flags; the
+// provider, asin and isbn come from the row.
+func matchRow(ctx context.Context, client *abs.Client, it *abs.Item, provider string, keep []string, opts abs.MatchOptions, res *applyResult) {
+	opts.Provider, opts.ASIN, opts.ISBN = provider, res.ASIN, res.ISBN
+	r, err := client.Match(ctx, it.ID, opts)
+	if err != nil {
+		res.Error = err.Error()
+		return
+	}
+	res.Updated, res.Warning = r.Updated, r.Warning
+	if r.LibraryItem != nil && res.ASIN != "" && !strings.EqualFold(r.LibraryItem.Media.Metadata.ASIN, res.ASIN) {
+		res.Warning = joinWarnings(res.Warning, fmt.Sprintf("the item's asin is %q, not %s; set override_details to replace it", r.LibraryItem.Media.Metadata.ASIN, res.ASIN))
+	}
+	if kerr := restoreKept(ctx, client, it, keep); kerr != nil {
+		res.Error = "matched, but restoring " + strings.Join(keep, ", ") + " failed: " + kerr.Error()
+	} else {
+		res.Kept = keep
+	}
+	tags := it.Media.Tags
+	if r.LibraryItem != nil && !slices.Contains(keep, "tags") {
+		tags = r.LibraryItem.Media.Tags
+	}
+	if terr := tagProvider(ctx, client, it.ID, tags, provider); terr != nil {
+		res.Warning = joinWarnings(res.Warning, "recording the provider tag failed: "+terr.Error())
+	}
+}
+
+// addCounts folds one row's counts into the batch's.
+func addCounts(into, add map[string]int) map[string]int {
+	for k, v := range add {
+		if into == nil {
+			into = map[string]int{}
+		}
+		into[k] += v
+	}
+	return into
+}
+
 func registerMatchBatchTools(r *registry) {
 	client := r.client
 
@@ -231,17 +300,6 @@ func registerMatchBatchTools(r *registry) {
 		Smart           bool        `json:"smart,omitempty"            jsonschema:"fill the empty fields, then decide each remaining difference by rule: a file-tag title, a company in the narrator field or a timestamp year is written; a curated series, a plain year or an honorific-only difference is kept; anything else is reported for review with both values. Cannot combine with override_details"`
 		Preview         bool        `json:"preview,omitempty"          jsonschema:"with smart: report every decision and change nothing"`
 	}
-	type applyResult struct {
-		Item    string          `json:"item"`
-		Title   string          `json:"title,omitempty"`
-		ASIN    string          `json:"asin,omitempty"`
-		ISBN    string          `json:"isbn,omitempty"`
-		Updated bool            `json:"updated"`
-		Kept    []string        `json:"kept,omitempty"    jsonschema:"fields restored after the match"`
-		Fields  []fieldDecision `json:"fields,omitempty"  jsonschema:"with smart: every field the provider would write differently and what was done about it"`
-		Warning string          `json:"warning,omitempty"`
-		Error   string          `json:"error,omitempty"`
-	}
 	type applyBatchOut struct {
 		Applied int            `json:"applied"`
 		Failed  int            `json:"failed"`
@@ -290,52 +348,10 @@ func registerMatchBatchTools(r *registry) {
 					provider, _, _ = matchQuery(ctx, client, it, "", "", "")
 				}
 				if in.Smart {
-					decisions, r, serr := smartApply(ctx, client, it, provider, res.ASIN, res.ISBN, in.Preview)
-					res.Fields = decisions
-					for k, v := range smartCounts(decisions) {
-						if out.Counts == nil {
-							out.Counts = map[string]int{}
-						}
-						out.Counts[k] += v
-					}
-					switch {
-					case serr != nil:
-						res.Error = serr.Error()
-					case in.Preview:
-					default:
-						res.Updated, res.Warning = r.Updated, r.Warning
-						if terr := tagProvider(ctx, client, it.ID, it.Media.Tags, provider); terr != nil {
-							res.Warning = joinWarnings(res.Warning, "recording the provider tag failed: "+terr.Error())
-						}
-					}
-					if res.Error == "" {
-						out.Applied++
-					} else {
-						out.Failed++
-					}
-					out.Results = append(out.Results, res)
-					continue
-				}
-				r, err := client.Match(ctx, it.ID, abs.MatchOptions{Provider: provider, ASIN: res.ASIN, ISBN: res.ISBN, OverrideCover: in.OverrideCover, OverrideDetails: in.OverrideDetails})
-				if err != nil {
-					res.Error = err.Error()
+					smartRow(ctx, client, it, provider, &res, in.Preview)
+					out.Counts = addCounts(out.Counts, smartCounts(res.Fields))
 				} else {
-					res.Updated, res.Warning = r.Updated, r.Warning
-					if r.LibraryItem != nil && res.ASIN != "" && !strings.EqualFold(r.LibraryItem.Media.Metadata.ASIN, res.ASIN) {
-						res.Warning = joinWarnings(res.Warning, fmt.Sprintf("the item's asin is %q, not %s; set override_details to replace it", r.LibraryItem.Media.Metadata.ASIN, res.ASIN))
-					}
-					if kerr := restoreKept(ctx, client, it, keep); kerr != nil {
-						res.Error = "matched, but restoring " + strings.Join(keep, ", ") + " failed: " + kerr.Error()
-					} else {
-						res.Kept = keep
-					}
-					tags := it.Media.Tags
-					if r.LibraryItem != nil && !slices.Contains(keep, "tags") {
-						tags = r.LibraryItem.Media.Tags
-					}
-					if terr := tagProvider(ctx, client, it.ID, tags, provider); terr != nil {
-						res.Warning = joinWarnings(res.Warning, "recording the provider tag failed: "+terr.Error())
-					}
+					matchRow(ctx, client, it, provider, keep, abs.MatchOptions{OverrideCover: in.OverrideCover, OverrideDetails: in.OverrideDetails}, &res)
 				}
 			}
 			if res.Error == "" {

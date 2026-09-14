@@ -119,7 +119,7 @@ func TestResolveCollectionAndPlaylistByID(t *testing.T) {
 // candidates. Nothing tested it, because no fixture name spans two libraries -
 // so this makes one span, checks the error names both, and puts it back.
 func TestResolveAmbiguousAcrossLibraries(t *testing.T) {
-	const shared = "Isaac Asimov"
+	const shared = "Tad Williams"  // Fiction only; Asimov is in Messy too
 	const book = "War Is a Racket" // Non-Fiction
 
 	// call, not invoke: only call skips when there is no server, and this is

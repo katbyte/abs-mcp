@@ -51,6 +51,8 @@
 
 ### Fixed
 
+- `audit_authors` and `audit_narrators` read "Sanderson, Brandon" as Brandon Sanderson, so the
+  two spellings are one group
 - `series_get`, and `library_items` with a series filter, show every series a book is in, not
   only the one asked for; an edit built from the old output dropped links
 - `audit_series` reads a "The X Series" folder as series X
@@ -69,6 +71,13 @@
 ### Changed
 
 - `audit_authors` says an asin without a photo means Audible has none
+- the live fixtures carry covers: non-fiction has a square one, a jacket scan and one too
+  small, so `audit_covers` measures real files there; fiction stays bare
+- a fourth live fixture, `Messy`: 31 books seeded with the defects the curation audits are
+  for (a gap with its book on the shelf unlinked, a series and a narrator spelled two ways,
+  unpadded numbers, titles that are the series name, stub descriptions, genre placeholders,
+  a folder naming another book, a duplicate, a single-file m4b, a ribboned cover, one matched
+  book), and a test per audit against it
 - `docker-compose.yml` no longer pins `dns: 1.1.1.1`
 
 ## 0.3.0 (2026-09-13)

@@ -454,9 +454,9 @@ func registerItemTools(r *registry) {
 			if opts.ASIN == "" && opts.ISBN == "" {
 				return nil, applyOut{}, errors.New("smart needs an asin or isbn to fetch the provider's record")
 			}
-			decisions, res, err := smartApply(ctx, client, it, provider, opts.ASIN, opts.ISBN, in.Preview)
-			if err != nil {
-				return nil, applyOut{}, err
+			decisions, res, serr := smartApply(ctx, client, it, provider, opts.ASIN, opts.ISBN, in.Preview)
+			if serr != nil {
+				return nil, applyOut{}, serr
 			}
 			out := applyOut{Applied: &applied, Fields: decisions, Counts: smartCounts(decisions)}
 			if in.Preview {

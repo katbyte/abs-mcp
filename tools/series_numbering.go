@@ -117,11 +117,11 @@ func (c *numberingCollector) sequences(keys ...string) []float64 {
 // and "#02" beside "#12". The highest number decides, not the count, so a
 // series with gaps pads the same as a complete one.
 func (c *numberingCollector) padWidth(seriesKey string) int {
-	max := c.maxNum[seriesKey]
+	top := c.maxNum[seriesKey]
 	switch {
-	case max >= 100:
+	case top >= 100:
 		return 3
-	case max >= 10:
+	case top >= 10:
 		return 2
 	}
 	return 1

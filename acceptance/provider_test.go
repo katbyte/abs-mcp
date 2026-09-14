@@ -12,6 +12,7 @@
 package acceptance
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -119,6 +120,68 @@ func TestItemMatchAndApply(t *testing.T) {
 		if got, _ := item["asin"].(string); got != asin {
 			t.Errorf("asin = %q, want the matched %q", got, asin)
 		}
+	})
+
+	// the batch form takes the same asin as an explicit pair, and records the
+	// store it came from on the book
+	t.Run("item_match_apply_batch", func(t *testing.T) {
+		if asin == "" {
+			t.Skip("item_match produced no asin")
+		}
+		t.Cleanup(func() { restoreBook(t, book) })
+
+		if msg := callErr(t, "item_match_apply_batch", map[string]any{"provider": "audible"}); msg == "" {
+			t.Error("a batch with no matches should be refused")
+		}
+
+		out := call(t, "item_match_apply_batch", map[string]any{
+			"matches": []any{map[string]any{"item": book, "asin": asin}}, "provider": "audible", "override_details": true,
+		})
+		if applied := num(t, out["applied"], "applied"); applied != 1 {
+			t.Errorf("applied = %d, want 1: %v", applied, out)
+		}
+		results := rows(t, out["results"], "results")
+		if len(results) != 1 {
+			t.Fatalf("results = %v, want one row", results)
+		}
+		if updated, _ := results[0]["updated"].(bool); !updated {
+			t.Errorf("the row reports no update: %v", results[0])
+		}
+		if msg, _ := results[0]["error"].(string); msg != "" {
+			t.Errorf("the row failed: %s", msg)
+		}
+
+		item := call(t, "item_get", map[string]any{"item": book})
+		if got, _ := item["asin"].(string); got != asin {
+			t.Errorf("asin = %q, want %q", got, asin)
+		}
+		if tags := strs(t, item["tags"], "tags"); !slices.Contains(tags, "zz-provider:audible") {
+			t.Errorf("tags = %v, want the store recorded as zz-provider:audible", tags)
+		}
+
+		// item_match_tag backfills that tag: a book that already carries it
+		// is counted and left alone, and overwrite looks the asin up again
+		t.Run("item_match_tag", func(t *testing.T) {
+			out := call(t, "item_match_tag", map[string]any{"library": "Fiction", "providers": []any{"audible"}})
+			if already := num(t, out["already_tagged"], "already_tagged"); already != 1 {
+				t.Errorf("already_tagged = %d, want the one matched book: %v", already, out)
+			}
+			if tagged := num(t, out["tagged"], "tagged"); tagged != 0 {
+				t.Errorf("tagged = %d, want 0 without overwrite", tagged)
+			}
+
+			out = call(t, "item_match_tag", map[string]any{"library": "Fiction", "providers": []any{"audible"}, "overwrite": true})
+			if tagged := num(t, out["tagged"], "tagged"); tagged != 1 {
+				t.Errorf("tagged = %d, want 1 with overwrite: %v", tagged, out)
+			}
+			tagRows := rows(t, out["rows"], "rows")
+			if len(tagRows) != 1 {
+				t.Fatalf("rows = %v, want the one book", tagRows)
+			}
+			if provider, _ := tagRows[0]["provider"].(string); provider != "audible" {
+				t.Errorf("provider = %q, want audible, the store that has the asin", provider)
+			}
+		})
 	})
 }
 

@@ -30,13 +30,17 @@ import (
 type libraryFixture struct {
 	Name, MediaType, Folder string
 	Items                   int
+	Provider                string // "" leaves the server's default
 }
 
-// libraries are created by library_create and filled by library_scan.
+// libraries are created by library_create and filled by library_scan. Messy
+// is an Audible library, so the audits that look a matched book up go to
+// the store its asin came from.
 var libraries = []libraryFixture{
-	{"Fiction", "book", "/fiction", 7},
-	{"Non-Fiction", "book", "/nonfiction", 3},
-	{"Podcasts", "podcast", "/podcasts", 2},
+	{"Fiction", "book", "/fiction", 7, ""},
+	{"Non-Fiction", "book", "/nonfiction", 3, ""},
+	{"Podcasts", "podcast", "/podcasts", 2, ""},
+	{"Messy", "book", "/messy", 31, "audible"},
 }
 
 // bookFixture is a seeded item. Foundation is complete, The Expanse skips one book
@@ -64,6 +68,77 @@ var books = []bookFixture{
 
 // podcasts are the shows laid out on disk, each with two episodes.
 var podcasts = []string{"Well There's Your Problem", "Behind the Bastards"}
+
+// messyBook is one book of the Messy library, addressed by its folder because
+// two of them end up with the same title. Each carries one of the defects
+// the curation audits are for; the layout itself (scripts/abs-testenv.sh)
+// supplies the rest: a series folder with no series on the book, files named
+// after another book, one book twice, a single-file m4b, a ribboned cover.
+type messyBook struct {
+	Path, Title, Author string
+	Narrators           []string
+	Series              []string // nil clears whatever the scan guessed
+	Genres, Tags        []string
+	Description         string // "" is left empty; filler is a real one
+	ASIN                string
+}
+
+// filler is a description long enough not to be a stub.
+const filler = "A novel, on this shelf so the audits have something to sweep. This description is here so audit_missing has nothing to say about it: it is long enough to pass as one."
+
+var messyBooks = []messyBook{
+	// Discworld: twelve books, so numbers should be two digits, and two are not
+	{Path: "Terry Pratchett/Discworld - 01 - The Colour of Magic", Title: "The Colour of Magic", Author: "Terry Pratchett", Narrators: []string{"Nigel Planer"}, Series: []string{"Discworld #01"}, Genres: []string{"Audiobook"}, Tags: []string{"lang:en"}, Description: filler},
+	{Path: "Terry Pratchett/Discworld - 02 - The Light Fantastic", Title: "The Light Fantastic", Author: "Terry Pratchett", Narrators: []string{"Nigel Planer"}, Series: []string{"Discworld #2"}, Genres: []string{"Audiobook - Fantasy"}, Description: filler},
+	{Path: "Terry Pratchett/Discworld - 03 - Equal Rites", Title: "Equal Rites", Author: "Terry Pratchett", Narrators: []string{"Nigel Planer"}, Series: []string{"Discworld #03"}, Genres: []string{"Science Fiction & Fantasy, Fantasy"}, Description: filler},
+	{Path: "Terry Pratchett/Discworld - 04 - Mort", Title: "Mort", Author: "Terry Pratchett", Narrators: []string{"Nigel Planer"}, Series: []string{"Discworld #04"}, Genres: []string{"Fantasy"}, Tags: []string{"fantasy"}, Description: filler},
+	{Path: "Terry Pratchett/Discworld - 05 - Sourcery", Title: "Sourcery", Author: "Terry Pratchett", Narrators: []string{"Nigel Planer"}, Series: []string{"Discworld #5"}, Genres: []string{"Fantasy"}, Description: filler},
+	{Path: "Terry Pratchett/Discworld - 06 - Wyrd Sisters", Title: "Wyrd Sisters", Author: "Terry Pratchett", Narrators: []string{"Nigel Planer"}, Series: []string{"Discworld #06"}, Genres: []string{"Fantasy"}, Description: filler},
+	// the folder says Pyramids, the metadata says another book
+	{Path: "Terry Pratchett/Discworld - 07 - Pyramids", Title: "Small Gods", Author: "Terry Pratchett", Narrators: []string{"Nigel Planer"}, Series: []string{"Discworld #07"}, Genres: []string{"Fantasy"}, Description: filler},
+	// three files, named after Men at Arms
+	{Path: "Terry Pratchett/Discworld - 08 - Guards! Guards!", Title: "Guards! Guards!", Author: "Terry Pratchett", Narrators: []string{"Nigel Planer"}, Series: []string{"Discworld #08"}, Genres: []string{"Fantasy"}, Description: filler},
+	// one m4b file rather than a folder, in the library root
+	{Path: "Discworld - 09 - Eric.m4b", Title: "Eric", Author: "Terry Pratchett", Narrators: []string{"Nigel Planer"}, Series: []string{"Discworld #09"}, Genres: []string{"Fantasy"}, Description: filler},
+	// the cover wears the ribbon
+	{Path: "Terry Pratchett/Discworld - 10 - Moving Pictures", Title: "Moving Pictures", Author: "Terry Pratchett", Narrators: []string{"Nigel Planer"}, Series: []string{"Discworld #10"}, Genres: []string{"Fantasy"}, Description: filler},
+	{Path: "Terry Pratchett/Discworld - 11 - Reaper Man", Title: "Reaper Man", Author: "Terry Pratchett", Narrators: []string{"Nigel Planer"}, Series: []string{"Discworld #11"}, Genres: []string{"Fantasy"}, Description: filler},
+	{Path: "Terry Pratchett/Discworld - 12 - Witches Abroad", Title: "Witches Abroad", Author: "Terry Pratchett", Narrators: []string{"Nigel Planer"}, Series: []string{"Discworld #12"}, Genres: []string{"Fantasy"}, Description: filler},
+	// Mort a second time, outside the series
+	{Path: "Terry Pratchett/Mort", Title: "Mort", Author: "Terry Pratchett", Narrators: []string{"Nigel Planer"}, Genres: []string{"Fantasy"}, Description: filler},
+
+	// descriptions that say nothing: a credit line, a url, a stub, and none
+	{Path: "Andy Weir/The Martian", Title: "The Martian", Author: "Andy Weir", Narrators: []string{"R. C. Bray"}, Genres: []string{"Science Fiction"}, Description: "Read by R. C. Bray"},
+	{Path: "Andy Weir/Artemis", Title: "Artemis", Author: "Andy Weir", Narrators: []string{"Rosario Dawson"}, Genres: []string{"Science Fiction"}, Description: "https://www.andyweir.com/artemis"},
+	{Path: "Andy Weir/Project Hail Mary", Title: "Project Hail Mary", Author: "Andy Weir", Narrators: []string{"Ray Porter"}, Genres: []string{"Science Fiction"}, Description: "A lone astronaut must save the earth."},
+	{Path: "Andy Weir/The Egg", Title: "The Egg", Author: "Andy Weir", Narrators: []string{"Andy Weir"}, Genres: []string{"Science Fiction"}},
+
+	// one series spelled two ways, and its narrator too
+	{Path: "Robert Jordan/The Wheel of Time - 01 - The Eye of the World", Title: "The Eye of the World", Author: "Robert Jordan", Narrators: []string{"Michael Kramer", "Kate Reading"}, Series: []string{"The Wheel of Time #1"}, Genres: []string{"Fantasy"}, Description: filler},
+	{Path: "Robert Jordan/The Wheel of Time - 02 - The Great Hunt", Title: "The Great Hunt", Author: "Robert Jordan", Narrators: []string{"Michael Kramer", "Kate Reading"}, Series: []string{"The Wheel of Time #2"}, Genres: []string{"Fantasy"}, Description: filler},
+	{Path: "Robert Jordan/Wheel of Time - 03 - The Dragon Reborn", Title: "The Dragon Reborn", Author: "Robert Jordan", Narrators: []string{"Micheal Kramer", "Kate Reading"}, Series: []string{"Wheel of Time #3"}, Genres: []string{"Fantasy"}, Description: filler},
+	{Path: "Robert Jordan/Wheel of Time - 04 - The Shadow Rising", Title: "The Shadow Rising", Author: "Robert Jordan", Narrators: []string{"Micheal Kramer", "Kate Reading"}, Series: []string{"Wheel of Time #4"}, Genres: []string{"Fantasy"}, Description: filler},
+
+	// a gap whose missing book is on the shelf, in a series folder, unlinked
+	{Path: "Kim Stanley Robinson/Mars Trilogy - 01 - Red Mars", Title: "Red Mars", Author: "Kim Stanley Robinson", Narrators: []string{"Richard Ferrone"}, Series: []string{"Mars Trilogy #1"}, Genres: []string{"Science Fiction"}, Description: filler},
+	{Path: "Kim Stanley Robinson/Mars Trilogy - 02 - Green Mars", Title: "Green Mars", Author: "Kim Stanley Robinson", Narrators: []string{"Richard Ferrone"}, Genres: []string{"Science Fiction"}, Description: filler},
+	{Path: "Kim Stanley Robinson/Mars Trilogy - 03 - Blue Mars", Title: "Blue Mars", Author: "Kim Stanley Robinson", Narrators: []string{"Richard Ferrone"}, Series: []string{"Mars Trilogy #3"}, Genres: []string{"Science Fiction"}, Description: filler},
+
+	// titles that are the series name, or carry it with a book number
+	{Path: "George R. R. Martin/A Song of Ice and Fire - 01 - A Game of Thrones", Title: "A Song of Ice and Fire", Author: "George R. R. Martin", Narrators: []string{"Roy Dotrice"}, Series: []string{"A Song of Ice and Fire #1"}, Genres: []string{"Fantasy"}, Description: filler},
+	{Path: "George R. R. Martin/A Song of Ice and Fire - 02 - A Clash of Kings", Title: "A Clash of Kings: A Song of Ice and Fire, Book 2", Author: "George R. R. Martin", Narrators: []string{"Roy Dotrice"}, Series: []string{"A Song of Ice and Fire #2"}, Genres: []string{"Fantasy"}, Description: filler},
+
+	// an author spelled two ways, and an author record that is a title
+	{Path: "Brandon Sanderson/Stormlight Archive - 01 - The Way of Kings", Title: "The Way of Kings", Author: "Brandon Sanderson", Narrators: []string{"Michael Kramer", "Kate Reading"}, Series: []string{"Stormlight Archive #1"}, Genres: []string{"Fantasy"}, Description: filler},
+	{Path: "Brandon Sanderson/Stormlight Archive - 02 - Words of Radiance", Title: "Words of Radiance", Author: "Brandon Sanderson", Narrators: []string{"Michael Kramer", "Kate Reading"}, Series: []string{"Stormlight Archive #2"}, Genres: []string{"Fantasy"}, Description: filler},
+	{Path: "Brandon Sanderson/Warbreaker", Title: "Warbreaker", Author: "Warbreaker", Narrators: []string{"James Yaegashi"}, Genres: []string{"Fantasy"}, Description: filler},
+	{Path: "Sanderson, Brandon/Stormlight Archive - 03 - Oathbringer", Title: "Oathbringer", Author: "Sanderson, Brandon", Narrators: []string{"Michael Kramer", "Kate Reading"}, Series: []string{"Stormlight Archive #3"}, Genres: []string{"Fantasy"}, Description: filler},
+
+	// matched already: the asin Audible's own search returns for it, so the
+	// audits that look a matched book up have one to look up. The title
+	// carries an importer's suffix, so it is not the Fiction library's Foundation
+	{Path: "Isaac Asimov/Foundation", Title: "Foundation (Unabridged)", Author: "Isaac Asimov", Narrators: []string{"Scott Brick"}, Genres: []string{"Science Fiction"}, Description: filler, ASIN: "B003D8W5VS"},
+}
 
 var (
 	ctx     context.Context
@@ -284,9 +359,11 @@ func seed() error {
 		if have[l.Name] {
 			continue
 		}
-		if _, err := invoke("library_create", map[string]any{
-			"name": l.Name, "media_type": l.MediaType, "folders": []any{l.Folder},
-		}); err != nil {
+		args := map[string]any{"name": l.Name, "media_type": l.MediaType, "folders": []any{l.Folder}}
+		if l.Provider != "" {
+			args["provider"] = l.Provider
+		}
+		if _, err := invoke("library_create", args); err != nil {
 			return err
 		}
 		created = true
@@ -306,9 +383,13 @@ func seed() error {
 		}
 	}
 
-	for _, b := range books {
+	for i, b := range books {
+		library := "Fiction"
+		if i >= libraries[0].Items {
+			library = "Non-Fiction"
+		}
 		args := map[string]any{
-			"item": b.Title, "authors": []any{b.Author}, "narrators": []any{b.Narrator},
+			"library": library, "item": b.Title, "authors": []any{b.Author}, "narrators": []any{b.Narrator},
 			"publisher": b.Publisher, "year": b.Year, "language": b.Language,
 			"tags": toAny(b.Tags), "genres": toAny(b.Genres),
 		}
@@ -317,6 +398,60 @@ func seed() error {
 		}
 		if _, err := invoke("item_edit", args); err != nil {
 			return fmt.Errorf("seeding %s: %w", b.Title, err)
+		}
+	}
+
+	return seedMessy()
+}
+
+// seedMessy sets the metadata of the Messy library. Its books are addressed
+// by folder: the scan titled each after its folder, and two end up titled
+// Mort, so the ids are taken from a listing first.
+func seedMessy() error {
+	ids := map[string]string{}
+	for offset := 0; ; offset += 50 {
+		out, err := invoke("library_items", map[string]any{"library": "Messy", "limit": 50, "offset": offset})
+		if err != nil {
+			return err
+		}
+		items, _ := out["items"].([]any)
+		for _, r := range items {
+			row, _ := r.(map[string]any)
+			id, _ := row["id"].(string)
+			got, err := invoke("item_get", map[string]any{"item": id})
+			if err != nil {
+				return err
+			}
+			path, _ := got["path"].(string)
+			ids[path] = id
+		}
+		if len(items) < 50 {
+			break
+		}
+	}
+
+	for _, b := range messyBooks {
+		id, ok := ids[b.Path]
+		if !ok {
+			return fmt.Errorf("seeding the messy library: nothing scanned at %q (have %v)", b.Path, ids)
+		}
+		args := map[string]any{
+			"item": id, "title": b.Title, "authors": []any{b.Author}, "narrators": toAny(b.Narrators),
+			"genres": toAny(b.Genres), "tags": toAny(b.Tags), "language": "English",
+		}
+		if len(b.Series) > 0 {
+			args["series"] = toAny(b.Series)
+		} else {
+			args["clear"] = []any{"series"}
+		}
+		if b.Description != "" {
+			args["description"] = b.Description
+		}
+		if b.ASIN != "" {
+			args["asin"] = b.ASIN
+		}
+		if _, err := invoke("item_edit", args); err != nil {
+			return fmt.Errorf("seeding %s: %w", b.Path, err)
 		}
 	}
 

@@ -14,6 +14,8 @@ func numbered(id, path, series, seq string) *abs.Item {
 }
 
 func TestNumberingPadding(t *testing.T) {
+	t.Parallel()
+
 	c := newNumberingCollector()
 	// #1, #02, #3: three books, so no leading zero, and the "02" is reported
 	c.add(numbered("d1", "Darksword/Forging the Darksword", "Darksword", "1"))

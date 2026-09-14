@@ -64,6 +64,45 @@ War Is a Racket|Smedley D. Butler'
 PODCASTS="Well There's Your Problem
 Behind the Bastards"
 
+# The messy library: the defects the curation audits exist to find, laid out
+# the way a real collection accumulates them. The layout here sets up the
+# folder ones - a series folder holding a book that is not linked to the
+# series, a title folder holding another book's files, one book twice, a
+# single-file m4b, a cover wearing the ribbon - and the acceptance harness
+# sets the metadata ones (spellings, stubs, placeholders) beside each book.
+# number|title - the Discworld shelf, "Discworld - NN - Title"
+MESSY_DISCWORLD='01|The Colour of Magic
+02|The Light Fantastic
+03|Equal Rites
+04|Mort
+05|Sourcery
+06|Wyrd Sisters
+07|Pyramids
+10|Moving Pictures
+11|Reaper Man
+12|Witches Abroad'
+
+# author|folder - one book per line, one file each
+MESSY_BOOKS='Andy Weir|The Martian
+Andy Weir|Artemis
+Andy Weir|Project Hail Mary
+Andy Weir|The Egg
+Robert Jordan|The Wheel of Time - 01 - The Eye of the World
+Robert Jordan|The Wheel of Time - 02 - The Great Hunt
+Robert Jordan|Wheel of Time - 03 - The Dragon Reborn
+Robert Jordan|Wheel of Time - 04 - The Shadow Rising
+Kim Stanley Robinson|Mars Trilogy - 01 - Red Mars
+Kim Stanley Robinson|Mars Trilogy - 02 - Green Mars
+Kim Stanley Robinson|Mars Trilogy - 03 - Blue Mars
+George R. R. Martin|A Song of Ice and Fire - 01 - A Game of Thrones
+George R. R. Martin|A Song of Ice and Fire - 02 - A Clash of Kings
+Brandon Sanderson|Stormlight Archive - 01 - The Way of Kings
+Brandon Sanderson|Stormlight Archive - 02 - Words of Radiance
+Brandon Sanderson|Warbreaker
+Sanderson, Brandon|Stormlight Archive - 03 - Oathbringer
+Terry Pratchett|Mort
+Isaac Asimov|Foundation'
+
 # wipe_data removes the data directory. The container writes its config,
 # metadata and backups as root, and on Linux those land root-owned in the bind
 # mount where the calling user cannot delete them (Docker Desktop on macOS
@@ -87,6 +126,32 @@ silent_mp3() {
   ffmpeg -nostdin -loglevel error -y -f lavfi -i anullsrc=r=44100:cl=mono -t 1 -q:a 9 "$1"
 }
 
+# silent_m4b PATH - the same second of silence as one m4b file, for a book
+# that is a file rather than a folder.
+silent_m4b() {
+  mkdir -p "$(dirname "$1")"
+  ffmpeg -nostdin -loglevel error -y -f lavfi -i anullsrc=r=44100:cl=mono -t 1 -c:a aac "$1"
+}
+
+# ribbon PATH SIZE - a square cover wearing the "Only from Audible" ribbon's
+# geometry: a yellow band at 45 degrees across the bottom-right corner with
+# dark marks on it, which is what audit_covers banner=true looks for.
+ribbon() {
+  mkdir -p "$(dirname "$1")"
+  local band='between((X+Y)/W,1.42,1.62)' mark='lt(mod(X-Y+W,11),3)*between((X+Y)/W,1.47,1.57)'
+  ffmpeg -nostdin -loglevel error -y -f lavfi -i "testsrc2=s=${2}x${2}" -frames:v 1 \
+    -vf "format=rgb24,geq=r='if(${band},if(${mark},30,250),r(X,Y))':g='if(${band},if(${mark},30,230),g(X,Y))':b='if(${band},if(${mark},30,40),b(X,Y))'" \
+    "$1"
+}
+
+# cover PATH WIDTH HEIGHT - a jpeg of that size with a test pattern on it, so
+# the scanner picks it up as the book's cover and the cover audits have a
+# file to measure.
+cover() {
+  mkdir -p "$(dirname "$1")"
+  ffmpeg -nostdin -loglevel error -y -f lavfi -i "testsrc2=s=${2}x${3}" -frames:v 1 "$1"
+}
+
 fixtures() {
   log "generating audio fixtures under ${DATA}"
   wipe_data
@@ -101,6 +166,13 @@ fixtures() {
     [ -n "$title" ] && silent_mp3 "${DATA}/nonfiction/${author}/${title}/01.mp3"
   done <<<"$NONFICTION"
 
+  # non-fiction has covers, one of each shape audit_covers judges: square, a
+  # jacket scan, and one too small to keep. Fiction stays bare, so the cover
+  # tools have books to set a first cover on
+  cover "${DATA}/nonfiction/William Manchester/The Arms of Krupp/cover.jpg" 600 600
+  cover "${DATA}/nonfiction/Robert Evans/A Brief History of Vice/cover.jpg" 400 600
+  cover "${DATA}/nonfiction/Smedley D. Butler/War Is a Racket/cover.jpg" 200 200
+
   # one book also gets an ebook beside the audio, so the ebook endpoints have
   # something to read. A minimal epub is a zip whose first entry is an
   # uncompressed "mimetype" file.
@@ -110,6 +182,23 @@ fixtures() {
   printf '%s' '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>' > "${ebook_dir}/META-INF/container.xml"
   printf '%s' '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">sdk</dc:identifier><dc:title>Foundation</dc:title><dc:language>en</dc:language></metadata><manifest/><spine/></package>' > "${ebook_dir}/content.opf"
   ( cd "${ebook_dir}" && zip -q -X -0 Foundation.epub mimetype && zip -q -X -9 -r Foundation.epub META-INF content.opf && rm -f mimetype content.opf && rm -rf META-INF )
+
+  # the messy library
+  while IFS='|' read -r number title; do
+    [ -n "$title" ] && silent_mp3 "${DATA}/messy/Terry Pratchett/Discworld - ${number} - ${title}/01.mp3"
+  done <<<"$MESSY_DISCWORLD"
+  while IFS='|' read -r author folder; do
+    [ -n "$folder" ] && silent_mp3 "${DATA}/messy/${author}/${folder}/01.mp3"
+  done <<<"$MESSY_BOOKS"
+  # a three-file book whose files are named after another book
+  for n in 01 02 03; do
+    silent_mp3 "${DATA}/messy/Terry Pratchett/Discworld - 08 - Guards! Guards!/Men at Arms - ${n}.mp3"
+  done
+  # a book that is one file, not a folder. It sits in the library root: a
+  # file beside author folders turns the folder it is in into one book
+  silent_m4b "${DATA}/messy/Discworld - 09 - Eric.m4b"
+  # a cover with the ribbon on it
+  ribbon "${DATA}/messy/Terry Pratchett/Discworld - 10 - Moving Pictures/cover.jpg" 600
 
   # podcasts are "<podcast>/<episode file>"
   while read -r show; do
@@ -158,6 +247,7 @@ up() {
     -v "${DATA}/fiction:/fiction" \
     -v "${DATA}/nonfiction:/nonfiction" \
     -v "${DATA}/podcasts:/podcasts" \
+    -v "${DATA}/messy:/messy" \
     -v "${DATA}/metadata:/metadata" \
     -v "${DATA}/config:/config" \
     "$IMAGE" >/dev/null

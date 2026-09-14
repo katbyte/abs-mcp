@@ -177,9 +177,9 @@ func registerMatchTagTool(r *registry) {
 			// the server has no "has an asin or isbn" filter: sweep and page by hand
 			var matched []abs.Item
 			if err := client.ItemsAll(ctx, lib.ID, abs.ItemsOptions{}, func(page []abs.Item) bool {
-				for _, it := range page {
-					if !it.IsPodcast() && (strings.TrimSpace(it.Media.Metadata.ASIN) != "" || strings.TrimSpace(it.Media.Metadata.ISBN) != "") {
-						matched = append(matched, it)
+				for i := range page {
+					if it := &page[i]; !it.IsPodcast() && (strings.TrimSpace(it.Media.Metadata.ASIN) != "" || strings.TrimSpace(it.Media.Metadata.ISBN) != "") {
+						matched = append(matched, *it)
 					}
 				}
 				return true

@@ -8,6 +8,8 @@ import (
 )
 
 func TestCleanPeople(t *testing.T) {
+	t.Parallel()
+
 	got := cleanPeople([]string{"Dr. Nicole LePera", "Larry Page - introduction", "Gabor Maté MD", "The Great Courses", "PhD Marshall Rosenberg", "Malcolm X"})
 	want := []string{"Nicole LePera", "Gabor Maté", "Marshall Rosenberg", "Malcolm X"}
 	if !slices.Equal(got, want) {
@@ -16,6 +18,8 @@ func TestCleanPeople(t *testing.T) {
 }
 
 func TestSmartDecide(t *testing.T) {
+	t.Parallel()
+
 	it := &abs.Item{MediaType: "book", RelPath: "K. Patrick/Mrs S", Media: abs.Media{Metadata: abs.Metadata{
 		Title: "Mrs. S .mp3", AuthorName: "Nicole LePera", NarratorName: "Black Library, Heavy Entertainment",
 		Series: abs.SeriesRefs{{Name: "Nemesis", Sequence: "2"}}, Genres: []string{"Audiobook"},
@@ -90,6 +94,8 @@ func TestSmartDecide(t *testing.T) {
 }
 
 func TestProviderTag(t *testing.T) {
+	t.Parallel()
+
 	it := &abs.Item{Media: abs.Media{Tags: []string{"Fantasy", providerTagPrefix + "audible.ca"}}}
 	if providerTag(it) != "audible.ca" {
 		t.Errorf("providerTag = %q", providerTag(it))
@@ -112,7 +118,7 @@ func TestProviderTag(t *testing.T) {
 	}
 }
 
-func TestProviderTagPrefix(t *testing.T) {
+func TestProviderTagPrefix(t *testing.T) { //nolint:paralleltest // swaps the package-level prefix
 	defer func(p string) { providerTagPrefix = p }(providerTagPrefix)
 	providerTagPrefix = "provider:"
 	it := &abs.Item{Media: abs.Media{Tags: []string{"zz-provider:audible", "provider:audible.ca"}}}

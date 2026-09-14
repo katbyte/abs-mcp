@@ -26,7 +26,7 @@ type fieldDecision struct {
 	Field    string `json:"field"`
 	Local    string `json:"local,omitempty"`
 	Provider string `json:"provider"`
-	Action   string `json:"action" jsonschema:"filled: was empty and the match wrote it; written: replaced by rule; kept: left as it was by rule; review: no rule applies, both values shown, nothing changed"`
+	Action   string `json:"action"          jsonschema:"filled: was empty and the match wrote it; written: replaced by rule; kept: left as it was by rule; review: no rule applies, both values shown, nothing changed"`
 	Rule     string `json:"rule"`
 }
 
@@ -184,13 +184,13 @@ func smartDecide(it *abs.Item, hit *abs.BookSearchResult) []fieldDecision {
 // the provider's values.
 func smartUpdate(decisions []fieldDecision, hit *abs.BookSearchResult) (abs.MediaUpdate, bool) {
 	md := abs.MetadataUpdate{}
-	any := false
+	changed := false
 	str := func(v string) *string { return &v }
 	for _, d := range decisions {
 		if d.Action != actWritten {
 			continue
 		}
-		any = true
+		changed = true
 		switch d.Field {
 		case "title":
 			md.Title = str(hit.Title)
@@ -215,7 +215,7 @@ func smartUpdate(decisions []fieldDecision, hit *abs.BookSearchResult) (abs.Medi
 			md.Description = str(hit.Description)
 		}
 	}
-	return abs.MediaUpdate{Metadata: &md}, any
+	return abs.MediaUpdate{Metadata: &md}, changed
 }
 
 // providerRecord fetches the provider's record for an asin or isbn.
@@ -253,7 +253,7 @@ func smartApply(ctx context.Context, client *abs.Client, it *abs.Item, provider,
 	if err != nil {
 		return decisions, nil, err
 	}
-	if upd, any := smartUpdate(decisions, hit); any {
+	if upd, changed := smartUpdate(decisions, hit); changed {
 		if _, err := client.UpdateMedia(ctx, it.ID, upd); err != nil {
 			return decisions, res, fmt.Errorf("matched, but writing the decided fields failed: %w", err)
 		}
@@ -286,7 +286,7 @@ func seriesCore(name string) string {
 
 // seriesNumberClash finds a series both sides name, spelling aside, at
 // different numbers, and returns the two numbers.
-func seriesNumberClash(local abs.SeriesRefs, provider []abs.SearchSeries) (string, string, bool) {
+func seriesNumberClash(local abs.SeriesRefs, provider []abs.SearchSeries) (mine, theirs string, clash bool) {
 	for _, l := range local {
 		for _, p := range provider {
 			if l.Sequence == "" || p.Sequence == "" || seriesCore(l.Name) != seriesCore(p.Title()) {
