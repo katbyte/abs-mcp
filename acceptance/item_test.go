@@ -192,12 +192,13 @@ func TestItemCoverRemove(t *testing.T) {
 	}
 }
 
-// embedding rewrites the audio tags in the background; assert it starts.
+// embedding rewrites the audio tags in the background; the tool waits for
+// it and reads the tags back (journey 11 follows one through a rescan).
 func TestItemEmbedMetadata(t *testing.T) {
 	out := call(t, "item_embed_metadata", map[string]any{"item": "A Brief History of Vice", "backup": true})
 
-	if started, _ := out["started"].(string); started == "" {
-		t.Errorf("item_embed_metadata started = %v", out["started"])
+	if embedded, _ := out["embedded"].(bool); !embedded {
+		t.Errorf("item_embed_metadata = %v, want embedded", out)
 	}
 }
 

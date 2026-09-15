@@ -26,9 +26,11 @@ import (
 	"errors"
 	"io"
 	"log"
+	"maps"
 	"math/big"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"strconv"
@@ -74,6 +76,9 @@ type Proxy struct {
 
 	driftMu sync.Mutex
 	drifts  []Drift
+
+	localMu sync.RWMutex
+	local   map[string]http.Handler
 }
 
 // Options configure a Proxy.
@@ -119,6 +124,7 @@ func New(opts Options) (*Proxy, error) {
 		ca:     ca,
 		caKey:  caKey,
 		certs:  map[string]*tls.Certificate{},
+		local:  map[string]http.Handler{},
 		upstream: &http.Transport{
 			Proxy:                 nil, // go straight out; we are the proxy
 			ForceAttemptHTTP2:     false,
@@ -136,7 +142,7 @@ func New(opts Options) (*Proxy, error) {
 	}
 	p.listener = ln
 	p.srv = &http.Server{
-		Handler:           http.HandlerFunc(p.serve),
+		Handler:           http.HandlerFunc(p.dispatch),
 		ReadHeaderTimeout: 30 * time.Second,
 	}
 	go func() {
@@ -170,6 +176,35 @@ func (p *Proxy) Misses() []string {
 	return append([]string(nil), p.misses...)
 }
 
+// Serve answers every request for host with h instead of a cassette, until
+// the returned func is called. It is for the hosts a test plays itself - a
+// podcast feed whose episodes it adds as it goes - which have no provider to
+// record: nothing for such a host is recorded, replayed or counted as a miss.
+// The host needs no DNS: the container sends the whole url to the proxy.
+func (p *Proxy) Serve(host string, h http.Handler) (stop func()) {
+	host = strings.ToLower(host)
+	p.localMu.Lock()
+	p.local[host] = h
+	p.localMu.Unlock()
+
+	return func() {
+		p.localMu.Lock()
+		delete(p.local, host)
+		p.localMu.Unlock()
+	}
+}
+
+// localHandler is the handler a test put in front of host, if any.
+func (p *Proxy) localHandler(host string) http.Handler {
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	p.localMu.RLock()
+	defer p.localMu.RUnlock()
+
+	return p.local[strings.ToLower(host)]
+}
+
 // Close stops the proxy, writing any newly recorded cassettes.
 func (p *Proxy) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -183,9 +218,9 @@ func (p *Proxy) Close() error {
 	return nil
 }
 
-// serve handles both a CONNECT tunnel (https, which is everything the
+// dispatch handles both a CONNECT tunnel (https, which is everything the
 // providers use) and a plain proxied request.
-func (p *Proxy) serve(w http.ResponseWriter, r *http.Request) {
+func (p *Proxy) dispatch(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodConnect {
 		p.tunnel(w, r)
 		return
@@ -255,6 +290,17 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 func (p *Proxy) respond(w http.ResponseWriter, r *http.Request, host string) {
 	if r.Body != nil {
 		defer func() { _ = r.Body.Close() }()
+	}
+	if h := p.localHandler(host); h != nil {
+		// buffered, so it goes out with a length: inside a tunnel nothing
+		// else would tell the client where the body ends
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, r)
+		maps.Copy(w.Header(), rec.Header())
+		w.Header().Set("Content-Length", strconv.Itoa(rec.Body.Len()))
+		w.WriteHeader(rec.Code)
+		_, _ = w.Write(rec.Body.Bytes())
+		return
 	}
 
 	path := r.URL.Path

@@ -436,9 +436,10 @@ func registerUserTools(r *registry) {
 	type bookmarkRow struct {
 		ItemID  string  `json:"item_id"`
 		Item    string  `json:"item,omitempty"`
+		Deleted bool    `json:"item_deleted,omitempty" jsonschema:"the item is no longer on the server; Audiobookshelf keeps the bookmark and will not remove it"`
 		Title   string  `json:"title"`
 		Time    string  `json:"time"`
-		Seconds float64 `json:"seconds"           jsonschema:"pass to user_bookmark_edit to remove it"`
+		Seconds float64 `json:"seconds"                jsonschema:"pass to user_bookmark_edit to remove it"`
 		Created string  `json:"created,omitempty"`
 	}
 	type bookmarksIn struct {
@@ -484,10 +485,19 @@ func registerUserTools(r *registry) {
 				ids = append(ids, b.LibraryItemID)
 			}
 		}
+		deleted := map[string]bool{}
 		if len(ids) > 0 {
 			if items, err := client.ItemsBatch(ctx, ids); err == nil {
 				for i := range items {
 					titles[items[i].ID] = items[i].Title()
+				}
+				// the batch leaves out what is gone without a word; asked one
+				// at a time, a deleted item is a 404
+				for _, id := range ids {
+					if titles[id] == "" {
+						_, gerr := client.Item(ctx, id)
+						deleted[id] = abs.IsNotFound(gerr)
+					}
 				}
 			}
 		}
@@ -500,6 +510,7 @@ func registerUserTools(r *registry) {
 			out.Bookmarks = append(out.Bookmarks, bookmarkRow{
 				ItemID:  b.LibraryItemID,
 				Item:    titles[b.LibraryItemID],
+				Deleted: deleted[b.LibraryItemID],
 				Title:   b.Title,
 				Time:    fmtDuration(b.Time),
 				Seconds: b.Time,
@@ -536,9 +547,17 @@ func registerUserTools(r *registry) {
 		}
 
 		it, err := resolveItem(ctx, client, in.Library, in.Item)
+		if err != nil && abs.IsNotFound(err) && action == "remove" && looksLikeID(in.Item) {
+			if me, merr := client.Me(ctx); merr == nil && slices.ContainsFunc(me.Bookmarks, func(b abs.Bookmark) bool { return b.LibraryItemID == strings.TrimSpace(in.Item) }) {
+				return nil, bookmarkEditOut{}, fmt.Errorf("the item %s has been deleted, and Audiobookshelf will not remove a bookmark on an item it no longer has: the bookmark stays in the account", in.Item)
+			}
+		}
 		if err != nil {
 			return nil, bookmarkEditOut{}, err
 		}
+		// the server keeps an account's bookmarks as one list, read and
+		// saved whole by every add and removal
+		defer r.locks.hold("bookmarks")()
 
 		if action == "remove" {
 			if err := client.DeleteBookmark(ctx, it.ID, in.Seconds); err != nil {

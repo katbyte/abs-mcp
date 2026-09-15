@@ -185,6 +185,7 @@ func testMain(m *testing.M) {
 
 	code := m.Run()
 	stopProxy()
+	removeBinary()
 
 	// a replay miss means a test ran against a 502 rather than a recording, so
 	// say so loudly even when the assertions happened to survive it

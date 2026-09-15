@@ -347,6 +347,12 @@ func registerPlaylistTools(r *registry) {
 		if err != nil {
 			return nil, changeOut{}, err
 		}
+		// what it holds is judged once held, so two adds of one entry at once
+		// do not both say they added it
+		defer r.locks.hold("playlist:" + p.ID)()
+		if p, err = client.Playlist(ctx, p.ID); err != nil {
+			return nil, changeOut{}, err
+		}
 		entries, err := resolvePlaylistEntries(ctx, client, p.LibraryID, in.Entries)
 		if err != nil {
 			return nil, changeOut{}, err

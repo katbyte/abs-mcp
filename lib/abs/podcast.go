@@ -150,10 +150,11 @@ type NewPodcast struct {
 		Metadata             map[string]any `json:"metadata"`
 		AutoDownloadEpisodes bool           `json:"autoDownloadEpisodes"`
 	} `json:"media"`
-	EpisodesToDownload []FeedEpisode `json:"episodesToDownload,omitempty"`
 }
 
-// CreatePodcast adds a podcast from a parsed feed (admin only).
+// CreatePodcast adds a podcast from a parsed feed (admin only). It downloads
+// nothing: older servers took episodesToDownload with the create, current
+// ones ignore it, so queue episodes with DownloadEpisodes once it exists.
 func (c *Client) CreatePodcast(ctx context.Context, p NewPodcast) (*Item, error) {
 	var it Item
 	if err := c.post(ctx, "/api/podcasts", nil, p, &it); err != nil {

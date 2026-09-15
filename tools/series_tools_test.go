@@ -255,7 +255,10 @@ func TestItemBatchEditAddsSeries(t *testing.T) {
 
 	f := newFakeABS(t)
 	oneLibrary(f)
-	f.json("GET /api/items/"+itemID, item(itemID, "Elantris", `"series":[{"id":"e","name":"Elantris","sequence":"1"}]`, ""))
+	elantris := item(itemID, "Elantris", `"series":[{"id":"e","name":"Elantris","sequence":"1"}]`, "")
+	f.json("GET /api/items/"+itemID, elantris)
+	// read again, all at once, once the items are held
+	f.json("POST /api/items/batch/get", `{"libraryItems":[`+elantris+`]}`)
 	f.json("POST /api/items/batch/update", `{"updates":1}`)
 	call := toolCaller(t, f)
 

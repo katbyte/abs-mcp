@@ -41,5 +41,11 @@ Found by the acceptance journeys against Audiobookshelf 2.36; each has a unit te
 - `/api/me/items-in-progress` carries no position or percent.
 - Open sessions name their user by id only; `/api/users/:id/listening-sessions` rows do not name the user. `/api/sessions/open` answers a non-admin 404, not 403.
 - `PATCH /api/authors/:id`, and the image and match routes, answer with the record and no `libraryItems`.
+- `POST /api/podcasts` ignores `episodesToDownload`, and refuses only a folder that already holds a podcast, not a feed the library already subscribes to.
+- `POST /api/podcasts/:id/download-episodes` downloads an episode the podcast already holds a second time, under a filename with a random suffix, as another episode; a request for one already downloading or queued is dropped without a word. A podcast's episodes come back in the order they were downloaded, not published.
+- `POST /api/tools/item/:id/embed-metadata` tags the files and never probes them again: the item's `metaTags` stay as they were until the item is scanned. A task leaves `/api/tasks` the moment it ends, failed or finished, and a queued embed is only listed with `include=queue`.
+- Bookmarks live on the user record. Deleting an item leaves them there, and `DELETE /api/me/item/:id/bookmark/:time` answers 404 once the item is gone, so nothing can remove them.
+- A series whose last book is deleted is not always removed: it stays in `/api/libraries/:id/series` with no books, and `GET /api/series/:id` answers 404.
+- Media updates replace the tag list, and diff the series list against the book as the request loaded it, so two edits of one book at once keep only one of them. `POST /api/me/item/:id/bookmark` saves the account's whole bookmark list.
 
 `ROADMAP.md` records the tool design rules and what is deliberately not wrapped.

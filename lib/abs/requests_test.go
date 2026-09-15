@@ -492,6 +492,33 @@ func TestItemRequests(t *testing.T) {
 	}
 }
 
+// An embed is pending while it runs and while it waits in the queue, which
+// the task list only carries when asked to include it.
+func TestEmbedPendingReadsTasksAndQueue(t *testing.T) {
+	t.Parallel()
+
+	s := newJSONServer(t, func(*http.Request) (int, string) {
+		return http.StatusOK, `{"tasks":[
+			{"id":"t1","action":"embed-metadata","data":{"libraryItemId":"running"}},
+			{"id":"t2","action":"library-scan","data":{"libraryItemId":"scanning"}}
+		],"queuedTaskData":{"embedMetadata":[{"libraryItemId":"queued"}]}}`
+	})
+	c := newClient(t, s)
+
+	for id, want := range map[string]bool{"running": true, "queued": true, "scanning": false, "done": false} {
+		got, err := c.EmbedPending(t.Context(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Errorf("EmbedPending(%s) = %v, want %v", id, got, want)
+		}
+	}
+	if q, _ := parseQuery(s.query); s.path != "/api/tasks" || q.Get("include") != "queue" {
+		t.Errorf("EmbedPending asked %s?%s", s.path, s.query)
+	}
+}
+
 // The author lookup route answers with the bare provider record, or null
 // when nobody is close enough; an earlier decode expected a results list and
 // always came back empty.

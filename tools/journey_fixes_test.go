@@ -2,17 +2,19 @@ package tools
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 )
 
-// The bugs the live journeys found (acceptance/journey_test.go), pinned
+// The bugs the live journeys found (acceptance/journey_*_test.go), pinned
 // against a canned server so each stays fixed without a container.
 
 const (
@@ -511,5 +513,331 @@ func TestAuditMatchedPagesAcrossBookLibraries(t *testing.T) {
 	findings := list(t, second["findings"])
 	if len(findings) != 1 || str(t, findings[0]["title"]) != "Elsewhere" {
 		t.Errorf("page 1 findings = %v, want Elsewhere", second["findings"])
+	}
+}
+
+// showLibrary is a podcast library with one folder.
+func showLibrary(f *fakeABS) {
+	f.json("GET /api/libraries", `{"libraries":[{"id":"`+podLibID+`","name":"Shows","mediaType":"podcast","folders":[{"id":"f1","fullPath":"/podcasts"}]}]}`)
+}
+
+// feedEpisode is one entry of a canned feed.
+func feedEpisode(guid, title string, published int) string {
+	return fmt.Sprintf(`{"title":%q,"guid":%q,"publishedAt":%d,"enclosure":{"url":"http://feed.test/%s.mp3"}}`, title, guid, published, guid)
+}
+
+// The server takes no episodes with a new podcast, and dropped the ones sent
+// there, so download_latest queues the newest by publication once the
+// podcast exists; and a feed the library already has is refused before
+// anything is made.
+func TestPodcastAddQueuesTheNewestAndRefusesAHeldFeed(t *testing.T) {
+	t.Parallel()
+
+	feed := `{"podcast":{"metadata":{"title":"Show","feedUrl":"http://feed.test/show.xml"},"episodes":[` +
+		feedEpisode("g1", "Oldest", 1000) + "," + feedEpisode("g3", "Newest", 3000) + "," + feedEpisode("g2", "Middle", 2000) + `]}}`
+
+	t.Run("queued once it exists", func(t *testing.T) {
+		t.Parallel()
+
+		f := newFakeABS(t)
+		showLibrary(f)
+		f.json("POST /api/podcasts/feed", feed)
+		f.json("GET /api/libraries/"+podLibID+"/items", page())
+		f.json("POST /api/podcasts", `{"id":"`+podcastID+`","libraryId":"`+podLibID+`","mediaType":"podcast","media":{"metadata":{"title":"Show"}}}`)
+		f.json("POST /api/podcasts/"+podcastID+"/download-episodes", `OK`)
+		call := toolCaller(t, f)
+
+		out, err := call("podcast_add", map[string]any{"feed_url": "http://feed.test/show.xml", "download_latest": 2})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := out["queued"]; fmt.Sprint(got) != "[Newest Middle]" {
+			t.Errorf("queued = %v, want [Newest Middle]", got)
+		}
+		if created := f.requests("/api/podcasts"); len(created) != 1 || strings.Contains(created[0].Body, "episodesToDownload") {
+			t.Errorf("create = %v, want no episodes sent with it", created)
+		}
+		queued := f.requests("/api/podcasts/" + podcastID + "/download-episodes")
+		if len(queued) != 1 || !strings.Contains(queued[0].Body, `"Newest"`) || !strings.Contains(queued[0].Body, `"Middle"`) || strings.Contains(queued[0].Body, `"Oldest"`) {
+			t.Errorf("download-episodes = %v, want Newest and Middle", queued)
+		}
+	})
+
+	t.Run("a feed already held", func(t *testing.T) {
+		t.Parallel()
+
+		f := newFakeABS(t)
+		showLibrary(f)
+		f.json("POST /api/podcasts/feed", feed)
+		f.json("GET /api/libraries/"+podLibID+"/items", page(`{"id":"`+podcastID+`","libraryId":"`+podLibID+`","mediaType":"podcast","media":{"metadata":{"title":"Show","feedUrl":"HTTP://feed.test/show.xml"}}}`))
+		call := toolCaller(t, f)
+
+		if _, err := call("podcast_add", map[string]any{"feed_url": "http://feed.test/show.xml", "folder": "Show Again"}); err == nil || !strings.Contains(err.Error(), podcastID) {
+			t.Errorf("a second subscription: %v, want refused naming %s", err, podcastID)
+		}
+		if created := f.requests("/api/podcasts"); len(created) != 0 {
+			t.Errorf("the podcast was created: %v", created)
+		}
+	})
+}
+
+// podcastWith is a podcast item holding episodes.
+func podcastWith(episodes ...string) string {
+	return `{"id":"` + podcastID + `","libraryId":"` + podLibID + `","mediaType":"podcast","media":{"metadata":{"title":"Show","feedUrl":"http://feed.test/show.xml"},"episodes":[` + strings.Join(episodes, ",") + `]}}`
+}
+
+// The server downloads an episode it holds a second time, and drops a
+// request for one it is already fetching without a word: held is matched by
+// guid or audio url, not by a title an edit changed, and neither is sent.
+func TestPodcastEpisodeDownloadSkipsHeldAndQueued(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/items/"+podcastID, podcastWith(`{"id":"e1","title":"Retitled","guid":"g1","enclosure":{"url":"http://feed.test/g1.mp3"}}`))
+	f.json("POST /api/podcasts/feed", `{"podcast":{"metadata":{"title":"Show"},"episodes":[`+
+		feedEpisode("g3", "Three", 3000)+","+feedEpisode("g2", "Two", 2000)+","+feedEpisode("g1", "One", 1000)+`]}}`)
+	f.json("GET /api/libraries/"+podLibID+"/episode-downloads", `{"currentDownload":{"url":"http://feed.test/g2.mp3","libraryItemId":"`+podcastID+`"},"queue":[]}`)
+	f.json("POST /api/podcasts/"+podcastID+"/download-episodes", `OK`)
+	call := toolCaller(t, f)
+
+	out, err := call("podcast_episode_download", map[string]any{"item": podcastID, "indexes": []any{0, 1, 2, 2}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, want := range map[string]string{"queued": "[Three]", "already_queued": "[Two]", "already_held": "[One]"} {
+		if got := fmt.Sprint(out[key]); got != want {
+			t.Errorf("%s = %s, want %s", key, got, want)
+		}
+	}
+	sent := f.requests("/api/podcasts/" + podcastID + "/download-episodes")
+	if len(sent) != 1 || strings.Contains(sent[0].Body, `"One"`) || strings.Contains(sent[0].Body, `"Two"`) {
+		t.Errorf("sent %v, want only Three", sent)
+	}
+
+	// nothing left to send is not a request
+	f2 := newFakeABS(t)
+	f2.json("GET /api/items/"+podcastID, podcastWith(`{"id":"e1","title":"One","guid":"g1"}`))
+	f2.json("POST /api/podcasts/feed", `{"podcast":{"metadata":{"title":"Show"},"episodes":[`+feedEpisode("g1", "One", 1000)+`]}}`)
+	f2.json("GET /api/libraries/"+podLibID+"/episode-downloads", `{"queue":[]}`)
+	if _, err := toolCaller(t, f2)("podcast_episode_download", map[string]any{"item": podcastID, "indexes": []any{0}}); err != nil {
+		t.Fatal(err)
+	}
+	if sent := f2.requests("/api/podcasts/" + podcastID + "/download-episodes"); len(sent) != 0 {
+		t.Errorf("sent %v for an episode already held", sent)
+	}
+}
+
+// The server lists a podcast's episodes in the order they were downloaded;
+// newest first is by publication.
+func TestPodcastEpisodesAreNewestByPublication(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/items/"+podcastID, podcastWith(
+		`{"id":"e3","title":"Newest","publishedAt":3000}`,
+		`{"id":"e1","title":"Oldest","publishedAt":1000}`,
+		`{"id":"e2","title":"Middle","publishedAt":2000}`,
+	))
+	call := toolCaller(t, f)
+
+	want := []string{"Newest", "Middle", "Oldest"}
+	for tool, key := range map[string]string{"podcast_episodes": "episodes", "item_get": "episodes"} {
+		out, err := call(tool, map[string]any{"item": podcastID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, e := range list(t, out[key]) {
+			got = append(got, str(t, e["title"]))
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("%s = %v, want %v", tool, got, want)
+		}
+	}
+}
+
+// The server tags the files in the background and never reads them back, so
+// item_embed_metadata waits for its task, rescans, and judges the tags the
+// rescan found.
+func TestItemEmbedMetadataWaitsAndReadsTheTagsBack(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	var polls, scanned atomic.Int32
+	f.mux.HandleFunc("GET /api/items/"+itemID, func(w http.ResponseWriter, _ *http.Request) {
+		tags := `{}`
+		if scanned.Load() > 0 {
+			tags = `{"tagTitle":"Dune"}`
+		}
+		_, _ = io.WriteString(w, item(itemID, "Dune", "", `"audioFiles":[{"index":1,"metadata":{"filename":"01.mp3"},"metaTags":`+tags+`}]`))
+	})
+	f.json("POST /api/tools/item/"+itemID+"/embed-metadata", `OK`)
+	f.mux.HandleFunc("GET /api/tasks", func(w http.ResponseWriter, _ *http.Request) {
+		if polls.Add(1) == 1 {
+			_, _ = io.WriteString(w, `{"tasks":[],"queuedTaskData":{"embedMetadata":[{"libraryItemId":"`+itemID+`"}]}}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"tasks":[]}`)
+	})
+	f.mux.HandleFunc("POST /api/items/"+itemID+"/scan", func(w http.ResponseWriter, _ *http.Request) {
+		if polls.Load() < 2 {
+			t.Error("rescanned while the embed was still queued")
+		}
+		scanned.Add(1)
+		_, _ = io.WriteString(w, `{"result":"UPDATED"}`)
+	})
+	call := toolCaller(t, f)
+
+	out, err := call("item_embed_metadata", map[string]any{"item": itemID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !boolOf(t, out["embedded"]) || out["rescan"] != "UPDATED" || out["running"] != nil || out["differs"] != nil {
+		t.Errorf("item_embed_metadata = %v, want embedded after the rescan", out)
+	}
+}
+
+// The server keeps a bookmark on a deleted item and will not remove it: it
+// reads as such, a removal says why it fails, and item_delete removes the
+// caller's own first, once it knows the delete is allowed.
+func TestBookmarksOnADeletedItem(t *testing.T) {
+	t.Parallel()
+
+	t.Run("seen, and not removable", func(t *testing.T) {
+		t.Parallel()
+
+		f := newFakeABS(t)
+		marks := `[{"libraryItemId":"` + itemID + `","title":"Mark","time":5},{"libraryItemId":"` + bookB1 + `","title":"Kept","time":1}]`
+		f.json("GET /api/me", `{"id":"u1","username":"kt","type":"root","bookmarks":`+marks+`}`)
+		f.json("GET /api/me/bookmarks", `{"bookmarks":`+marks+`}`)
+		f.json("POST /api/items/batch/get", `{"libraryItems":[`+item(bookB1, "First", "", "")+`]}`)
+		f.json("GET /api/items/"+bookB1, item(bookB1, "First", "", ""))
+		call := toolCaller(t, f)
+
+		out, err := call("user_bookmarks", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, b := range list(t, out["bookmarks"]) {
+			if deleted := b["item_deleted"] != nil && boolOf(t, b["item_deleted"]); deleted != (b["item_id"] == itemID) {
+				t.Errorf("bookmark %v: item_deleted = %v", b, deleted)
+			}
+		}
+		if _, err := call("user_bookmark_edit", map[string]any{"item": itemID, "action": "remove", "seconds": 5}); err == nil || !strings.Contains(err.Error(), "will not remove") {
+			t.Errorf("removing a bookmark on a deleted item: %v", err)
+		}
+	})
+
+	t.Run("item_delete removes the caller's first", func(t *testing.T) {
+		t.Parallel()
+
+		f := newFakeABS(t)
+		f.json("GET /api/items/"+bookB1, item(bookB1, "First", "", ""))
+		f.json("GET /api/me", `{"id":"u1","username":"kt","type":"root","bookmarks":[{"libraryItemId":"`+bookB1+`","title":"Mark","time":5},{"libraryItemId":"`+bookB2+`","title":"Other","time":7}]}`)
+		f.json("DELETE /api/me/item/"+bookB1+"/bookmark/5", `OK`)
+		f.json("DELETE /api/items/"+bookB1, `OK`)
+		call := toolCaller(t, f)
+
+		out, err := call("item_delete", map[string]any{"item": bookB1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if num(t, out["bookmarks_removed"]) != 1 {
+			t.Errorf("bookmarks_removed = %v, want 1", out["bookmarks_removed"])
+		}
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		var deletes []string
+		for _, r := range f.seen {
+			if r.Method == http.MethodDelete {
+				deletes = append(deletes, r.Path)
+			}
+		}
+		if !slices.Equal(deletes, []string{"/api/me/item/" + bookB1 + "/bookmark/5", "/api/items/" + bookB1}) {
+			t.Errorf("deletes = %v, want the bookmark, then the item", deletes)
+		}
+	})
+
+	t.Run("a refused delete costs no bookmark", func(t *testing.T) {
+		t.Parallel()
+
+		f := newFakeABS(t)
+		f.json("GET /api/items/"+bookB1, item(bookB1, "First", "", ""))
+		f.json("GET /api/me", `{"id":"u2","username":"guest","type":"user","permissions":{"delete":false},"bookmarks":[{"libraryItemId":"`+bookB1+`","title":"Mark","time":5}]}`)
+		call := toolCaller(t, f)
+
+		if _, err := call("item_delete", map[string]any{"item": bookB1}); err == nil || !strings.Contains(err.Error(), "delete permission") {
+			t.Errorf("item_delete without the permission: %v", err)
+		}
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		for _, r := range f.seen {
+			if r.Method == http.MethodDelete {
+				t.Errorf("sent %s %s", r.Method, r.Path)
+			}
+		}
+	})
+}
+
+// A series whose books are all gone can stay listed, with none, and the
+// server answers 404 to opening it: by name it is not a series to open.
+func TestSeriesWithNoBooksLeftIsNotOpened(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	oneLibrary(f)
+	f.json("GET /api/libraries/"+libID+"/series", `{"results":[{"id":"s1","name":"Gone","books":[]}],"total":1}`)
+	call := toolCaller(t, f)
+
+	if _, err := call("series_get", map[string]any{"series": "Gone"}); err == nil || !strings.Contains(err.Error(), "with a book in it") {
+		t.Errorf("series_get of an emptied series: %v", err)
+	}
+	if got := f.requests("/api/series/s1"); len(got) != 0 {
+		t.Errorf("opened the emptied series: %v", got)
+	}
+}
+
+// Calls of one turn run at once. Each edit of a book's tags reads the book
+// and sends its tags back whole, so without holding the book eight adds kept
+// one tag; held, and read again once held, every tag lands.
+func TestItemEditsAtOnceKeepEveryTag(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	var mu sync.Mutex
+	tags := []string{"sf"}
+	f.mux.HandleFunc("GET /api/items/"+itemID, func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		have, _ := json.Marshal(tags)
+		mu.Unlock()
+		// a read that takes a while, so the calls overlap
+		time.Sleep(20 * time.Millisecond)
+		_, _ = io.WriteString(w, item(itemID, "Dune", "", `"tags":`+string(have)))
+	})
+	f.mux.HandleFunc("PATCH /api/items/"+itemID+"/media", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Tags []string `json:"tags"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		mu.Lock()
+		tags = body.Tags
+		mu.Unlock()
+		_, _ = io.WriteString(w, `{"updated":true}`)
+	})
+	call := toolCaller(t, f)
+
+	var wg sync.WaitGroup
+	for i := range 8 {
+		wg.Go(func() {
+			if _, err := call("item_edit", map[string]any{"item": itemID, "add_tags": []any{strconv.Itoa(i)}}); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+	mu.Lock()
+	defer mu.Unlock()
+	if len(tags) != 9 {
+		t.Errorf("tags = %v, want sf and all eight added", tags)
 	}
 }

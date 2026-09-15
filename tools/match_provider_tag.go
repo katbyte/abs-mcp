@@ -212,10 +212,19 @@ func registerMatchTagTool(r *registry) {
 			}
 			if row.Provider == "" {
 				out.NotFound++
-			} else if err := tagProvider(ctx, client, it.ID, it.Media.Tags, row.Provider); err != nil {
-				row.Error = err.Error()
 			} else {
-				out.Tagged++
+				// the tags as they are once held, not as the listing had them
+				release := r.locks.hold(itemKeys(it.ID)...)
+				fresh, err := client.Item(ctx, it.ID)
+				if err == nil {
+					err = tagProvider(ctx, client, it.ID, fresh.Media.Tags, row.Provider)
+				}
+				release()
+				if err != nil {
+					row.Error = err.Error()
+				} else {
+					out.Tagged++
+				}
 			}
 			out.Rows = append(out.Rows, row)
 		}

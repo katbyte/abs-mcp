@@ -9,7 +9,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 )
 
 // auditTools is every audit the server registers. TestEveryAuditRuns calls all
@@ -363,8 +362,8 @@ func TestAuditCovers(t *testing.T) {
 }
 
 // The fixtures are silent files ffmpeg wrote with no tags, so every book is
-// unembedded until item_embed_metadata runs. The embed is a background task
-// and the scanner has to see the rewritten file, so the clearing is polled.
+// unembedded until item_embed_metadata runs. The embed waits for the
+// background task and rescans, so the audit is clear as soon as it returns.
 func TestAuditUnembedded(t *testing.T) {
 	const item = "The Arms of Krupp"
 
@@ -386,26 +385,11 @@ func TestAuditUnembedded(t *testing.T) {
 		t.Errorf("podcasts were scanned: %v", pods)
 	}
 
-	call(t, "item_embed_metadata", map[string]any{"item": item})
-	deadline := time.Now().Add(90 * time.Second)
-	for {
-		call(t, "item_rescan", map[string]any{"item": item})
-		after := call(t, "audit_unembedded", map[string]any{"library": "Non-Fiction"})
-		flagged := false
-		for _, f := range rows(t, after["findings"], "findings") {
-			if f["title"] == item {
-				flagged = true
-			}
-		}
-		if !flagged {
-			if found := num(t, after["total_findings"], "total_findings"); found != 2 {
-				t.Errorf("total_findings after the embed = %d, want the 2 other fixtures", found)
-			}
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("%s is still unembedded 90s after item_embed_metadata: %v", item, after["findings"])
-		}
-		time.Sleep(3 * time.Second)
+	if embedded, _ := call(t, "item_embed_metadata", map[string]any{"item": item})["embedded"].(bool); !embedded {
+		t.Fatalf("item_embed_metadata did not embed %s", item)
+	}
+	after := call(t, "audit_unembedded", map[string]any{"library": "Non-Fiction"})
+	if titles := titlesIn(t, after["findings"], "findings"); slices.Contains(titles, item) || len(titles) != 2 {
+		t.Errorf("findings after the embed = %v, want the 2 other fixtures", titles)
 	}
 }
