@@ -30,7 +30,10 @@ func seriesRoutes(f *fakeABS) {
 	oneLibrary(f)
 	f.json("GET /api/series/"+seriesA, `{"id":"`+seriesA+`","name":"Stormlight Archive","libraryId":"`+libID+`"}`)
 	f.json("GET /api/series/"+seriesB, `{"id":"`+seriesB+`","name":"The Stormlight Archive","libraryId":"`+libID+`"}`)
-	f.json("GET /api/libraries/"+libID+"/filterdata", `{"series":[{"id":"`+seriesA+`","name":"Stormlight Archive"},{"id":"`+seriesB+`","name":"The Stormlight Archive"}]}`)
+	f.json("GET /api/libraries/"+libID+"/series", `{"results":[{"id":"`+seriesA+`","name":"Stormlight Archive","libraryId":"`+libID+`"},{"id":"`+seriesB+`","name":"The Stormlight Archive","libraryId":"`+libID+`"}],"total":2}`)
+	// the server's filter data is cached and keeps names from before a
+	// rename; nothing may resolve a series through it
+	f.json("GET /api/libraries/"+libID+"/filterdata", `{"series":[{"id":"`+seriesA+`","name":"Stale Name"},{"id":"`+seriesB+`","name":"Older Name"}]}`)
 	collapsed := func(id, title, seriesID, name, seq string) string {
 		return `{"id":"` + id + `","libraryId":"` + libID + `","mediaType":"book","relPath":"A/` + title + `","media":{"metadata":{"title":"` + title + `","series":{"id":"` + seriesID + `","name":"` + name + `","sequence":"` + seq + `"}}}}`
 	}
@@ -620,5 +623,33 @@ func TestVocabKeyTurnsLastFirstRound(t *testing.T) {
 	}
 	if vocabKey("series", "Wheel, The") == vocabKey("series", "The Wheel") {
 		t.Error("a series name is not turned round")
+	}
+}
+
+// A series renamed a moment ago is still listed under its old name in the
+// server's filter data for up to half an hour. Lookups by name read the live
+// series route, so the new name is found and the old one is not.
+func TestSeriesResolvesByTheNameItHasNow(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	seriesRoutes(f)
+	call := toolCaller(t, f)
+
+	out, err := call("series_get", map[string]any{"series": "The Stormlight Archive"})
+	if err != nil {
+		t.Fatalf("by the current name: %v", err)
+	}
+	if str(t, out["id"]) != seriesB {
+		t.Errorf("id = %v, want %s", out["id"], seriesB)
+	}
+	if _, err := call("series_get", map[string]any{"series": "Older Name"}); err == nil {
+		t.Error("a name only the stale filter data has was resolved")
+	}
+	if _, err := call("library_items", map[string]any{"filter": "series:The Stormlight Archive"}); err != nil {
+		t.Errorf("a filter by the current name: %v", err)
+	}
+	if got := f.requests("/api/libraries/" + libID + "/filterdata"); len(got) != 0 {
+		t.Errorf("filter data was read %d times, want never", len(got))
 	}
 }

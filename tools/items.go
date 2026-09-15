@@ -150,6 +150,8 @@ func registerItemTools(r *registry) {
 		RemoveSeries  []string `json:"remove_series,omitempty"  jsonschema:"series to take the item out of, by name, keeping the rest"`
 		Genres        []string `json:"genres,omitempty"         jsonschema:"replacement genre list"`
 		Tags          []string `json:"tags,omitempty"           jsonschema:"replacement tag list"`
+		AddTags       []string `json:"add_tags,omitempty"       jsonschema:"tags to add to the item's own, keeping the rest"`
+		RemoveTags    []string `json:"remove_tags,omitempty"    jsonschema:"tags to take off the item, keeping the rest"`
 		Year          string   `json:"year,omitempty"           jsonschema:"published year"`
 		Publisher     string   `json:"publisher,omitempty"`
 		Description   string   `json:"description,omitempty"`
@@ -168,7 +170,7 @@ func registerItemTools(r *registry) {
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "item_edit",
-		Description: "Edit an item's metadata: title, authors, narrators, series, genres, tags, year, publisher, description, isbn, asin, language, explicit/abridged flags. Only provided fields change; list a field in clear to blank it. Changes server state.",
+		Description: "Edit an item's metadata: title, authors, narrators, series, genres, tags, year, publisher, description, isbn, asin, language, explicit/abridged flags. Only provided fields change; list a field in clear to blank it. series and tags replace the list, add_series, remove_series, add_tags and remove_tags edit it. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in editIn) (*mcp.CallToolResult, editOut, error) {
 		it, err := resolveItem(ctx, client, in.Library, in.Item)
 		if err != nil {
@@ -235,6 +237,13 @@ func registerItemTools(r *registry) {
 		}
 		if len(in.Tags) > 0 {
 			upd.Tags = in.Tags
+			fields = append(fields, "tags")
+		}
+		if len(in.AddTags) > 0 || len(in.RemoveTags) > 0 {
+			if len(in.Tags) > 0 || slices.ContainsFunc(in.Clear, func(c string) bool { return strings.EqualFold(c, "tags") }) {
+				return nil, editOut{}, errors.New("tags replaces the list; add_tags and remove_tags edit it. One or the other")
+			}
+			upd.Tags = editTagList(it.Media.Tags, in.AddTags, in.RemoveTags)
 			fields = append(fields, "tags")
 		}
 
@@ -580,19 +589,7 @@ func registerItemTools(r *registry) {
 				upd.Tags = in.Tags // an explicit empty list would clear them
 			}
 			if len(in.AddTags) > 0 || len(in.DropTag) > 0 {
-				tags := slices.Clone(it.Media.Tags)
-				for _, t := range in.AddTags {
-					if t = strings.TrimSpace(t); t != "" && !slices.ContainsFunc(tags, func(x string) bool { return strings.EqualFold(x, t) }) {
-						tags = append(tags, t)
-					}
-				}
-				tags = slices.DeleteFunc(tags, func(x string) bool {
-					return slices.ContainsFunc(in.DropTag, func(d string) bool { return strings.EqualFold(strings.TrimSpace(d), x) })
-				})
-				if tags == nil {
-					tags = []string{}
-				}
-				upd.Tags = tags
+				upd.Tags = editTagList(it.Media.Tags, in.AddTags, in.DropTag)
 			}
 			if hasMeta || editSeries {
 				upd.Metadata = new(md)
@@ -855,6 +852,25 @@ func parseSeriesRef(s string) abs.SeriesRef {
 // Stormlight books lost their Cosmere link to a replacement built from a
 // listing that showed one series per book. An added series the book is
 // already in takes the number given, or keeps its own when none is.
+// editTagList adds and removes tags on a list, keeping the rest: a tag already
+// there, in any case, is not added twice. The result is never nil, so an edit
+// that removes the last tag reaches the server as an empty list.
+func editTagList(have, add, remove []string) []string {
+	tags := slices.Clone(have)
+	for _, t := range add {
+		if t = strings.TrimSpace(t); t != "" && !slices.ContainsFunc(tags, func(x string) bool { return strings.EqualFold(x, t) }) {
+			tags = append(tags, t)
+		}
+	}
+	tags = slices.DeleteFunc(tags, func(x string) bool {
+		return slices.ContainsFunc(remove, func(d string) bool { return strings.EqualFold(strings.TrimSpace(d), x) })
+	})
+	if tags == nil {
+		tags = []string{}
+	}
+	return tags
+}
+
 func editSeriesList(have []abs.SeriesRef, add, remove []string) ([]abs.SeriesRef, error) {
 	out := slices.Clone(have)
 	if out == nil {

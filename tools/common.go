@@ -113,13 +113,12 @@ func resolveLibrary(ctx context.Context, client *abs.Client, nameOrID string) (*
 		return nil, fmt.Errorf("library is required when the server has more than one (have: %s)", libraryNames(libs))
 	}
 
-	for i := range libs {
-		if strings.EqualFold(libs[i].Name, nameOrID) || libs[i].ID == nameOrID {
-			return &libs[i], nil
-		}
+	i, err := pickLibrary(libs, nameOrID)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, fmt.Errorf("no library named %q (have: %s)", nameOrID, libraryNames(libs))
+	return &libs[i], nil
 }
 
 // resolveLibraries returns the one named library, or every library when the
@@ -132,13 +131,67 @@ func resolveLibraries(ctx context.Context, client *abs.Client, nameOrID string) 
 	if nameOrID == "" {
 		return libs, nil
 	}
-	for i := range libs {
-		if strings.EqualFold(libs[i].Name, nameOrID) || libs[i].ID == nameOrID {
-			return libs[i : i+1], nil
-		}
+	i, err := pickLibrary(libs, nameOrID)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, fmt.Errorf("no library named %q (have: %s)", nameOrID, libraryNames(libs))
+	return libs[i : i+1], nil
+}
+
+// pickLibrary finds one library by id or name. Audiobookshelf lets two
+// libraries share a name, so a name that matches more than one is refused
+// with their ids rather than settled by whichever the server lists first.
+func pickLibrary(libs []abs.Library, nameOrID string) (int, error) {
+	nameOrID = strings.TrimSpace(nameOrID)
+	var named []int
+	for i := range libs {
+		if libs[i].ID == nameOrID {
+			return i, nil
+		}
+		if strings.EqualFold(libs[i].Name, nameOrID) {
+			named = append(named, i)
+		}
+	}
+	switch len(named) {
+	case 1:
+		return named[0], nil
+	case 0:
+		return -1, fmt.Errorf("no library named %q (have: %s)", nameOrID, libraryNames(libs))
+	}
+	ids := make([]string, 0, len(named))
+	for _, i := range named {
+		ids = append(ids, libs[i].ID)
+	}
+
+	return -1, fmt.Errorf("%d libraries are named %q; pass an id: %s", len(named), nameOrID, strings.Join(ids, ", "))
+}
+
+// oneNamed picks the one record whose name is the one asked for, or says how
+// many there were: none, or several, listed by id. Collections and playlists
+// can share a name, and taking the first would act on whichever the server
+// happened to list first.
+func oneNamed[T any](kind, name string, all []T, nameOf, idOf func(*T) string) (*T, error) {
+	var matches []*T
+	names := make([]string, 0, len(all))
+	for i := range all {
+		if strings.EqualFold(strings.TrimSpace(nameOf(&all[i])), name) {
+			matches = append(matches, &all[i])
+		}
+		names = append(names, nameOf(&all[i]))
+	}
+	switch len(matches) {
+	case 1:
+		return matches[0], nil
+	case 0:
+		return nil, fmt.Errorf("no %s named %q (have: %s)", kind, name, strings.Join(names, ", "))
+	}
+	ids := make([]string, 0, len(matches))
+	for _, m := range matches {
+		ids = append(ids, idOf(m))
+	}
+
+	return nil, fmt.Errorf("%d %ss are named %q; pass an id: %s", len(matches), kind, name, strings.Join(ids, ", "))
 }
 
 func libraryNames(libs []abs.Library) string {

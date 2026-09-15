@@ -40,11 +40,15 @@ func restoreBook(t *testing.T, title string) {
 		if b.Title != title {
 			continue
 		}
+		// a match leaves an asin and fills empty fields, and the fixture had
+		// none of those: an asin left behind makes the book matched for every
+		// test after this one
 		args := map[string]any{
 			"item": title, "title": b.Title, "authors": []any{b.Author},
 			"narrators": []any{b.Narrator}, "publisher": b.Publisher,
 			"year": b.Year, "language": b.Language,
 			"tags": toAny(b.Tags), "genres": toAny(b.Genres),
+			"clear": []any{"asin", "isbn", "subtitle", "description"},
 		}
 		if len(b.Series) > 0 {
 			args["series"] = toAny(b.Series)

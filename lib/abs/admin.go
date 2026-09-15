@@ -2,6 +2,7 @@ package abs
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
 )
@@ -369,6 +370,22 @@ func (c *Client) Filesystem(ctx context.Context) ([]FilesystemPath, error) {
 		return nil, err
 	}
 	return resp.Directories, nil
+}
+
+// ServerPathExists reports whether an absolute path exists on the server,
+// through the folder picker's route: it answers 400 for a path that is not
+// there (or is not absolute) and lists the directories under one that is.
+// Admin only.
+func (c *Client) ServerPathExists(ctx context.Context, path string) (bool, error) {
+	q := url.Values{}
+	q.Set("path", path)
+	q.Set("level", "0")
+	err := c.get(ctx, "/api/filesystem", q, nil)
+	var he *HTTPError
+	if errors.As(err, &he) && he.Status == http.StatusBadRequest {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 // PathExists reports whether a directory exists inside a library folder, and

@@ -437,13 +437,14 @@ func registerSpellingTools(r *registry) {
 	})
 
 	type renameIn struct {
-		Field   string   `json:"field"              jsonschema:"tags, genres, narrators, authors, languages or publishers, as audit_spelling reports it"`
-		From    string   `json:"from"               jsonschema:"the value to replace, exactly as it is spelled now"`
-		To      string   `json:"to,omitempty"       jsonschema:"the value to keep; renaming onto one that already exists merges the two"`
-		Remove  bool     `json:"remove,omitempty"   jsonschema:"instead of renaming: drop the value from every item that carries it (not authors)"`
-		Library string   `json:"library,omitempty"  jsonschema:"library name or id; default every library. Tags and genres are server-wide and refuse it"`
-		Into    []string `json:"into,omitempty"     jsonschema:"tags and genres: split the value into these, so \"Science Fiction & Fantasy, Fantasy\" becomes two; with to_field the parts land in the other field"`
-		ToField string   `json:"to_field,omitempty" jsonschema:"tags and genres: move the value (or the into parts) to the other field, genres or tags, dropping it from this one"`
+		Field   string          `json:"field"              jsonschema:"tags, genres, narrators, authors, languages or publishers, as audit_spelling reports it"`
+		From    string          `json:"from"               jsonschema:"the value to replace, exactly as it is spelled now"`
+		To      string          `json:"to,omitempty"       jsonschema:"the value to keep; renaming onto one that already exists merges the two"`
+		Remove  bool            `json:"remove,omitempty"   jsonschema:"instead of renaming: drop the value from every item that carries it (not authors)"`
+		Library string          `json:"library,omitempty"  jsonschema:"library name or id; default every library. Tags and genres are server-wide and refuse it"`
+		Into    []string        `json:"into,omitempty"     jsonschema:"tags and genres: split the value into these, so \"Science Fiction & Fantasy, Fantasy\" becomes two; with to_field the parts land in the other field"`
+		ToField string          `json:"to_field,omitempty" jsonschema:"tags and genres: move the value (or the into parts) to the other field, genres or tags, dropping it from this one"`
+		Split   *genreSplitPlan `json:"split,omitempty"    jsonschema:"tags and genres: replace the value with parts in both fields at once, {genres: [...], tags: [...]}, exactly as audit_genres suggests for a compound value; only the items carrying from change, so a part that is a genre on other books stays theirs"`
 	}
 	type renameOut struct {
 		Field        string   `json:"field"`
@@ -455,7 +456,7 @@ func registerSpellingTools(r *registry) {
 		Name: "metadata_rename",
 		Description: "Rename one metadata value everywhere it is used - a tag, genre, narrator, author, language or publisher - or with remove drop it from every item. " +
 			"Renaming onto a value that already exists merges the two, which is how a group from audit_spelling is fixed ('jim dale' into 'Jim Dale', 'Sci-Fi' into 'Science Fiction'). " +
-			"For tags and genres, into splits one value into several and to_field moves a value to the other field, which is how audit_genres findings are fixed. " +
+			"For tags and genres, into splits one value into several, to_field moves a value to the other field, and split does both at once, which is how audit_genres findings are fixed: pass a compound finding's suggest as split. " +
 			"Tags and genres are server-wide; the rest can be narrowed to one library. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in renameIn) (*mcp.CallToolResult, renameOut, error) {
 		field := vocabField(in.Field)
@@ -468,6 +469,12 @@ func registerSpellingTools(r *registry) {
 			return nil, renameOut{}, errors.New("from is required")
 		case in.Remove && to != "":
 			return nil, renameOut{}, errors.New("pass either to or remove, not both")
+		case in.Split != nil && (len(in.Into) > 0 || in.ToField != "" || in.Remove || to != ""):
+			return nil, renameOut{}, errors.New("split says where every part goes; it takes no to, remove, into or to_field")
+		case in.Split != nil && field != "tags" && field != "genres":
+			return nil, renameOut{}, fmt.Errorf("split is for tags and genres, not %s", field)
+		case in.Split != nil && len(in.Split.Genres)+len(in.Split.Tags) == 0:
+			return nil, renameOut{}, errors.New("split needs at least one part in genres or tags")
 		case (len(in.Into) > 0 || in.ToField != "") && (in.Remove || to != ""):
 			return nil, renameOut{}, errors.New("into and to_field are a split or a move; they do not combine with to or remove")
 		case (len(in.Into) > 0 || in.ToField != "") && field != "tags" && field != "genres":
@@ -476,7 +483,7 @@ func registerSpellingTools(r *registry) {
 			return nil, renameOut{}, fmt.Errorf("to_field must be tags or genres, not %q", in.ToField)
 		case in.ToField != "" && vocabField(in.ToField) == field:
 			return nil, renameOut{}, errors.New("to_field is the field the value is already in; use to or into")
-		case !in.Remove && to == "" && len(in.Into) == 0 && in.ToField == "":
+		case !in.Remove && to == "" && len(in.Into) == 0 && in.ToField == "" && in.Split == nil:
 			return nil, renameOut{}, errors.New("to is required unless remove, into or to_field is set")
 		case in.Remove && field == "authors":
 			return nil, renameOut{}, errors.New("an author cannot be removed here: author_delete removes the record")
@@ -488,8 +495,26 @@ func registerSpellingTools(r *registry) {
 			if in.Library != "" {
 				return nil, renameOut{}, fmt.Errorf("%s are server-wide: omit library", field)
 			}
-			if len(in.Into) > 0 || in.ToField != "" {
-				n, err := splitVocabulary(ctx, client, field, from, in.Into, vocabField(in.ToField))
+			if in.Split != nil || len(in.Into) > 0 || in.ToField != "" {
+				var genres, tags []string
+				if in.Split != nil {
+					genres, tags = in.Split.Genres, in.Split.Tags
+				} else {
+					parts := in.Into
+					if len(parts) == 0 {
+						parts = []string{from}
+					}
+					dst := vocabField(in.ToField)
+					if dst == "" {
+						dst = field
+					}
+					if dst == "tags" {
+						tags = parts
+					} else {
+						genres = parts
+					}
+				}
+				n, err := splitVocabulary(ctx, client, field, from, genres, tags)
 				if err != nil {
 					return nil, renameOut{}, err
 				}
@@ -558,26 +583,33 @@ func renameVocabulary(ctx context.Context, client *abs.Client, field, from, to s
 	}
 }
 
-// splitVocabulary replaces one tag or genre with several, or moves it to the
-// other field, on every item that carries it. The server's rename endpoints
-// map one value to one value in one field, so this walks every library and
-// batch-updates the items. An item that already carries a part keeps one copy.
-func splitVocabulary(ctx context.Context, client *abs.Client, field, from string, into []string, toField string) (int, error) {
-	if toField == "" {
-		toField = field
-	}
-	parts := make([]string, 0, len(into))
-	for _, p := range into {
-		if p = strings.TrimSpace(p); p != "" && !slices.Contains(parts, p) {
-			parts = append(parts, p)
+// splitVocabulary replaces one tag or genre with parts in either field, on
+// every item that carries it: the parts in genres become genres and those in
+// tags become tags. The server's rename endpoints map one value to one value
+// in one field, so this walks every library and batch-updates the items. An
+// item that already carries a part keeps one copy, and items without the
+// value are not touched, so a part that is a genre elsewhere stays one.
+func splitVocabulary(ctx context.Context, client *abs.Client, field, from string, toGenres, toTags []string) (int, error) {
+	clean := func(in []string) []string {
+		out := make([]string, 0, len(in))
+		for _, p := range in {
+			if p = strings.TrimSpace(p); p != "" && !slices.Contains(out, p) {
+				out = append(out, p)
+			}
 		}
+		return out
 	}
-	if len(parts) == 0 {
-		parts = []string{from}
-	}
+	toGenres, toTags = clean(toGenres), clean(toTags)
 	libs, err := resolveLibraries(ctx, client, "")
 	if err != nil {
 		return 0, err
+	}
+	addAll := func(dst *[]string, parts []string) {
+		for _, p := range parts {
+			if !slices.ContainsFunc(*dst, func(v string) bool { return strings.EqualFold(v, p) }) {
+				*dst = append(*dst, p)
+			}
+		}
 	}
 	var updates []abs.BatchMediaUpdate
 	for i := range libs {
@@ -585,22 +617,16 @@ func splitVocabulary(ctx context.Context, client *abs.Client, field, from string
 			for j := range items {
 				it := &items[j]
 				genres, tags := slices.Clone(it.Media.Metadata.Genres), slices.Clone(it.Media.Tags)
-				src, dst := &genres, &genres
+				src := &genres
 				if field == "tags" {
 					src = &tags
-				}
-				if toField == "tags" {
-					dst = &tags
 				}
 				if !slices.Contains(*src, from) {
 					continue
 				}
 				*src = slices.DeleteFunc(*src, func(v string) bool { return v == from })
-				for _, p := range parts {
-					if !slices.ContainsFunc(*dst, func(v string) bool { return strings.EqualFold(v, p) }) {
-						*dst = append(*dst, p)
-					}
-				}
+				addAll(&genres, toGenres)
+				addAll(&tags, toTags)
 				if genres == nil {
 					genres = []string{}
 				}

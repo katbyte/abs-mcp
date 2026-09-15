@@ -208,6 +208,17 @@ func TestFilesystemBrowser(t *testing.T) {
 	} else if missing {
 		t.Error("PathExists claims a nonexistent directory exists")
 	}
+
+	// any absolute path, which is what a new library's folder is checked with:
+	// the server would otherwise create a folder that is not there
+	for path, want := range map[string]bool{"/fiction/Isaac Asimov": true, "/no-such-folder": false} {
+		got, err := client.ServerPathExists(ctx, path)
+		if err != nil {
+			t.Errorf("ServerPathExists(%s): %v", path, err)
+		} else if got != want {
+			t.Errorf("ServerPathExists(%s) = %v, want %v", path, got, want)
+		}
+	}
 }
 
 func TestSessionsAndAuth(t *testing.T) {

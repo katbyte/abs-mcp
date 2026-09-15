@@ -324,10 +324,13 @@ func TestServerSessionsWithAPlaybackSession(t *testing.T) {
 	if found["title"] != book {
 		t.Errorf("title = %v, want %s", found["title"], book)
 	}
-	// an open session carries userId but not the expanded user object, so the
-	// name is absent here and only appears on a finished one
+	// an open session carries userId but not the expanded user object; the
+	// tool looks the name up
 	if uid, _ := found["user_id"].(string); uid == "" {
 		t.Errorf("no user_id on the open session: %v", found)
+	}
+	if found["user"] != "root" {
+		t.Errorf("user = %v, want root named on the open session", found["user"])
 	}
 	// DeviceInfo.Describe builds this from clientName and deviceName
 	if device, _ := found["device"].(string); !strings.Contains(device, "abs-mcp tests") {

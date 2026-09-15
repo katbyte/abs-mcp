@@ -970,9 +970,10 @@ func TestAuthorEditClear(t *testing.T) {
 	if _, err := call("author_edit", map[string]any{"author": authorID, "clear": []any{"asin", "description", "image"}}); err != nil {
 		t.Fatal(err)
 	}
+	// the reply to a PATCH carries no books, so the author is read back
 	patched := f.requests("/api/authors/" + authorID)
-	if len(patched) != 2 || patched[1].Method != http.MethodPatch {
-		t.Fatalf("author requests = %v, want a GET then a PATCH", patched)
+	if len(patched) != 3 || patched[1].Method != http.MethodPatch || patched[2].Method != http.MethodGet {
+		t.Fatalf("author requests = %v, want a GET, a PATCH, and a GET to read it back", patched)
 	}
 	var body map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(patched[1].Body), &body); err != nil {
@@ -992,8 +993,8 @@ func TestAuthorEditClear(t *testing.T) {
 	if _, err := call("author_edit", map[string]any{"author": authorID, "clear": []any{"image"}}); err != nil {
 		t.Fatal(err)
 	}
-	if got := f.requests("/api/authors/" + authorID); len(got) != 3 || got[2].Method != http.MethodGet {
-		t.Errorf("author requests after an image-only clear = %v, want only one more GET", got)
+	if got := f.requests("/api/authors/" + authorID); len(got) != 5 || got[3].Method != http.MethodGet || got[4].Method != http.MethodGet {
+		t.Errorf("author requests after an image-only clear = %v, want only a GET and the read back", got)
 	}
 }
 
@@ -1012,8 +1013,8 @@ func TestAuthorEditClearImageWithoutOne(t *testing.T) {
 	if _, err := call("author_edit", map[string]any{"author": authorID, "clear": []any{"asin", "description", "image"}}); err != nil {
 		t.Fatal(err)
 	}
-	if got := f.requests("/api/authors/" + authorID); len(got) != 2 || got[1].Method != http.MethodPatch {
-		t.Errorf("author requests = %v, want a GET then a PATCH", got)
+	if got := f.requests("/api/authors/" + authorID); len(got) != 3 || got[1].Method != http.MethodPatch {
+		t.Errorf("author requests = %v, want a GET, a PATCH and the read back", got)
 	}
 	if got := f.requests("/api/authors/" + authorID + "/image"); len(got) != 0 {
 		t.Errorf("image requests = %v, want none for an author with no photo", got)

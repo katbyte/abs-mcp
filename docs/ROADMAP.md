@@ -2,19 +2,12 @@
 
 Design rules, in priority order:
 
-1. **Wrap judgment, not plumbing.** A tool exists only where an AI has a decision to
-   make. Streaming, cover bytes, playback session heartbeats and socket events stay unwrapped.
-2. **Trim every response.** Tools return the fields a decision needs, never raw payloads
-   (an expanded library item is thousands of lines with ffprobe output per file; `item_get`
-   returns ~30 fields).
-3. **Composite over chatty.** If a task always takes N calls (search candidates →
-   pick → apply → verify), it is one tool, not N.
-4. **Names, not just ids.** Every tool that takes a library, item, author, series,
-   collection, playlist or user resolves a name, and an ambiguous title lists candidates.
+1. **Wrap judgment, not plumbing.** A tool exists only where an AI has a decision to make. Streaming, cover bytes, playback session heartbeats and socket events stay unwrapped.
+2. **Trim every response.** Tools return the fields a decision needs, never raw payloads (an expanded library item is thousands of lines with ffprobe output per file; `item_get` returns ~30 fields).
+3. **Composite over chatty.** If a task always takes N calls (search candidates → pick → apply → verify), it is one tool, not N.
+4. **Names, not just ids.** Every tool that takes a library, item, author, series, collection, playlist or user resolves a name, and an ambiguous title lists candidates.
 5. **Resource-first names** (`library_*`, `item_*`, `user_*`) so tools group by what they act on.
-6. **Reads are cheap, writes are explicit, destructive is opt-in.** Every tool carries MCP
-   annotations; anything that changes the server says so in its description; anything that
-   deletes records or files is disabled unless the operator sets `--enable-delete`.
+6. **Reads are cheap, writes are explicit, destructive is opt-in.** Every tool carries MCP annotations; anything that changes the server says so in its description; anything that deletes records or files is disabled unless the operator sets `--enable-delete`.
 
 ## Done
 
@@ -43,9 +36,5 @@ Design rules, in priority order:
 
 ## Guarded / deliberately excluded
 
-- `item_delete`, `podcast_episode_delete`, `author_delete`, `library_issues_remove`: only
-  registered with `--enable-delete` (`ABS_ENABLE_DELETE`).
-- Not wrapping **as tools**, ever: audio streaming and playback sessions, cover/image byte
-  delivery, uploads, server settings and auth settings, API key management, notification
-  config, cache purges, the file system browser. `lib/abs` covers all of them - it is a
-  general Audiobookshelf client - but none of it is judgment an AI should be making.
+- `item_delete`, `podcast_episode_delete`, `author_delete`, `library_issues_remove`: only registered with `--enable-delete` (`ABS_ENABLE_DELETE`).
+- Not wrapping **as tools**, ever: audio streaming and playback sessions, cover/image byte delivery, uploads, server settings and auth settings, API key management, notification config, cache purges, the file system browser. `lib/abs` covers all of them - it is a general Audiobookshelf client - but none of it is judgment an AI should be making.

@@ -8,26 +8,11 @@
 ![lint](https://github.com/katbyte/abs-mcp/actions/workflows/pr-golangci-lint.yaml/badge.svg)
 [![coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/katbyte/abs-mcp/badges/coverage.json)](https://github.com/katbyte/abs-mcp/actions/workflows/coverage.yaml)
 
-An [MCP](https://modelcontextprotocol.io) server, CLI and Go SDK that **audits an
-[Audiobookshelf](https://www.audiobookshelf.org) library for the things that actually go wrong,
-and fixes what it finds** - from Claude Code, Claude Desktop, or any other MCP client.
+An [MCP](https://modelcontextprotocol.io) server, CLI and Go SDK that **audits an [Audiobookshelf](https://www.audiobookshelf.org) library for the things that actually go wrong, and fixes what it finds** - from Claude Code, Claude Desktop, or any other MCP client.
 
-There are several Audiobookshelf MCP servers, and they do a useful thing: expose the API as
-tools, so a model can browse your library and read your progress. This one does that too, but
-the reason it exists is the layer above: **17 audits**, each a sweep over the whole library
-for one specific thing that goes wrong in a real collection, returning a worklist rather than
-a dump, and naming the tool that fixes it.
+There are several Audiobookshelf MCP servers, and they do a useful thing: expose the API as tools, so a model can browse your library and read your progress. This one does that too, but the reason it exists is the layer above: **17 audits**, each a sweep over the whole library for one specific thing that goes wrong in a real collection, returning a worklist rather than a dump, and naming the tool that fixes it.
 
-This is not a demo. It has been battle-tested on a real collection: a large library,
-collected over years from every source and matched by hand or not at all, was cleaned up with
-these tools driven from Claude Code. Hundreds of titles were matched to the right store
-edition and checked against it, wrong matches caught by the folder the collector had named,
-author and narrator records merged and photographed, genres and tags brought to one
-vocabulary, and series names, numbering and titles brought to one style across the whole
-shelf in a sitting - every "The" dropped from a series label, every series past nine books
-zero-padded, every book linked to the series its folder names, every title that was really a
-series name replaced with the one the folder carried. Each pass was an audit, a review of the
-worklist, and a batch of edits. Most of the audits exist because that library had the problem.
+This is not a demo. It has been battle-tested on a real collection: a large library, collected over years from every source and matched by hand or not at all, was cleaned up with these tools driven from Claude Code. Hundreds of titles were matched to the right store edition and checked against it, wrong matches caught by the folder the collector had named, author and narrator records merged and photographed, genres and tags brought to one vocabulary, and series names, numbering and titles brought to one style across the whole shelf in a sitting - every "The" dropped from a series label, every series past nine books zero-padded, every book linked to the series its folder names, every title that was really a series name replaced with the one the folder carried. Each pass was an audit, a review of the worklist, and a batch of edits. Most of the audits exist because that library had the problem.
 
 ### The audits
 
@@ -52,25 +37,13 @@ worklist, and a batch of edits. Most of the audits exist because that library ha
 | `audit_podcast_stale_feed` | podcasts with no new episodes in 90 days, or whose feed was never checked: the show ended, or the feed url is dead |
 | `audit_podcast_no_episodes` | podcasts with nothing downloaded |
 
-The design principle: **detection is code, correction is judgment.** The server runs cheap
-deterministic checks over the whole library and produces worklists; the AI reasons only about
-the anomalies. Every response is a trimmed projection of what a decision needs, never the raw
-API object (an expanded library item carries every audio file, track and chapter with full
-ffprobe output).
+The design principle: **detection is code, correction is judgment.** The server runs cheap deterministic checks over the whole library and produces worklists; the AI reasons only about the anomalies. Every response is a trimmed projection of what a decision needs, never the raw API object (an expanded library item carries every audio file, track and chapter with full ffprobe output).
 
 ### What else is in the box
 
-- **The whole API, as tools.** 92 tools over all 202 Audiobookshelf routes, so everything an
-  audit finds can be fixed from the same session: matching, covers, chapters, embedding,
-  renaming a genre everywhere it is used, merging duplicate authors.
-- **A Go SDK.** `lib/abs` is a complete Audiobookshelf API client - 204 methods, no
-  dependencies outside the standard library, no knowledge of MCP - useful on its own, whether
-  or not you care about AI.
-- **Tested against a real server.** Every tool and every client method runs against an
-  actual Audiobookshelf in Docker, and the suite fails if a registered tool has no test. Seven
-  response-shape bugs in this client were found that way and could not have been found any
-  other way, because Audiobookshelf publishes no OpenAPI spec and its public API docs say they
-  are unmaintained.
+- **The whole API, as tools.** 92 tools over all 202 Audiobookshelf routes, so everything an audit finds can be fixed from the same session: matching, covers, chapters, embedding, renaming a genre everywhere it is used, merging duplicate authors.
+- **A Go SDK.** `lib/abs` is a complete Audiobookshelf API client - 205 methods, no dependencies outside the standard library, no knowledge of MCP - useful on its own, whether or not you care about AI.
+- **Tested against a real server.** Every tool and every client method runs against an actual Audiobookshelf in Docker, and the suite fails if a registered tool has no test. Seven response-shape bugs in this client were found that way and could not have been found any other way, because Audiobookshelf publishes no OpenAPI spec and its public API docs say they are unmaintained.
 
 ## Installation
 
@@ -100,15 +73,11 @@ All options can be passed as command-line flags, environment variables, or via a
 | `ABS_AUTH_TOKEN` | `--auth-token` | bearer token required on the HTTP endpoint (required with `--listen`) |
 | `ABS_ALLOW_NO_AUTH` | `--allow-no-auth` | serve HTTP with no bearer token at all: anyone who can reach the port can use every tool |
 
-An API key acts as exactly one Audiobookshelf user and inherits that user's permissions: a key
-for a normal account cannot see libraries that account cannot see, and cannot scan, match or
-delete. Most write tools need an admin account; `server_info` reports what the key can do.
+An API key acts as exactly one Audiobookshelf user and inherits that user's permissions: a key for a normal account cannot see libraries that account cannot see, and cannot scan, match or delete. Most write tools need an admin account; `server_info` reports what the key can do.
 
 ### Configuration File
 
-You can place a `.abs-mcp` file in your home directory `~/.abs-mcp` (for global settings)
-or in your current directory `./.abs-mcp` (for per-project settings). Keys match the long flag
-names using the `env` format:
+You can place a `.abs-mcp` file in your home directory `~/.abs-mcp` (for global settings) or in your current directory `./.abs-mcp` (for per-project settings). Keys match the long flag names using the `env` format:
 
 ```env
 SERVER=http://nas:13378
@@ -150,10 +119,7 @@ claude mcp add audiobookshelf -e ABS_SERVER=http://nas:13378 -e ABS_TOKEN=... --
 
 ### Run as a service (HTTP transport)
 
-`serve --listen :8080` serves the MCP Streamable HTTP transport at `/mcp` (plus `GET /healthz`)
-instead of stdio. `ABS_AUTH_TOKEN` is required: clients must send `Authorization: Bearer
-<token>`, and the server refuses to start without one unless `ABS_ALLOW_NO_AUTH=true` says
-that anyone who can reach the port may use every tool. Register it from any machine:
+`serve --listen :8080` serves the MCP Streamable HTTP transport at `/mcp` (plus `GET /healthz`) instead of stdio. `ABS_AUTH_TOKEN` is required: clients must send `Authorization: Bearer <token>`, and the server refuses to start without one unless `ABS_ALLOW_NO_AUTH=true` says that anyone who can reach the port may use every tool. Register it from any machine:
 
 ```bash
 claude mcp add --transport http audiobookshelf http://nas:8080/mcp \
@@ -162,29 +128,18 @@ claude mcp add --transport http audiobookshelf http://nas:8080/mcp \
 
 ### Docker
 
-Releases publish a multi-arch (amd64, arm64) image to `ghcr.io/katbyte/abs-mcp`, tagged
-`vX.Y.Z`, `vX.Y` and `latest`. `docker-compose.yml` is the default always-on deployment: it runs
-that image and reads secrets from a gitignored `.env` (copy `.env.example`). Adjust
-`ABS_SERVER` and `TZ` in the compose file, then:
+Releases publish a multi-arch (amd64, arm64) image to `ghcr.io/katbyte/abs-mcp`, tagged `vX.Y.Z`, `vX.Y` and `latest`. `docker-compose.yml` is the default always-on deployment: it runs that image and reads secrets from a gitignored `.env` (copy `.env.example`). Adjust `ABS_SERVER` and `TZ` in the compose file, then:
 
 ```bash
 cp .env.example .env      # fill in ABS_TOKEN and ABS_AUTH_TOKEN
 docker compose up -d
 ```
 
-`make docker` builds the same image from source, tagged `abs-mcp`, with version info from
-git. The image is alpine-based (so `docker exec -it abs-mcp sh` works), runs as a non-root
-user and has a healthcheck against `/healthz`. The binary is the entrypoint, so `docker run --rm
-ghcr.io/katbyte/abs-mcp info` works as a connectivity check with the `ABS_*` variables
-passed via `-e`.
+`make docker` builds the same image from source, tagged `abs-mcp`, with version info from git. The image is alpine-based (so `docker exec -it abs-mcp sh` works), runs as a non-root user and has a healthcheck against `/healthz`. The binary is the entrypoint, so `docker run --rm ghcr.io/katbyte/abs-mcp info` works as a connectivity check with the `ABS_*` variables passed via `-e`.
 
 ## MCP Tools
 
-Tools are named resource-first (`library_*`, `item_*`, `user_*`...) so they group by what they
-act on. Every tool carries MCP annotations (read-only or destructive) and tools that change
-server state say so in their descriptions. Wherever a tool takes a library, item, author,
-series, collection, playlist or user it accepts a name as well as an id; an ambiguous title
-comes back as an error listing the candidates.
+Tools are named resource-first (`library_*`, `item_*`, `user_*`...) so they group by what they act on. Every tool carries MCP annotations (read-only or destructive) and tools that change server state say so in their descriptions. Wherever a tool takes a library, item, author, series, collection, playlist or user it accepts a name as well as an id; an ambiguous title comes back as an error listing the candidates.
 
 | Resource | Tools |
 |---|---|
@@ -202,21 +157,13 @@ comes back as an error listing the candidates.
 | podcasts | `podcast_episodes` (one show, or the newest across the library), `podcast_episode_get`, `podcast_episode_edit`, `podcast_check_new`, `podcast_feed_episodes`, `podcast_episode_download`, `podcast_downloads`, `podcast_search`, `podcast_add`, `podcast_settings` |
 | users | `user_get`, `user_in_progress`, `user_progress_get`, `user_progress_set`, `user_progress_remove`, `user_bookmarks`, `user_bookmark_edit` (add or remove), `user_history`, `user_stats` (all-time or year in review), `user_list` (admin) |
 
-`item_delete`, `podcast_episode_delete`, `author_delete` and `library_issues_remove` are only
-registered when `--enable-delete` / `ABS_ENABLE_DELETE` is set. `--read-only` registers the
-51 read tools and nothing else, so a write tool is absent from `tools/list` rather than refused
-when called.
+`item_delete`, `podcast_episode_delete`, `author_delete` and `library_issues_remove` are only registered when `--enable-delete` / `ABS_ENABLE_DELETE` is set. `--read-only` registers the 51 read tools and nothing else, so a write tool is absent from `tools/list` rather than refused when called.
 
 ### Choosing which tools load
 
-**The default is `core`: five read-only tools, about 1,000 tokens.** The whole surface is
-around 12,000 tokens of tool definitions before anyone asks a question, which is a poor way to
-spend a client's context by default. `--toolsets` / `ABS_TOOLSETS` loads the groups a session actually
-needs, and `core` comes along with whatever else is asked for, because nothing else can find a
-library or open an item.
+**The default is `core`: five read-only tools, about 1,000 tokens.** The whole surface is around 12,000 tokens of tool definitions before anyone asks a question, which is a poor way to spend a client's context by default. `--toolsets` / `ABS_TOOLSETS` loads the groups a session actually needs, and `core` comes along with whatever else is asked for, because nothing else can find a library or open an item.
 
-**Curating a library needs `ABS_TOOLSETS=curation`** - the audits and everything that fixes
-what they find. `ABS_TOOLSETS=all` restores every tool.
+**Curating a library needs `ABS_TOOLSETS=curation`** - the audits and everything that fixes what they find. `ABS_TOOLSETS=all` restores every tool.
 
 | toolset | tools | with core | ~tokens |
 |---|---|---|---|
@@ -228,14 +175,9 @@ what they find. `ABS_TOOLSETS=all` restores every tool.
 | `curation` | 41 | 46 | 7,600 |
 | `all` | 91 | 91 | 13,000 |
 
-Tokens are what the model sees: each tool's name, description and input schema, measured over
-a real `tools/list` at four bytes a token. Every tool also carries an output schema, another
-17,000 tokens across `all`, but clients keep that to themselves to validate results rather than
-sending it to the model.
+Tokens are what the model sees: each tool's name, description and input schema, measured over a real `tools/list` at four bytes a token. Every tool also carries an output schema, another 17,000 tokens across `all`, but clients keep that to themselves to validate results rather than sending it to the model.
 
-`--toolsets` also takes a resource family - `item`, `podcast`, `library`, `user`, `audit`,
-`author`, `series`, `narrator`, `collection`, `playlist`, `server` - which is every tool with
-that prefix:
+`--toolsets` also takes a resource family - `item`, `podcast`, `library`, `user`, `audit`, `author`, `series`, `narrator`, `collection`, `playlist`, `server` - which is every tool with that prefix:
 
 ```sh
 ABS_TOOLSETS=all                # every tool, which was the default before 0.2.0
@@ -245,8 +187,7 @@ ABS_TOOLSETS=audit              # read-only detection, nothing that writes
 ABS_TOOLSETS=core,item,series   # core plus two whole families
 ```
 
-`abs-mcp tools` prints what the current flags would register, grouped by toolset, and needs no
-server:
+`abs-mcp tools` prints what the current flags would register, grouped by toolset, and needs no server:
 
 ```sh
 abs-mcp tools                   # the default set
@@ -256,9 +197,7 @@ abs-mcp tools --read-only -q    # names only
 
 ### Narrowing further
 
-`--allow-tools` and `--deny-tools` narrow whatever the toolsets left, and
-take comma-separated tool names, globs with a leading or trailing `*`, or the
-`essential` preset (`library_list`, `library_search`, `library_items`, `item_get`, `user_in_progress`, `user_progress_get`, `user_progress_set`):
+`--allow-tools` and `--deny-tools` narrow whatever the toolsets left, and take comma-separated tool names, globs with a leading or trailing `*`, or the `essential` preset (`library_list`, `library_search`, `library_items`, `item_get`, `user_in_progress`, `user_progress_get`, `user_progress_set`):
 
 ```sh
 ABS_ALLOW_TOOLS=essential
@@ -266,24 +205,19 @@ ABS_ALLOW_TOOLS=library_*,item_get,user_*
 ABS_DENY_TOOLS=*_delete,server_*
 ```
 
-A pattern that matches no tool aborts startup and names it, so a typo cannot silently hide a
-tool.
+A pattern that matches no tool aborts startup and names it, so a typo cannot silently hide a tool.
 
 ### A typical curation session
 
 1. `audit_all` says where the library needs work; `audit_unmatched` lists the books never matched to a provider.
-2. For each, `item_match` returns candidates with duration, narrator and series; compare them
-   with the item and `item_match_apply candidate=N`.
+2. For each, `item_match` returns candidates with duration, narrator and series; compare them with the item and `item_match_apply candidate=N`.
 3. `audit_missing field=cover` and `item_cover_search` / `item_cover_edit` fill the gaps.
-4. `audit_missing field=chapters` finds long books with no chapters; `item_chapters_set` pulls
-   them from Audible by asin.
+4. `audit_missing field=chapters` finds long books with no chapters; `item_chapters_set` pulls them from Audible by asin.
 5. `audit_duplicates` and `audit_series` show what to prune and what is missing.
 
 ## Using the client on its own
 
-`lib/abs` is a plain Go client for the Audiobookshelf API with **no dependencies outside the
-standard library**, and no knowledge of MCP. If you only want to talk to Audiobookshelf from Go,
-take it and ignore the rest:
+`lib/abs` is a plain Go client for the Audiobookshelf API with **no dependencies outside the standard library**, and no knowledge of MCP. If you only want to talk to Audiobookshelf from Go, take it and ignore the rest:
 
 ```go
 import "github.com/katbyte/abs-mcp/lib/abs"
@@ -292,19 +226,9 @@ client, err := abs.New("http://nas:13378", os.Getenv("ABS_TOKEN"))
 items, err := client.Items(ctx, libraryID, abs.ItemsOptions{Limit: 50})
 ```
 
-It has 204 methods covering **every one of Audiobookshelf's 202 API routes** - libraries,
-items, authors, series, narrators, collections, playlists, progress, bookmarks, podcasts,
-provider search, RSS feeds, tags, genres, tasks, backups, playback sessions, notifications,
-email, API keys, sharing, settings and user administration. File downloads stream rather than
-buffer, so a multi-gigabyte audiobook does not have to fit in memory.
+It has 205 methods covering **every one of Audiobookshelf's 202 API routes** - libraries, items, authors, series, narrators, collections, playlists, progress, bookmarks, podcasts, provider search, RSS feeds, tags, genres, tasks, backups, playback sessions, notifications, email, API keys, sharing, settings and user administration. File downloads stream rather than buffer, so a multi-gigabyte audiobook does not have to fit in memory.
 
-`make apicheck` reads the route table out of the Audiobookshelf source and fails if anything
-is missing, so the coverage claim is checked rather than asserted.
-Audiobookshelf publishes no OpenAPI spec and its
-[public API docs say they are unmaintained](https://api.audiobookshelf.org), so the types here
-are written against the server source (see [docs/README.md](docs/README.md)) and then **proved
-against a running server** - which is the only thing that catches the server changing shape
-underneath you.
+`make apicheck` reads the route table out of the Audiobookshelf source and fails if anything is missing, so the coverage claim is checked rather than asserted. Audiobookshelf publishes no OpenAPI spec and its [public API docs say they are unmaintained](https://api.audiobookshelf.org), so the types here are written against the server source (see [docs/README.md](docs/README.md)) and then **proved against a running server** - which is the only thing that catches the server changing shape underneath you.
 
 ## Development
 
@@ -315,21 +239,14 @@ make check-all  # build + unit tests + both live suites (needs docker) + every l
 
 ### Tests
 
-`make test` is hermetic and fast. It covers the pure logic - filter encoding, formatting, gap
-arithmetic, the audit heuristics, tool registration - and two things that need a server but not
-a real one: every `lib/abs` request shape and response decoding against a canned server
-(`lib/abs/requests_test.go`), and the tools end to end over an in-memory MCP session against a
-canned Audiobookshelf (`tools/handlers_test.go`). The second is where the cases the live
-fixtures cannot reach live: a library with covers, inconsistent spellings, tagged and untagged
-audio files, more findings than the limit.
+`make test` is hermetic and fast. It covers the pure logic - filter encoding, formatting, gap arithmetic, the audit heuristics, tool registration - and two things that need a server but not a real one: every `lib/abs` request shape and response decoding against a canned server (`lib/abs/requests_test.go`), and the tools end to end over an in-memory MCP session against a canned Audiobookshelf (`tools/handlers_test.go`). The second is where the cases the live fixtures cannot reach live: a library with covers, inconsistent spellings, tagged and untagged audio files, more findings than the limit.
 
-Everything else runs against **a real Audiobookshelf in Docker**, because a stub can only
-confirm what you already believed. Two suites, each in its own container:
+Everything else runs against **a real Audiobookshelf in Docker**, because a stub can only confirm what you already believed. Two suites, each in its own container:
 
 | | Covers | Command |
 |---|---|---|
 | `integration/` | the `lib/abs` client: that every response decodes with its fields populated | `make testacc-integration` |
-| `acceptance/` | the tools: name resolution, projections, audits, provider flows | `make testacc-acceptance` |
+| `acceptance/` | the tools: name resolution, projections, audits, provider flows, and journeys | `make testacc-acceptance` |
 
 ```bash
 make testacc        # both, each in a throwaway container, torn down after
@@ -337,40 +254,19 @@ make check-all      # build + unit + both live suites + every linter
 make cover          # all three suites, merged into one coverage number
 ```
 
-Coverage has to span all three or it lies: `go test -cover ./...` reports about 40% for
-`tools/`, because almost everything real happens in the live suites behind the `integration`
-tag. `make cover` runs each into its own binary coverage directory and merges them with
-`go tool covdata` - stdlib tooling, no third-party merger - which is what the badge reports.
+The journeys (`acceptance/journey_*_test.go`) chain the tools the way a session does and read the server back after every write, because a 200 from Audiobookshelf is not proof: edits made while a scan runs; every fixable audit fixed, audited again and put back; a non-admin's playback reaching every listening tool; `audit_all` equal to each audit; every read-only lookup leaving the server byte-for-byte unchanged; accounts limited to one library or one tag; a library's whole life; writes done twice; and every record got by id and by name. They found a dozen tool bugs the per-tool tests had not, listed in [docs/README.md](docs/README.md).
 
-**All 92 tools and all 204 client methods are exercised**, 199 of them asserting a result
-rather than only that the call reached the server. The five that do not - sending an ebook by
-email, firing a notification, closing a device session, unlinking OpenID, syncing an offline
-session - need infrastructure a throwaway container has not got, and say so where they are
-written. Tool coverage is enforced rather than claimed: the acceptance suite records every tool
-it calls and fails if the server registered one nothing called, so a new tool cannot ship
-untested. Calls out to Audible, Audnexus and
-iTunes go through a record/replay proxy (`lib/providerproxy`), so neither suite needs a network:
+Coverage has to span all three or it lies: `go test -cover ./...` reports about 40% for `tools/`, because almost everything real happens in the live suites behind the `integration` tag. `make cover` runs each into its own binary coverage directory and merges them with `go tool covdata` - stdlib tooling, no third-party merger - which is what the badge reports.
+
+**All 92 tools and all 205 client methods are exercised**, 200 of them asserting a result rather than only that the call reached the server. The five that do not - sending an ebook by email, firing a notification, closing a device session, unlinking OpenID, syncing an offline session - need infrastructure a throwaway container has not got, and say so where they are written. Tool coverage is enforced rather than claimed: the acceptance suite records every tool it calls and fails if the server registered one nothing called, so a new tool cannot ship untested. Calls out to Audible, Audnexus and iTunes go through a record/replay proxy (`lib/providerproxy`), so neither suite needs a network:
 
 ```bash
 make record         # re-record the cassettes against the real providers
 make record-check   # check the cassettes still match, without rewriting them
 ```
 
-`record-check` compares the *shape* of live responses against the recordings - renamed fields,
-vanished fields, changed types - and ignores values, so it goes red when a provider changes its
-contract rather than when a chart position moves.
+`record-check` compares the *shape* of live responses against the recordings - renamed fields, vanished fields, changed types - and ignores values, so it goes red when a provider changes its contract rather than when a chart position moves.
 
-Fixtures are generated, never committed: `scripts/abs-testenv.sh` writes one-second silent files
-with `ffmpeg` under `~/.cache/abs-mcp` (`ABS_TEST_DATA` to move them - not `$TMPDIR`, which
-Docker Desktop does not share), creates the libraries through `library_create`, fills them
-with `library_scan` and sets the metadata with `item_edit` - so building the fixtures is itself
-part of the coverage. Three libraries are clean, so the audits have something to leave alone;
-the fourth, `Messy`, is seeded with every defect they exist to find - a series spelled two
-ways, a gap whose missing book sits unlinked in a series folder, a narrator's name misspelt on
-half the books, a folder naming another book, a duplicate, a cover wearing the ribbon - and
-each audit has a test against it. `scripts/abs-testenv.sh fixtures` writes just the audio tree
-if you want to look at the layout. Requires docker, ffmpeg and jq; the suites skip when `ABS_SERVER` and
-`ABS_TOKEN` are unset, so they never fail for want of a daemon.
+Fixtures are generated, never committed: `scripts/abs-testenv.sh` writes one-second silent files with `ffmpeg` under `~/.cache/abs-mcp` (`ABS_TEST_DATA` to move them - not `$TMPDIR`, which Docker Desktop does not share), creates the libraries through `library_create`, fills them with `library_scan` and sets the metadata with `item_edit` - so building the fixtures is itself part of the coverage. Three libraries are clean, so the audits have something to leave alone; the fourth, `Messy`, is seeded with every defect they exist to find - a series spelled two ways, a gap whose missing book sits unlinked in a series folder, a narrator's name misspelt on half the books, a folder naming another book, a duplicate, a cover wearing the ribbon - and each audit has a test against it. `scripts/abs-testenv.sh fixtures` writes just the audio tree if you want to look at the layout. Requires docker, ffmpeg and jq; the suites skip when `ABS_SERVER` and `ABS_TOKEN` are unset, so they never fail for want of a daemon.
 
-The Audiobookshelf API reference is the server source, not the public docs; see
-[docs/README.md](docs/README.md).
+The Audiobookshelf API reference is the server source, not the public docs; see [docs/README.md](docs/README.md).

@@ -55,7 +55,7 @@ type genreCompound struct {
 	Items   int            `json:"items"`
 	Parts   []genrePart    `json:"parts"            jsonschema:"the value split at commas, slashes or colons; known says whether the part is already a value on its own, which is how a category path written as one value differs from a category whose name has a comma"`
 	Sample  []genreRef     `json:"sample,omitempty"`
-	Suggest genreSplitPlan `json:"suggest"          jsonschema:"metadata_rename with into (and to_field) that does the split: the first part is the broad category and stays where it is, the rest are finer and go to tags"`
+	Suggest genreSplitPlan `json:"suggest"          jsonschema:"pass as split to metadata_rename field=<field> from=<value>: the first part is the broad category and stays where it is, the rest are finer and go to tags, on these books only"`
 }
 
 type genrePart struct {
@@ -259,7 +259,7 @@ func registerGenresAudit(r *registry) {
 		Description: "Check genres and tags against one rule: genres are a short list of broad categories to browse by, tags hold everything finer and the collector's own markers. " +
 			"Reports placeholders that say nothing (Audiobook, Audio Book, Vocal) in either field; compound values that are a category path written as one (\"Science Fiction & Fantasy, Fantasy\"), with each part and whether it already exists on its own; " +
 			"genres carried by fewer books than min_items, which belong in tags; tags that repeat one of the same book's genres; books with no genre; and marker tags, listed but not judged. " +
-			"Every finding carries the metadata_rename call that fixes it: remove drops a value, to merges, into splits one value into several, to_field moves a value between genres and tags. Spelling variants are audit_spelling's.",
+			"Every finding carries the metadata_rename call that fixes it: remove drops a value, to merges, to_field moves a value between genres and tags, and a compound value's suggest is passed as split. Spelling variants are audit_spelling's.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in genresIn) (*mcp.CallToolResult, genresOut, error) {
 		libs, err := resolveLibraries(ctx, client, in.Library)
 		if err != nil {

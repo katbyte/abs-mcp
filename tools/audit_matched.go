@@ -117,6 +117,10 @@ type matchedScope struct {
 	Page      int    // 0-based
 	Filter    string // a library_items filter; empty means every matched book
 	Fields    bool   // compare every field, not only the ones that identify the recording
+
+	// seen counts the matched books walked so far, across every library a
+	// call sweeps, so a page runs on from one library into the next
+	seen *int
 }
 
 // sweepMatched checks the matched books a scope selects and says whether a
@@ -147,18 +151,21 @@ func sweepMatched(ctx context.Context, client *abs.Client, lib *abs.Library, sco
 		return (scope.Page+1)*scope.PageSize < res.Total, nil
 	}
 	skip := scope.PageSize * scope.Page
-	seen := 0
+	seen := scope.seen
+	if seen == nil {
+		seen = new(0)
+	}
 	err = client.ItemsAll(ctx, lib.ID, abs.ItemsOptions{}, func(items []abs.Item) bool {
 		for j := range items {
 			it := &items[j]
 			if it.IsPodcast() || strings.TrimSpace(it.Media.Metadata.ASIN) == "" {
 				continue
 			}
-			seen++
-			if seen <= skip {
+			*seen++
+			if *seen <= skip {
 				continue
 			}
-			if scope.PageSize > 0 && seen > skip+scope.PageSize {
+			if scope.PageSize > 0 && *seen > skip+scope.PageSize {
 				more = true
 				return false
 			}
@@ -179,7 +186,7 @@ func registerMatchedAudit(r *registry) {
 		Filter    string   `json:"filter,omitempty"    jsonschema:"which books, as library_items takes it: authors:Douglas Adams, series:Discworld; default every matched book (needs library)"`
 		Providers []string `json:"providers,omitempty" jsonschema:"where to look the asins up, in order, default the server's --providers, else the library's provider alone; the same recording has a different asin in each region, so put the store the books were bought from first: [audible.ca, audible]"`
 		Limit     int      `json:"limit,omitempty"     jsonschema:"matched books to check per call, default 50, at most 100: each is a provider request"`
-		Page      int      `json:"page,omitempty"      jsonschema:"0-based page of matched books; next_page says when there is more"`
+		Page      int      `json:"page,omitempty"      jsonschema:"0-based page of matched books, which with no library run on from one book library into the next; next_page says when there is more"`
 		Tolerance float64  `json:"tolerance,omitempty" jsonschema:"how far apart two durations of the same recording may be, default 0.03"`
 		Fields    bool     `json:"fields,omitempty"    jsonschema:"also compare title, subtitle, authors, narrators, series, genres, publisher, year, language and description with the provider's record, and report each field that differs with both values: what item_match_apply with override_details would change. Off by default"`
 	}
@@ -197,27 +204,20 @@ func registerMatchedAudit(r *registry) {
 		if in.Filter != "" && in.Library == "" && len(libs) > 1 {
 			return nil, matchedOut{}, fmt.Errorf("a filter needs one library (have: %s)", libraryNames(libs))
 		}
-		if len(libs) > 1 && in.Library == "" {
-			// pages over several libraries would not line up; one library at a time
-			books := 0
-			for i := range libs {
-				if !libs[i].IsPodcast() {
-					books++
-				}
-			}
-			if books > 1 {
-				return nil, matchedOut{}, fmt.Errorf("library is required when the server has more than one book library (have: %s): the pages are per library", libraryNames(libs))
-			}
-		}
 		out := matchedOut{Findings: []matchedFinding{}}
 		pageSize := min(limitOr(in.Limit, 50), 100)
+		// with no library the matched books of every book library are one
+		// run, in library order, and a page is a window over that run: the
+		// count of books walked carries on from one library to the next
+		walked := new(int)
 		for i := range libs {
-			more, err := sweepMatched(ctx, client, &libs[i], matchedScope{Providers: in.Providers, Tolerance: in.Tolerance, PageSize: pageSize, Page: max(in.Page, 0), Filter: strings.TrimSpace(in.Filter), Fields: in.Fields}, &out)
+			more, err := sweepMatched(ctx, client, &libs[i], matchedScope{Providers: in.Providers, Tolerance: in.Tolerance, PageSize: pageSize, Page: max(in.Page, 0), Filter: strings.TrimSpace(in.Filter), Fields: in.Fields, seen: walked}, &out)
 			if err != nil {
 				return nil, matchedOut{}, err
 			}
 			if more {
 				out.NextPage = new(max(in.Page, 0) + 1)
+				break
 			}
 		}
 

@@ -1,19 +1,40 @@
+## 0.5.0 (unreleased)
+
+### Breaking
+
+- a name two libraries, collections or playlists share is refused with their ids instead of taking the first; `library_create`, `collection_create`, `playlist_create` and the renames refuse a name already taken
+- `collection_create` requires `items`: the server never made an empty one
+- `library_create` refuses a folder that is not there (the server made it, empty)
+- `user_get` `libraries` is only set with `all_libraries` false, and empty then means none
+
+### Added
+
+- `collection_books_edit`, `playlist_entries_edit`: `added`, `already_held`, `removed`, `not_held`, and `deleted` when a playlist's last entry goes (the server deletes it)
+- `user_get`: `all_libraries`, `all_tags`, `tags`, `denied_tags`, `explicit`
+- `metadata_rename` `split`: a compound genre's `suggest` as-is, only on the books carrying it
+- `item_edit` `add_tags`, `remove_tags`, which 0.4.0 said it had
+- acceptance journeys: tools chained against a changing server, across users and repeated
+
+### Fixed
+
+- a playlist entry naming an episode for a book, or another podcast's episode, took the server down; one with no episode for a podcast stored a broken entry; another library's book was accepted. Entries are checked before anything is sent
+- a series renamed was not found by its new name, and its old name still resolved, for half an hour (`series_get`, `series_edit`, `series_merge`, `series:` filters, `library_filters`)
+- an account limited by tag or explicit flag was shown hidden books' authors, narrators, series and titles by `library_filters`, `library_get`, `narrator_list` and `library_search`
+- `user_in_progress` for the key's own account had no position or percent
+- `server_sessions` and `user_history` rows never named their user; `server_sessions` for a non-admin said 404
+- `author_edit`, `author_image_set`, `author_match_apply` reported `books: 0`
+- `audit_matched` with no library refused, while `audit_all` counted it: pages now run on across book libraries
+- following a compound genre's suggestion in two calls moved the part off every book
+- a 403 on a read blamed admin rights, not a library or tag restriction
+- `restoreBook` left the matched asin behind for later tests
+
 ## 0.4.0 (2026-09-13)
 
 ### Breaking
 
-- `audit_series_gaps` is `audit_series`: gaps, names (one series spelled two ways, with authors),
-  numbering (folder vs series number, unlinked, duplicates, zero padding), odd names, and titles
-  that are really the series name. Gap rows carry `unlinked` (the book is on the shelf) and
-  `merged` (what is left once spellings are one series); `articles=true` lists names opening
-  with The, A or An
-- `audit_author_as_title` and `audit_author_missing_image` are folded into `audit_authors`, which
-  also finds records with no asin, no photo, no books, a stranger's biography, or a name spelled
-  two ways
-- `audit_cover_ratio` is `audit_covers`: missing, not square, too small. `store=true` compares each
-  matched book's cover with its store's by perceptual hash: `upgrade` (same picture, bigger),
-  `differs` (another picture), a jacket scan as `ratio` with the store's square art attached.
-  `banner=true` finds the "Only from Audible" ribbon
+- `audit_series_gaps` is `audit_series`: gaps, names (one series spelled two ways, with authors), numbering (folder vs series number, unlinked, duplicates, zero padding), odd names, and titles that are really the series name. Gap rows carry `unlinked` (the book is on the shelf) and `merged` (what is left once spellings are one series); `articles=true` lists names opening with The, A or An
+- `audit_author_as_title` and `audit_author_missing_image` are folded into `audit_authors`, which also finds records with no asin, no photo, no books, a stranger's biography, or a name spelled two ways
+- `audit_cover_ratio` is `audit_covers`: missing, not square, too small. `store=true` compares each matched book's cover with its store's by perceptual hash: `upgrade` (same picture, bigger), `differs` (another picture), a jacket scan as `ratio` with the store's square art attached. `banner=true` finds the "Only from Audible" ribbon
 - `item_match_apply` requires `candidate`, `asin` or `isbn`
 - `serve --listen` refuses to start without `ABS_AUTH_TOKEN`; `--allow-no-auth` opts out
 - `audit_all` runs every audit; `deep=true` adds the three that fetch per item, otherwise `skipped`
@@ -23,38 +44,27 @@
 
 ### Added
 
-- `item_match_batch` scores a page of books against a provider (`exact`, `likely`, `edition`,
-  `unsure`, `none`); `item_match_apply_batch` applies an explicit list of item and asin pairs
-- `item_match_apply` `smart`: fill the empty fields, then decide each difference by rule, with
-  `preview`; `keep` restores named fields after `override_details`; results report `applied`
-  and warn when the item's asin is not the one applied
-- `zz-provider:` tag records the store a match came from, `zz-provider:none` marks a book checked
-  and unmatchable, `item_match_tag` backfills; `--provider-tag` / `ABS_PROVIDER_TAG`
+- `item_match_batch` scores a page of books against a provider (`exact`, `likely`, `edition`, `unsure`, `none`); `item_match_apply_batch` applies an explicit list of item and asin pairs
+- `item_match_apply` `smart`: fill the empty fields, then decide each difference by rule, with `preview`; `keep` restores named fields after `override_details`; results report `applied` and warn when the item's asin is not the one applied
+- `zz-provider:` tag records the store a match came from, `zz-provider:none` marks a book checked and unmatchable, `item_match_tag` backfills; `--provider-tag` / `ABS_PROVIDER_TAG`
 - `--providers` / `ABS_PROVIDERS`: the store order every match and audit asks
-- `audit_matched`: is each asin the recording on disk (title, duration, narrator); `fields=true`
-  lists every field that differs, with both values
+- `audit_matched`: is each asin the recording on disk (title, duration, narrator); `fields=true` lists every field that differs, with both values
 - `audit_narrators`: names that both wrote and read, and the spelling checks on narrators
-- `audit_genres`: placeholders, compound values, narrow genres, tags repeating genres, books with
-  no genre; every finding carries its `metadata_rename`
-- `audit_spelling` finds importer wrappers ("Read by"), truncations, typos, two names in one
-  value, and leftovers such as "Ph.D."
+- `audit_genres`: placeholders, compound values, narrow genres, tags repeating genres, books with no genre; every finding carries its `metadata_rename`
+- `audit_spelling` finds importer wrappers ("Read by"), truncations, typos, two names in one value, and leftovers such as "Ph.D."
 - `audit_missing description` also reports stubs under 120 characters, credit lines and bare urls
 - `audit_path files=true` compares audio filenames as well
-- `series_merge` moves one series into another, keeping numbers and other series; `series_edit`
-  refuses a rename onto an existing name
+- `series_merge` moves one series into another, keeping numbers and other series; `series_edit` refuses a rename onto an existing name
 - `item_edit` and `item_batch_edit`: `add_series`, `remove_series`, `add_tags`, `remove_tags`
-- `item_cover_upgrade`: the store's full-size cover when bigger and the same picture; `square`
-  for jacket scans, `any_picture`, `preview`; a ribboned store copy never replaces a clean cover
+- `item_cover_upgrade`: the store's full-size cover when bigger and the same picture; `square` for jacket scans, `any_picture`, `preview`; a ribboned store copy never replaces a clean cover
 - `metadata_rename` `into` splits a value; `to_field` moves it between genres and tags
 - `author_edit clear=[description, asin, image]`
 - `series_list` lists every book library when none is named
 
 ### Fixed
 
-- `audit_authors` and `audit_narrators` read "Sanderson, Brandon" as Brandon Sanderson, so the
-  two spellings are one group
-- `series_get`, and `library_items` with a series filter, show every series a book is in, not
-  only the one asked for; an edit built from the old output dropped links
+- `audit_authors` and `audit_narrators` read "Sanderson, Brandon" as Brandon Sanderson, so the two spellings are one group
+- `series_get`, and `library_items` with a series filter, show every series a book is in, not only the one asked for; an edit built from the old output dropped links
 - `audit_series` reads a "The X Series" folder as series X
 - the `smart` match no longer writes bare co-authors (illustrators, translators, pen names)
 - `audit_path` reported writing style as a mismatch: 393 findings, a dozen real, now 16
@@ -64,107 +74,69 @@
 - server-filtered audits reported `items_scanned` wrong and sent book filters to podcast libraries
 - `item_match` candidates lost their series name
 - the name normalizer dropped accented letters
-- `metadata_rename` on languages and publishers matched case-insensitively and sent hundreds of
-  items in one request
+- `metadata_rename` on languages and publishers matched case-insensitively and sent hundreds of items in one request
 - `author_edit clear=[image]` failed on an author with no photo
 
 ### Changed
 
 - `audit_authors` says an asin without a photo means Audible has none
-- the live fixtures carry covers: non-fiction has a square one, a jacket scan and one too
-  small, so `audit_covers` measures real files there; fiction stays bare
-- a fourth live fixture, `Messy`: 31 books seeded with the defects the curation audits are
-  for (a gap with its book on the shelf unlinked, a series and a narrator spelled two ways,
-  unpadded numbers, titles that are the series name, stub descriptions, genre placeholders,
-  a folder naming another book, a duplicate, a single-file m4b, a ribboned cover, one matched
-  book), and a test per audit against it
+- the live fixtures carry covers: non-fiction has a square one, a jacket scan and one too small, so `audit_covers` measures real files there; fiction stays bare
+- a fourth live fixture, `Messy`: 31 books seeded with the defects the curation audits are for (a gap with its book on the shelf unlinked, a series and a narrator spelled two ways, unpadded numbers, titles that are the series name, stub descriptions, genre placeholders, a folder naming another book, a duplicate, a single-file m4b, a ribboned cover, one matched book), and a test per audit against it
 - `docker-compose.yml` no longer pins `dns: 1.1.1.1`
 
 ## 0.3.0 (2026-09-13)
 
 ### Breaking
 
-- one rename tool. `metadata_rename field=tags|genres|narrators|authors|languages|publishers`
-  replaces `server_tag_rename`, `narrator_edit` and `audit_terminology_rename`, and with
-  `remove` drops a tag, genre, narrator, language or publisher everywhere. `audit_terminology`
-  is now `audit_spelling`, and every group it reports is fixed by the one tool. 88 tools -> 87
-- `audit_no_episodes` and `audit_stale_feed` are `audit_podcast_no_episodes` and
-  `audit_podcast_stale_feed`, so the name says they only look at podcasts
-- `item_cover_edit` no longer removes the cover when called with neither `url` nor `file`:
-  pass `remove=true`. A call that forgot its url used to delete the cover
-- the README token table is now what the model sees. Most clients send only the description
-  and input schema to the model, not the output schema, which was 60% of the earlier figure
+- one rename tool. `metadata_rename field=tags|genres|narrators|authors|languages|publishers` replaces `server_tag_rename`, `narrator_edit` and `audit_terminology_rename`, and with `remove` drops a tag, genre, narrator, language or publisher everywhere. `audit_terminology` is now `audit_spelling`, and every group it reports is fixed by the one tool. 88 tools -> 87
+- `audit_no_episodes` and `audit_stale_feed` are `audit_podcast_no_episodes` and `audit_podcast_stale_feed`, so the name says they only look at podcasts
+- `item_cover_edit` no longer removes the cover when called with neither `url` nor `file`: pass `remove=true`. A call that forgot its url used to delete the cover
+- the README token table is now what the model sees. Most clients send only the description and input schema to the model, not the output schema, which was 60% of the earlier figure
 
 ### Added
 
-- `audit_unembedded`: books whose audio files carry no tags, or tags that disagree with the
-  current title, author, narrator, series, genres, year or publisher - what
-  `item_embed_metadata` is due for after a curation pass. It reads the expanded items in
-  batches of 50, so it runs apart from `audit_all`
+- `audit_unembedded`: books whose audio files carry no tags, or tags that disagree with the current title, author, narrator, series, genres, year or publisher - what `item_embed_metadata` is due for after a curation pass. It reads the expanded items in batches of 50, so it runs apart from `audit_all`
 
 ### Fixed
 
-- `item_edit clear` for `narrators`, `series`, `genres` and `tags` was a silent no-op: the
-  empty list was dropped from the request (`omitempty`), so the server saw nothing to change.
-  `lib/abs` list fields are now `omitzero`: nil leaves a field alone, an empty slice clears it
-- `audit_cover_ratio` measured the server's 400-pixel-wide cache copy rather than the cover
-  file, so every cover was "400 wide" and the too-small check could never fire. It now asks for
-  the raw file, reads only the image header instead of buffering the whole image, and skips
-  the request for items the listing already says have no cover
-- `audit_spelling` (then `audit_terminology`) never found narrator spellings: the sweep sees the minified item shape,
-  which carries narrators only as one joined `narratorName`, and only the expanded
-  `narrators` list was read
-- an audit with a server-side filter (`audit_missing`, `audit_issues`, `audit_no_audio`)
-  overran `limit` once an earlier library had filled it: the request for the next library was
-  sent with no limit, which the server reads as everything
-- `lib/abs` `DeleteAuthorImage` returned an empty record; the server answers with the author
-  under an `author` key, like the image and match routes
+- `item_edit clear` for `narrators`, `series`, `genres` and `tags` was a silent no-op: the empty list was dropped from the request (`omitempty`), so the server saw nothing to change. `lib/abs` list fields are now `omitzero`: nil leaves a field alone, an empty slice clears it
+- `audit_cover_ratio` measured the server's 400-pixel-wide cache copy rather than the cover file, so every cover was "400 wide" and the too-small check could never fire. It now asks for the raw file, reads only the image header instead of buffering the whole image, and skips the request for items the listing already says have no cover
+- `audit_spelling` (then `audit_terminology`) never found narrator spellings: the sweep sees the minified item shape, which carries narrators only as one joined `narratorName`, and only the expanded `narrators` list was read
+- an audit with a server-side filter (`audit_missing`, `audit_issues`, `audit_no_audio`) overran `limit` once an earlier library had filled it: the request for the next library was sent with no limit, which the server reads as everything
+- `lib/abs` `DeleteAuthorImage` returned an empty record; the server answers with the author under an `author` key, like the image and match routes
 
 ### Changed
 
-- docker-free tests for the tools: an in-memory MCP session against a canned Audiobookshelf
-  (`tools/handlers_test.go`), covering what the live fixtures cannot reach - a library with
-  covers, inconsistent narrator spellings, more findings than the limit
-- `lib/abs` request and response-shape tests without a server: paging, streaming, multipart
-  upload, the vocabulary path encoding, the chapter and feed-episode unwrapping
+- docker-free tests for the tools: an in-memory MCP session against a canned Audiobookshelf (`tools/handlers_test.go`), covering what the live fixtures cannot reach - a library with covers, inconsistent narrator spellings, more findings than the limit
+- `lib/abs` request and response-shape tests without a server: paging, streaming, multipart upload, the vocabulary path encoding, the chapter and feed-episode unwrapping
 - `intParam`/`intQuery` and `narratorID`/`vocabularyID` were the same function twice
 
 ## 0.2.0 (2026-09-12)
 
 ### Breaking
 
-- default is now the `core` toolset: 5 read-only tools, ~4,400 tokens instead of ~33,000.
-  `ABS_TOOLSETS=curation` for the audits and their fixers, `ABS_TOOLSETS=all` for everything
-- `item_chapters` and `item_files` are now `chapters` and `files` flags on `item_get`, off by
-  default (a 300-chapter book is 19x the rest of the answer)
-- `library_stats` folded into `library_get`, `server_stats` into `server_info`,
-  `podcast_recent` into `podcast_episodes` (omit `item` for the whole library)
-- removed `library_match_all`: no candidates to review, no undo. Use `item_match` then
-  `item_match_apply`. `lib/abs` keeps `MatchAll`
+- default is now the `core` toolset: 5 read-only tools, ~4,400 tokens instead of ~33,000. `ABS_TOOLSETS=curation` for the audits and their fixers, `ABS_TOOLSETS=all` for everything
+- `item_chapters` and `item_files` are now `chapters` and `files` flags on `item_get`, off by default (a 300-chapter book is 19x the rest of the answer)
+- `library_stats` folded into `library_get`, `server_stats` into `server_info`, `podcast_recent` into `podcast_episodes` (omit `item` for the whole library)
+- removed `library_match_all`: no candidates to review, no undo. Use `item_match` then `item_match_apply`. `lib/abs` keeps `MatchAll`
 - 94 tools -> 88
 
 ### Added
 
-- `--toolsets` / `ABS_TOOLSETS`: `core`, `curation`, `listening`, `podcasts`, `organise`,
-  `admin`, `all`, or a resource family like `item`. `core` is always included
-- `abs-mcp tools` lists what the current flags would register, grouped by toolset. No server
-  needed; `-q` for names only
+- `--toolsets` / `ABS_TOOLSETS`: `core`, `curation`, `listening`, `podcasts`, `organise`, `admin`, `all`, or a resource family like `item`. `core` is always included
+- `abs-mcp tools` lists what the current flags would register, grouped by toolset. No server needed; `-q` for names only
 - coverage workflow and badge; `make cover` merges all three suites
 
 ### Fixed
 
-- `server_info` says what an admin-only key could not see instead of dropping the totals
-  silently, and no longer hides zero podcasts or zero open sessions
+- `server_info` says what an admin-only key could not see instead of dropping the totals silently, and no longer hides zero podcasts or zero open sessions
 - `item_get chapters=true` on a podcast says chapters belong to the episodes again
 - `abs-mcp tools -q > file` wrote to stdout past cobra's buffer
-- the Homebrew formula never published for v0.1.0: the script was committed non-executable.
-  The release workflow can now republish it for any tag
+- the Homebrew formula never published for v0.1.0: the script was committed non-executable. The release workflow can now republish it for any tag
 
 ### Changed
 
-- `library_items` and `library_search` say what each is for and name the other;
-  `library_items` no longer advertises `missing:` and `issues`, which are `audit_missing` and
-  `audit_issues`
+- `library_items` and `library_search` say what each is for and name the other; `library_items` no longer advertises `missing:` and `issues`, which are `audit_missing` and `audit_issues`
 - coverage 84.8% (`lib/abs` 87.1%, `tools` 86.1%, `cli` 58.8%); `requireBearer` 0% -> 100%
 - ids are tested across every resolver, not just titles
 - lowercase workflow names
@@ -172,18 +144,9 @@
 ## 0.1.0 (2026-09-12)
 
 - MCP server over stdio or HTTP (`--listen`), and a CLI (`serve`, `info`, `version`)
-- 94 tools: server, libraries, items, authors, series, narrators, collections, playlists,
-  podcasts, users (progress, bookmarks, history and stats, for the API key's own account or
-  any other), and 16 audits
-- `--read-only`, `--enable-delete`, `--allow-tools` / `--deny-tools` (names, globs, or the
-  `essential` preset); every tool carries MCP read-only/destructive annotations
-- tools take names as well as ids; every response is a trimmed projection rather than the
-  raw API payload
-- `lib/abs`: a standalone Audiobookshelf client for Go, stdlib only and with no knowledge of
-  MCP. 204 methods covering all 202 API routes (`make apicheck`); downloads stream rather
-  than buffer
-- tested against a real Audiobookshelf in Docker: `integration/` covers the client,
-  `acceptance/` the tools, with provider calls replayed from cassettes. Every tool and every
-  client method is exercised, and the suite fails if a registered tool has no test
-- binaries for linux, darwin, windows, freebsd, openbsd and solaris, a Homebrew tap, and a
-  linux/amd64 + linux/arm64 image on `ghcr.io/katbyte/abs-mcp` with `docker-compose.yml`
+- 94 tools: server, libraries, items, authors, series, narrators, collections, playlists, podcasts, users (progress, bookmarks, history and stats, for the API key's own account or any other), and 16 audits
+- `--read-only`, `--enable-delete`, `--allow-tools` / `--deny-tools` (names, globs, or the `essential` preset); every tool carries MCP read-only/destructive annotations
+- tools take names as well as ids; every response is a trimmed projection rather than the raw API payload
+- `lib/abs`: a standalone Audiobookshelf client for Go, stdlib only and with no knowledge of MCP. 204 methods covering all 202 API routes (`make apicheck`); downloads stream rather than buffer
+- tested against a real Audiobookshelf in Docker: `integration/` covers the client, `acceptance/` the tools, with provider calls replayed from cassettes. Every tool and every client method is exercised, and the suite fails if a registered tool has no test
+- binaries for linux, darwin, windows, freebsd, openbsd and solaris, a Homebrew tap, and a linux/amd64 + linux/arm64 image on `ghcr.io/katbyte/abs-mcp` with `docker-compose.yml`

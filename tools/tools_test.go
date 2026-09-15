@@ -144,11 +144,14 @@ func TestBuildFilter(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasSuffix(r.URL.Path, "/filterdata") {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/authors"):
+			_, _ = w.Write([]byte(`{"results":[{"id":"a1","name":"Frank Herbert"}],"total":1}`))
+		case strings.HasSuffix(r.URL.Path, "/series"):
+			_, _ = w.Write([]byte(`{"results":[{"id":"s1","name":"Dune"}],"total":1}`))
+		default:
 			http.NotFound(w, r)
-			return
 		}
-		_, _ = w.Write([]byte(`{"authors":[{"id":"a1","name":"Frank Herbert"}],"series":[{"id":"s1","name":"Dune"}],"genres":[]}`))
 	}))
 	defer srv.Close()
 

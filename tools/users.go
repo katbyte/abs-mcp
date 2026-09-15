@@ -116,18 +116,23 @@ func registerUserTools(r *registry) {
 	}
 	type getOut struct {
 		userRow
-		Self        bool          `json:"self"                jsonschema:"true when this is the account the API key acts as"`
-		Email       string        `json:"email,omitempty"`
-		CanUpdate   bool          `json:"can_update"`
-		CanDelete   bool          `json:"can_delete"`
-		CanDownload bool          `json:"can_download"`
-		CanUpload   bool          `json:"can_upload"`
-		Libraries   []string      `json:"libraries,omitempty" jsonschema:"library ids accessible; all when empty"`
-		InProgress  int           `json:"items_in_progress"`
-		Finished    int           `json:"items_finished"`
-		Bookmarks   int           `json:"bookmarks"`
-		Created     string        `json:"created,omitempty"`
-		Recent      []progressRow `json:"recent_progress"     jsonschema:"their 10 most recently updated items"`
+		Self         bool          `json:"self"                  jsonschema:"true when this is the account the API key acts as"`
+		Email        string        `json:"email,omitempty"`
+		CanUpdate    bool          `json:"can_update"`
+		CanDelete    bool          `json:"can_delete"`
+		CanDownload  bool          `json:"can_download"`
+		CanUpload    bool          `json:"can_upload"`
+		AllLibraries bool          `json:"all_libraries"         jsonschema:"the account can open every library; when false, only those in libraries"`
+		Libraries    []string      `json:"libraries,omitempty"   jsonschema:"with all_libraries false: the ids of the only libraries the account can open (none when empty)"`
+		AllTags      bool          `json:"all_tags"              jsonschema:"the account sees books whatever their tags; when false, tags or denied_tags says which"`
+		Tags         []string      `json:"tags,omitempty"        jsonschema:"with all_tags false: the account sees only books carrying one of these"`
+		DeniedTags   []string      `json:"denied_tags,omitempty" jsonschema:"with all_tags false: the account sees every book except those carrying one of these"`
+		Explicit     bool          `json:"explicit"              jsonschema:"the account sees books marked explicit"`
+		InProgress   int           `json:"items_in_progress"`
+		Finished     int           `json:"items_finished"`
+		Bookmarks    int           `json:"bookmarks"`
+		Created      string        `json:"created,omitempty"`
+		Recent       []progressRow `json:"recent_progress"       jsonschema:"their 10 most recently updated items"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "user_get",
@@ -139,17 +144,29 @@ func registerUserTools(r *registry) {
 		}
 		row := userRow{ID: u.ID, Username: u.Username, Type: u.Type, Active: u.IsActive, LastSeen: fmtTime(u.LastSeen)}
 		out := getOut{
-			userRow:     row,
-			Self:        self,
-			Email:       u.Email,
-			CanUpdate:   u.IsAdmin() || u.Permissions.Update,
-			CanDelete:   u.IsAdmin() || u.Permissions.Delete,
-			CanDownload: u.IsAdmin() || u.Permissions.Download,
-			CanUpload:   u.IsAdmin() || u.Permissions.Upload,
-			Libraries:   u.LibrariesAccessible,
-			Bookmarks:   len(u.Bookmarks),
-			Created:     fmtDate(u.CreatedAt),
-			Recent:      []progressRow{},
+			userRow:      row,
+			Self:         self,
+			Email:        u.Email,
+			CanUpdate:    u.IsAdmin() || u.Permissions.Update,
+			CanDelete:    u.IsAdmin() || u.Permissions.Delete,
+			CanDownload:  u.IsAdmin() || u.Permissions.Download,
+			CanUpload:    u.IsAdmin() || u.Permissions.Upload,
+			AllLibraries: u.Permissions.AccessAllLibraries,
+			AllTags:      u.Permissions.AccessAllTags,
+			Explicit:     u.Permissions.AccessExplicitContent,
+			Bookmarks:    len(u.Bookmarks),
+			Created:      fmtDate(u.CreatedAt),
+			Recent:       []progressRow{},
+		}
+		if !u.Permissions.AccessAllLibraries {
+			out.Libraries = u.LibrariesAccessible
+		}
+		if !u.Permissions.AccessAllTags {
+			if u.Permissions.SelectedTagsNotAccessible {
+				out.DeniedTags = u.ItemTagsSelected
+			} else {
+				out.Tags = u.ItemTagsSelected
+			}
 		}
 		progress := slices.Clone(u.MediaProgress)
 		slices.SortFunc(progress, func(a, b abs.MediaProgress) int { return cmp.Compare(b.LastUpdate, a.LastUpdate) })
@@ -193,9 +210,22 @@ func registerUserTools(r *registry) {
 		var progressFor map[string]*abs.MediaProgress
 		if self {
 			// the server has a shelf endpoint for the caller, already ordered
-			// and carrying the episode that is in progress
+			// and carrying the episode that is in progress - but not the
+			// position or percent, which come from the caller's own record
 			if items, err = client.ItemsInProgress(ctx, limit); err != nil {
 				return nil, inProgressOut{}, err
+			}
+			progressFor = map[string]*abs.MediaProgress{}
+			for i := range items {
+				want := ""
+				if items[i].RecentEpisode != nil {
+					want = items[i].RecentEpisode.ID
+				}
+				for j := range u.MediaProgress {
+					if p := &u.MediaProgress[j]; p.LibraryItemID == items[i].ID && p.EpisodeID == want {
+						progressFor[items[i].ID] = p
+					}
+				}
 			}
 		} else {
 			// for anyone else the shelf has to be rebuilt from their progress
@@ -591,7 +621,9 @@ func registerUserTools(r *registry) {
 			if onlyItem != "" && sessions[i].LibraryItemID != onlyItem {
 				continue
 			}
-			out.Sessions = append(out.Sessions, summarizeSession(&sessions[i]))
+			row := summarizeSession(&sessions[i])
+			row.User = u.Username // every session here is theirs; the route does not say so
+			out.Sessions = append(out.Sessions, row)
 		}
 
 		return nil, out, nil

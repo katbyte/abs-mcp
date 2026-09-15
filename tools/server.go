@@ -152,12 +152,29 @@ func registerServerTools(r *registry) {
 		Description: "What is playing right now: open playback sessions across all users with title, position and device. Admin only. For history use user_history.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, sessionsOut, error) {
 		sessions, err := client.OpenSessions(ctx)
+		if abs.IsNotFound(err) {
+			return nil, sessionsOut{}, fmt.Errorf("open sessions are admin only: Audiobookshelf answers anyone else as if the route did not exist (%w)", err)
+		}
 		if err != nil {
 			return nil, sessionsOut{}, err
 		}
 		out := sessionsOut{Sessions: []sessionSummary{}}
+		var names map[string]string
 		for i := range sessions {
-			out.Sessions = append(out.Sessions, summarizeSession(&sessions[i]))
+			row := summarizeSession(&sessions[i])
+			// an open session names its user by id only
+			if row.User == "" && row.UserID != "" {
+				if names == nil {
+					names = map[string]string{}
+					if users, uerr := client.Users(ctx, false); uerr == nil {
+						for j := range users {
+							names[users[j].ID] = users[j].Username
+						}
+					}
+				}
+				row.User = names[row.UserID]
+			}
+			out.Sessions = append(out.Sessions, row)
 		}
 
 		return nil, out, nil

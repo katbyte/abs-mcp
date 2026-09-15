@@ -526,3 +526,34 @@ func TestSearchAuthorDecodesOneRecordOrNull(t *testing.T) {
 		t.Errorf("a null answer decoded as %+v", none)
 	}
 }
+
+// The folder picker's route answers 400 for a path that is not there, which
+// is an answer, not an error; anything else is still an error.
+func TestServerPathExists(t *testing.T) {
+	t.Parallel()
+
+	s := newJSONServer(t, func(r *http.Request) (int, string) {
+		switch r.URL.Query().Get("path") {
+		case "/books":
+			return http.StatusOK, `{"posix":true,"directories":[]}`
+		case "/forbidden":
+			return http.StatusForbidden, "Forbidden"
+		default:
+			return http.StatusBadRequest, `Invalid "path" query string`
+		}
+	})
+	c := newClient(t, s)
+
+	if ok, err := c.ServerPathExists(t.Context(), "/books"); err != nil || !ok {
+		t.Errorf("/books = %v, %v; want true", ok, err)
+	}
+	if s.path != "/api/filesystem" || !strings.Contains(s.query, "path=%2Fbooks") || !strings.Contains(s.query, "level=0") {
+		t.Errorf("request = %s?%s", s.path, s.query)
+	}
+	if ok, err := c.ServerPathExists(t.Context(), "/nope"); err != nil || ok {
+		t.Errorf("/nope = %v, %v; want false and no error", ok, err)
+	}
+	if _, err := c.ServerPathExists(t.Context(), "/forbidden"); err == nil {
+		t.Error("a 403 was taken for an answer")
+	}
+}

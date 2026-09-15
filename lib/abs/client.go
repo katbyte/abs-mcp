@@ -80,7 +80,7 @@ func (e *HTTPError) Error() string {
 	case http.StatusUnauthorized:
 		msg += " (API key rejected; check ABS_TOKEN)"
 	case http.StatusForbidden:
-		msg += " (the API key's user lacks permission for this; most write operations need an admin account)"
+		msg += " (the API key's user lacks permission for this: most write operations need an admin account, and an account limited to some libraries or tags cannot open the rest)"
 	}
 
 	return msg

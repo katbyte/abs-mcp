@@ -207,6 +207,10 @@ fixtures() {
     silent_mp3 "${DATA}/podcasts/${show}/Episode 2.mp3"
   done <<<"$PODCASTS"
 
+  # an empty folder no library covers, for the tests that build a library of
+  # their own and watch it change
+  mkdir -p "${DATA}/scratch"
+
   mkdir -p "${DATA}/metadata" "${DATA}/config"
   chmod -R 777 "${DATA}"
 }
@@ -248,6 +252,7 @@ up() {
     -v "${DATA}/nonfiction:/nonfiction" \
     -v "${DATA}/podcasts:/podcasts" \
     -v "${DATA}/messy:/messy" \
+    -v "${DATA}/scratch:/scratch" \
     -v "${DATA}/metadata:/metadata" \
     -v "${DATA}/config:/config" \
     "$IMAGE" >/dev/null

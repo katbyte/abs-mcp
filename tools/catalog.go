@@ -81,6 +81,24 @@ func resolveAuthor(ctx context.Context, client *abs.Client, library, nameOrID st
 	return nil, fmt.Errorf("%q exists in several libraries; pass an id: %s", nameOrID, strings.Join(ids, "; "))
 }
 
+// allSeries lists every series in a library from the live series route, a
+// page at a time. The filter data the server also offers is cached for half
+// an hour and not refreshed when a series is renamed, so a series looked up
+// there by its new name is not found and its old name still is.
+func allSeries(ctx context.Context, client *abs.Client, libraryID string) ([]abs.Series, error) {
+	var all []abs.Series
+	for page := 0; ; page++ {
+		series, total, err := client.SeriesList(ctx, libraryID, abs.ListOptions{Limit: seriesPageSize, Page: page, Sort: "name"})
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, series...)
+		if len(series) == 0 || len(series) < seriesPageSize || len(all) >= total {
+			return all, nil
+		}
+	}
+}
+
 // resolveSeries finds a series by id or name in the named library or all of
 // them.
 func resolveSeries(ctx context.Context, client *abs.Client, library, nameOrID string) (*abs.Series, error) {
@@ -98,11 +116,14 @@ func resolveSeries(ctx context.Context, client *abs.Client, library, nameOrID st
 	}
 	var found []string
 	for i := range libs {
-		fd, err := client.FilterData(ctx, libs[i].ID)
+		if libs[i].IsPodcast() {
+			continue
+		}
+		series, err := allSeries(ctx, client, libs[i].ID)
 		if err != nil {
 			return nil, err
 		}
-		for _, s := range fd.Series {
+		for _, s := range series {
 			if strings.EqualFold(s.Name, nameOrID) {
 				found = append(found, s.ID)
 			}
@@ -125,6 +146,16 @@ type authorRow struct {
 	ASIN        string `json:"asin,omitempty"`
 	HasImage    bool   `json:"has_image"`
 	Description string `json:"description,omitempty"`
+}
+
+// withBooks reads an author back with their books after a write: the update,
+// image and match routes answer with the record alone, so a row built from
+// that reply says the author has no books.
+func withBooks(ctx context.Context, client *abs.Client, a *abs.Author) *abs.Author {
+	if full, err := client.Author(ctx, a.ID, true); err == nil {
+		return full
+	}
+	return a
 }
 
 func authorRowOf(a *abs.Author, withDescription bool) authorRow {
@@ -250,7 +281,7 @@ func registerAuthorTools(r *registry) {
 			}
 		}
 
-		return nil, editOut{Merged: merged, Author: authorRowOf(updated, true)}, nil
+		return nil, editOut{Merged: merged, Author: authorRowOf(withBooks(ctx, client, updated), true)}, nil
 	})
 
 	type imageIn struct {
@@ -276,7 +307,7 @@ func registerAuthorTools(r *registry) {
 			return nil, imageOut{}, err
 		}
 
-		return nil, imageOut{Author: authorRowOf(updated, true)}, nil
+		return nil, imageOut{Author: authorRowOf(withBooks(ctx, client, updated), true)}, nil
 	})
 
 	type matchIn struct {
@@ -352,7 +383,7 @@ func registerAuthorTools(r *registry) {
 			return nil, applyOut{}, err
 		}
 
-		return nil, applyOut{Updated: changed, Author: authorRowOf(updated, true)}, nil
+		return nil, applyOut{Updated: changed, Author: authorRowOf(withBooks(ctx, client, updated), true)}, nil
 	})
 
 	type deleteOut struct {
@@ -395,6 +426,22 @@ func registerNarratorTools(r *registry) {
 		lib, err := resolveLibrary(ctx, client, in.Library)
 		if err != nil {
 			return nil, listOut{}, err
+		}
+		restricted, err := restrictedKey(ctx, client)
+		if err != nil {
+			return nil, listOut{}, err
+		}
+		if restricted {
+			// the narrator route counts books this key may not see
+			v, verr := sweepVisible(ctx, client, lib)
+			if verr != nil {
+				return nil, listOut{}, verr
+			}
+			out := listOut{Total: len(v.Narrators), Narrators: make([]narratorRow, 0, len(v.Narrators))}
+			for _, name := range keysOf(v.Narrators) {
+				out.Narrators = append(out.Narrators, narratorRow{Name: name, Books: v.Narrators[name]})
+			}
+			return nil, out, nil
 		}
 		ns, err := client.Narrators(ctx, lib.ID)
 		if err != nil {
@@ -651,11 +698,11 @@ func registerSeriesTools(r *registry) {
 		if upd.Name != nil {
 			// two series with one name is not a merge, it is two series
 			// with one name; series_merge is how books move
-			fd, ferr := client.FilterData(ctx, s.LibraryID)
+			others, ferr := allSeries(ctx, client, s.LibraryID)
 			if ferr != nil {
 				return nil, editOut{}, ferr
 			}
-			for _, other := range fd.Series {
+			for _, other := range others {
 				if other.ID != s.ID && strings.EqualFold(strings.TrimSpace(other.Name), strings.TrimSpace(in.Name)) {
 					return nil, editOut{}, fmt.Errorf("a series named %q already exists (%s): series_merge from=%q into=%q moves the books there instead", other.Name, other.ID, s.Name, other.Name)
 				}
