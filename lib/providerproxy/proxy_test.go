@@ -134,6 +134,57 @@ func TestReplayMissIsLoud(t *testing.T) {
 	}
 }
 
+// A host a test serves itself answers from its handler, over plain http and
+// through a tunnel alike, and is never a miss; once stopped it is a host like
+// any other.
+func TestServeAnswersALocalHost(t *testing.T) {
+	t.Parallel()
+
+	p, err := New(Options{CassetteDir: t.TempDir(), Logger: log.New(io.Discard, "", 0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = p.Close() }()
+
+	stop := p.Serve("Feed.Test", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/show.xml" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = io.WriteString(w, "served /show.xml")
+	}))
+	get := func(u string) (int, string) {
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, u, http.NoBody)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := clientThrough(t, p).Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp.StatusCode, string(body)
+	}
+
+	for _, u := range []string{"http://feed.test/show.xml", "http://feed.test:8080/show.xml", "https://feed.test/show.xml"} {
+		if status, body := get(u); status != http.StatusOK || body != "served /show.xml" {
+			t.Errorf("%s = %d %q", u, status, body)
+		}
+	}
+	if misses := p.Misses(); len(misses) != 0 {
+		t.Errorf("misses = %v, want none", misses)
+	}
+
+	stop()
+	if status, _ := get("http://feed.test/show.xml"); status != http.StatusBadGateway {
+		t.Errorf("after stop: status = %d, want 502", status)
+	}
+}
+
 // Query parameter order must not matter, or a cassette would miss on a request
 // that is the same in every way that affects the response.
 func TestKeyIsOrderIndependent(t *testing.T) {

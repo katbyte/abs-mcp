@@ -226,7 +226,7 @@ client, err := abs.New("http://nas:13378", os.Getenv("ABS_TOKEN"))
 items, err := client.Items(ctx, libraryID, abs.ItemsOptions{Limit: 50})
 ```
 
-It has 205 methods covering **every one of Audiobookshelf's 202 API routes** - libraries, items, authors, series, narrators, collections, playlists, progress, bookmarks, podcasts, provider search, RSS feeds, tags, genres, tasks, backups, playback sessions, notifications, email, API keys, sharing, settings and user administration. File downloads stream rather than buffer, so a multi-gigabyte audiobook does not have to fit in memory.
+It has 206 methods covering **every one of Audiobookshelf's 202 API routes** - libraries, items, authors, series, narrators, collections, playlists, progress, bookmarks, podcasts, provider search, RSS feeds, tags, genres, tasks, backups, playback sessions, notifications, email, API keys, sharing, settings and user administration. File downloads stream rather than buffer, so a multi-gigabyte audiobook does not have to fit in memory.
 
 `make apicheck` reads the route table out of the Audiobookshelf source and fails if anything is missing, so the coverage claim is checked rather than asserted. Audiobookshelf publishes no OpenAPI spec and its [public API docs say they are unmaintained](https://api.audiobookshelf.org), so the types here are written against the server source (see [docs/README.md](docs/README.md)) and then **proved against a running server** - which is the only thing that catches the server changing shape underneath you.
 
@@ -246,7 +246,7 @@ Everything else runs against **a real Audiobookshelf in Docker**, because a stub
 | | Covers | Command |
 |---|---|---|
 | `integration/` | the `lib/abs` client: that every response decodes with its fields populated | `make testacc-integration` |
-| `acceptance/` | the tools: name resolution, projections, audits, provider flows, and journeys | `make testacc-acceptance` |
+| `acceptance/` | the tools: name resolution, projections, audits, provider flows, journeys, and a smoke test of the built binary | `make testacc-acceptance` |
 
 ```bash
 make testacc        # both, each in a throwaway container, torn down after
@@ -254,7 +254,9 @@ make check-all      # build + unit + both live suites + every linter
 make cover          # all three suites, merged into one coverage number
 ```
 
-The journeys (`acceptance/journey_*_test.go`) chain the tools the way a session does and read the server back after every write, because a 200 from Audiobookshelf is not proof: edits made while a scan runs; every fixable audit fixed, audited again and put back; a non-admin's playback reaching every listening tool; `audit_all` equal to each audit; every read-only lookup leaving the server byte-for-byte unchanged; accounts limited to one library or one tag; a library's whole life; writes done twice; and every record got by id and by name. They found a dozen tool bugs the per-tool tests had not, listed in [docs/README.md](docs/README.md).
+The journeys (`acceptance/journey_*_test.go`) chain the tools the way a session does and read the server back after every write, because a 200 from Audiobookshelf is not proof: edits made while a scan runs; every fixable audit fixed, audited again and put back; a non-admin's playback reaching every listening tool; `audit_all` equal to each audit; every read-only lookup leaving the server byte-for-byte unchanged; accounts limited to one library or one tag; a library's whole life; writes done twice; every record got by id and by name; a podcast's whole life over a feed the suite serves itself through the provider proxy; metadata embedded, the record thrown away and the book scanned back from its file alone; a book deleted out from under collections, playlists, progress, bookmarks and someone's history; one turn's calls made at once on the same records; and an account without rights calling every tool that changes the server. They found some twenty tool bugs the per-tool tests had not, and the server behaviour behind them is listed in [docs/README.md](docs/README.md).
+
+Those journeys, like everything else, drive `tools.RegisterAll` in process, which is every line of tool code the binary runs. What they never touch is the thin layer around it, where a breakage is silent: MCP over stdio uses stdout for the protocol, so one stray print or log line corrupts the stream and a client simply fails to connect with the whole suite still green. So `acceptance/binary_test.go` builds the real binary and speaks to it the way a client does: `serve` over stdio at the most verbose log level, with every line it writes to stdout checked for being a protocol message and nothing else; the flags, the environment and a `.abs-mcp` in the working directory each changing what a client lists; `--listen` serving `/mcp` behind the bearer check with `/healthz` open beside it, and shutting down on SIGTERM; and a start that cannot work - no server, no token, `--listen` with no auth token, a toolset that does not exist - failing with a message that names the problem rather than hanging.
 
 Coverage has to span all three or it lies: `go test -cover ./...` reports about 40% for `tools/`, because almost everything real happens in the live suites behind the `integration` tag. `make cover` runs each into its own binary coverage directory and merges them with `go tool covdata` - stdlib tooling, no third-party merger - which is what the badge reports.
 

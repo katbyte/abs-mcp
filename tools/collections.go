@@ -250,6 +250,12 @@ func registerCollectionTools(r *registry) {
 		if err != nil {
 			return nil, changeOut{}, err
 		}
+		// what it holds is judged once held, so two adds of one book at once
+		// do not both say they added it
+		defer r.locks.hold("collection:" + c.ID)()
+		if c, err = client.Collection(ctx, c.ID); err != nil {
+			return nil, changeOut{}, err
+		}
 		books, err := libraryBooks(ctx, client, c.LibraryID, in.Items)
 		if err != nil {
 			return nil, changeOut{}, err

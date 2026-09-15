@@ -114,7 +114,10 @@ func resolveSeries(ctx context.Context, client *abs.Client, library, nameOrID st
 	if err != nil {
 		return nil, err
 	}
+	// a series whose books have all gone can outlive them: the server lists
+	// it, with no books, and answers 404 to opening it
 	var found []string
+	empty := false
 	for i := range libs {
 		if libs[i].IsPodcast() {
 			continue
@@ -124,15 +127,24 @@ func resolveSeries(ctx context.Context, client *abs.Client, library, nameOrID st
 			return nil, err
 		}
 		for _, s := range series {
-			if strings.EqualFold(s.Name, nameOrID) {
-				found = append(found, s.ID)
+			if !strings.EqualFold(s.Name, nameOrID) {
+				continue
 			}
+			// an empty list, not an absent one: that would be a reply that
+			// left the books out, and says nothing about them
+			if s.Books != nil && len(s.Books) == 0 {
+				empty = true
+				continue
+			}
+			found = append(found, s.ID)
 		}
 	}
-	switch len(found) {
-	case 1:
+	switch {
+	case len(found) == 1:
 		return client.Series(ctx, found[0])
-	case 0:
+	case len(found) == 0 && empty:
+		return nil, fmt.Errorf("no series named %q with a book in it: the server still lists one by that name, but its books are gone and it cannot be opened", nameOrID)
+	case len(found) == 0:
 		return nil, fmt.Errorf("no series named %q (library_search finds partial names)", nameOrID)
 	}
 
@@ -734,6 +746,8 @@ func registerSeriesTools(r *registry) {
 			"For two spellings of one series that audit_series names reports ('The Wheel of Time' into 'Wheel of Time'), and for a one-book 'Skyward Series' beside 'Skyward'. " +
 			"A book already in both keeps its number in the target, or takes the one it had if the target had none. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in mergeIn) (*mcp.CallToolResult, mergeOut, error) {
+		// every book of the series is read and its series list written back
+		defer r.locks.holdAll()()
 		from, err := resolveSeries(ctx, client, in.Library, in.From)
 		if err != nil {
 			return nil, mergeOut{}, fmt.Errorf("from: %w", err)

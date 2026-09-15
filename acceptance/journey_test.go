@@ -220,6 +220,14 @@ func (u *userSession) invoke(name string, args map[string]any) (map[string]any, 
 func newUser(t *testing.T, username string, create abs.UserCreate) *userSession {
 	t.Helper()
 
+	return newUserWith(t, username, create, tools.Options{})
+}
+
+// newUserWith is newUser with the account's MCP server registering the tools
+// opts allows, such as the delete tools.
+func newUserWith(t *testing.T, username string, create abs.UserCreate, opts tools.Options) *userSession {
+	t.Helper()
+
 	admin := adminClient(t)
 	existing, err := admin.Users(ctx, false)
 	if err != nil {
@@ -257,7 +265,7 @@ func newUser(t *testing.T, username string, create abs.UserCreate) *userSession 
 		t.Fatal(err)
 	}
 	srv := mcp.NewServer(&mcp.Implementation{Name: "abs-mcp", Version: "test"}, nil)
-	if _, err := tools.RegisterAll(srv, client, tools.Options{}); err != nil {
+	if _, err := tools.RegisterAll(srv, client, opts); err != nil {
 		t.Fatal(err)
 	}
 	st, ct := mcp.NewInMemoryTransports()
@@ -966,6 +974,29 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 				t.Errorf("collection by id %s = %v", id, got["id"])
 			}
 		}
+	})
+
+	t.Run("a collection renamed, found by the name it has now", func(t *testing.T) {
+		made := text(call(t, "collection_create", map[string]any{"library": "Fiction", "name": "Zzyzx Renamed Shelf", "items": []any{"Foundation"}})["id"])
+		other := text(call(t, "collection_create", map[string]any{"library": "Fiction", "name": "Zzyzx Other Shelf", "items": []any{"Second Foundation"}})["id"])
+		t.Cleanup(func() {
+			for _, id := range []string{made, other} {
+				eventually(t, "deleting a collection", func() error { return admin.DeleteCollection(context.WithoutCancel(ctx), id) })
+			}
+		})
+
+		if msg := callErr(t, "collection_edit", map[string]any{"collection": other, "name": "zzyzx renamed shelf"}); !strings.Contains(msg, made) {
+			t.Errorf("renaming onto a taken name: %s", msg)
+		}
+		call(t, "collection_edit", map[string]any{"collection": "Zzyzx Renamed Shelf", "name": "Zzyzx Shelf Anew"})
+		if got := call(t, "collection_get", map[string]any{"collection": "Zzyzx Shelf Anew"}); got["id"] != made {
+			t.Errorf("by the new name = %v, want %s", got["id"], made)
+		}
+		if msg := callErr(t, "collection_get", map[string]any{"collection": "Zzyzx Renamed Shelf"}); !strings.Contains(msg, "no collection named") {
+			t.Errorf("the old name still resolves: %s", msg)
+		}
+		// renamed to the name it already has, in another case, is not a clash with itself
+		call(t, "collection_edit", map[string]any{"collection": made, "name": "ZZYZX SHELF ANEW"})
 	})
 
 	t.Run("playlists sharing a name", func(t *testing.T) {

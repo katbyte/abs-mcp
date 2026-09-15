@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/katbyte/abs-mcp/lib/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -46,21 +47,29 @@ func registerItemTools(r *registry) {
 		Chapters bool `json:"chapters,omitempty" jsonschema:"include the full chapter list; a long book can run to thousands of tokens, and chapter_count is always reported, so check that first. Books only: a podcast's chapters belong to each episode, see podcast_episode_get"`
 		Files    bool `json:"files,omitempty"    jsonschema:"include every audio track with codec, bitrate, duration and any probe error, plus the non-audio files; for a podcast the tracks are its downloaded episodes"`
 	}
+	type downloadSettings struct {
+		AutoDownload bool   `json:"auto_download"`
+		Schedule     string `json:"schedule,omitempty"   jsonschema:"cron expression of the automatic check"`
+		KeepEpisodes int    `json:"keep_episodes"        jsonschema:"0 keeps them all"`
+		NewPerCheck  int    `json:"new_per_check"        jsonschema:"0 downloads every new one"`
+		LastCheck    string `json:"last_check,omitempty" jsonschema:"when the feed was last checked for new episodes"`
+	}
 	type getOut struct {
 		itemSummary
-		Description   string           `json:"description,omitempty"`
-		PublishedDate string           `json:"published_date,omitempty"`
-		Authors       []abs.NameRef    `json:"authors,omitempty"        jsonschema:"with ids for author_get"`
-		SeriesRefs    []abs.SeriesRef  `json:"series_refs,omitempty"    jsonschema:"with ids for series_get"`
-		LibraryID     string           `json:"library_id"`
-		FullPath      string           `json:"full_path,omitempty"`
-		LastScan      string           `json:"last_scan,omitempty"`
-		Audio         string           `json:"audio,omitempty"          jsonschema:"codec, bitrate and channels of the first track"`
-		OtherFiles    []fileRow        `json:"other_files,omitempty"    jsonschema:"non-audio files in the folder"`
-		Episodes      []episodeSummary `json:"episodes,omitempty"       jsonschema:"podcasts: newest 25 episodes; podcast_episodes lists all"`
-		EpisodeTotal  int              `json:"episode_total,omitempty"`
-		ChapterList   *[]chapterRow    `json:"chapter_list,omitempty"   jsonschema:"only when chapters is true; an empty list means the book genuinely has none"`
-		TrackList     *[]fileRow       `json:"track_list,omitempty"     jsonschema:"only when files is true: audio files in play order"`
+		Downloads     *downloadSettings `json:"downloads,omitempty"      jsonschema:"podcasts: the automatic download settings podcast_settings changes"`
+		Description   string            `json:"description,omitempty"`
+		PublishedDate string            `json:"published_date,omitempty"`
+		Authors       []abs.NameRef     `json:"authors,omitempty"        jsonschema:"with ids for author_get"`
+		SeriesRefs    []abs.SeriesRef   `json:"series_refs,omitempty"    jsonschema:"with ids for series_get"`
+		LibraryID     string            `json:"library_id"`
+		FullPath      string            `json:"full_path,omitempty"`
+		LastScan      string            `json:"last_scan,omitempty"`
+		Audio         string            `json:"audio,omitempty"          jsonschema:"codec, bitrate and channels of the first track"`
+		OtherFiles    []fileRow         `json:"other_files,omitempty"    jsonschema:"non-audio files in the folder"`
+		Episodes      []episodeSummary  `json:"episodes,omitempty"       jsonschema:"podcasts: newest 25 episodes; podcast_episodes lists all"`
+		EpisodeTotal  int               `json:"episode_total,omitempty"`
+		ChapterList   *[]chapterRow     `json:"chapter_list,omitempty"   jsonschema:"only when chapters is true; an empty list means the book genuinely has none"`
+		TrackList     *[]fileRow        `json:"track_list,omitempty"     jsonschema:"only when files is true: audio files in play order"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "item_get",
@@ -93,10 +102,16 @@ func registerItemTools(r *registry) {
 			out.OtherFiles = append(out.OtherFiles, fileRow{Filename: f.Metadata.Filename, SizeMB: mb(f.Metadata.Size), Type: f.FileType})
 		}
 		if it.IsPodcast() {
-			eps := it.Media.Episodes
+			out.Downloads = &downloadSettings{
+				AutoDownload: it.Media.AutoDownloadEpisodes,
+				Schedule:     it.Media.AutoDownloadSchedule,
+				KeepEpisodes: it.Media.MaxEpisodesToKeep,
+				NewPerCheck:  it.Media.MaxNewEpisodesToDownload,
+				LastCheck:    fmtTime(it.Media.LastEpisodeCheck),
+			}
+			eps := newestEpisodes(it.Media.Episodes)
 			out.EpisodeTotal = len(eps)
-			// newest first
-			for i := len(eps) - 1; i >= 0 && len(out.Episodes) < defaultLimit; i-- {
+			for i := 0; i < len(eps) && len(out.Episodes) < defaultLimit; i++ {
 				out.Episodes = append(out.Episodes, summarizeEpisode(&eps[i], "", false))
 			}
 		}
@@ -175,6 +190,14 @@ func registerItemTools(r *registry) {
 		it, err := resolveItem(ctx, client, in.Library, in.Item)
 		if err != nil {
 			return nil, editOut{}, err
+		}
+		defer r.locks.hold(itemKeys(it.ID)...)()
+		// the lists are edited from the item as it is once held, not as the
+		// lookup found it: a call running alongside may have changed them
+		if len(in.AddSeries)+len(in.RemoveSeries)+len(in.AddTags)+len(in.RemoveTags) > 0 {
+			if it, err = client.Item(ctx, it.ID); err != nil {
+				return nil, editOut{}, err
+			}
 		}
 
 		md := abs.MetadataUpdate{}
@@ -420,6 +443,12 @@ func registerItemTools(r *registry) {
 		if it.IsPodcast() {
 			return nil, applyOut{}, errNotBook
 		}
+		// held from the read the kept fields and the provider tag are
+		// restored from, to the last write
+		defer r.locks.hold(itemKeys(it.ID)...)()
+		if it, err = client.Item(ctx, it.ID); err != nil {
+			return nil, applyOut{}, err
+		}
 
 		keep, err := parseKeep(in.Keep)
 		if err != nil {
@@ -574,8 +603,8 @@ func registerItemTools(r *registry) {
 			return nil, batchEditOut{}, errors.New("tags replaces the list; add_tags and remove_tags edit it. One or the other")
 		}
 
-		out := batchEditOut{Items: make([]string, 0, len(in.Items))}
-		updates := make([]abs.BatchMediaUpdate, 0, len(in.Items))
+		items := make([]*abs.Item, 0, len(in.Items))
+		ids := make([]string, 0, len(in.Items))
 		for _, ref := range in.Items {
 			it, err := resolveItem(ctx, client, in.Library, ref)
 			if err != nil {
@@ -584,6 +613,28 @@ func registerItemTools(r *registry) {
 			if it.IsPodcast() {
 				return nil, batchEditOut{}, fmt.Errorf("%s is a podcast; item_batch_edit is for books", it.Title())
 			}
+			items = append(items, it)
+			ids = append(ids, it.ID)
+		}
+		defer r.locks.hold(itemKeys(ids...)...)()
+		// the lists are edited from the items as they are once held
+		if len(in.AddTags) > 0 || len(in.DropTag) > 0 || editSeries {
+			fresh, err := client.ItemsBatch(ctx, ids)
+			if err != nil {
+				return nil, batchEditOut{}, err
+			}
+			for i := range items {
+				for j := range fresh {
+					if fresh[j].ID == items[i].ID {
+						items[i] = &fresh[j]
+					}
+				}
+			}
+		}
+
+		out := batchEditOut{Items: make([]string, 0, len(in.Items))}
+		updates := make([]abs.BatchMediaUpdate, 0, len(in.Items))
+		for _, it := range items {
 			upd := abs.MediaUpdate{}
 			if len(in.Tags) > 0 {
 				upd.Tags = in.Tags // an explicit empty list would clear them
@@ -769,19 +820,62 @@ func registerItemTools(r *registry) {
 		itemRef
 		Backup bool `json:"backup,omitempty" jsonschema:"keep a copy of the original audio files"`
 	}
+	type embedOut struct {
+		Item     string `json:"item"`
+		Embedded bool   `json:"embedded"          jsonschema:"the files' tags carry the item's metadata, read back after a rescan"`
+		Running  bool   `json:"running,omitempty" jsonschema:"the embed was still running or queued when this stopped waiting: item_rescan the item once server_tasks no longer lists it, or audit_unembedded keeps reading the old tags"`
+		Rescan   string `json:"rescan,omitempty"  jsonschema:"the rescan result once the embed finished"`
+		Differs  string `json:"differs,omitempty" jsonschema:"what the files' tags still disagree on after the embed: it failed, or wrote something else"`
+	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "item_embed_metadata",
-		Description: "Write the item's metadata and chapters into its audio files' tags so they travel with the files. audit_unembedded lists the books where this is due. Admin only. Changes the files on disk; runs in the background (see server_tasks).",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in embedIn) (*mcp.CallToolResult, scanStartedOut, error) {
+		Description: "Write the item's metadata and chapters into its audio files' tags so they travel with the files, then rescan the item and check the tags: embedded says they now match. audit_unembedded lists the books where this is due. Waits for the embed, up to two minutes; a longer one comes back running. Admin only. Changes the files on disk.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in embedIn) (*mcp.CallToolResult, embedOut, error) {
 		it, err := resolveItem(ctx, client, in.Library, in.Item)
 		if err != nil {
-			return nil, scanStartedOut{}, err
+			return nil, embedOut{}, err
+		}
+		if it.IsPodcast() {
+			return nil, embedOut{}, errNotBook
 		}
 		if err := client.EmbedMetadata(ctx, it.ID, true, in.Backup); err != nil {
-			return nil, scanStartedOut{}, err
+			return nil, embedOut{}, err
 		}
+		out := embedOut{Item: it.Title()}
 
-		return nil, scanStartedOut{Started: it.Title()}, nil
+		// the server tags the files in the background and never reads them
+		// back: what it holds of their tags, which is what audit_unembedded
+		// judges, stays as it was until the item is scanned again
+		deadline := time.Now().Add(embedWait)
+		for {
+			pending, perr := client.EmbedPending(ctx, it.ID)
+			if perr != nil {
+				return nil, embedOut{}, perr
+			}
+			if !pending {
+				break
+			}
+			if time.Now().After(deadline) {
+				out.Running = true
+				return nil, out, nil
+			}
+			select {
+			case <-ctx.Done():
+				return nil, embedOut{}, ctx.Err()
+			case <-time.After(embedPoll):
+			}
+		}
+		if out.Rescan, err = client.ScanItem(ctx, it.ID); err != nil {
+			return nil, embedOut{}, fmt.Errorf("embedded, but the rescan that reads the tags back failed: %w", err)
+		}
+		after, err := client.Item(ctx, it.ID)
+		if err != nil {
+			return nil, embedOut{}, err
+		}
+		detail, stale := checkEmbedded(after)
+		out.Embedded, out.Differs = !stale, detail
+
+		return nil, out, nil
 	})
 
 	type deleteIn struct {
@@ -789,28 +883,50 @@ func registerItemTools(r *registry) {
 		DeleteFiles bool `json:"delete_files,omitempty" jsonschema:"also delete the item's folder from disk (irreversible); default keeps the files"`
 	}
 	type deleteOut struct {
-		Deleted      string `json:"deleted"`
-		FilesRemoved bool   `json:"files_removed"`
+		Deleted          string `json:"deleted"`
+		FilesRemoved     bool   `json:"files_removed"`
+		BookmarksRemoved int    `json:"bookmarks_removed,omitempty" jsonschema:"the API key user's bookmarks on it, removed before the delete"`
 	}
 	add(r, deleteTool, &mcp.Tool{
 		Name:        "item_delete",
-		Description: "Remove an item from the library, and with delete_files also erase its folder from disk. Listening progress for it is lost. Requires the delete permission.",
+		Description: "Remove an item from the library, and with delete_files also erase its folder from disk. Listening progress for it is lost. The API key user's bookmarks on it are removed first: Audiobookshelf keeps a bookmark on a deleted item and will not remove it afterwards, though other accounts' bookmarks stay. Requires the delete permission.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in deleteIn) (*mcp.CallToolResult, deleteOut, error) {
 		it, err := resolveItem(ctx, client, in.Library, in.Item)
 		if err != nil {
 			return nil, deleteOut{}, err
 		}
+		me, err := client.Me(ctx)
+		if err != nil {
+			return nil, deleteOut{}, err
+		}
+		// asked before the bookmarks go, so a refused delete costs nothing
+		if !me.IsAdmin() && !me.Permissions.Delete {
+			return nil, deleteOut{}, fmt.Errorf("%s may not delete items: the account lacks the delete permission", me.Username)
+		}
+		out := deleteOut{Deleted: it.Title(), FilesRemoved: in.DeleteFiles}
+		for _, b := range me.Bookmarks {
+			if b.LibraryItemID != it.ID {
+				continue
+			}
+			if err := client.DeleteBookmark(ctx, it.ID, b.Time); err != nil {
+				return nil, deleteOut{}, fmt.Errorf("removing the bookmark %q before deleting %q failed, and nothing was deleted: %w", b.Title, it.Title(), err)
+			}
+			out.BookmarksRemoved++
+		}
 		if err := client.DeleteItem(ctx, it.ID, in.DeleteFiles); err != nil {
 			return nil, deleteOut{}, err
 		}
 
-		return nil, deleteOut{Deleted: it.Title(), FilesRemoved: in.DeleteFiles}, nil
+		return nil, out, nil
 	})
 }
 
-type scanStartedOut struct {
-	Started string `json:"started" jsonschema:"runs in the background; poll server_tasks for completion"`
-}
+// embedWait is how long item_embed_metadata waits for its embed before
+// handing back a running one, and embedPoll how often it looks.
+var (
+	embedWait = 2 * time.Minute
+	embedPoll = 500 * time.Millisecond
+)
 
 // matchQuery fills in the provider, title and author for a provider search
 // from the item and its library when not overridden.

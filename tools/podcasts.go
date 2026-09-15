@@ -1,10 +1,12 @@
 package tools
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"path"
+	"slices"
 	"strings"
 
 	"github.com/katbyte/abs-mcp/lib/abs"
@@ -130,13 +132,13 @@ func registerPodcastTools(r *registry) {
 			}
 		}
 
-		eps := it.Media.Episodes
+		eps := newestEpisodes(it.Media.Episodes)
 		limit := limitOr(in.Limit, 50)
 		// a negative offset would index past the end of the list; treat it as
 		// the start, like an offset past the end yields nothing
 		offset := max(in.Offset, 0)
 		out := episodesOut{Podcast: it.Title(), Total: len(eps), Episodes: []episodeSummary{}}
-		for i := len(eps) - 1 - offset; i >= 0 && len(out.Episodes) < limit; i-- {
+		for i := offset; i < len(eps) && len(out.Episodes) < limit; i++ {
 			e := &eps[i]
 			e.Progress = progress[e.ID]
 			out.Episodes = append(out.Episodes, summarizeEpisode(e, "", false))
@@ -320,12 +322,14 @@ func registerPodcastTools(r *registry) {
 		Indexes []int  `json:"indexes"         jsonschema:"episode indexes from podcast_feed_episodes"`
 	}
 	type downloadOut struct {
-		Podcast string   `json:"podcast"`
-		Queued  []string `json:"queued"`
+		Podcast       string   `json:"podcast"`
+		Queued        []string `json:"queued,omitempty"         jsonschema:"accepted by the download queue; podcast_episodes shows them once they have downloaded"`
+		AlreadyHeld   []string `json:"already_held,omitempty"   jsonschema:"feed episodes the podcast already has, by guid or audio url, whatever they are titled now; not downloaded again"`
+		AlreadyQueued []string `json:"already_queued,omitempty" jsonschema:"feed episodes already downloading or waiting in the queue"`
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "podcast_episode_download",
-		Description: "Queue episodes from a podcast's feed for download, chosen by index from podcast_feed_episodes. Admin only. Changes server state; downloads run in the background (podcast_downloads shows the queue).",
+		Description: "Queue episodes from a podcast's feed for download, chosen by index from podcast_feed_episodes, and say which the podcast already holds or is already fetching (those are not downloaded twice). Admin only. Changes server state; downloads run in the background (podcast_downloads shows the queue, podcast_episodes what arrived).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in downloadIn) (*mcp.CallToolResult, downloadOut, error) {
 		it, err := resolvePodcast(ctx, client, in.Library, in.Item)
 		if err != nil {
@@ -338,14 +342,36 @@ func registerPodcastTools(r *registry) {
 		if err != nil {
 			return nil, downloadOut{}, err
 		}
+		queued, err := queuedURLs(ctx, client, it)
+		if err != nil {
+			return nil, downloadOut{}, err
+		}
+
+		// the server downloads an episode it already has a second time, under
+		// a filename with a random suffix, and adds it as another episode
 		var pick []abs.FeedEpisode
 		out := downloadOut{Podcast: it.Title()}
+		picked := map[int]bool{}
 		for _, i := range in.Indexes {
 			if i < 0 || i >= len(eps) {
 				return nil, downloadOut{}, fmt.Errorf("index %d out of range (feed has %d episodes)", i, len(eps))
 			}
-			pick = append(pick, eps[i])
-			out.Queued = append(out.Queued, eps[i].Title)
+			if picked[i] {
+				continue
+			}
+			picked[i] = true
+			switch {
+			case heldEpisode(it, &eps[i]) != nil:
+				out.AlreadyHeld = append(out.AlreadyHeld, eps[i].Title)
+			case eps[i].Enclosure != nil && queued[strings.TrimSpace(eps[i].Enclosure.URL)]:
+				out.AlreadyQueued = append(out.AlreadyQueued, eps[i].Title)
+			default:
+				pick = append(pick, eps[i])
+				out.Queued = append(out.Queued, eps[i].Title)
+			}
+		}
+		if len(pick) == 0 {
+			return nil, out, nil
 		}
 		if err := client.DownloadEpisodes(ctx, it.ID, pick); err != nil {
 			return nil, downloadOut{}, err
@@ -459,11 +485,13 @@ func registerPodcastTools(r *registry) {
 	}
 	type addOut struct {
 		itemSummary
-		FeedEpisodes int `json:"feed_episodes" jsonschema:"episodes available in the feed"`
+		FeedEpisodes int      `json:"feed_episodes"     jsonschema:"episodes available in the feed"`
+		Queued       []string `json:"queued,omitempty"  jsonschema:"the newest episodes queued for download with download_latest"`
+		Warning      string   `json:"warning,omitempty"`
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "podcast_add",
-		Description: "Subscribe to a podcast: parse its feed, create it in the podcast library, and optionally queue the newest episodes. Admin only. Changes server state.",
+		Description: "Subscribe to a podcast: parse its feed, create it in the podcast library, and optionally queue the newest episodes. A feed the library already subscribes to is refused. Admin only. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in addIn) (*mcp.CallToolResult, addOut, error) {
 		libs, err := resolveLibraries(ctx, client, in.Library)
 		if err != nil {
@@ -489,6 +517,24 @@ func registerPodcastTools(r *registry) {
 		if err != nil {
 			return nil, addOut{}, err
 		}
+		// the server refuses only a folder it already has a podcast in; the
+		// same feed under another folder would be a second copy of the show
+		var dup error
+		if err := client.ItemsAll(ctx, lib.ID, abs.ItemsOptions{}, func(items []abs.Item) bool {
+			for i := range items {
+				have := strings.TrimSpace(items[i].Media.Metadata.FeedURL)
+				if have != "" && (strings.EqualFold(have, strings.TrimSpace(in.FeedURL)) || strings.EqualFold(have, strings.TrimSpace(feed.Metadata.FeedURL))) {
+					dup = fmt.Errorf("%s already subscribes to this feed as %q (%s): podcast_check_new fetches its new episodes", lib.Name, items[i].Title(), items[i].ID)
+					return false
+				}
+			}
+			return true
+		}); err != nil {
+			return nil, addOut{}, err
+		}
+		if dup != nil {
+			return nil, addOut{}, dup
+		}
 		folder := in.Folder
 		if folder == "" {
 			folder = safeFolderName(feed.Metadata.Title)
@@ -512,16 +558,29 @@ func registerPodcastTools(r *registry) {
 		if np.Media.Metadata["feedUrl"] == "" {
 			np.Media.Metadata["feedUrl"] = in.FeedURL
 		}
-		for i := 0; i < in.Download && i < len(feed.Episodes); i++ {
-			np.EpisodesToDownload = append(np.EpisodesToDownload, feed.Episodes[i])
-		}
 
 		it, err := client.CreatePodcast(ctx, np)
 		if err != nil {
 			return nil, addOut{}, err
 		}
+		out := addOut{itemSummary: summarize(it), FeedEpisodes: len(feed.Episodes)}
 
-		return nil, addOut{itemSummary: summarize(it), FeedEpisodes: len(feed.Episodes)}, nil
+		// queued once the podcast exists: the server takes no episodes with
+		// the create, and dropped the ones sent there without a word
+		if in.Download > 0 && len(feed.Episodes) > 0 {
+			newest := slices.Clone(feed.Episodes)
+			slices.SortStableFunc(newest, func(a, b abs.FeedEpisode) int { return cmp.Compare(b.PublishedAt, a.PublishedAt) })
+			newest = newest[:min(in.Download, len(newest))]
+			if derr := client.DownloadEpisodes(ctx, it.ID, newest); derr != nil {
+				out.Warning = "the podcast was added, but queueing its newest episodes failed: " + derr.Error()
+			} else {
+				for i := range newest {
+					out.Queued = append(out.Queued, newest[i].Title)
+				}
+			}
+		}
+
+		return nil, out, nil
 	})
 
 	type settingsIn struct {
@@ -571,6 +630,62 @@ func feedEpisodes(ctx context.Context, client *abs.Client, it *abs.Item, title s
 		return nil, err
 	}
 	return feed.Episodes, nil
+}
+
+// newestEpisodes is a podcast's episodes by publication, newest first. The
+// server lists them in the order they were downloaded, so an episode fetched
+// from the back catalogue would otherwise come ahead of this week's. One with
+// no publish date goes by when it was added.
+func newestEpisodes(eps []abs.Episode) []abs.Episode {
+	out := slices.Clone(eps)
+	when := func(e *abs.Episode) int64 {
+		if e.PublishedAt > 0 {
+			return e.PublishedAt
+		}
+		return e.AddedAt
+	}
+	slices.SortStableFunc(out, func(a, b abs.Episode) int { return cmp.Compare(when(&b), when(&a)) })
+	return out
+}
+
+// heldEpisode is the episode a podcast already has for a feed entry, matched
+// the way the server's own new-episode check matches: by guid, or by the
+// audio url. Not by title, which an edit changes.
+func heldEpisode(it *abs.Item, fe *abs.FeedEpisode) *abs.Episode {
+	for i := range it.Media.Episodes {
+		e := &it.Media.Episodes[i]
+		if fe.GUID != "" && e.GUID == fe.GUID {
+			return e
+		}
+		if fe.Enclosure != nil && e.Enclosure != nil && fe.Enclosure.URL != "" && strings.TrimSpace(e.Enclosure.URL) == strings.TrimSpace(fe.Enclosure.URL) {
+			return e
+		}
+	}
+	return nil
+}
+
+// queuedURLs are the audio urls of a podcast's episodes downloading or
+// waiting to: the server drops a second request for one without saying so.
+func queuedURLs(ctx context.Context, client *abs.Client, it *abs.Item) (map[string]bool, error) {
+	current, queue, err := client.EpisodeDownloads(ctx, it.LibraryID)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]bool{}
+	for _, d := range append(queue, ptrValues(current)...) {
+		if d.LibraryItemID == it.ID {
+			out[strings.TrimSpace(d.URL)] = true
+		}
+	}
+	return out, nil
+}
+
+// ptrValues is a pointer's value as a list of one, or none for nil.
+func ptrValues[T any](p *T) []T {
+	if p == nil {
+		return nil
+	}
+	return []T{*p}
 }
 
 // safeFolderName strips characters that are unsafe in folder names.

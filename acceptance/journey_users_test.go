@@ -1,9 +1,10 @@
 //go:build integration
 
-// Journeys 3 and 6: other accounts. A listener's playback has to reach every
-// tool that reports on listening, whichever account asks, and an account kept
-// from some libraries or some books has to be kept from them by every tool
-// that reads a library on its behalf.
+// Journeys 3, 6 and 14: other accounts. A listener's playback has to reach
+// every tool that reports on listening, whichever account asks; an account
+// kept from some libraries or some books has to be kept from them by every
+// tool that reads a library on its behalf; and an account without the rights
+// to change the library has to be refused by every tool that would.
 package acceptance
 
 import (
@@ -14,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/tools"
 )
 
 // A non-admin account plays a book the way an app does - open a session,
@@ -293,6 +295,151 @@ func TestJourneyRestrictedAccounts(t *testing.T) {
 		tagged.callErr(t, "item_get", map[string]any{"library": "Fiction", "item": "Foundation"})
 		if scanned := num(t, tagged.call(t, "audit_all", map[string]any{"library": "Fiction"})["items_scanned"], "items_scanned"); scanned != 2 {
 			t.Errorf("audit_all scanned %d, want the 2 visible books", scanned)
+		}
+	})
+}
+
+// writeCall is one write a journey makes as another account. refused, when
+// set, judges a reply that is not an error: the batch tools report a failed
+// row rather than failing the call. mayPass is a call that has nothing to
+// write with these fixtures, which the snapshot still has to agree with.
+type writeCall struct {
+	tool    string
+	args    map[string]any
+	refused func(out map[string]any) bool
+	mayPass bool
+}
+
+// An account with no update, delete, upload or admin rights, kept out of
+// Non-Fiction, calls every tool that changes the server with arguments that
+// would work for an admin. Each is refused, and the server read back
+// afterwards is as it was. Then its own listening and its own playlists,
+// which need no rights, work in the libraries it can open. A new write tool
+// fails the test until it is added to one list or the other.
+func TestJourneyWritesAnAccountMayNotMake(t *testing.T) {
+	requireProviders(t)
+
+	fiction, messy, podcastsID := libraryID(t, "Fiction"), libraryID(t, "Messy"), libraryID(t, "Podcasts")
+	no := false
+	account := newUserWith(t, "zzyzx-no-rights", abs.UserCreate{
+		Permissions: map[string]bool{
+			"download": true, "update": no, "delete": no, "upload": no,
+			"accessAllLibraries": no, "accessAllTags": true, "accessExplicitContent": true,
+		},
+		LibrariesAccessible: []string{fiction, messy, podcastsID},
+	}, tools.Options{EnableDelete: true})
+
+	racket := itemID(t, "Non-Fiction", "War Is a Racket")
+	shelf := text(call(t, "collection_create", map[string]any{"library": "Fiction", "name": "Zzyzx Rights Shelf", "items": []any{"Foundation"}})["id"])
+	t.Cleanup(func() { call(t, "collection_delete", map[string]any{"collection": shelf}) })
+	episode := text(rows(t, call(t, "podcast_episodes", map[string]any{"item": "Behind the Bastards"})["episodes"], "episodes")[0]["id"])
+	noneApplied := func(out map[string]any) bool { return num(t, out["applied"], "applied") == 0 }
+	noneTagged := func(out map[string]any) bool { return num(t, out["tagged"], "tagged") == 0 }
+
+	refused := []writeCall{
+		{tool: "item_edit", args: map[string]any{"library": "Fiction", "item": "Foundation", "add_tags": []any{"zzyzx-refused"}}},
+		{tool: "item_edit", args: map[string]any{"item": racket, "add_tags": []any{"zzyzx-refused"}}},
+		{tool: "item_batch_edit", args: map[string]any{"library": "Fiction", "items": []any{"Foundation", "Second Foundation"}, "add_tags": []any{"zzyzx-refused"}}},
+		{tool: "item_chapters_set", args: map[string]any{"library": "Fiction", "item": "Foundation", "chapters": []any{map[string]any{"title": "Zzyzx", "start": 0}}}},
+		{tool: "item_cover_edit", args: map[string]any{"library": "Messy", "item": "Moving Pictures", "remove": true}},
+		// Foundation has no asin to look a cover up by
+		{tool: "item_cover_upgrade", args: map[string]any{"library": "Fiction", "items": []any{"Foundation"}}, mayPass: true},
+		{tool: "item_match_apply", args: map[string]any{"library": "Messy", "item": "Foundation (Unabridged)", "provider": "audible", "asin": "B003D8W5VS", "override_details": true}},
+		{tool: "item_match_apply_batch", args: map[string]any{"matches": []any{map[string]any{"item": "Foundation (Unabridged)", "asin": "B003D8W5VS"}}, "provider": "audible"}, refused: noneApplied},
+		{tool: "item_match_tag", args: map[string]any{"library": "Messy", "overwrite": true}, refused: noneTagged},
+		{tool: "item_rescan", args: map[string]any{"library": "Fiction", "item": "Foundation"}},
+		{tool: "item_embed_metadata", args: map[string]any{"library": "Fiction", "item": "Foundation"}},
+		{tool: "item_delete", args: map[string]any{"library": "Fiction", "item": "Foundation"}},
+		{tool: "library_create", args: map[string]any{"name": "Zzyzx Refused", "folders": []any{"/scratch"}}},
+		{tool: "library_edit", args: map[string]any{"library": "Fiction", "name": "Zzyzx Refused Fiction"}},
+		{tool: "library_scan", args: map[string]any{"library": "Fiction"}},
+		// Fiction has no missing books, so there is nothing to send
+		{tool: "library_issues_remove", args: map[string]any{"library": "Fiction"}, mayPass: true},
+		{tool: "metadata_rename", args: map[string]any{"field": "tags", "from": "sf", "to": "zzyzx-refused-sf"}},
+		{tool: "metadata_rename", args: map[string]any{"field": "publishers", "library": "Fiction", "from": "Bantam", "to": "Zzyzx Refused"}},
+		{tool: "series_edit", args: map[string]any{"library": "Fiction", "series": "Foundation", "description": "Zzyzx refused"}},
+		{tool: "series_merge", args: map[string]any{"library": "Fiction", "from": "Otherland", "into": "The Expanse"}},
+		{tool: "author_edit", args: map[string]any{"library": "Fiction", "author": "Isaac Asimov", "description": "Zzyzx refused"}},
+		{tool: "author_match_apply", args: map[string]any{"library": "Fiction", "author": "Isaac Asimov", "asin": "B000AP9A6K", "region": "us"}},
+		{tool: "author_image_set", args: map[string]any{"library": "Fiction", "author": "Isaac Asimov", "url": "https://m.media-amazon.com/images/I/zzyzx-refused.jpg"}},
+		{tool: "author_delete", args: map[string]any{"library": "Fiction", "author": "Tad Williams"}},
+		{tool: "collection_create", args: map[string]any{"library": "Fiction", "name": "Zzyzx Refused Shelf", "items": []any{"Foundation"}}},
+		{tool: "collection_edit", args: map[string]any{"collection": shelf, "name": "Zzyzx Refused Rename"}},
+		{tool: "collection_books_edit", args: map[string]any{"collection": shelf, "action": "add", "items": []any{"Second Foundation"}}},
+		{tool: "collection_delete", args: map[string]any{"collection": shelf}},
+		{tool: "podcast_add", args: map[string]any{"feed_url": "http://zzyzx-refused.test/show.xml", "library": "Podcasts"}},
+		{tool: "podcast_settings", args: map[string]any{"item": "Behind the Bastards", "auto_download": true}},
+		{tool: "podcast_episode_edit", args: map[string]any{"item": "Behind the Bastards", "episode": episode, "title": "Zzyzx Refused"}},
+		{tool: "podcast_episode_download", args: map[string]any{"item": "Behind the Bastards", "indexes": []any{0}}},
+		{tool: "podcast_check_new", args: map[string]any{"item": "Behind the Bastards"}},
+		{tool: "podcast_episode_delete", args: map[string]any{"item": "Behind the Bastards", "episode": episode}},
+		{tool: "server_backup_create"},
+		// its own things, but on a book in a library it cannot open
+		{tool: "user_progress_set", args: map[string]any{"item": racket, "percent": 50}},
+		{tool: "user_progress_remove", args: map[string]any{"item": racket}},
+		{tool: "user_bookmark_edit", args: map[string]any{"item": racket, "action": "add", "seconds": 0.5, "title": "Zzyzx Refused"}},
+		{tool: "playlist_create", args: map[string]any{"library": "Non-Fiction", "name": "Zzyzx Refused Queue", "entries": []any{map[string]any{"item": racket}}}},
+	}
+	// what any account may do with its own listening, in its own libraries
+	own := []string{"user_progress_set", "user_progress_remove", "user_bookmark_edit", "playlist_create", "playlist_edit", "playlist_entries_edit", "playlist_delete"}
+
+	res, err := account.session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range res.Tools {
+		if tool.Annotations != nil && tool.Annotations.ReadOnlyHint {
+			continue
+		}
+		if !slices.Contains(own, tool.Name) && !slices.ContainsFunc(refused, func(c writeCall) bool { return c.tool == tool.Name }) {
+			t.Errorf("%s changes the server but this journey does not call it", tool.Name)
+		}
+	}
+
+	waitIdle(t)
+	before := snapshot(t)
+	for _, c := range refused {
+		out, err := account.invoke(c.tool, c.args)
+		switch {
+		case err != nil:
+		case c.refused != nil && c.refused(out):
+		case c.mayPass:
+		default:
+			t.Errorf("%s %v was not refused: %v", c.tool, c.args, out)
+		}
+	}
+	waitIdle(t)
+	if changed := diff("", before, snapshot(t)); len(changed) > 0 {
+		t.Errorf("the refused writes changed the server:\n  %s", strings.Join(changed, "\n  "))
+	}
+
+	t.Run("its own listening and playlists", func(t *testing.T) {
+		t.Cleanup(func() {
+			_, _ = account.invoke("user_progress_remove", map[string]any{"library": "Fiction", "item": "Foundation"})
+			_, _ = account.invoke("user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Foundation", "action": "remove", "seconds": 0.5})
+			_, _ = account.invoke("playlist_delete", map[string]any{"playlist": "Zzyzx Own Queue"})
+		})
+		account.call(t, "user_progress_set", map[string]any{"library": "Fiction", "item": "Foundation", "percent": 50})
+		account.call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Foundation", "action": "add", "seconds": 0.5, "title": "Zzyzx Own Mark"})
+		account.call(t, "playlist_create", map[string]any{"library": "Fiction", "name": "Zzyzx Own Queue", "entries": []any{map[string]any{"item": "Foundation"}}})
+		account.call(t, "playlist_entries_edit", map[string]any{"playlist": "Zzyzx Own Queue", "action": "add", "entries": []any{map[string]any{"item": "Second Foundation"}}})
+		account.call(t, "playlist_edit", map[string]any{"playlist": "Zzyzx Own Queue", "description": "Zzyzx: the account's own"})
+		if got := account.call(t, "playlist_get", map[string]any{"playlist": "Zzyzx Own Queue"}); len(rows(t, got["entries"], "entries")) != 2 || got["description"] != "Zzyzx: the account's own" {
+			t.Errorf("the account's playlist = %v", got)
+		}
+		if p, _ := account.call(t, "user_progress_get", map[string]any{"library": "Fiction", "item": "Foundation"})["progress"].(map[string]any); p == nil || num(t, p["percent"], "percent") != 50 {
+			t.Errorf("the account's progress = %v", p)
+		}
+		account.call(t, "playlist_delete", map[string]any{"playlist": "Zzyzx Own Queue"})
+		if done, _ := account.call(t, "user_progress_remove", map[string]any{"library": "Fiction", "item": "Foundation"})["done"].(bool); !done {
+			t.Error("the account's progress was not removed")
+		}
+		account.call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Foundation", "action": "remove", "seconds": 0.5})
+		// and none of it is the admin's
+		for _, p := range rows(t, call(t, "playlist_list", nil)["playlists"], "playlists") {
+			if p["name"] == "Zzyzx Own Queue" {
+				t.Errorf("the account's playlist is in the admin's list: %v", p)
+			}
 		}
 	})
 }

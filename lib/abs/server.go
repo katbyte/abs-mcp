@@ -48,6 +48,35 @@ func (c *Client) Tasks(ctx context.Context) ([]Task, error) {
 	return resp.Tasks, nil
 }
 
+// EmbedPending reports whether a metadata embed for an item is running or
+// waiting its turn. The server runs two embeds at a time and keeps the rest
+// out of the task list until they start, and a task leaves the list the
+// moment it ends, so a finished embed and a failed one both read as false.
+func (c *Client) EmbedPending(ctx context.Context, itemID string) (bool, error) {
+	var resp struct {
+		Tasks  []Task `json:"tasks"`
+		Queued struct {
+			EmbedMetadata []struct {
+				LibraryItemID string `json:"libraryItemId"`
+			} `json:"embedMetadata"`
+		} `json:"queuedTaskData"`
+	}
+	if err := c.get(ctx, "/api/tasks", url.Values{"include": {"queue"}}, &resp); err != nil {
+		return false, err
+	}
+	for _, t := range resp.Tasks {
+		if t.Action == "embed-metadata" && !t.IsFinished && t.Data["libraryItemId"] == itemID {
+			return true, nil
+		}
+	}
+	for _, q := range resp.Queued.EmbedMetadata {
+		if q.LibraryItemID == itemID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // Providers lists the metadata providers available for matching.
 func (c *Client) Providers(ctx context.Context) (book, podcast []string, err error) {
 	// {"providers":{"books":[{"value":"audible","text":"Audible.com"},...],

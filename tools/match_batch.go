@@ -347,12 +347,19 @@ func registerMatchBatchTools(r *registry) {
 				if provider == "" {
 					provider, _, _ = matchQuery(ctx, client, it, "", "", "")
 				}
-				if in.Smart {
-					smartRow(ctx, client, it, provider, &res, in.Preview)
+				// held, and read again, from the snapshot the kept fields and
+				// the provider tag come from to the last write
+				release := r.locks.hold(itemKeys(it.ID)...)
+				switch fresh, ferr := client.Item(ctx, it.ID); {
+				case ferr != nil:
+					res.Error = ferr.Error()
+				case in.Smart:
+					smartRow(ctx, client, fresh, provider, &res, in.Preview)
 					out.Counts = addCounts(out.Counts, smartCounts(res.Fields))
-				} else {
-					matchRow(ctx, client, it, provider, keep, abs.MatchOptions{OverrideCover: in.OverrideCover, OverrideDetails: in.OverrideDetails}, &res)
+				default:
+					matchRow(ctx, client, fresh, provider, keep, abs.MatchOptions{OverrideCover: in.OverrideCover, OverrideDetails: in.OverrideDetails}, &res)
 				}
+				release()
 			}
 			if res.Error == "" {
 				out.Applied++

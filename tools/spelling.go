@@ -459,6 +459,9 @@ func registerSpellingTools(r *registry) {
 			"For tags and genres, into splits one value into several, to_field moves a value to the other field, and split does both at once, which is how audit_genres findings are fixed: pass a compound finding's suggest as split. " +
 			"Tags and genres are server-wide; the rest can be narrowed to one library. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in renameIn) (*mcp.CallToolResult, renameOut, error) {
+		// a sweep reads every item and writes the ones it changes back
+		// whole: no edit of an item may land in between
+		defer r.locks.holdAll()()
 		field := vocabField(in.Field)
 		if field == "" {
 			return nil, renameOut{}, fmt.Errorf("unknown field %q; choose one of: %s", in.Field, strings.Join(vocabFields, ", "))

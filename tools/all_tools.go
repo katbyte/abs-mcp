@@ -141,6 +141,7 @@ type registry struct {
 	client  *abs.Client
 	opts    Options
 	pending []pending
+	locks   writeLocks
 }
 
 // add queues a tool for registration. It sets the MCP annotations from kind so

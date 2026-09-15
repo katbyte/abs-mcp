@@ -6,6 +6,9 @@
 - `collection_create` requires `items`: the server never made an empty one
 - `library_create` refuses a folder that is not there (the server made it, empty)
 - `user_get` `libraries` is only set with `all_libraries` false, and empty then means none
+- `item_embed_metadata` waits for the embed (up to two minutes), rescans the item and checks its tags: `embedded`, `rescan`, `differs`, or `running` when it stopped waiting, instead of `started`
+- `podcast_episode_download` `queued` lists only what was sent: `already_held` and `already_queued` list the rest
+- `lib/abs`: `NewPodcast.EpisodesToDownload` is gone, as the server ignores it
 
 ### Added
 
@@ -13,7 +16,11 @@
 - `user_get`: `all_libraries`, `all_tags`, `tags`, `denied_tags`, `explicit`
 - `metadata_rename` `split`: a compound genre's `suggest` as-is, only on the books carrying it
 - `item_edit` `add_tags`, `remove_tags`, which 0.4.0 said it had
-- acceptance journeys: tools chained against a changing server, across users and repeated
+- `item_get` `downloads` for a podcast: `auto_download`, `schedule`, `keep_episodes`, `new_per_check`, `last_check`, the settings `podcast_settings` changes
+- `podcast_add` `queued` and `warning`; `item_delete` `bookmarks_removed`; `user_bookmarks` `item_deleted`
+- `lib/abs` `EmbedPending`; `providerproxy` `Serve`, for a host a test answers itself
+- acceptance journeys: tools chained against a changing server, across users and repeated; a podcast's whole life over a feed the suite serves, an embed read back from the file alone, a deleted book, calls made at once, and an account without rights calling every write tool
+- a smoke test of the built binary (`acceptance/binary_test.go`): stdio carrying nothing but the protocol, the flags, environment and config file reaching the running server, the HTTP routes and bearer check, shutdown on SIGTERM, and a bad start failing with a reason
 
 ### Fixed
 
@@ -27,6 +34,14 @@
 - following a compound genre's suggestion in two calls moved the part off every book
 - a 403 on a read blamed admin rights, not a library or tag restriction
 - `restoreBook` left the matched asin behind for later tests
+- calls of one turn run at once, and edits of one record undid each other: eight `item_edit add_tags` calls on a book kept one tag. `item_edit`, `item_batch_edit`, the match tools, `collection_books_edit`, `playlist_entries_edit` and `user_bookmark_edit` hold the records they rewrite and read them again once held; `metadata_rename` and `series_merge` hold everything
+- `podcast_add download_latest` queued nothing: the server ignores episodes sent with a new podcast
+- `podcast_add` subscribed again to a feed the library already had, under another folder
+- `podcast_episode_download` downloaded an episode the podcast already held as a second copy, and said an episode already downloading was queued
+- `podcast_episodes` and `item_get` listed episodes newest downloaded first, not newest published
+- `audit_unembedded` kept listing a book after `item_embed_metadata`: the server never reads back the tags it writes
+- a bookmark on a deleted book had no title and no way to remove it; `item_delete` now removes the key user's own first, as the server will not afterwards
+- a series left with no books still resolved by name, then failed with a 404
 
 ## 0.4.0 (2026-09-13)
 
