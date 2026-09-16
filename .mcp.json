@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "audiobookshelf": {
+      "command": "abs-mcp",
+      "args": ["serve"]
+    }
+  }
+}
