@@ -59,6 +59,10 @@ func TestServerInfoTotals(t *testing.T) {
 		t.Errorf("users = %d, want 1", users)
 	}
 	num(t, totals["audio_files"], "audio_files")
+	// in bytes: a few hundred one-second files were 0 in whole gigabytes
+	if size := num(t, totals["total_size"], "total_size"); size <= 0 || size < num(t, totals["books_size"], "books_size") {
+		t.Errorf("total_size = %d bytes, want the books' %v and more", size, totals["books_size"])
+	}
 
 	// nobody is playing anything, and that is a real answer rather than a
 	// missing one: the field has to be there and say zero
@@ -88,11 +92,29 @@ func TestServerSessions(t *testing.T) {
 
 func TestServerBackups(t *testing.T) {
 	before := call(t, "server_backups", nil)
-	n := len(rows(t, before["backups"], "backups"))
 
+	// the backup made, by name: a count of the list cannot say, as a backup
+	// made in the minute of another replaces it and the oldest are pruned
 	after := call(t, "server_backup_create", nil)
-	if got := len(rows(t, after["backups"], "backups")); got != n+1 {
-		t.Errorf("backups after create = %d, want %d", got, n+1)
+	created, _ := after["created"].(map[string]any)
+	id, _ := created["id"].(string)
+	if id == "" {
+		t.Fatalf("server_backup_create named no backup: %v", after)
+	}
+	t.Cleanup(func() {
+		eventually(t, "deleting the backup", func() error { _, err := adminClient(t).DeleteBackup(ctx, id); return err })
+	})
+	var listed bool
+	for _, b := range rows(t, after["backups"], "backups") {
+		listed = listed || b["id"] == id
+	}
+	if !listed {
+		t.Errorf("the backup made, %s, is not in the list: %v", id, after["backups"])
+	}
+	for _, b := range rows(t, after["backups"], "backups") {
+		if num(t, b["size"], "size") <= 0 {
+			t.Errorf("backup %v has no size in bytes", b)
+		}
 	}
 	// the create response carries only the list; the location comes from the
 	// list endpoint
@@ -303,7 +325,10 @@ func TestServerSessionsWithAPlaybackSession(t *testing.T) {
 		t.Fatalf("opening a playback session: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = client.CloseSession(ctx, session.ID, nil)
+		// a close that failed left the session playing for the next run
+		if err := client.CloseSession(ctx, session.ID, nil); err != nil {
+			t.Errorf("closing the session: %v", err)
+		}
 		call(t, "user_progress_remove", map[string]any{"item": book})
 	})
 

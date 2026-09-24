@@ -33,4 +33,4 @@ services:
       - "ABS_LISTEN=:8080"
       - "ABS_LOG=INFO"
       # - "ABS_READ_ONLY=true"     # only register tools that never change server state
-      # - "ABS_ENABLE_DELETE=true" # opt in to item_delete, podcast_episode_delete, author_delete, library_remove_issues
+      # - "ABS_ENABLE_DELETE=true" # opt in to item_delete, podcast_episode_delete, author_delete, library_issues_remove, collection_delete, playlist_delete

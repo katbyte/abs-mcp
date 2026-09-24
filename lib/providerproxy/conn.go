@@ -30,6 +30,15 @@ func newReader(c net.Conn) *bufio.Reader {
 	return r
 }
 
+// dropReader forgets a connection's reader once its tunnel is done, so a
+// long run does not keep one for every tunnel it ever served.
+func dropReader(c net.Conn) {
+	readerMu.Lock()
+	defer readerMu.Unlock()
+
+	delete(readers, c)
+}
+
 // connResponse is an http.ResponseWriter that writes an HTTP/1.1 response
 // directly onto a hijacked, TLS-terminated connection. net/http will not do
 // this for us: inside a CONNECT tunnel we are both the server and the

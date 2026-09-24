@@ -1,6 +1,8 @@
 package tools
 
 import (
+	"context"
+	"path"
 	"regexp"
 	"slices"
 	"strconv"
@@ -24,7 +26,7 @@ type numberingFinding struct {
 	Series       string `json:"series,omitempty"        jsonschema:"the series the item is in, or that its folder names"`
 	Sequence     string `json:"sequence,omitempty"      jsonschema:"the number the item has"`
 	FolderNumber string `json:"folder_number,omitempty" jsonschema:"the number the folder carries"`
-	Problem      string `json:"problem"                 jsonschema:"folder_disagrees: the folder's number is not the item's; unnumbered: the item is in the folder's series with no number; unlinked: the folder names a series the item is not in; duplicate_sequence: another title in the series has the same number (editions of one title sharing a number are fine and not reported); padding: the number is written with leading zeros the series does not use, or without the zeros it does (one digit under ten, two from ten, three from a hundred: #1 #02 #3 in one series)"`
+	Problem      string `json:"problem"                 jsonschema:"folder_disagrees: the folder's number is not the item's; unnumbered: the item is in the folder's series with no number; unlinked: the folder names a series the item is not in; duplicate_sequence: another title in the series has the same number (editions of one title sharing a number are fine and not reported); padding: the number is not zero-padded to the width of the series' highest number, a fixed convention rather than a reading of how the rest are written (one digit under ten, two from ten, three from a hundred: #2 in a twelve-book series is #02, #02 in a nine-book one is #2)"`
 	Suggest      string `json:"suggest,omitempty"       jsonschema:"the series value to set with item_edit, or for duplicate_sequence the other title"`
 }
 
@@ -53,20 +55,22 @@ func folderNumber(relPath string) (series, number string) {
 	return "", ""
 }
 
-// parentFolder is the folder an item sits in, which in a series-organised
-// library is the series.
+// parentFolder is the name of the folder an item sits in, which in a
+// series-organised library is the series: "Mistborn" for "Brandon
+// Sanderson/Mistborn/01 - The Final Empire". The whole parent path would be
+// "Brandon Sanderson/Mistborn", which names no series at all.
 func parentFolder(relPath string) string {
-	if i := strings.LastIndex(relPath, "/"); i >= 0 {
-		return relPath[:i]
+	if dir := path.Dir(strings.Trim(relPath, "/")); dir != "." {
+		return path.Base(dir)
 	}
 	return ""
 }
 
 // sameNumber is "01" == "1" == "1.0".
 func sameNumber(a, b string) bool {
-	fa, ea := strconv.ParseFloat(strings.TrimSpace(a), 64)
-	fb, eb := strconv.ParseFloat(strings.TrimSpace(b), 64)
-	if ea != nil || eb != nil {
+	fa, oka := sequenceNumber(a)
+	fb, okb := sequenceNumber(b)
+	if !oka || !okb {
 		return strings.TrimSpace(a) == strings.TrimSpace(b)
 	}
 	return fa == fb
@@ -80,19 +84,21 @@ func seriesKey(name string) string {
 
 type numberedItem struct {
 	ID, Title, RelPath string
+	LibraryID, Author  string
 	Series             []abs.SeriesRef
 }
 
 // numberingCollector gathers what the numbering checks need from a sweep.
 type numberingCollector struct {
-	items  []numberedItem
-	names  map[string]string           // series key -> a display name, from the items' own series
-	maxNum map[string]float64          // series key -> its highest number, which sets how the series pads
-	seqs   map[string]map[float64]bool // series key -> every number present, across every spelling of the key
+	items   []numberedItem
+	names   map[string]string           // series key -> a display name, from the items' own series
+	seqs    map[string]map[float64]bool // series key -> every number present, across every spelling of the key
+	widths  map[string]int              // series key -> how many digits it pads to, worked out once
+	pending []string                    // items whose series the listing cannot tell apart, for resolve
 }
 
 func newNumberingCollector() *numberingCollector {
-	return &numberingCollector{names: map[string]string{}, maxNum: map[string]float64{}, seqs: map[string]map[float64]bool{}}
+	return &numberingCollector{names: map[string]string{}, seqs: map[string]map[float64]bool{}, widths: map[string]int{}}
 }
 
 // sequences is every number present under any of the series keys, sorted:
@@ -114,17 +120,27 @@ func (c *numberingCollector) sequences(keys ...string) []float64 {
 
 // padWidth is how many digits the series writes its whole numbers in: one
 // under ten, two from ten, three from a hundred, so "#2" sits beside "#9"
-// and "#02" beside "#12". The highest number decides, not the count, so a
-// series with gaps pads the same as a complete one.
+// and "#02" beside "#12". That is the collector's convention, fixed rather
+// than read from how the series happens to be written: every series past
+// nine books is zero-padded. The highest number decides, not the count, so a
+// series with gaps pads the same as a complete one; a number far from the
+// rest (#2019 beside #1 to #12, see splitOutliers) does not decide it.
 func (c *numberingCollector) padWidth(seriesKey string) int {
-	top := c.maxNum[seriesKey]
-	switch {
-	case top >= 100:
-		return 3
-	case top >= 10:
-		return 2
+	if w, ok := c.widths[seriesKey]; ok {
+		return w
 	}
-	return 1
+	kept, _ := splitOutliers(c.sequences(seriesKey))
+	w := 1
+	if len(kept) > 0 {
+		switch top := kept[len(kept)-1]; {
+		case top >= 100:
+			w = 3
+		case top >= 10:
+			w = 2
+		}
+	}
+	c.widths[seriesKey] = w
+	return w
 }
 
 // styleNumber writes a number the way the series writes its numbers: "2"
@@ -133,8 +149,8 @@ func (c *numberingCollector) padWidth(seriesKey string) int {
 // number is left alone.
 func (c *numberingCollector) styleNumber(seriesKey, number string) string {
 	number = strings.TrimSpace(number)
-	f, err := strconv.ParseFloat(number, 64)
-	if err != nil || f < 0 {
+	f, ok := sequenceNumber(number)
+	if !ok || f < 0 {
 		return number
 	}
 	whole := strconv.FormatInt(int64(f), 10)
@@ -149,7 +165,9 @@ func (c *numberingCollector) styleNumber(seriesKey, number string) string {
 
 // seriesRefsOf is the item's series with numbers, from the structured refs
 // when the item is expanded and from the joined "Name #4, Other #2" string
-// the minified listing carries otherwise.
+// the minified listing carries otherwise. The joined string cannot tell
+// "Love, Death & Robots #2" from two series; seriesAmbiguous says when to
+// fetch the item instead.
 func seriesRefsOf(it *abs.Item) []abs.SeriesRef {
 	m := &it.Media.Metadata
 	if len(m.Series) > 0 {
@@ -170,28 +188,78 @@ func seriesRefsOf(it *abs.Item) []abs.SeriesRef {
 	return refs
 }
 
+// seriesAmbiguous reports whether the listing's joined series string could
+// be read more than one way: a comma is both what joins two series and a
+// character a series name may hold. "Foundation #2, Robot #9" is two
+// numbered series; "Love, Death & Robots #2" has a part with no number,
+// which is either an unnumbered series or the front of a name.
+func seriesAmbiguous(it *abs.Item) bool {
+	m := &it.Media.Metadata
+	if len(m.Series) > 0 || !strings.Contains(m.SeriesName, ", ") {
+		return false
+	}
+	for part := range strings.SplitSeq(m.SeriesName, ", ") {
+		if !strings.Contains(part, " #") {
+			return true
+		}
+	}
+	return false
+}
+
+// add gathers one item from the sweep. One whose series string is
+// ambiguous is held back for resolve, which fetches it.
 func (c *numberingCollector) add(it *abs.Item) {
 	if it.IsPodcast() {
 		return
 	}
-	n := numberedItem{ID: it.ID, Title: it.Title(), RelPath: it.RelPath, Series: seriesRefsOf(it)}
+	if seriesAmbiguous(it) {
+		c.pending = append(c.pending, it.ID)
+		return
+	}
+	c.addRefs(it, seriesRefsOf(it))
+}
+
+func (c *numberingCollector) addRefs(it *abs.Item, refs []abs.SeriesRef) {
+	n := numberedItem{ID: it.ID, Title: it.Title(), RelPath: it.RelPath, LibraryID: it.LibraryID, Author: it.Media.Metadata.AuthorDisplay(), Series: refs}
 	for _, s := range n.Series {
 		if k := seriesKey(s.Name); k != "" {
 			if _, ok := c.names[k]; !ok {
 				c.names[k] = s.Name
 			}
-			if f, err := strconv.ParseFloat(strings.TrimSpace(s.Sequence), 64); err == nil {
-				if f > c.maxNum[k] {
-					c.maxNum[k] = f
-				}
+			if f, ok := sequenceNumber(s.Sequence); ok {
 				if c.seqs[k] == nil {
 					c.seqs[k] = map[float64]bool{}
 				}
 				c.seqs[k][f] = true
+				delete(c.widths, k)
 			}
 		}
 	}
 	c.items = append(c.items, n)
+}
+
+// resolve fetches the items add held back, a batch at a time, and reads
+// their series from the record, where each is its own entry. Most books are
+// in one series, or in several with a number in each, so this is a handful
+// of requests.
+func (c *numberingCollector) resolve(ctx context.Context, client *abs.Client) error {
+	pending := c.pending
+	c.pending = nil
+	for chunk := range slices.Chunk(pending, embedBatchSize) {
+		items, err := client.ItemsBatch(ctx, chunk)
+		if err != nil {
+			return err
+		}
+		for j := range items {
+			it := &items[j]
+			refs := it.Media.Metadata.Series
+			if len(refs) == 0 { // a record with no structured series: the string is all there is
+				refs = seriesRefsOf(it)
+			}
+			c.addRefs(it, refs)
+		}
+	}
+	return nil
 }
 
 // findings runs the three checks over what was gathered.
@@ -216,7 +284,7 @@ func (c *numberingCollector) findings() []numberingFinding {
 				bySeriesNumber[k] = map[string][]slot{}
 			}
 			num := strings.TrimSpace(s.Sequence)
-			if f, err := strconv.ParseFloat(num, 64); err == nil {
+			if f, ok := sequenceNumber(num); ok {
 				num = strconv.FormatFloat(f, 'f', -1, 64)
 			}
 			bySeriesNumber[k][num] = append(bySeriesNumber[k][num], slot{it.Title, it.ID}) // raw: titleLevel reads the subtitle
@@ -272,7 +340,10 @@ func (c *numberingCollector) findings() []numberingFinding {
 		if a.Problem != b.Problem {
 			return strings.Compare(a.Problem, b.Problem)
 		}
-		return strings.Compare(a.Path, b.Path)
+		if a.Path != b.Path {
+			return strings.Compare(a.Path, b.Path)
+		}
+		return strings.Compare(a.ID, b.ID) // the same path in two libraries
 	})
 	return out
 }

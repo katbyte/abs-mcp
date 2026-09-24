@@ -222,11 +222,12 @@ func TestAuditCoversAgainstTheStore(t *testing.T) {
 		t.Errorf("li_6 = %v, want differs", r)
 	}
 	counts, ok := out["counts"].(map[string]any)
-	if !ok || num(t, counts["missing"]) != 1 || num(t, counts["upgrade"]) != 2 || num(t, counts["differs"]) != 2 || num(t, counts["ratio"]) != 2 {
+	// the jacket's two rows are one ratio problem, counted once
+	if !ok || num(t, counts["missing"]) != 1 || num(t, counts["upgrade"]) != 2 || num(t, counts["differs"]) != 2 || num(t, counts["ratio"]) != 1 {
 		t.Errorf("counts = %v", counts)
 	}
-	if _, more := out["next_page"]; more {
-		t.Errorf("next_page set with everything on one page: %v", out["next_page"])
+	if _, more := out["next_offset"]; more {
+		t.Errorf("next_offset set with everything in one window: %v", out["next_offset"])
 	}
 }
 

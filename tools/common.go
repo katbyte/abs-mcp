@@ -37,6 +37,11 @@ func fmtDuration(seconds float64) string {
 	}
 }
 
+// wholeSec rounds seconds for a length, position or total in an answer: the
+// server's fractions of a second there are noise. Chapter and bookmark times
+// stay as the server has them, since they are passed back and compared.
+func wholeSec(seconds float64) int { return int(math.Round(seconds)) }
+
 // fmtTime renders an epoch-milliseconds timestamp as RFC3339, empty when
 // unset.
 func fmtTime(ms int64) string {
@@ -55,8 +60,6 @@ func fmtDate(ms int64) string {
 	}
 	return t.UTC().Format("2006-01-02")
 }
-
-func mb(bytes int64) int64 { return bytes / (1 << 20) }
 
 func percent(p float64) int { return int(math.Round(p * 100)) }
 
@@ -204,9 +207,23 @@ func libraryNames(libs []abs.Library) string {
 
 // resolveItem finds a library item by id, or by title searched across the
 // given library (all libraries when empty). A title must match exactly one
-// item; otherwise the candidates are listed in the error so the caller can
-// pick an id.
+// item, or be part of exactly one title when none matches whole; otherwise
+// the candidates are listed in the error so the caller can pick an id. It is
+// for the tools that only read: see resolveItemToChange for the rest.
 func resolveItem(ctx context.Context, client *abs.Client, library, idOrTitle string) (*abs.Item, error) {
+	return findItem(ctx, client, library, idOrTitle, false)
+}
+
+// resolveItemToChange is resolveItem for a tool that writes or deletes: a
+// title must be the whole title of exactly one item. A title that is only
+// part of one would otherwise change the book it happens to be part of -
+// "Foundation" deleting Foundation and Empire once Foundation itself is gone -
+// so that book is named in the refusal instead.
+func resolveItemToChange(ctx context.Context, client *abs.Client, library, idOrTitle string) (*abs.Item, error) {
+	return findItem(ctx, client, library, idOrTitle, true)
+}
+
+func findItem(ctx context.Context, client *abs.Client, library, idOrTitle string, whole bool) (*abs.Item, error) {
 	idOrTitle = strings.TrimSpace(idOrTitle)
 	if idOrTitle == "" {
 		return nil, errors.New("item id or title is required")
@@ -248,6 +265,8 @@ func resolveItem(ctx context.Context, client *abs.Client, library, idOrTitle str
 	switch {
 	case len(exact) == 1:
 		return client.Item(ctx, exact[0].ID)
+	case len(exact) == 0 && len(partial) == 1 && whole:
+		return nil, fmt.Errorf("no item titled %q; the nearest is %s: pass its id or its whole title to change it", idOrTitle, itemNames(partial))
 	case len(exact) == 0 && len(partial) == 1:
 		return client.Item(ctx, partial[0].ID)
 	case len(exact)+len(partial)+len(other) == 0:

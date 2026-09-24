@@ -24,7 +24,7 @@ func registerEmbeddedAudit(r *registry) {
 	add(r, readTool, &mcp.Tool{
 		Name: "audit_unembedded",
 		Description: "Find books whose audio files do not carry the library's metadata in their tags: never embedded (no title or artist tag at all), or stale (the tags disagree with the current title, author, narrator, series, genres, year or publisher, because the book was edited or matched after the last embed). " +
-			"This is what says item_embed_metadata is due; run it after a curation pass. It fetches every audio file's tags, so it is slower than the sweeping audits and is not part of audit_all. Fix with item_embed_metadata.",
+			"This is what says item_embed_metadata is due; run it after a curation pass. It fetches every audio file's tags, so it is slower than the sweeping audits, and audit_all runs it only with deep. Fix with item_embed_metadata.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in auditIn) (*mcp.CallToolResult, auditOut, error) {
 		libs, err := resolveLibraries(ctx, client, in.Library)
 		if err != nil {
@@ -32,7 +32,7 @@ func registerEmbeddedAudit(r *registry) {
 		}
 
 		out := auditOut{Check: "unembedded", Findings: []auditFinding{}}
-		limit := limitOr(in.Limit, 100)
+		limit := auditLimit(in.Limit, 100)
 		for i := range libs {
 			if err := sweepUnembedded(ctx, client, &libs[i], limit, &out); err != nil {
 				return nil, auditOut{}, err
@@ -144,7 +144,9 @@ func tagsEmpty(af *abs.AudioFile) bool {
 // item's metadata: title (also the album, which is title plus subtitle),
 // artist and album artist for the author, composer for the narrators,
 // grouping or series for the series, genre, date and publisher. Fields the
-// item does not have are not expected in the file either.
+// item does not have are not expected in the file either, and nor is a
+// publisher in anything but an mp3: the server writes it to an m4b only as
+// the copyright, which its scan does not read back as the publisher.
 func embedMismatches(m *abs.Metadata, af *abs.AudioFile) []string {
 	tag := func(k string) string { return strings.TrimSpace(af.MetaTags[k]) }
 	var out []string
@@ -177,7 +179,7 @@ func embedMismatches(m *abs.Metadata, af *abs.AudioFile) []string {
 	if year := strings.TrimSpace(m.PublishedYear.String()); year != "" && !strings.HasPrefix(tag("tagDate"), year) {
 		out = append(out, differs("year", tag("tagDate"), year))
 	}
-	if publisher := strings.TrimSpace(m.Publisher); publisher != "" && !sameText(tag("tagPublisher"), publisher) {
+	if publisher := strings.TrimSpace(m.Publisher); publisher != "" && isMP3(af) && !sameText(tag("tagPublisher"), publisher) {
 		out = append(out, differs("publisher", tag("tagPublisher"), publisher))
 	}
 
@@ -197,20 +199,44 @@ func sameText(a, b string) bool {
 	return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
 }
 
-// sameList compares a tag holding several values ("Science Fiction; Classic",
-// or "/" or "," separated by another tool) against a list, as sets.
+// isMP3 reports whether an audio file is an mp3, the one format the server
+// writes a publisher tag into on embed. Its mime type says so, or failing
+// that its extension.
+func isMP3(af *abs.AudioFile) bool {
+	if af.MimeType != "" {
+		return strings.EqualFold(af.MimeType, "audio/mpeg")
+	}
+	return strings.EqualFold(af.Metadata.Ext, ".mp3")
+}
+
+// sameList compares a tag holding several values against a list, as sets.
+// The server joins genres with "; " on embed, and a genre may hold a comma
+// or a slash of its own ("Mystery, Thriller & Suspense"), so the tag is read
+// split at semicolons first; a tag another tool wrote with "/" or ","
+// between the values is read split at those as well.
 func sameList(tag string, want []string) bool {
+	return sameSet(tag, want, func(r rune) bool { return r == ';' }) ||
+		sameSet(tag, want, func(r rune) bool { return r == ';' || r == '/' || r == ',' })
+}
+
+func sameSet(tag string, want []string, sep func(rune) bool) bool {
 	have := map[string]bool{}
-	for v := range strings.FieldsFuncSeq(tag, func(r rune) bool { return r == ';' || r == '/' || r == ',' }) {
+	for v := range strings.FieldsFuncSeq(tag, sep) {
 		if v = strings.ToLower(strings.TrimSpace(v)); v != "" {
 			have[v] = true
 		}
 	}
-	if len(have) != len(want) {
+	wanted := map[string]bool{}
+	for _, w := range want {
+		if w = strings.ToLower(strings.TrimSpace(w)); w != "" {
+			wanted[w] = true
+		}
+	}
+	if len(have) != len(wanted) {
 		return false
 	}
-	for _, w := range want {
-		if !have[strings.ToLower(strings.TrimSpace(w))] {
+	for w := range wanted {
+		if !have[w] {
 			return false
 		}
 	}

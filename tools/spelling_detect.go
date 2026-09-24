@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // The detectors behind audit_spelling beyond "same key, different spelling".
@@ -69,9 +70,8 @@ func cleanName(original string, words int) string {
 	}
 	inWord, seen := false, 0
 	for i, r := range original {
-		lr := unicode.ToLower(r)
 		switch {
-		case (lr >= 'a' && lr <= 'z') || (r >= '0' && r <= '9'):
+		case unicode.IsLetter(r) || unicode.IsDigit(r):
 			if !inWord {
 				inWord = true
 				seen++
@@ -135,15 +135,17 @@ func initialsOf(short, long string) bool {
 // typoApart reports whether two normalized values differ by a slip of the
 // keyboard: one edit for anything six letters or longer, two for twelve or
 // longer when they start with the same word (peter whickam / peter wickham).
+// Letters, not bytes: a two-character Japanese word is six bytes long.
 func typoApart(a, b string) bool {
-	if a == b || len(a) < 6 || len(b) < 6 {
+	la, lb := utf8.RuneCountInString(a), utf8.RuneCountInString(b)
+	if a == b || la < 6 || lb < 6 {
 		return false
 	}
 	switch typoDistance(a, b, 2) {
 	case 0, 1:
 		return true
 	case 2:
-		if len(a) < 12 || len(b) < 12 {
+		if la < 12 || lb < 12 {
 			return false
 		}
 		return strings.Fields(a)[0] == strings.Fields(b)[0]
@@ -210,4 +212,44 @@ func splitParts(original string) []string {
 		}
 	}
 	return parts
+}
+
+// languageBase is a language value without its region: "en-US" and "pt_BR"
+// are English and Portuguese, whatever the country.
+func languageBase(value string) string {
+	if i := strings.IndexAny(value, "-_"); i > 0 {
+		return value[:i]
+	}
+	return value
+}
+
+// oddLanguages is every language value gathered that is not a code or name
+// this tool knows, sorted: usually a placeholder such as XXX, which needs
+// looking at rather than merging.
+func oddLanguages(c spellingCounts) []spelling {
+	var out []spelling
+	for _, spellings := range c["languages"] {
+		for v, n := range spellings {
+			if !knownLanguage(v) {
+				out = append(out, spelling{Value: v, Items: n})
+			}
+		}
+	}
+	slices.SortFunc(out, func(a, b spelling) int { return strings.Compare(a.Value, b.Value) })
+	return out
+}
+
+// dropMarkers takes the marker tags back out of what a sweep gathered (see
+// markerTag), so the tag vocabulary is judged on subjects alone.
+func (c spellingCounts) dropMarkers(prov providerConfig) {
+	for k, spellings := range c["tags"] {
+		for v := range spellings {
+			if markerTag(prov, v) {
+				delete(spellings, v)
+			}
+		}
+		if len(spellings) == 0 {
+			delete(c["tags"], k)
+		}
+	}
 }

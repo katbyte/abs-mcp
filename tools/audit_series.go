@@ -64,9 +64,10 @@ type seriesCounts struct {
 
 type seriesOut struct {
 	Scanned   int                `json:"series_scanned"`
-	Found     int                `json:"total_findings"     jsonschema:"gaps, names, odd and numbering together, before limit; articles too when asked for"`
+	Items     int                `json:"items_scanned"      jsonschema:"books swept for the numbering, titles and the series the listing leaves out"`
+	Found     int                `json:"total_findings"     jsonschema:"gaps, names, odd, numbering and titles together, before limit; articles too when asked for"`
 	Counts    seriesCounts       `json:"counts"`
-	Gaps      []seriesGap        `json:"gaps"               jsonschema:"series missing a book: whole numbers absent between the lowest and highest present, interior gaps only; unlinked names the books on the shelf that fill a gap once linked, and merged what is left once the spellings in names are one series"`
+	Gaps      []seriesGap        `json:"gaps"               jsonschema:"series missing a book: whole numbers absent between the lowest and highest present, interior gaps only; outliers the numbers far from the rest (a year typed as the number), set aside; unlinked names the books on the shelf that fill a gap once linked, and merged what is left once the spellings in names are one series"`
 	Names     []vocabGroup       `json:"names"              jsonschema:"series that are one series spelled two ways, the one with more books first: series_merge from= into= moves the other's books over, and the empty series goes away. Each spelling carries its author"`
 	Odd       []oddSeries        `json:"odd"                jsonschema:"names that are not series names, most books first"`
 	Numbering []numberingFinding `json:"numbering"          jsonschema:"books whose folder disagrees with their series number, books their folder puts in a series they are not in, and two titles sharing a number"`
@@ -133,8 +134,9 @@ func articleSeriesName(name string, titles []string) string {
 
 // seriesNames feeds one library's series into the name detectors, the odd
 // list and, when asked, the articles list, from the listing alone, and
-// records whose series each name is. Podcast libraries have no series.
-func seriesNames(ctx context.Context, client *abs.Client, lib *abs.Library, out *seriesOut, names spellingCounts, authors map[string]string, articles bool) error {
+// records whose series each name is and that the listing had it (listed,
+// by listedKey). Podcast libraries have no series.
+func seriesNames(ctx context.Context, client *abs.Client, lib *abs.Library, out *seriesOut, names spellingCounts, authors map[string]string, listed map[string]bool, articles bool) error {
 	if lib.IsPodcast() {
 		return nil
 	}
@@ -145,6 +147,8 @@ func seriesNames(ctx context.Context, client *abs.Client, lib *abs.Library, out 
 		}
 		for j := range series {
 			s := &series[j]
+			listed[listedKey(lib.ID, s.Name)] = true
+			listed[listedKey("", s.Name)] = true
 			names.addValue("series", s.Name, max(len(s.Books), 1))
 			author := ""
 			if len(s.Books) > 0 {
@@ -168,6 +172,102 @@ func seriesNames(ctx context.Context, client *abs.Client, lib *abs.Library, out 
 			return nil
 		}
 	}
+}
+
+// listedKey is how seriesNames records a series the listing had: by library
+// and name, and by name alone under library "" for an item that does not
+// say which library it is in.
+func listedKey(library, name string) string {
+	return library + "/" + name
+}
+
+// unlistedSeries feeds the names, odd and articles sections the series the
+// listing left out, read from the books the numbering sweep gathered. A
+// library set to hide single-book series lists none of them, and a one-book
+// series is where a stray name most often sits. An odd one needs its id for
+// series_edit, which the listing would have carried: one of its books is
+// fetched for it when the sweep only had the name.
+func unlistedSeries(ctx context.Context, client *abs.Client, coll *numberingCollector, listed map[string]bool, out *seriesOut, names spellingCounts, authors map[string]string, articles bool) error {
+	type unlisted struct {
+		name, id, author, lookup string
+		titles                   []string
+	}
+	found := map[string]*unlisted{}
+	var order []string
+	for _, it := range coll.items {
+		for _, ref := range it.Series {
+			key := listedKey(it.LibraryID, ref.Name)
+			if strings.TrimSpace(ref.Name) == "" || listed[key] {
+				continue
+			}
+			u := found[key]
+			if u == nil {
+				u = &unlisted{name: ref.Name, author: it.Author, lookup: it.ID}
+				found[key] = u
+				order = append(order, key)
+			}
+			if u.id == "" {
+				u.id = ref.ID
+			}
+			u.titles = append(u.titles, it.Title)
+		}
+	}
+
+	type row struct {
+		u        *unlisted
+		problems []string
+		suggest  string
+		article  string
+	}
+	var rows []row
+	var lookups []string
+	for _, key := range order {
+		u := found[key]
+		names.addValue("series", u.name, len(u.titles))
+		if authors[u.name] == "" {
+			authors[u.name] = u.author
+		}
+		r := row{u: u}
+		r.problems, r.suggest = oddSeriesName(u.name, u.author)
+		if articles {
+			r.article = articleSeriesName(u.name, u.titles)
+		}
+		if len(r.problems) == 0 && r.article == "" {
+			continue
+		}
+		rows = append(rows, r)
+		if u.id == "" && !slices.Contains(lookups, u.lookup) {
+			lookups = append(lookups, u.lookup)
+		}
+	}
+	for chunk := range slices.Chunk(lookups, embedBatchSize) {
+		items, err := client.ItemsBatch(ctx, chunk)
+		if err != nil {
+			return err
+		}
+		for j := range items {
+			for _, r := range rows {
+				if r.u.id != "" || r.u.lookup != items[j].ID {
+					continue
+				}
+				for _, ref := range items[j].Media.Metadata.Series {
+					if ref.Name == r.u.name {
+						r.u.id = ref.ID
+					}
+				}
+			}
+		}
+	}
+	for _, r := range rows {
+		u := r.u
+		if len(r.problems) > 0 {
+			out.Odd = append(out.Odd, oddSeries{ID: u.id, Name: u.name, Author: u.author, Books: len(u.titles), Problems: r.problems, Suggest: r.suggest})
+		}
+		if r.article != "" {
+			out.Articles = append(out.Articles, articleSeries{ID: u.id, Name: u.name, Author: u.author, Books: len(u.titles), Suggest: r.article})
+		}
+	}
+	return nil
 }
 
 // withSeriesAuthors puts each spelling's author on the name groups and drops
@@ -244,14 +344,14 @@ func registerSeriesAudit(r *registry) {
 
 	type seriesIn struct {
 		Library  string `json:"library,omitempty"  jsonschema:"library name or id; default every book library"`
-		Limit    int    `json:"limit,omitempty"    jsonschema:"maximum rows per section, default 50"`
+		Limit    int    `json:"limit,omitempty"    jsonschema:"maximum rows per section, default 50, at most 1000"`
 		Articles bool   `json:"articles,omitempty" jsonschema:"also list series names that open with The, A or An, with the bare name suggested; a matter of taste, so off by default"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name: "audit_series",
-		Description: "Everything wrong with series. Gaps: a series missing a book, sequence numbers absent between the lowest and the highest the library has (interior gaps only, so a series whose first book is #3 is not flagged for #1-2, and novella numbering such as 4.5 never creates one; series_get shows what is present). A gap whose book is on the shelf in the right folder but not linked is reported with that book under unlinked, and a series that names reports as one of several spellings has its gap read across all of them under merged. " +
-			"Names: two series that are one series spelled two ways ('The Chronicles of Amber', 'Chronicles of Amber', 'Chronicles of Amber Series'), the one with more books first; fix with series_merge. Each spelling carries its author, and two authors' series a letter apart are not reported. " +
-			"Numbering: a book whose folder carries a different number from its series entry ('Series - 1 - Title' at #4), a book whose folder puts it in a series it is not linked to, and two different titles at the same number, plus a number padded unlike the rest of its series (one digit under ten, two from ten, three from a hundred: #1 #02 #3 in one series is reported at #02); the folder is taken as the collector's own record, and suggest is the series value for item_edit add_series. " +
+		Description: "Everything wrong with series. Gaps: a series missing a book, sequence numbers absent between the lowest and the highest the library has (interior gaps only, so a series whose first book is #3 is not flagged for #1-2, and novella numbering such as 4.5 never creates one; series_get shows what is present). A number far from the rest, a year typed as the sequence (#2019 beside #1 and #2), is reported under outliers rather than as two thousand missing books. A gap whose book is on the shelf in the right folder but not linked is reported with that book under unlinked, and a series that names reports as one of several spellings has its gap read across all of them under merged. " +
+			"Names: two series that are one series spelled two ways ('The Chronicles of Amber', 'Chronicles of Amber', 'Chronicles of Amber Series'), the one with more books first; fix with series_merge. Each spelling carries its author, and two authors' series a letter apart are not reported. Names and odd read the books as well as the series listing, so a one-book series is covered when the library hides single-book series. " +
+			"Numbering: a book whose folder carries a different number from its series entry ('Series - 1 - Title' at #4), a book whose folder puts it in a series it is not linked to, and two different titles at the same number, plus a number not zero-padded to the collector's fixed convention, the width of the series' highest number (one digit under ten, two from ten, three from a hundred: #2 in a twelve-book series should be #02, and #02 in a nine-book one #2); the folder is taken as the collector's own record, and suggest is the series value for item_edit add_series. " +
 			"Odd: names that are not series names - ending in the word Series, called what the author is called, carrying a book number, or with a trademark sign, a space before a colon or doubled spaces; fix with series_edit name=, and suggest is the cleaned name where that is all that is wrong. " +
 			"Titles: a book whose title is its series name, with or without a number ('Harry Hole 1', 'Beebo Brinker' on the book Odd Girl Out), or carries the series name and a number beside the real title ('The Bat - Harry Hole Series, Book 1', 'Bright Falls 03 - Iris Kelly Doesn't Date'), judged only where the folder is 'Series - 03 - Title' and so says what the title is; suggest is that title, for item_edit title=. No provider is asked. " +
 			"Whether a subtitle belongs in the name ('Siege of Terra: The Horus Heresy' or 'Siege of Terra') is a matter of taste and is not reported, and so is a leading article: articles=true lists 'The Expanse' and 'A Hanne Wilhelmsen Novel' with the bare name suggested, leaving out names that are a book's own title.",
@@ -260,17 +360,18 @@ func registerSeriesAudit(r *registry) {
 		if err != nil {
 			return nil, seriesOut{}, err
 		}
-		limit := limitOr(in.Limit, 50)
+		limit := auditLimit(in.Limit, 50)
 		var gaps gapsOut
 		out := seriesOut{Gaps: []seriesGap{}, Names: []vocabGroup{}, Odd: []oddSeries{}, Numbering: []numberingFinding{}, Titles: []titleFinding{}}
 		names := newSpellingCounts([]string{"series"})
 		authors := map[string]string{}
+		listed := map[string]bool{}
 		numbering := newNumberingCollector()
 		for i := range libs {
 			if err := sweepSeriesGaps(ctx, client, &libs[i], limit, &gaps); err != nil {
 				return nil, seriesOut{}, err
 			}
-			if err := seriesNames(ctx, client, &libs[i], &out, names, authors, in.Articles); err != nil {
+			if err := seriesNames(ctx, client, &libs[i], &out, names, authors, listed, in.Articles); err != nil {
 				return nil, seriesOut{}, err
 			}
 			if libs[i].IsPodcast() {
@@ -278,6 +379,7 @@ func registerSeriesAudit(r *registry) {
 			}
 			if err := client.ItemsAll(ctx, libs[i].ID, abs.ItemsOptions{}, func(items []abs.Item) bool {
 				for j := range items {
+					out.Items++
 					numbering.add(&items[j])
 				}
 				return true
@@ -285,17 +387,29 @@ func registerSeriesAudit(r *registry) {
 				return nil, seriesOut{}, err
 			}
 		}
+		if err := numbering.resolve(ctx, client); err != nil {
+			return nil, seriesOut{}, err
+		}
+		if err := unlistedSeries(ctx, client, numbering, listed, &out, names, authors, in.Articles); err != nil {
+			return nil, seriesOut{}, err
+		}
 		slices.SortFunc(out.Odd, func(x, y oddSeries) int {
 			if x.Books != y.Books {
 				return y.Books - x.Books
 			}
-			return strings.Compare(x.Name, y.Name)
+			if x.Name != y.Name {
+				return strings.Compare(x.Name, y.Name)
+			}
+			return strings.Compare(x.ID, y.ID)
 		})
 		slices.SortFunc(out.Articles, func(x, y articleSeries) int {
 			if x.Books != y.Books {
 				return y.Books - x.Books
 			}
-			return strings.Compare(x.Name, y.Name)
+			if x.Name != y.Name {
+				return strings.Compare(x.Name, y.Name)
+			}
+			return strings.Compare(x.ID, y.ID)
 		})
 		allNames, allNumbering, allTitles := withSeriesAuthors(names.report("series"), authors), numbering.findings(), numbering.titleFindings()
 		crossReferenceGaps(gaps.Series, allNames, allNumbering, numbering)

@@ -194,7 +194,7 @@ func testMain(m *testing.M) {
 		for _, m := range misses {
 			fmt.Fprintln(os.Stderr, "  "+m)
 		}
-		fmt.Fprintln(os.Stderr, "run `make record` to capture them")
+		fmt.Fprintln(os.Stderr, "record them with ABS_TEST_RECORD=1 make testacc-acceptance, which records only what is missing")
 		if code == 0 {
 			code = 1
 		}

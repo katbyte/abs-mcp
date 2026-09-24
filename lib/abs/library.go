@@ -331,7 +331,13 @@ func (c *Client) EpisodeDownloads(ctx context.Context, libraryID string) (curren
 		CurrentDownload *EpisodeDownload  `json:"currentDownload"`
 		Queue           []EpisodeDownload `json:"queue"`
 	}
-	if err := c.get(ctx, "/api/libraries/"+url.PathEscape(libraryID)+"/episode-downloads", nil, &resp); err != nil {
+	// the server caches every read under /api/libraries until its database
+	// is next written, and the queue lives in memory, so a cached answer is
+	// stale from the moment a download starts until the episode is saved.
+	// A random sort is the one request that cache lets through; this route
+	// sorts nothing
+	q := url.Values{"sort": {"random"}}
+	if err := c.get(ctx, "/api/libraries/"+url.PathEscape(libraryID)+"/episode-downloads", q, &resp); err != nil {
 		return nil, nil, err
 	}
 	return resp.CurrentDownload, resp.Queue, nil

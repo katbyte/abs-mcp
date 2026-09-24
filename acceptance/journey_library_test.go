@@ -122,7 +122,7 @@ func TestJourneyLibraryLife(t *testing.T) {
 		if !slices.Equal(issues, []string{"Zzyzx First Book"}) {
 			t.Errorf("audit_issues = %v", issues)
 		}
-		if removed := num(t, call(t, "library_issues_remove", map[string]any{"library": name})["removed"], "removed"); removed != 1 {
+		if removed := num(t, call(t, "library_issues_remove", map[string]any{"library": name, "confirm": true})["removed"], "removed"); removed != 1 {
 			t.Errorf("removed = %d, want 1", removed)
 		}
 		if err := waitForItems(name, 1); err != nil {

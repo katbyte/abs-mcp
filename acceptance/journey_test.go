@@ -434,6 +434,7 @@ func TestJourneyLookupsChangeNothing(t *testing.T) {
 		{tool: "item_cover_search", args: map[string]any{"item": "Foundation and Empire", "provider": "audible", "title": "Foundation and Empire", "author": "Isaac Asimov"}},
 		{tool: "audit_all", args: map[string]any{"library": "Messy", "deep": true}},
 		{tool: "audit_authors", args: map[string]any{"library": "Messy"}},
+		{tool: "audit_chapters", args: map[string]any{"library": "Messy"}},
 		{tool: "audit_covers", args: map[string]any{"library": "Messy", "banner": true}},
 		{tool: "audit_duplicates", args: map[string]any{"library": "Messy"}},
 		{tool: "audit_genres", args: map[string]any{"library": "Messy"}},
@@ -446,7 +447,6 @@ func TestJourneyLookupsChangeNothing(t *testing.T) {
 		{tool: "audit_podcast_no_episodes", args: map[string]any{"library": "Podcasts"}},
 		{tool: "audit_podcast_stale_feed", args: map[string]any{"library": "Podcasts"}},
 		{tool: "audit_series", args: map[string]any{"library": "Messy", "articles": true}},
-		{tool: "audit_single_chapter", args: map[string]any{"library": "Messy"}},
 		{tool: "audit_spelling", args: map[string]any{"library": "Messy"}},
 		{tool: "audit_unembedded", args: map[string]any{"library": "Messy"}},
 		{tool: "audit_unmatched", args: map[string]any{"library": "Messy"}},
@@ -709,10 +709,10 @@ func TestJourneyWritesDoneTwice(t *testing.T) {
 		if p1["progress_id"] != p2["progress_id"] || p1["finished_at"] != p2["finished_at"] {
 			t.Errorf("finishing a finished book changed its record: %v then %v", p1, p2)
 		}
-		if done, _ := call(t, "user_progress_remove", map[string]any{"library": "Fiction", "item": "City of Golden Shadow"})["done"].(bool); !done {
+		if done, _ := call(t, "user_progress_remove", map[string]any{"library": "Fiction", "item": "City of Golden Shadow"})["removed"].(bool); !done {
 			t.Error("the first removal removed nothing")
 		}
-		if done, _ := call(t, "user_progress_remove", map[string]any{"library": "Fiction", "item": "City of Golden Shadow"})["done"].(bool); done {
+		if done, _ := call(t, "user_progress_remove", map[string]any{"library": "Fiction", "item": "City of Golden Shadow"})["removed"].(bool); done {
 			t.Error("the second removal said it removed something")
 		}
 	})
@@ -797,10 +797,10 @@ func TestJourneyWritesDoneTwice(t *testing.T) {
 
 	t.Run("a bookmark added twice", func(t *testing.T) {
 		t.Cleanup(func() {
-			call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Leviathan Wakes", "action": "remove", "seconds": 0.5})
+			call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Leviathan Wakes", "action": "remove", "time_s": 0.5})
 		})
-		call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Leviathan Wakes", "action": "add", "seconds": 0.5, "title": "Zzyzx once"})
-		call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Leviathan Wakes", "action": "add", "seconds": 0.5, "title": "Zzyzx twice"})
+		call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Leviathan Wakes", "action": "add", "time_s": 0.5, "title": "Zzyzx once"})
+		call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Leviathan Wakes", "action": "add", "time_s": 0.5, "title": "Zzyzx twice"})
 		marks := rows(t, call(t, "user_bookmarks", map[string]any{"library": "Fiction", "item": "Leviathan Wakes"})["bookmarks"], "bookmarks")
 		if len(marks) != 1 || marks[0]["title"] != "Zzyzx twice" {
 			t.Errorf("bookmarks = %v, want one, renamed", marks)

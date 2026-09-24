@@ -169,7 +169,7 @@ func TestBuildFilter(t *testing.T) {
 		{"author:frank herbert", "authors." + b64("a1")},
 		{"authors:a1", "authors." + b64("a1")},
 		{"series:Dune", "series." + b64("s1")},
-		{"abridged", "abridged." + b64("abridged")},
+		{"abridged", "abridged"},
 	} {
 		got, err := buildFilter(context.Background(), client, lib, tc.in)
 		if err != nil {
@@ -196,6 +196,11 @@ func TestFormatting(t *testing.T) {
 			t.Errorf("fmtDuration(%v) = %q want %q", secs, got, want)
 		}
 	}
+	for secs, want := range map[float64]int{0: 0, 0.4: 0, 0.5: 1, 39942.36: 39942, 45296.5: 45297} {
+		if got := wholeSec(secs); got != want {
+			t.Errorf("wholeSec(%v) = %d want %d", secs, got, want)
+		}
+	}
 	if got := fmtDate(1_700_000_000_000); got != "2023-11-14" {
 		t.Errorf("fmtDate = %q", got)
 	}
@@ -220,7 +225,7 @@ func TestSummariseItem(t *testing.T) {
 		ID: "i1", MediaType: "book", RelPath: "Frank Herbert/Dune", AddedAt: 1_700_000_000_000, Size: 500 << 20,
 		Media: abs.Media{
 			Metadata:  abs.Metadata{Title: "Dune", AuthorName: "Frank Herbert", NarratorName: "Scott Brick", SeriesName: "Dune #1", PublishedYear: "1965", ASIN: "B0"},
-			CoverPath: "/x/cover.jpg", Duration: 75_000, NumTracks: 3, NumChapters: 40, Tags: []string{"sf"},
+			CoverPath: "/x/cover.jpg", Duration: 75_000.4, NumTracks: 3, NumChapters: 40, Tags: []string{"sf"},
 		},
 		UserMediaProgress: &abs.MediaProgress{Progress: 0.5, CurrentTime: 37_500, ID: "p1"},
 	}
@@ -231,7 +236,7 @@ func TestSummariseItem(t *testing.T) {
 	if len(s.Series) != 1 || s.Series[0] != "Dune #1" {
 		t.Errorf("series = %v", s.Series)
 	}
-	if s.Duration != "20h 50m" || s.SizeMB != 500 || s.Tracks != 3 || s.Chapters != 40 || s.NoCover {
+	if s.Duration != 75_000 || s.Size != 500<<20 || s.Tracks != 3 || s.Chapters != 40 || s.NoCover {
 		t.Errorf("facts = %+v", s)
 	}
 	if s.Progress == nil || s.Progress.Percent != 50 || s.Progress.ProgressID != "p1" {
@@ -263,12 +268,10 @@ func TestAuditChecks(t *testing.T) {
 		t.Error("chapters: short book flagged")
 	}
 	// one chapter across a long book is as unnavigable as none, and the
-	// chapters check treats any chapter count above zero as fine
-	if _, bad := auditChecksByName["single_chapter"](book(abs.Metadata{}, abs.Media{Duration: 3 * 3600, NumChapters: 1})); !bad {
-		t.Error("single_chapter: one chapter over 3h not flagged")
-	}
-	if _, bad := auditChecksByName["single_chapter"](book(abs.Metadata{}, abs.Media{Duration: 3 * 3600, NumChapters: 30})); bad {
-		t.Error("single_chapter: a properly chaptered book flagged")
+	// chapters check treats any chapter count above zero as fine: audit_chapters
+	// reports it, from the whole book (TestChapterProblems)
+	if _, bad := auditChecksByName["chapters"](book(abs.Metadata{}, abs.Media{Duration: 3 * 3600, NumChapters: 1})); bad {
+		t.Error("chapters: a book with one chapter flagged as having none")
 	}
 
 	// path check: Author/Title layout matches; a foreign folder does not
@@ -412,7 +415,7 @@ func TestProgressOf(t *testing.T) {
 	}
 
 	got := progressOf(&abs.MediaProgress{
-		ID: "p1", Progress: 0.256, CurrentTime: 3725, IsFinished: false,
+		ID: "p1", Progress: 0.256, CurrentTime: 3725.6, IsFinished: false,
 		LastUpdate: 1_700_000_000_000, HideFromContinueListening: true,
 	})
 	if got == nil {
@@ -421,11 +424,8 @@ func TestProgressOf(t *testing.T) {
 	if got.Percent != 26 {
 		t.Errorf("percent = %d, want 26 (rounded)", got.Percent)
 	}
-	if got.CurrentTime != "1h 2m" {
-		t.Errorf("current_time = %q, want 1h 2m", got.CurrentTime)
-	}
-	if got.Seconds != 3725 {
-		t.Errorf("seconds = %d", got.Seconds)
+	if got.CurrentTime != 3726 {
+		t.Errorf("current_time_s = %d, want 3726 (rounded)", got.CurrentTime)
 	}
 	if !got.Hidden || got.ProgressID != "p1" {
 		t.Errorf("hidden/id did not carry through: %+v", got)
@@ -522,9 +522,7 @@ func TestEveryAuditTripsAndClears(t *testing.T) {
 		"publisher":   book(abs.Metadata{Title: "Dune"}, abs.Media{}),
 		"language":    book(abs.Metadata{Title: "Dune"}, abs.Media{}),
 		"chapters":    book(abs.Metadata{}, abs.Media{Duration: 3 * 3600, NumTracks: 3}),
-		// one chapter over three hours is as unnavigable as none
-		"single_chapter": book(abs.Metadata{}, abs.Media{Duration: 3 * 3600, NumTracks: 1, NumChapters: 1}),
-		"no_audio":       book(abs.Metadata{Title: "Dune"}, abs.Media{}),
+		"no_audio":    book(abs.Metadata{Title: "Dune"}, abs.Media{}),
 		// the server flags these itself; the predicate only reads the flags
 		"issues":          {MediaType: "book", IsMissing: true, Media: abs.Media{Metadata: abs.Metadata{Title: "Gone"}}},
 		"path":            book(abs.Metadata{Title: "Neuromancer", AuthorName: "William Gibson"}, abs.Media{}),
@@ -544,13 +542,12 @@ func TestEveryAuditTripsAndClears(t *testing.T) {
 		"publisher":       clean(),
 		"language":        clean(),
 		"chapters":        clean(),
-		"single_chapter":  clean(),
 		"no_audio":        clean(),
 		"path":            clean(),
 		"author_as_title": clean(),
 		"issues":          clean(),
-		// a podcast checked recently with episodes downloaded
-		"stale_feed":  pod(abs.Metadata{FeedURL: "http://f"}, abs.Media{LastEpisodeCheck: time.Now().UnixMilli(), NumEpisodes: 3}),
+		// a podcast whose newest episode came out today
+		"stale_feed":  pod(abs.Metadata{FeedURL: "http://f"}, abs.Media{LastEpisodeCheck: time.Now().UnixMilli(), NumEpisodes: 1, Episodes: []abs.Episode{{PublishedAt: time.Now().UnixMilli()}}}),
 		"no_episodes": pod(abs.Metadata{FeedURL: "http://f"}, abs.Media{NumEpisodes: 3}),
 	}
 
@@ -627,6 +624,37 @@ func TestAuditSpecsAreComplete(t *testing.T) {
 	for check := range auditChecksByName {
 		if _, ok := byCheck[check]; !ok {
 			t.Errorf("check %q has no audit tool, so audit_all never reports it", check)
+		}
+	}
+}
+
+// audit_all must name every audit, as run, skipped or not applicable. The
+// ones with no per-item predicate (audit_chapters needs the whole book) are
+// listed in it by hand, and one left off would never be counted.
+func TestAuditAllNamesEveryAudit(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	oneLibrary(f)
+	f.json("GET /api/libraries/"+libID+"/items", page())
+	f.json("GET /api/libraries/"+libID+"/series", `{"results":[],"total":0}`)
+	f.json("GET /api/libraries/"+libID+"/authors", `{"results":[],"total":0}`)
+	out, err := toolCaller(t, f)("audit_all", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	named := map[string]bool{}
+	for _, row := range list(t, out["audits"]) {
+		named[str(t, row["audit"])] = true
+	}
+	for _, key := range []string{"clean", "skipped", "not_applicable"} {
+		for _, name := range strs(t, out[key]) {
+			named[strings.Fields(name)[0]] = true // "audit_missing cover"
+		}
+	}
+	for _, name := range register(t, Options{EnableDelete: true}) {
+		if strings.HasPrefix(name, "audit_") && name != "audit_all" && !named[name] {
+			t.Errorf("audit_all does not name %s", name)
 		}
 	}
 }

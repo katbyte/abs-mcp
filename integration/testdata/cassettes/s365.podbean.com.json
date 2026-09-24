@@ -14,8 +14,6 @@
         "Access-Control-Allow-Origin": "*",
         "Cache-Control": "max-age=3600",
         "Content-Type": "audio/mpeg",
-        "Etag": "\"6a90480b-12b991e\"",
-        "Last-Modified": "Thu, 27 Aug 2026 14:22:03 GMT",
         "Server": "Podbean Content Distribution Network",
         "Strict-Transport-Security": "max-age=15552000; includeSubDomains"
       },

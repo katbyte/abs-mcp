@@ -20,6 +20,7 @@ type EpisodeUpdate struct {
 	Subtitle    *string `json:"subtitle,omitempty"`
 	Description *string `json:"description,omitempty"`
 	PubDate     *string `json:"pubDate,omitempty"`
+	PublishedAt *int64  `json:"publishedAt,omitempty"` // what the server sorts by; pubDate alone does not move it
 	Episode     *string `json:"episode,omitempty"`
 	Season      *string `json:"season,omitempty"`
 	EpisodeType *string `json:"episodeType,omitempty"` // full, trailer, bonus

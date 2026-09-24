@@ -36,7 +36,7 @@ func requireProviders(t *testing.T) {
 func restoreBook(t *testing.T, title string) {
 	t.Helper()
 
-	for _, b := range books {
+	for i, b := range books {
 		if b.Title != title {
 			continue
 		}
@@ -54,6 +54,18 @@ func restoreBook(t *testing.T, title string) {
 			args["series"] = toAny(b.Series)
 		}
 		call(t, "item_edit", args)
+
+		// a match fetches the store's cover too: fiction's fixtures have
+		// none, and non-fiction's is the cover.jpg in the book's folder
+		got := call(t, "item_get", map[string]any{"item": title})
+		switch fiction := i < libraries[0].Items; {
+		case fiction && got["no_cover"] == nil:
+			call(t, "item_cover_edit", map[string]any{"item": title, "remove": true})
+		case !fiction:
+			if folder, _ := got["full_path"].(string); folder != "" {
+				call(t, "item_cover_edit", map[string]any{"item": title, "file": folder + "/cover.jpg"})
+			}
+		}
 
 		return
 	}
@@ -222,8 +234,8 @@ func TestItemCoverSearchAndSet(t *testing.T) {
 		t.Cleanup(func() { call(t, "item_cover_edit", map[string]any{"item": book, "remove": true}) })
 
 		out := call(t, "item_cover_edit", map[string]any{"item": book, "url": coverURL})
-		if done, _ := out["done"].(bool); !done {
-			t.Errorf("item_cover_edit done = %v", out["done"])
+		if cover, _ := out["cover"].(string); cover == "" {
+			t.Errorf("item_cover_edit cover = %v, want the one it set, read back", out["cover"])
 		}
 
 		// the fixtures start with no cover, so this is visible on the item
@@ -234,7 +246,10 @@ func TestItemCoverSearchAndSet(t *testing.T) {
 }
 
 // the from_asin path pulls Audible's chapter list, as opposed to the explicit
-// list covered in item_test.go.
+// list covered in item_test.go. The fixture is a one-second file, so the
+// store's chapters for the real Foundation - hours of them - are another
+// recording's: they are refused, and the book keeps the chapters it had.
+// journey_chapters_test.go sets a store's list that fits.
 func TestItemChaptersSetFromASIN(t *testing.T) {
 	requireProviders(t)
 
@@ -252,25 +267,13 @@ func TestItemChaptersSetFromASIN(t *testing.T) {
 		t.Skip("no asin on the candidate")
 	}
 
-	t.Cleanup(func() {
-		call(t, "item_chapters_set", map[string]any{
-			"item":     book,
-			"chapters": []any{map[string]any{"title": "Chapter One", "start": 0}},
-		})
-	})
-
-	out := call(t, "item_chapters_set", map[string]any{"item": book, "from_asin": asin, "region": "us"})
-	n := num(t, out["chapters"], "chapters")
-	if n < 2 {
-		t.Fatalf("chapters = %d, want Audible's list", n)
+	before := call(t, "item_get", map[string]any{"item": book, "chapters": true})["chapter_list"]
+	msg := callErr(t, "item_chapters_set", map[string]any{"item": book, "from_asin": asin, "region": "us"})
+	if !strings.Contains(msg, "another recording") || !strings.Contains(msg, asin) {
+		t.Errorf("a recording's chapters past the end of the audio: %s", msg)
 	}
-
-	got := rows(t, call(t, "item_get", map[string]any{"item": book, "chapters": true})["chapter_list"], "chapter_list")
-	if len(got) != n {
-		t.Errorf("read back %d chapters, want %d", len(got), n)
-	}
-	if title, _ := got[0]["title"].(string); title == "" {
-		t.Error("first chapter has no title")
+	if after := call(t, "item_get", map[string]any{"item": book, "chapters": true})["chapter_list"]; !sameJSON(before, after) {
+		t.Errorf("the refused chapters were written: %v, was %v", after, before)
 	}
 }
 
@@ -382,6 +385,10 @@ func TestAuthorImageSet(t *testing.T) {
 		t.Skip("no image url available to set")
 	}
 
+	// the fixture's authors have no photo, which audit_authors counts
+	t.Cleanup(func() {
+		call(t, "author_edit", map[string]any{"library": "Fiction", "author": "James S. A. Corey", "clear": []any{"image"}})
+	})
 	out := call(t, "author_image_set", map[string]any{
 		"library": "Fiction", "author": "James S. A. Corey", "url": covers[0],
 	})
@@ -394,6 +401,10 @@ func TestAuthorImageSet(t *testing.T) {
 	}
 	if img, _ := author["has_image"].(bool); !img {
 		t.Errorf("has_image = %v, want the downloaded image to be reported: %v", author["has_image"], author)
+	}
+	// and read back, not only the answer's word for it
+	if got := call(t, "author_get", map[string]any{"library": "Fiction", "author": "James S. A. Corey"}); got["has_image"] != true {
+		t.Errorf("author_get has_image = %v after the photo was set", got["has_image"])
 	}
 }
 
@@ -463,7 +474,7 @@ func TestPodcastProviderFlow(t *testing.T) {
 	// keeping the Podcasts library at the two shows the rest of the suite counts on
 	t.Cleanup(func() {
 		if podcastID != "" {
-			call(t, "item_delete", map[string]any{"item": podcastID, "delete_files": true})
+			call(t, "item_delete", map[string]any{"confirm": true, "item": podcastID, "delete_files": true})
 		}
 	})
 
@@ -493,8 +504,9 @@ func TestPodcastProviderFlow(t *testing.T) {
 			"item": podcastID, "auto_download": true,
 			"schedule": "0 * * * *", "keep_episodes": 3, "new_per_check": 1,
 		})
-		if done, _ := out["done"].(bool); !done {
-			t.Errorf("podcast_settings done = %v", out["done"])
+		// the settings as the server now has them, not as they were asked
+		if out["auto_download"] != true || out["schedule"] != "0 * * * *" || num(t, out["keep_episodes"], "keep_episodes") != 3 || num(t, out["new_per_check"], "new_per_check") != 1 {
+			t.Errorf("podcast_settings = %v, want the settings read back", out)
 		}
 	})
 

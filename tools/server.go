@@ -1,10 +1,15 @@
 package tools
 
 import (
+	"cmp"
 	"context"
+	"errors"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/go-kt/version"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -16,17 +21,18 @@ func registerServerTools(r *registry) {
 	// not ask" from the perfectly ordinary answers of no podcasts and nobody
 	// listening.
 	type totalsOut struct {
-		Books          int   `json:"books"`
-		Podcasts       int   `json:"podcasts"`
-		AudioFiles     int   `json:"audio_files"`
-		TotalSizeGB    int64 `json:"total_size_gb"`
-		BooksSizeGB    int64 `json:"books_size_gb"`
-		PodcastsSizeGB int64 `json:"podcasts_size_gb"`
-		Users          int   `json:"users"`
-		OpenSessions   int   `json:"open_sessions"    jsonschema:"how many are playing right now; server_sessions lists them"`
+		Books        int   `json:"books"`
+		Podcasts     int   `json:"podcasts"`
+		AudioFiles   int   `json:"audio_files"`
+		TotalSize    int64 `json:"total_size"    jsonschema:"bytes on disk"`
+		BooksSize    int64 `json:"books_size"    jsonschema:"bytes on disk"`
+		PodcastsSize int64 `json:"podcasts_size" jsonschema:"bytes on disk"`
+		Users        int   `json:"users"`
+		OpenSessions int   `json:"open_sessions" jsonschema:"how many are playing right now; server_sessions lists them"`
 	}
 	type infoOut struct {
 		Version          string       `json:"version"`
+		AbsMCPVersion    string       `json:"abs_mcp_version"             jsonschema:"the build of this MCP server answering, e.g. v0.4.0+12@g3592143: the tag, the commits since it, and the commit"`
 		URL              string       `json:"url"`
 		User             string       `json:"user"                        jsonschema:"the account the API key acts as"`
 		UserType         string       `json:"user_type"                   jsonschema:"root, admin, user or guest; admin-only tools need root/admin"`
@@ -40,7 +46,7 @@ func registerServerTools(r *registry) {
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "server_info",
-		Description: "Check connectivity and see the whole server at once: version, the user the API key acts as and their permissions, the libraries, the metadata providers available for matching, and - for an admin key - server-wide item counts, disk usage, user count and how many people are listening. Call this first when unsure what the key can do. server_sessions lists who is playing what.",
+		Description: "Check connectivity and see the whole server at once: its version and this MCP server's, the user the API key acts as and their permissions, the libraries, the metadata providers available for matching, and - for an admin key - server-wide item counts, disk usage, user count and how many people are listening. Call this first when unsure what the key can do. server_sessions lists who is playing what.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, infoOut, error) {
 		status, err := client.Status(ctx)
 		if err != nil {
@@ -56,12 +62,16 @@ func registerServerTools(r *registry) {
 		}
 
 		out := infoOut{
-			Version:   status.ServerVersion,
-			URL:       client.BaseURL(),
-			User:      me.Username,
-			UserType:  me.Type,
-			CanUpdate: me.IsAdmin() || me.Permissions.Update,
-			CanDelete: me.IsAdmin() || me.Permissions.Delete,
+			Version: status.ServerVersion,
+			// both change what a caller can expect: a server ahead of the
+			// client may answer with things it does not read
+			AbsMCPVersion: version.Version,
+			URL:           client.BaseURL(),
+			User:          me.Username,
+			UserType:      me.Type,
+			CanUpdate:     me.IsAdmin() || me.Permissions.Update,
+			CanDelete:     me.IsAdmin() || me.Permissions.Delete,
+			Libraries:     []libraryRow{}, // none is an answer, not null
 		}
 		for i := range libs {
 			out.Libraries = append(out.Libraries, libraryRowOf(&libs[i]))
@@ -75,12 +85,12 @@ func registerServerTools(r *registry) {
 		// be told that, or it reads the silence as an empty server
 		if st, err := client.ServerStats(ctx); err == nil {
 			t := totalsOut{
-				Books:          st.Books.NumItems,
-				Podcasts:       st.Podcasts.NumItems,
-				AudioFiles:     st.Total.NumAudioFiles,
-				TotalSizeGB:    st.Total.TotalSize >> 30,
-				BooksSizeGB:    st.Books.TotalSize >> 30,
-				PodcastsSizeGB: st.Podcasts.TotalSize >> 30,
+				Books:        st.Books.NumItems,
+				Podcasts:     st.Podcasts.NumItems,
+				AudioFiles:   st.Total.NumAudioFiles,
+				TotalSize:    st.Total.TotalSize,
+				BooksSize:    st.Books.TotalSize,
+				PodcastsSize: st.Podcasts.TotalSize,
 			}
 			if users, err := client.Users(ctx, false); err == nil {
 				t.Users = len(users)
@@ -183,7 +193,7 @@ func registerServerTools(r *registry) {
 	type backupRow struct {
 		ID       string `json:"id"`
 		Filename string `json:"filename"`
-		SizeMB   int64  `json:"size_mb"`
+		Size     int64  `json:"size"                     jsonschema:"bytes"`
 		Created  string `json:"created"`
 		Version  string `json:"server_version,omitempty"`
 	}
@@ -194,7 +204,7 @@ func registerServerTools(r *registry) {
 	backupRows := func(bs []abs.Backup) []backupRow {
 		rows := make([]backupRow, 0, len(bs))
 		for _, b := range bs {
-			rows = append(rows, backupRow{ID: b.ID, Filename: b.Filename, SizeMB: mb(b.FileSize), Created: fmtTime(b.CreatedAt), Version: b.ServerVersion})
+			rows = append(rows, backupRow{ID: b.ID, Filename: b.Filename, Size: b.FileSize, Created: fmtTime(b.CreatedAt), Version: b.ServerVersion})
 		}
 		return rows
 	}
@@ -210,16 +220,45 @@ func registerServerTools(r *registry) {
 		return nil, backupsOut{Location: loc, Backups: backupRows(bs)}, nil
 	})
 
+	type backupCreateOut struct {
+		Created  backupRow   `json:"created"            jsonschema:"the backup this call made"`
+		Replaced bool        `json:"replaced,omitempty" jsonschema:"the server names a backup by the minute it was made, so this one took the place of one made earlier in the same minute"`
+		Pruned   []string    `json:"pruned,omitempty"   jsonschema:"ids of older backups the server deleted to stay within the number it keeps"`
+		Backups  []backupRow `json:"backups"`
+	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "server_backup_create",
-		Description: "Run a server backup now and return the backup list. Admin only. Changes server state (writes a backup file).",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, backupsOut, error) {
-		bs, err := client.CreateBackup(ctx)
+		Description: "Run a server backup now and say which it made, then list the backups. The server names a backup by the minute it was made, so a second one in the same minute replaces the first, and it deletes the oldest past the number it keeps: replaced and pruned say when either happened. Admin only. Changes server state (writes a backup file).",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, backupCreateOut, error) {
+		before, _, err := client.Backups(ctx)
 		if err != nil {
-			return nil, backupsOut{}, err
+			return nil, backupCreateOut{}, err
+		}
+		after, err := client.CreateBackup(ctx)
+		if err != nil {
+			return nil, backupCreateOut{}, err
+		}
+		if len(after) == 0 {
+			return nil, backupCreateOut{}, errors.New("the server accepted the backup but lists none afterwards")
+		}
+		// the one made is the newest; its id can be one listed before, when
+		// it replaced a backup made earlier in the same minute
+		made := slices.MaxFunc(after, func(a, b abs.Backup) int { return cmp.Compare(a.CreatedAt, b.CreatedAt) })
+		out := backupCreateOut{Created: backupRows([]abs.Backup{made})[0], Backups: backupRows(after)}
+		kept := map[string]bool{}
+		for _, b := range after {
+			kept[b.ID] = true
+		}
+		for _, b := range before {
+			switch {
+			case b.ID == made.ID:
+				out.Replaced = true
+			case !kept[b.ID]:
+				out.Pruned = append(out.Pruned, b.ID)
+			}
 		}
 
-		return nil, backupsOut{Backups: backupRows(bs)}, nil
+		return nil, out, nil
 	})
 
 	type tagsIn struct {
@@ -233,14 +272,26 @@ func registerServerTools(r *registry) {
 		Name:        "server_tags",
 		Description: "Every tag and genre in use across all libraries: the server-wide vocabulary to normalize against before merging with metadata_rename. Admin only. library_filters is the per-library equivalent.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in tagsIn) (*mcp.CallToolResult, tagsOut, error) {
+		// "Tags" once fell through both tests and answered genres as well
+		var wantTags, wantGenres bool
+		switch strings.ToLower(strings.TrimSpace(in.Kind)) {
+		case "":
+			wantTags, wantGenres = true, true
+		case "tag", "tags":
+			wantTags = true
+		case "genre", "genres":
+			wantGenres = true
+		default:
+			return nil, tagsOut{}, fmt.Errorf("unknown kind %q; choose tags or genres, or omit it for both", in.Kind)
+		}
 		var out tagsOut
 		var err error
-		if in.Kind != "genre" && in.Kind != "genres" {
+		if wantTags {
 			if out.Tags, err = client.Tags(ctx); err != nil {
 				return nil, tagsOut{}, err
 			}
 		}
-		if in.Kind != "tag" && in.Kind != "tags" {
+		if wantGenres {
 			if out.Genres, err = client.Genres(ctx); err != nil {
 				return nil, tagsOut{}, err
 			}

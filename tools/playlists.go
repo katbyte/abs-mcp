@@ -89,7 +89,7 @@ func resolvePlaylistEntries(ctx context.Context, client *abs.Client, libraryID s
 		if looksLikeID(e.Item) {
 			it, err = client.Item(ctx, e.Item)
 		} else {
-			it, err = resolveItem(ctx, client, libraryID, e.Item)
+			it, err = resolveItemToChange(ctx, client, libraryID, e.Item)
 		}
 		if err != nil {
 			return nil, err
@@ -251,8 +251,14 @@ func registerPlaylistTools(r *registry) {
 			if err != nil {
 				return nil, row{}, err
 			}
-			if in.Name != "" && !strings.EqualFold(in.Name, p.Name) {
-				if p, err = client.UpdatePlaylist(ctx, p.ID, &in.Name, strPtr(in.Description)); err != nil {
+			// the server makes the copy with the collection's name and
+			// description; either asked for is set on it afterwards
+			var rename *string
+			if !strings.EqualFold(name, p.Name) {
+				rename = &name
+			}
+			if rename != nil || in.Description != "" {
+				if p, err = client.UpdatePlaylist(ctx, p.ID, rename, strPtr(in.Description)); err != nil {
 					return nil, row{}, err
 				}
 			}
@@ -297,19 +303,24 @@ func registerPlaylistTools(r *registry) {
 		Name:        "playlist_edit",
 		Description: "Rename a playlist or change its description. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in editIn) (*mcp.CallToolResult, row, error) {
+		// a name of only spaces would leave a playlist nothing can name
+		name := strings.TrimSpace(in.Name)
+		switch {
+		case in.Name != "" && name == "":
+			return nil, row{}, errors.New("name is blank: pass a name, or leave it out to keep the one it has")
+		case name == "" && in.Description == "":
+			return nil, row{}, errors.New("nothing to change: pass name or description")
+		}
 		p, err := resolvePlaylist(ctx, client, in.Playlist)
 		if err != nil {
 			return nil, row{}, err
 		}
-		if in.Name == "" && in.Description == "" {
-			return nil, row{}, errors.New("nothing to change: pass name or description")
-		}
-		if in.Name != "" {
-			if err := playlistNameInUse(ctx, client, p.LibraryID, in.Name, p.ID); err != nil {
+		if name != "" {
+			if err := playlistNameInUse(ctx, client, p.LibraryID, name, p.ID); err != nil {
 				return nil, row{}, err
 			}
 		}
-		updated, err := client.UpdatePlaylist(ctx, p.ID, strPtr(in.Name), strPtr(in.Description))
+		updated, err := client.UpdatePlaylist(ctx, p.ID, strPtr(name), strPtr(in.Description))
 		if err != nil {
 			return nil, row{}, err
 		}
@@ -336,7 +347,7 @@ func registerPlaylistTools(r *registry) {
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "playlist_entries_edit",
-		Description: "Append books or podcast episodes to a playlist, or take them out of it, and say which were added or removed and which it already held or never did. Removing only changes the playlist; the items stay in the library. Removing every entry deletes the playlist: Audiobookshelf does not keep an empty one. Changes server state.",
+		Description: "Append books or podcast episodes to a playlist, or take them out of it, and say which were added or removed and which it already held or never did. Removing only changes the playlist; the items stay in the library. Removing every entry deletes the playlist, as Audiobookshelf keeps no empty one, so that is refused unless the delete tools are switched on. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in entriesEditIn) (*mcp.CallToolResult, changeOut, error) {
 		action := strings.ToLower(strings.TrimSpace(in.Action))
 		if action != "add" && action != "remove" {
@@ -379,6 +390,11 @@ func registerPlaylistTools(r *registry) {
 		}
 		if len(send) == 0 {
 			return nil, out, nil
+		}
+		// the server deletes a playlist its last entry leaves, so emptying one
+		// is a delete, and is only done where deleting is switched on
+		if action == "remove" && len(send) == len(p.Items) && !r.opts.EnableDelete {
+			return nil, changeOut{}, fmt.Errorf("removing every entry of %q deletes the playlist, as Audiobookshelf keeps no empty one; that needs the delete tools switched on (--enable-delete), and then playlist_delete says so plainly", p.Name)
 		}
 		refs := make([]abs.PlaylistEntry, 0, len(send))
 		labels := make([]string, 0, len(send))
@@ -433,10 +449,13 @@ func registerPlaylistTools(r *registry) {
 
 	type deleteOut struct {
 		Deleted string `json:"deleted"`
+		ID      string `json:"id"`
 	}
-	add(r, writeTool, &mcp.Tool{
+	// a delete tool, registered only with --enable-delete, like every tool
+	// that removes a record rather than changing one
+	add(r, deleteTool, &mcp.Tool{
 		Name:        "playlist_delete",
-		Description: "Delete a playlist (its items stay in the library). Changes server state.",
+		Description: "Delete one of the API key user's playlists (its items stay in the library).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, deleteOut, error) {
 		p, err := resolvePlaylist(ctx, client, in.Playlist)
 		if err != nil {
@@ -445,7 +464,18 @@ func registerPlaylistTools(r *registry) {
 		if err := client.DeletePlaylist(ctx, p.ID); err != nil {
 			return nil, deleteOut{}, err
 		}
+		// read back rather than trusted: the answer to a delete is not the
+		// playlist gone
+		left, err := client.Playlists(ctx, p.LibraryID)
+		if err != nil {
+			return nil, deleteOut{}, fmt.Errorf("deleted %q, but reading the playlists back failed: %w", p.Name, err)
+		}
+		for i := range left {
+			if left[i].ID == p.ID {
+				return nil, deleteOut{}, fmt.Errorf("the server accepted the delete but %q (%s) is still listed", p.Name, p.ID)
+			}
+		}
 
-		return nil, deleteOut{Deleted: p.Name}, nil
+		return nil, deleteOut{Deleted: p.Name, ID: p.ID}, nil
 	})
 }

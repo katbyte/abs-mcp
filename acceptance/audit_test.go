@@ -18,7 +18,7 @@ var auditTools = []string{
 	"audit_issues",
 	"audit_no_audio",
 	"audit_path",
-	"audit_single_chapter",
+	"audit_chapters",
 	"audit_podcast_stale_feed",
 	"audit_podcast_no_episodes",
 }
@@ -174,13 +174,27 @@ func TestAuditAll(t *testing.T) {
 	}
 	clean := strs(t, all["clean"], "clean")
 
-	// every audit appears exactly once, in one list or the other; the two
-	// that fetch something per item are named as skipped instead
+	// every audit appears exactly once, found, clean or not applicable (the
+	// podcast audits, in a library of books); the ones that fetch something
+	// per item are named as skipped instead
+	var notApplicable []string
+	if all["not_applicable"] != nil {
+		notApplicable = strs(t, all["not_applicable"], "not_applicable")
+	}
+	if !slices.Equal(notApplicable, []string{"audit_podcast_stale_feed", "audit_podcast_no_episodes"}) {
+		t.Errorf("not_applicable = %v, want the two podcast audits", notApplicable)
+	}
 	crossItem := []string{"audit_duplicates", "audit_spelling", "audit_authors", "audit_narrators", "audit_series", "audit_genres"}
 	for _, name := range slices.Concat(auditTools, crossItem) {
 		_, reported := counts[name]
-		if reported == slices.Contains(clean, name) {
-			t.Errorf("%s is in both lists or neither: found=%v clean=%v", name, reported, slices.Contains(clean, name))
+		lists := 0
+		for _, in := range []bool{reported, slices.Contains(clean, name), slices.Contains(notApplicable, name)} {
+			if in {
+				lists++
+			}
+		}
+		if lists != 1 {
+			t.Errorf("%s is in %d of found, clean and not applicable, want 1", name, lists)
 		}
 	}
 	perItem := []string{"audit_covers", "audit_unembedded", "audit_matched"}
@@ -193,10 +207,32 @@ func TestAuditAll(t *testing.T) {
 		}
 	}
 
-	// with deep those two run as well, and agree with the tools themselves
+	// with deep the covers and the embedded tags run as well, and agree
+	// with the tools themselves. Fiction is on the server's default
+	// provider, google, which cannot look an asin up, and no --providers is
+	// set: audit_matched refuses it alone, and deep skips it saying so
 	deep := call(t, "audit_all", map[string]any{"library": "Fiction", "deep": true})
-	if _, present := deep["skipped"]; present {
-		t.Errorf("deep still skipped %v", deep["skipped"])
+	if skipped := strs(t, deep["skipped"], "skipped"); !slices.Equal(skipped, []string{"audit_matched"}) {
+		t.Errorf("deep skipped %v, want audit_matched alone", skipped)
+	}
+	const onGoogle = `library "Fiction" is on the google provider, which cannot look up an asin`
+	for _, row := range rows(t, deep["not_run"], "not_run") {
+		if row["audit"] == "audit_matched" && !strings.Contains(text(row["reason"]), onGoogle) {
+			t.Errorf("audit_matched not run because %q, want %q", row["reason"], onGoogle)
+		}
+	}
+	for _, c := range []struct {
+		tool string
+		args map[string]any
+	}{
+		{"audit_matched", map[string]any{"library": "Fiction"}},
+		{"audit_covers", map[string]any{"library": "Fiction", "store": true}},
+		{"item_match_tag", map[string]any{"library": "Fiction"}},
+		{"item_cover_upgrade", map[string]any{"library": "Fiction", "items": []any{"Foundation"}}},
+	} {
+		if msg := callErr(t, c.tool, c.args); !strings.Contains(msg, onGoogle) || !strings.Contains(msg, "--providers") {
+			t.Errorf("%s on Fiction with no providers: %q, want the library, its provider and the fix", c.tool, msg)
+		}
 	}
 	deepCounts := map[string]int{}
 	for _, row := range rows(t, deep["audits"], "audits") {
@@ -204,7 +240,7 @@ func TestAuditAll(t *testing.T) {
 			deepCounts[name] = num(t, row["found"], "found")
 		}
 	}
-	for _, name := range perItem {
+	for _, name := range perItem[:2] {
 		one := call(t, name, map[string]any{"library": "Fiction"})
 		if got := num(t, one["total_findings"], "total_findings"); got != deepCounts[name] {
 			t.Errorf("%s: audit_all deep says %d, the audit itself says %d", name, deepCounts[name], got)
@@ -385,6 +421,7 @@ func TestAuditUnembedded(t *testing.T) {
 		t.Errorf("podcasts were scanned: %v", pods)
 	}
 
+	keepAudioFiles(t, item)
 	if embedded, _ := call(t, "item_embed_metadata", map[string]any{"item": item})["embedded"].(bool); !embedded {
 		t.Fatalf("item_embed_metadata did not embed %s", item)
 	}

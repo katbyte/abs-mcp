@@ -13,11 +13,8 @@
         "Access-Control-Allow-Origin": "*",
         "Content-Type": "image/jpeg",
         "Edge-Cache-Tag": "x-cache-269,/images/S/amzn-author-media-prod/6ce4rnjgpci8m81tu3aibtlf5r",
-        "Last-Modified": "Thu, 27 Apr 2023 04:52:16 GMT",
         "Server": "Server",
         "Surrogate-Key": "x-cache-269 /images/S/amzn-author-media-prod/6ce4rnjgpci8m81tu3aibtlf5r",
-        "Via": "1.1 dde74ce86558de137d520253d0e46822.cloudfront.net (CloudFront)",
-        "X-Amz-Ir-Id": "7c626627-cf34-4c21-8aa8-b5ea48d79aac",
         "X-Nginx-Cache-Status": "HIT"
       },
       "elided": true,

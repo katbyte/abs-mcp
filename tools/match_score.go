@@ -33,6 +33,11 @@ var confidenceRank = map[string]int{confExact: 0, confLikely: 1, confEdition: 2,
 // recording may be: encoder padding and a trimmed credit, not a chapter.
 const defaultDurationTolerance = 0.03
 
+// maxDurationTolerance is the most a caller may loosen it to. The editions it
+// is there to tell apart are ten to nineteen percent shorter, and a tolerance
+// wide enough to cover them calls every one of them exact.
+const maxDurationTolerance = 0.1
+
 type matchScore struct {
 	Confidence string
 	Reason     string

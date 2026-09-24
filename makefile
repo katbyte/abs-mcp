@@ -160,8 +160,10 @@ depscheck: ## Check that go.mod/go.sum and vendor/ are in sync
 		(echo; echo "golangci-lint version mismatch: .tools/go.mod has $$modv but .tools/.custom-gcl.yml has $$gclv - update .custom-gcl.yml to match."; exit 1)
 
 ##@ Testing
-test: build ## Run tests
-	go test ./... -timeout ${TEST_TIMEOUT}
+# -race because the tools run a turn's calls at once, and a shared setting
+# written by one server and read by another's calls went unseen without it
+test: build ## Run the unit tests, with the race detector
+	go test -race ./... -timeout ${TEST_TIMEOUT}
 
 test-integration: ## Run the SDK tests (lib/abs shapes) against an already-running server
 	@[ -n "${ABS_SERVER}" ] && [ -n "${ABS_TOKEN}" ] || \
@@ -173,12 +175,13 @@ test-acceptance: ## Run the tool tests (behaviour, audits, providers) against an
 		(echo 'ABS_SERVER and ABS_TOKEN must be set; or use "make testacc"'; exit 1)
 	go test -tags integration -count=1 ./acceptance/... -timeout ${TEST_TIMEOUT} -v
 
-# each suite gets its own container: the SDK tests create and delete libraries
-# of their own, which would trample the tool suite's fixtures
+# each suite gets its own container and provider proxy port: the SDK tests
+# create and delete libraries of their own, which would trample the tool
+# suite's fixtures, and the two can then run side by side
 testacc-integration: ## SDK tests in a throwaway container
 	@echo "==> integration (SDK) on port 13379..."
 	@set -e; \
-		ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_PORT=13379 ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk \
+		ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_PORT=13379 ABS_TEST_PROXY_PORT=18180 ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk \
 			scripts/abs-testenv.sh up | grep '^export' > .testenv-sdk.sh; \
 		trap 'st=$$?; [ $$st -eq 0 ] || docker logs abs-mcp-sdk 2>&1 | tail -60; \
 			ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk scripts/abs-testenv.sh down; \
@@ -203,7 +206,7 @@ testacc: testacc-integration testacc-acceptance ## Run both live suites, each in
 # directory and covdata merges them, which is stdlib tooling rather than a
 # third-party merger.
 COVERDIR?=.coverage
-COVERPKG=./tools/...,./lib/abs/...,./cli/...
+COVERPKG=./tools/...,./lib/...,./cli/...
 
 cover: ## Run every suite with coverage and report the total
 	@rm -rf $(COVERDIR)
@@ -213,7 +216,7 @@ cover: ## Run every suite with coverage and report the total
 		-args -test.gocoverdir=$(CURDIR)/$(COVERDIR)/unit >/dev/null
 	@echo "==> integration (SDK) with coverage..."
 	@set -e; \
-		ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_PORT=13379 ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk \
+		ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_PORT=13379 ABS_TEST_PROXY_PORT=18180 ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk \
 			scripts/abs-testenv.sh up | grep '^export' > .testenv-sdk.sh; \
 		trap 'st=$$?; ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk \
 			scripts/abs-testenv.sh down; rm -f .testenv-sdk.sh; exit $$st' EXIT; \
@@ -238,14 +241,16 @@ cover: ## Run every suite with coverage and report the total
 cover-html: cover ## Run every suite with coverage and open the HTML report
 	@go tool cover -html=$(COVERDIR)/coverage.out
 
+# ABS_TEST_RECORD=all refreshes every recording a run touches; set to 1 on a
+# testacc target it records only the requests no cassette holds
 record-sdk: ## Re-record the SDK suite's provider cassettes against the real providers
 	@echo "==> recording the SDK cassettes (this hits the network)..."
 	@set -e; \
-		ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_PORT=13379 ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk \
+		ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_PORT=13379 ABS_TEST_PROXY_PORT=18180 ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk \
 			scripts/abs-testenv.sh up | grep '^export' > .testenv-sdk.sh; \
 		trap 'ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk scripts/abs-testenv.sh down; rm -f .testenv-sdk.sh' EXIT; \
 		. ./.testenv-sdk.sh; \
-		ABS_TEST_RECORD=1 go test -tags integration -count=1 ./integration/... -timeout ${TEST_TIMEOUT} -v
+		ABS_TEST_RECORD=all go test -tags integration -count=1 ./integration/... -timeout ${TEST_TIMEOUT} -v
 
 record: ## Re-record the provider cassettes against the real Audible/Audnexus/iTunes
 	@echo "==> recording against the real providers (this hits the network)..."
@@ -253,15 +258,21 @@ record: ## Re-record the provider cassettes against the real Audible/Audnexus/iT
 		scripts/abs-testenv.sh up | grep '^export' > .testenv.sh; \
 		trap 'scripts/abs-testenv.sh down; rm -f .testenv.sh' EXIT; \
 		. ./.testenv.sh; \
-		ABS_TEST_RECORD=1 go test -tags integration -count=1 ./acceptance/... -timeout ${TEST_TIMEOUT} -v
+		ABS_TEST_RECORD=all go test -tags integration -count=1 ./acceptance/... -timeout ${TEST_TIMEOUT} -v
 
-record-check: ## Check the provider cassettes still match the real APIs, without rewriting them
+record-check: ## Check both suites' provider cassettes still match the real APIs, without rewriting them
 	@echo "==> verifying cassettes against the real providers (this hits the network)..."
 	@set -e; \
 		scripts/abs-testenv.sh up | grep '^export' > .testenv.sh; \
 		trap 'scripts/abs-testenv.sh down; rm -f .testenv.sh' EXIT; \
 		. ./.testenv.sh; \
 		ABS_TEST_VERIFY=1 go test -tags integration -count=1 ./acceptance/... -timeout ${TEST_TIMEOUT}
+	@set -e; \
+		ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_PORT=13379 ABS_TEST_PROXY_PORT=18180 ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk \
+			scripts/abs-testenv.sh up | grep '^export' > .testenv-sdk.sh; \
+		trap 'ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk scripts/abs-testenv.sh down; rm -f .testenv-sdk.sh' EXIT; \
+		. ./.testenv-sdk.sh; \
+		ABS_TEST_VERIFY=1 go test -tags integration -count=1 ./integration/... -timeout ${TEST_TIMEOUT}
 
 testenv-up: ## Start and seed a throwaway Audiobookshelf container
 	@scripts/abs-testenv.sh up
@@ -274,4 +285,4 @@ apicheck: ## Report how much of the Audiobookshelf API lib/abs covers
 
 check-all: build test testacc lint actionlint yamllint shellcheck depscheck apicheck ## Run build + tests (incl. integration) + all linters + depscheck
 
-.PHONY: default all help fmt goimports build docker lint lint-fix actionlint yamllint shellcheck zizmor depscheck check-all install tools test test-integration testacc cover cover-html record testenv-up testenv-down apicheck
+.PHONY: default all help fmt goimports build docker lint lint-fix actionlint yamllint shellcheck zizmor depscheck check-all install tools test test-integration test-acceptance testacc testacc-integration testacc-acceptance cover cover-html record record-sdk record-check testenv-up testenv-down apicheck

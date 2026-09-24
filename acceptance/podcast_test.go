@@ -98,9 +98,9 @@ func TestPodcastEpisodeDelete(t *testing.T) {
 	}
 	id, _ := episodes[0]["id"].(string)
 
-	out := call(t, "podcast_episode_delete", map[string]any{"item": "Well There's Your Problem", "episode": id})
-	if done, _ := out["done"].(bool); !done {
-		t.Errorf("podcast_episode_delete done = %v", out["done"])
+	out := call(t, "podcast_episode_delete", map[string]any{"item": "Well There's Your Problem", "episode": id, "confirm": true})
+	if deleted, _ := out["deleted"].(bool); !deleted {
+		t.Errorf("podcast_episode_delete deleted = %v", out["deleted"])
 	}
 	t.Cleanup(func() {
 		// the audio file is still on disk, so a rescan restores the record

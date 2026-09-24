@@ -26,7 +26,7 @@ import (
 // a cover that is a different picture from the one the store shows for that
 // asin, which is either a wrong match or another edition's art, and either
 // way worth a look. The store checks cost a provider request and two image
-// fetches per book, so they run over a page of matched books at a time.
+// fetches per book, so they run over a window of matched books at a time.
 //
 // item_cover_upgrade does the fix: for each book it fetches the store's
 // full-size cover and sets it when it is bigger and, unless told otherwise,
@@ -59,7 +59,7 @@ func fullSizeCoverURL(u string) string {
 type coverRow struct {
 	ID       string `json:"id"`
 	Title    string `json:"title"`
-	Problem  string `json:"problem"               jsonschema:"missing: no cover; ratio: not square (with store, a second row carries the store's square art: item_cover_upgrade square=true takes it); small: narrower than min_pixels; banner: an 'Only from Audible' ribbon across the bottom-right corner; upgrade: the store has the same picture bigger, or has one where the book has none; differs: the store's cover for the book's asin is another picture"`
+	Problem  string `json:"problem"               jsonschema:"missing: no cover; ratio: not square (with store, a second row carries the store's square art: item_cover_upgrade square=true takes it); small: narrower than min_pixels; banner: an 'Only from Audible' ribbon across the bottom-right corner; upgrade: the store has the same picture bigger, or has one where the book has none or its file is gone; differs: the store's cover for the book's asin is another picture; skipped: with store, the book could not be compared, why says what failed, and it is not counted as a finding"`
 	Width    int    `json:"width,omitempty"`
 	Height   int    `json:"height,omitempty"`
 	Ratio    string `json:"ratio,omitempty"`
@@ -81,13 +81,14 @@ type coverCounts struct {
 }
 
 type coversOut struct {
-	Checked  int         `json:"covers_checked"`
-	Skipped  int         `json:"skipped,omitempty"       jsonschema:"covers in a format Go cannot read (webp), or files that are gone"`
-	Store    int         `json:"store_checked,omitempty" jsonschema:"matched books compared with their store, this page"`
-	Found    int         `json:"total_findings"`
-	Counts   coverCounts `json:"counts"`
-	Findings []coverRow  `json:"findings"`
-	NextPage *int        `json:"next_page,omitempty"     jsonschema:"pass as page to compare the next books with their store; absent when every matched book has been compared"`
+	Scanned    int         `json:"items_scanned"           jsonschema:"books looked at: every book on the library-wide checks, or past offset 0 the matched books compared"`
+	Checked    int         `json:"covers_checked"`
+	Skipped    int         `json:"skipped,omitempty"       jsonschema:"covers that could not be judged: a format Go cannot read (webp), a file that is gone, or a fetch that failed, the store's included; with store each such book is also a skipped row saying why"`
+	Store      int         `json:"store_checked,omitempty" jsonschema:"matched books compared with their store: this call's window"`
+	Found      int         `json:"total_findings"          jsonschema:"the library-wide findings (at offset 0 only) plus the upgrades and differs in this window; a store ratio row adds the store's art to a ratio finding already counted"`
+	Counts     coverCounts `json:"counts"`
+	Findings   []coverRow  `json:"findings"`
+	NextOffset int         `json:"next_offset,omitempty"   jsonschema:"with store: pass back as offset to compare the next matched books; absent when every one has been compared"`
 }
 
 // coverLocalScope is what the library-only sweep judges.
@@ -110,6 +111,7 @@ func sweepCoverLocal(ctx context.Context, client *abs.Client, libraryID string, 
 			if it.IsPodcast() {
 				continue
 			}
+			out.Scanned++
 			row := coverRow{ID: it.ID, Title: it.Title()}
 			if !it.HasCover() { // the listing already says so: no request needed
 				row.Problem, row.Why = "missing", "no cover"
@@ -290,48 +292,48 @@ type coverStoreScope struct {
 	Providers []string
 	Factor    float64 // how much wider the store's must be to count as an upgrade
 	Tolerance float64 // how far from square is still square
-	PageSize  int
-	Page      int
+	Limit     int     // matched books to compare
+	Offset    int     // matched books to pass over first
 }
 
-// sweepCoverStore compares a page of a library's matched books with their
+// sweepCoverStore compares a window of a library's matched books with their
 // store: a bigger copy of the same picture is an upgrade, and so is any
 // cover where the book has none; another picture is reported as differing,
-// with both images to look at. Says whether a further page exists.
-func sweepCoverStore(ctx context.Context, client *abs.Client, lib *abs.Library, scope coverStoreScope, out *coversOut) (bool, error) {
+// with both images to look at. Says whether more lie past the window.
+func sweepCoverStore(ctx context.Context, client *abs.Client, prov providerConfig, lib *abs.Library, scope coverStoreScope, out *coversOut) (bool, error) {
 	if lib.IsPodcast() {
 		return false, nil
 	}
-	providers := providersFor(scope.Providers, lib)
-	page, err := client.Items(ctx, lib.ID, abs.ItemsOptions{Limit: scope.PageSize, Page: scope.Page, Sort: "media.metadata.title", Minified: true})
-	if err != nil {
-		return false, err
-	}
-	for i := range page.Results {
-		it := &page.Results[i]
-		if it.IsPodcast() || strings.TrimSpace(it.Media.Metadata.ASIN) == "" {
-			continue
-		}
-		row, err := compareWithStore(ctx, client, it, providerOrder(it, providers), scope.Factor, scope.Tolerance)
-		if err != nil {
-			return false, err
-		}
+	providers := prov.providersFor(scope.Providers, lib)
+	return matchedWindow(ctx, client, lib.ID, bookWindow{Matched: hasASIN, Offset: scope.Offset, Limit: scope.Limit}, func(it *abs.Item) error {
 		out.Store++
+		row, err := compareWithStore(ctx, client, it, prov.providerOrder(it, providers), scope.Factor, scope.Tolerance)
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			// one book's store or cover failing is that book's problem: a
+			// window that stopped at it could never be got past
+			out.Skipped++
+			out.Findings = append(out.Findings, coverRow{ID: it.ID, Title: it.Title(), Problem: "skipped", Why: err.Error()})
+			return nil
+		}
 		if row == nil {
-			continue
+			return nil
 		}
 		switch row.Problem {
 		case "upgrade":
 			out.Counts.Upgrade++
+			out.Found++
 		case "differs":
 			out.Counts.Differs++
-		case "ratio":
-			out.Counts.Ratio++ // the library-only sweep counted it too; this row carries the store's art
+			out.Found++
 		}
-		out.Found++
-		out.Findings = append(out.Findings, *row) // a page is already a bound: the limit is for the library-wide checks
-	}
-	return (scope.Page+1)*scope.PageSize < page.Total, nil
+		// a ratio row carries the store's art for a book the library-wide
+		// sweep counted already, so it is not counted again
+		out.Findings = append(out.Findings, *row) // a window is already a bound: the limit is for the library-wide checks
+		return nil
+	})
 }
 
 // compareWithStore is one book against its store's cover: nil when they
@@ -347,7 +349,12 @@ func compareWithStore(ctx context.Context, client *abs.Client, it *abs.Item, pro
 		return &row, nil
 	}
 	w, h, err := client.CoverSize(ctx, it.ID)
-	if err != nil && !errors.Is(err, abs.ErrNoCover) {
+	switch {
+	case errors.Is(err, abs.ErrNoCover):
+		// the listing names a cover and the file is gone: as good as none
+		row.Problem, row.Why = "upgrade", fmt.Sprintf("the cover file is gone; %s has one %dpx wide", sc.FoundIn, sc.Width)
+		return &row, nil
+	case err != nil:
 		w, h = 0, 0 // unreadable on disk (webp): the size is unknown, the picture can still be compared
 	}
 	row.Width, row.Height = w, h
@@ -384,16 +391,17 @@ func compareWithStore(ctx context.Context, client *abs.Client, it *abs.Item, pro
 
 func registerCoverAudit(r *registry) {
 	client := r.client
+	prov := r.providerConfig()
 
 	type coversIn struct {
 		Library   string   `json:"library,omitempty"    jsonschema:"library name or id; default every book library"`
 		Tolerance float64  `json:"tolerance,omitempty"  jsonschema:"how far from square counts as square, default 0.1 (a 10% deviation)"`
 		MinPixels int      `json:"min_pixels,omitempty" jsonschema:"report covers narrower than this, default 400"`
-		Limit     int      `json:"limit,omitempty"      jsonschema:"maximum findings from the library-wide checks, default 50; with store, also how many books to compare per call, at most 200, and every store finding on the page is reported"`
+		Limit     int      `json:"limit,omitempty"      jsonschema:"maximum findings from the library-wide checks, default 50, at most 1000; with store, also how many matched books to compare per call, at most 200, and every store finding among them is reported"`
 		Banner    bool     `json:"banner,omitempty"     jsonschema:"also look for the 'Only from Audible' ribbon across the bottom-right corner of every cover: a fetch of the server's 400-pixel copy per cover, found by its colour and angle"`
-		Store     bool     `json:"store,omitempty"      jsonschema:"also compare each matched book's cover with its store's: a bigger copy of the same picture is an upgrade, another picture is reported as differing. A provider request and two image fetches per book, so this works through a page of matched books per call: pass next_page back as page"`
-		Page      int      `json:"page,omitempty"       jsonschema:"with store: which page of matched books, from next_page"`
-		Providers []string `json:"providers,omitempty"  jsonschema:"with store: where to look the asins up, in order, default the server's --providers, else the library's provider"`
+		Store     bool     `json:"store,omitempty"      jsonschema:"also compare each matched book's cover with its store's: a bigger copy of the same picture is an upgrade, another picture is reported as differing. A provider request and two image fetches per book, so this works through limit matched books per call: pass next_offset back as offset"`
+		Offset    int      `json:"offset,omitempty"     jsonschema:"with store: skip this many matched books, counted in the order they were added: a previous call's next_offset. The library-wide checks are reported at offset 0 only"`
+		Providers []string `json:"providers,omitempty"  jsonschema:"with store: where to look the asins up, in order, default the server's --providers, else the library's provider, which must then be an Audible store"`
 		Factor    float64  `json:"factor,omitempty"     jsonschema:"with store: how much wider the store's cover must be to count as an upgrade, default 1.5"`
 	}
 	add(r, readTool, &mcp.Tool{
@@ -402,7 +410,7 @@ func registerCoverAudit(r *registry) {
 			"These read every cover file's header, one request per item with a cover, so audit_all runs this only with deep. " +
 			"With banner=true, every cover is fetched small and checked for the 'Only from Audible' ribbon across its bottom-right corner, found by colour and angle. " +
 			"With store=true, two more: upgrade, where the book's store has the same picture bigger (or has one where the book has none), with the full-size url for item_cover_edit or item_cover_upgrade; and differs, where the store's cover for the book's asin is another picture, which is a wrong match or another edition's art, with both images to look at and how far apart they are; a cover that is not square is reported as ratio with the store's square art attached rather than as differs, since square is the convention and the store's art is the fix. " +
-			"Same or different is decided by perceptual hash (a DCT hash, with a difference hash as a second opinion), so a resize, a recompression or a shaved border is still the same picture. The store checks work through a page of matched books per call; next_page says when there are more. " +
+			"Same or different is decided by perceptual hash (a DCT hash, with a difference hash as a second opinion), so a resize, a recompression or a shaved border is still the same picture. The store checks work through limit matched books per call, counting only books with an asin, in the order they were added; next_offset says when there are more, and a call past offset 0 reports only its store rows. A book whose store or cover cannot be fetched is a skipped row saying why, and the rest are still compared. " +
 			"Fix a missing, tall or small cover with item_cover_search then item_cover_edit, and an upgrade with item_cover_upgrade.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in coversIn) (*mcp.CallToolResult, coversOut, error) {
 		tolerance := in.Tolerance
@@ -413,7 +421,7 @@ func registerCoverAudit(r *registry) {
 		if minPixels <= 0 {
 			minPixels = defaultCoverMinPixels
 		}
-		limit := limitOr(in.Limit, coverPageSize)
+		limit := auditLimit(in.Limit, coverPageSize)
 		factor := in.Factor
 		if factor <= 1 {
 			factor = defaultUpgradeFactor
@@ -423,25 +431,48 @@ func registerCoverAudit(r *registry) {
 		if err != nil {
 			return nil, coversOut{}, err
 		}
-
-		out := coversOut{Findings: []coverRow{}}
-		local := coverLocalScope{Tolerance: tolerance, MinPixels: minPixels, Banner: in.Banner, Limit: limit}
-		for i := range libs {
-			if err := sweepCoverLocal(ctx, client, libs[i].ID, local, &out); err != nil {
+		if in.Store && len(libs) != 1 {
+			return nil, coversOut{}, errors.New("store compares one library at a time: pass library")
+		}
+		if in.Offset != 0 && !in.Store {
+			return nil, coversOut{}, errors.New("offset only means something with store: the library-wide checks read every cover in one call")
+		}
+		// a store the server lacks, or a library whose own cannot look an
+		// asin up, is refused before the library-wide sweep, not after
+		// reading every cover in it
+		if in.Store {
+			if err := prov.checkProviders(ctx, client, in.Providers, true); err != nil {
+				return nil, coversOut{}, err
+			}
+			if err := prov.lookupRefusal(in.Providers, &libs[0]); err != nil {
 				return nil, coversOut{}, err
 			}
 		}
-		if in.Store {
-			if len(libs) != 1 {
-				return nil, coversOut{}, errors.New("store compares one library at a time: pass library")
+
+		out := coversOut{Findings: []coverRow{}}
+		// the library-wide checks answer the same at every offset, so a
+		// later store window leaves them to the first rather than repeating
+		// them
+		offset := max(in.Offset, 0)
+		if !in.Store || offset == 0 {
+			local := coverLocalScope{Tolerance: tolerance, MinPixels: minPixels, Banner: in.Banner, Limit: limit}
+			for i := range libs {
+				if err := sweepCoverLocal(ctx, client, libs[i].ID, local, &out); err != nil {
+					return nil, coversOut{}, err
+				}
 			}
-			scope := coverStoreScope{Providers: in.Providers, Factor: factor, Tolerance: tolerance, PageSize: min(limit, coverPageMax), Page: in.Page}
-			more, err := sweepCoverStore(ctx, client, &libs[0], scope, &out)
+		}
+		if in.Store {
+			scope := coverStoreScope{Providers: in.Providers, Factor: factor, Tolerance: tolerance, Limit: min(limit, coverPageMax), Offset: offset}
+			more, err := sweepCoverStore(ctx, client, prov, &libs[0], scope, &out)
 			if err != nil {
 				return nil, coversOut{}, err
 			}
 			if more {
-				out.NextPage = new(in.Page + 1)
+				out.NextOffset = offset + out.Store
+			}
+			if offset > 0 {
+				out.Scanned = out.Store
 			}
 		}
 
@@ -451,7 +482,7 @@ func registerCoverAudit(r *registry) {
 	type upgradeIn struct {
 		Items      []string `json:"items"                 jsonschema:"the books to upgrade, by id or exact title"`
 		Library    string   `json:"library,omitempty"     jsonschema:"library name or id, for resolving titles"`
-		Providers  []string `json:"providers,omitempty"   jsonschema:"where to look the asins up, in order, default the server's --providers, else the library's provider"`
+		Providers  []string `json:"providers,omitempty"   jsonschema:"where to look the asins up, in order, default the server's --providers, else the library's provider, which must then be an Audible store"`
 		Factor     float64  `json:"factor,omitempty"      jsonschema:"how much wider the store's cover must be to replace the current one, default 1.5; a book with no cover takes any"`
 		AnyPicture bool     `json:"any_picture,omitempty" jsonschema:"replace the cover even when the store's is a different picture; off by default so a curated cover is not swapped for another edition's art"`
 		Square     bool     `json:"square,omitempty"      jsonschema:"take the store's cover whenever the current one is not square (a jacket scan), whatever the picture and size: audiobook art is square by convention"`
@@ -461,22 +492,24 @@ func registerCoverAudit(r *registry) {
 	type upgradeRow struct {
 		ID       string `json:"id"`
 		Title    string `json:"title"`
-		Action   string `json:"action"                jsonschema:"upgraded: the store's cover was set; would_upgrade: preview; kept_size: the store's is not enough bigger; kept_picture: the store's is another picture, pass any_picture to take it; kept_banner: the store's copy wears the 'Only from Audible' ribbon and the current cover does not, so it is not taken; no_asin: the book is not matched; not_found: no store has the asin or its record has no cover"`
+		Action   string `json:"action"                jsonschema:"upgraded: the store's cover was set; would_upgrade: preview; kept_size: the store's is not enough bigger; kept_picture: the store's is another picture, pass any_picture to take it; kept_banner: the store's copy wears the 'Only from Audible' ribbon and the current cover does not, so it is not taken; no_asin: the book is not matched; not_found: no store has the asin or its record has no cover; failed: the book could not be checked or set, error says why, and the batch stopped there"`
 		Width    int    `json:"width,omitempty"       jsonschema:"the cover before"`
 		StoreW   int    `json:"store_width,omitempty"`
 		StoreURL string `json:"store_url,omitempty"`
 		FoundIn  string `json:"found_in,omitempty"`
 		Distance string `json:"distance,omitempty"`
+		Error    string `json:"error,omitempty"       jsonschema:"failed only: what went wrong"`
 	}
 	type upgradeOut struct {
 		Upgraded int          `json:"upgraded"`
 		Rows     []upgradeRow `json:"items"`
+		NotTried []string     `json:"not_tried,omitempty" jsonschema:"the books after a failed one, as they were passed: not looked at, to pass again once the failure is dealt with"`
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name: "item_cover_upgrade",
-		Description: "Replace a matched book's cover with its store's full-size one when that is bigger: the asin is looked up, the store's cover fetched at full size and compared, and set if it is at least factor times as wide and the same picture by perceptual hash (any_picture takes it regardless; square takes it whenever the current cover is not square). A book with no cover takes the store's. " +
+		Description: "Replace a matched book's cover with its store's full-size one when that is bigger: the asin is looked up, the store's cover fetched at full size and compared, and set if it is at least factor times as wide and the same picture by perceptual hash (any_picture takes it regardless; square takes it whenever the current cover is not square). A book with no cover, or whose cover file is gone, takes the store's. " +
 			"A store copy wearing the 'Only from Audible' ribbon is never put over a cover that does not wear one. " +
-			"Takes the rows audit_covers reports as upgrade or ratio, or any list of books. preview reports without changing anything. Changes server state.",
+			"Takes the rows audit_covers reports as upgrade or ratio, or any list of books. A failure part way through a batch stops it and is reported as a failed row after the books already done, with the rest under not_tried. preview reports without changing anything. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in upgradeIn) (*mcp.CallToolResult, upgradeOut, error) {
 		if len(in.Items) == 0 {
 			return nil, upgradeOut{}, errors.New("at least one item is required")
@@ -489,40 +522,58 @@ func registerCoverAudit(r *registry) {
 		if tolerance <= 0 {
 			tolerance = defaultCoverTolerance
 		}
-		out := upgradeOut{Rows: make([]upgradeRow, 0, len(in.Items))}
-		for _, ref := range in.Items {
-			it, err := resolveItem(ctx, client, in.Library, ref)
+		if err := prov.checkProviders(ctx, client, in.Providers, true); err != nil {
+			return nil, upgradeOut{}, err
+		}
+		// a named library is refused before any book; without one each book's
+		// own is, when it is looked up
+		if in.Library != "" {
+			lib, err := resolveLibrary(ctx, client, in.Library)
 			if err != nil {
 				return nil, upgradeOut{}, err
 			}
-			row := upgradeRow{ID: it.ID, Title: it.Title()}
+			if err := prov.lookupRefusal(in.Providers, lib); err != nil {
+				return nil, upgradeOut{}, err
+			}
+		}
+		upgrade := func(ref string, row *upgradeRow) error {
+			it, err := resolveItemToChange(ctx, client, in.Library, ref)
+			if err != nil {
+				return err
+			}
+			row.ID, row.Title = it.ID, it.Title()
 			if it.IsPodcast() || strings.TrimSpace(it.Media.Metadata.ASIN) == "" {
 				row.Action = "no_asin"
-				out.Rows = append(out.Rows, row)
-				continue
+				return nil
 			}
 			lib, err := client.Library(ctx, it.LibraryID)
 			if err != nil {
-				return nil, upgradeOut{}, err
+				return err
 			}
-			sc, err := storeCoverFor(ctx, client, it, providerOrder(it, providersFor(in.Providers, lib)))
+			if err := prov.lookupRefusal(in.Providers, lib); err != nil {
+				return err
+			}
+			sc, err := storeCoverFor(ctx, client, it, prov.providerOrder(it, prov.providersFor(in.Providers, lib)))
 			if err != nil {
-				return nil, upgradeOut{}, err
+				return err
 			}
 			if sc == nil {
 				row.Action = "not_found"
-				out.Rows = append(out.Rows, row)
-				continue
+				return nil
 			}
 			row.StoreW, row.StoreURL, row.FoundIn = sc.Width, sc.URL, sc.FoundIn
+			w, h, err := 0, 0, abs.ErrNoCover
 			if it.HasCover() {
-				w, h, err := client.CoverSize(ctx, it.ID)
+				w, h, err = client.CoverSize(ctx, it.ID)
 				if err == nil {
 					row.Width = w
 				}
+			}
+			// a cover the listing names whose file is gone is no cover at all
+			if !errors.Is(err, abs.ErrNoCover) {
 				have, err := libraryCoverImage(ctx, client, it.ID)
 				if err != nil {
-					return nil, upgradeOut{}, fmt.Errorf("cover of %s: %w", it.Title(), err)
+					return fmt.Errorf("cover of %s: %w", it.Title(), err)
 				}
 				hash := hashImage(have)
 				_, ribboned := findAudibleBanner(have)
@@ -543,17 +594,38 @@ func registerCoverAudit(r *registry) {
 					row.Action = "kept_size" // the same picture, and not enough bigger to be worth the swap
 				}
 				if row.Action != "" {
-					out.Rows = append(out.Rows, row)
-					continue
+					return nil
 				}
 			}
 			if in.Preview {
 				row.Action = "would_upgrade"
-			} else {
-				if err := client.SetCoverFromURL(ctx, it.ID, sc.URL); err != nil {
-					return nil, upgradeOut{}, fmt.Errorf("setting cover of %s: %w", it.Title(), err)
+				return nil
+			}
+			if err := client.SetCoverFromURL(ctx, it.ID, sc.URL); err != nil {
+				return fmt.Errorf("setting cover of %s: %w", it.Title(), err)
+			}
+			row.Action = "upgraded"
+			return nil
+		}
+
+		out := upgradeOut{Rows: make([]upgradeRow, 0, len(in.Items))}
+		for i, ref := range in.Items {
+			var row upgradeRow
+			if err := upgrade(ref, &row); err != nil {
+				if len(out.Rows) == 0 {
+					return nil, upgradeOut{}, err // nothing done yet: the error is the whole answer
 				}
-				row.Action = "upgraded"
+				// covers already set stay set: say which, what failed, and
+				// what was never tried, rather than only the failure
+				if row.ID == "" {
+					row.Title = ref
+				}
+				row.Action, row.Error = "failed", err.Error()
+				out.Rows = append(out.Rows, row)
+				out.NotTried = in.Items[i+1:]
+				return nil, out, nil
+			}
+			if row.Action == "upgraded" {
 				out.Upgraded++
 			}
 			out.Rows = append(out.Rows, row)

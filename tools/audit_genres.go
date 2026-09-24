@@ -30,6 +30,18 @@ var (
 	genreMarker = regexp.MustCompile(`^[a-z0-9_-]+:`)
 )
 
+// markerTag reports whether a tag is a marker rather than a subject: a
+// "prefix:value" tag such as lang:en, or the provider tag under whatever
+// prefix the server is set to. Two stores' markers are a letter apart by
+// design (zz-provider:audible.ca, zz-provider:audible.uk) and are not two
+// spellings of one thing, nor a compound value to split.
+func markerTag(prov providerConfig, tag string) bool {
+	if prov.providerTagging() && strings.HasPrefix(strings.ToLower(tag), strings.ToLower(prov.prefix())) {
+		return true
+	}
+	return genreMarker.MatchString(tag)
+}
+
 type genreRef struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
@@ -85,10 +97,10 @@ type genresOut struct {
 	Scanned      int             `json:"items_scanned"`
 	Found        int             `json:"total_findings"`
 	Counts       genresCounts    `json:"counts"`
-	Placeholders []genreValue    `json:"placeholders"   jsonschema:"values that say nothing (Audiobook, Audio Book, Vocal, Unknown) in either field: drop with metadata_rename remove, or when a real value is glued on (Audiobook - Fantasy) rename to it"`
+	Placeholders []genreValue    `json:"placeholders"   jsonschema:"values that say nothing (Audiobook, Audio Book, Vocal, Unknown) in either field: drop with metadata_rename remove confirm=true, or when a real value is glued on (Audiobook - Fantasy) rename to it"`
 	Compound     []genreCompound `json:"compound"       jsonschema:"one value holding several, joined by a comma, slash or colon"`
 	Narrow       []genreValue    `json:"narrow"         jsonschema:"genres on fewer books than min_items: too specific for a genre, move to tags with metadata_rename to_field=tags"`
-	Redundant    []genreValue    `json:"redundant"      jsonschema:"tags that repeat one of the same book's genres: drop the tag with metadata_rename remove"`
+	Redundant    []genreValue    `json:"redundant"      jsonschema:"tags that repeat one of the same book's genres: drop the tag with metadata_rename remove confirm=true"`
 	Markers      []string        `json:"markers"        jsonschema:"tags that are markers rather than subjects (a prefix and a colon); listed so they are seen, not judged"`
 	NoGenres     []genreRef      `json:"no_genres"      jsonschema:"up to limit of the books with no genre"`
 }
@@ -100,6 +112,7 @@ type genresCollector struct {
 	noGenres     []genreRef
 	placeholder  int
 	books        int
+	prov         providerConfig // for the provider tag's prefix, which is a marker whatever it is
 }
 
 func newGenresCollector() *genresCollector {
@@ -180,12 +193,12 @@ func (c *genresCollector) findings(minItems, limit int) genresOut {
 		for _, u := range values {
 			v := u.value
 			switch {
-			case field == "tags" && genreMarker.MatchString(v):
+			case field == "tags" && markerTag(c.prov, v):
 				out.Markers = append(out.Markers, v)
 			case genrePlaceholder.MatchString(v):
 				out.Placeholders = append(out.Placeholders, genreValue{
 					Field: field, Value: v, Items: u.items, Sample: u.refs,
-					Suggest: "metadata_rename field=" + field + " from=" + quote(v) + " remove=true",
+					Suggest: "metadata_rename field=" + field + " from=" + quote(v) + " remove=true confirm=true",
 				})
 			case genrePlaceholderPrefix.MatchString(v):
 				rest := strings.TrimSpace(genrePlaceholderPrefix.ReplaceAllString(v, ""))
@@ -224,11 +237,16 @@ func (c *genresCollector) findings(minItems, limit int) genresOut {
 	for _, u := range c.redundant {
 		redundant = append(redundant, u)
 	}
-	slices.SortFunc(redundant, func(a, b *genreUse) int { return b.items - a.items })
+	slices.SortFunc(redundant, func(a, b *genreUse) int {
+		if a.items != b.items {
+			return b.items - a.items
+		}
+		return strings.Compare(a.value, b.value)
+	})
 	for _, u := range redundant {
 		out.Redundant = append(out.Redundant, genreValue{
 			Field: "tags", Value: u.value, Items: u.items, Sample: u.refs,
-			Suggest: "metadata_rename field=tags from=" + quote(u.value) + " remove=true",
+			Suggest: "metadata_rename field=tags from=" + quote(u.value) + " remove=true confirm=true",
 		})
 	}
 	slices.Sort(out.Markers)
@@ -252,20 +270,21 @@ func registerGenresAudit(r *registry) {
 	type genresIn struct {
 		Library  string `json:"library,omitempty"   jsonschema:"library name or id; default every book library"`
 		MinItems int    `json:"min_items,omitempty" jsonschema:"a genre on fewer books than this is too narrow to be a genre; default 5"`
-		Limit    int    `json:"limit,omitempty"     jsonschema:"books with no genre to list, default 50"`
+		Limit    int    `json:"limit,omitempty"     jsonschema:"books with no genre to list, default 50, at most 1000"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name: "audit_genres",
 		Description: "Check genres and tags against one rule: genres are a short list of broad categories to browse by, tags hold everything finer and the collector's own markers. " +
 			"Reports placeholders that say nothing (Audiobook, Audio Book, Vocal) in either field; compound values that are a category path written as one (\"Science Fiction & Fantasy, Fantasy\"), with each part and whether it already exists on its own; " +
 			"genres carried by fewer books than min_items, which belong in tags; tags that repeat one of the same book's genres; books with no genre; and marker tags, listed but not judged. " +
-			"Every finding carries the metadata_rename call that fixes it: remove drops a value, to merges, to_field moves a value between genres and tags, and a compound value's suggest is passed as split. Spelling variants are audit_spelling's.",
+			"Every finding carries the metadata_rename call that fixes it: remove drops a value (it only previews which books carry it until confirm=true, which the suggestion includes), to merges, to_field moves a value between genres and tags, and a compound value's suggest is passed as split. Spelling variants are audit_spelling's.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in genresIn) (*mcp.CallToolResult, genresOut, error) {
 		libs, err := resolveLibraries(ctx, client, in.Library)
 		if err != nil {
 			return nil, genresOut{}, err
 		}
 		c := newGenresCollector()
+		c.prov = r.providerConfig()
 		for i := range libs {
 			if libs[i].IsPodcast() {
 				continue
@@ -279,6 +298,6 @@ func registerGenresAudit(r *registry) {
 				return nil, genresOut{}, err
 			}
 		}
-		return nil, c.findings(limitOr(in.MinItems, 5), limitOr(in.Limit, 50)), nil
+		return nil, c.findings(limitOr(in.MinItems, 5), auditLimit(in.Limit, 50)), nil
 	})
 }

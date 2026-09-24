@@ -104,7 +104,10 @@ func (c *numberingCollector) titleFindings() []titleFinding {
 		if a.Problem != b.Problem {
 			return strings.Compare(a.Problem, b.Problem)
 		}
-		return strings.Compare(a.Path, b.Path)
+		if a.Path != b.Path {
+			return strings.Compare(a.Path, b.Path)
+		}
+		return strings.Compare(a.ID, b.ID)
 	})
 	return out
 }

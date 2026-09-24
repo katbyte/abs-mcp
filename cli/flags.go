@@ -1,9 +1,10 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/katbyte/abs-mcp/lib/abs"
 	"github.com/katbyte/abs-mcp/tools"
@@ -33,7 +34,7 @@ func configureFlags(root *cobra.Command) error {
 	pflags.StringP("server", "s", "", "the Audiobookshelf server url, e.g. http://nas:13378")
 	pflags.StringP("token", "t", "", "an Audiobookshelf API key (consider exporting to ABS_TOKEN instead)")
 	pflags.Bool("read-only", false, "register only tools that never change server state")
-	pflags.Bool("enable-delete", false, "register the tools that delete library items, episodes and authors")
+	pflags.Bool("enable-delete", false, "register the tools that delete items, episodes, authors, collections and playlists")
 	pflags.StringSlice("toolsets", nil, "groups of tools to register: all, core (default), curation, listening, podcasts, organise, admin, or a resource family like item (core is always included)")
 	pflags.StringSlice("allow-tools", nil, "only register these tools: names, prefix globs like library_*, or the essential preset")
 	pflags.StringSlice("deny-tools", nil, "never register these tools: names or prefix globs like *_delete")
@@ -71,22 +72,58 @@ func configureFlags(root *cobra.Command) error {
 		}
 	}
 
-	viper.SetConfigName(".abs-mcp")
-	viper.SetConfigType("env")
-	// viper reads the first file it finds, so the working directory comes
-	// first: a per-project .abs-mcp overrides the one in $HOME
-	viper.AddConfigPath(".")
-	if home, err := os.UserHomeDir(); err == nil {
-		viper.AddConfigPath(home)
-	}
+	readConfigFiles()
 
-	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := errors.AsType[viper.ConfigFileNotFoundError](err); !ok {
-			clog.Log.Errorf("Error reading config file: %v", err)
+	// a config file spells a setting the way the environment does, with or
+	// without the prefix - READ_ONLY or ABS_READ_ONLY for --read-only - and
+	// viper only matches a key spelled as the flag is, so every two-word
+	// setting was ignored. Carried across as defaults, they still lose to a
+	// flag or the environment.
+	for name, env := range m {
+		for _, alt := range []string{strings.ReplaceAll(name, "-", "_"), strings.ToLower(env)} {
+			if alt != name && viper.InConfig(alt) {
+				viper.SetDefault(name, viper.Get(alt))
+				break
+			}
 		}
 	}
 
 	return nil
+}
+
+// readConfigFiles reads ~/.abs-mcp and then ./.abs-mcp over it, key by key:
+// the home file holds the global settings and a project's file changes the
+// ones it names. viper on its own reads only the first file it finds, so a
+// project file that set one thing lost the server and key from home.
+func readConfigFiles() {
+	viper.SetConfigType("env")
+
+	var files []string
+	if home, err := os.UserHomeDir(); err == nil {
+		files = append(files, filepath.Join(home, ".abs-mcp"))
+	}
+	if wd, err := os.Getwd(); err == nil && (len(files) == 0 || filepath.Join(wd, ".abs-mcp") != files[0]) {
+		files = append(files, filepath.Join(wd, ".abs-mcp"))
+	}
+
+	read := false
+	for _, f := range files {
+		if _, err := os.Stat(f); err != nil {
+			continue
+		}
+		viper.SetConfigFile(f)
+		var err error
+		if read {
+			err = viper.MergeInConfig()
+		} else {
+			err = viper.ReadInConfig()
+		}
+		if err != nil {
+			clog.Log.Errorf("Error reading config file %s: %v", f, err)
+			continue
+		}
+		read = true
+	}
 }
 
 // GetFlags returns the fully populated FlagData.

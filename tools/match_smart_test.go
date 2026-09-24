@@ -96,40 +96,42 @@ func TestSmartDecide(t *testing.T) {
 func TestProviderTag(t *testing.T) {
 	t.Parallel()
 
-	it := &abs.Item{Media: abs.Media{Tags: []string{"Fantasy", providerTagPrefix + "audible.ca"}}}
-	if providerTag(it) != "audible.ca" {
-		t.Errorf("providerTag = %q", providerTag(it))
+	var prov providerConfig // the default prefix
+	it := &abs.Item{Media: abs.Media{Tags: []string{"Fantasy", defaultProviderTag + "audible.ca"}}}
+	if prov.providerTag(it) != "audible.ca" {
+		t.Errorf("providerTag = %q", prov.providerTag(it))
 	}
-	if got := providerOrder(it, []string{"audible", "audible.ca"}); !slices.Equal(got, []string{"audible.ca", "audible"}) {
+	if got := prov.providerOrder(it, []string{"audible", "audible.ca"}); !slices.Equal(got, []string{"audible.ca", "audible"}) {
 		t.Errorf("providerOrder = %v", got)
 	}
-	if got := withProviderTag(it.Media.Tags, "audible"); !slices.Equal(got, []string{"Fantasy", providerTagPrefix + "audible"}) {
+	if got := prov.withProviderTag(it.Media.Tags, "audible"); !slices.Equal(got, []string{"Fantasy", defaultProviderTag + "audible"}) {
 		t.Errorf("withProviderTag = %v", got)
 	}
-	none := &abs.Item{MediaType: "book", Media: abs.Media{Tags: []string{providerTagPrefix + "none"}}}
-	if !markedUnmatchable(none) {
+	none := &abs.Item{MediaType: "book", Media: abs.Media{Tags: []string{defaultProviderTag + "none"}}}
+	if !prov.markedUnmatchable(none) {
 		t.Error("provider:none not recognised")
 	}
-	if _, bad := auditChecksByName["unmatched"](none); bad {
+	if _, bad := prov.auditCheck("unmatched")(none); bad {
 		t.Error("audit_unmatched reported a book marked provider:none")
 	}
-	if got := providerOrder(none, []string{"audible"}); !slices.Equal(got, []string{"audible"}) {
+	if got := prov.providerOrder(none, []string{"audible"}); !slices.Equal(got, []string{"audible"}) {
 		t.Errorf("providerOrder with none = %v", got)
 	}
 }
 
-func TestProviderTagPrefix(t *testing.T) { //nolint:paralleltest // swaps the package-level prefix
-	defer func(p string) { providerTagPrefix = p }(providerTagPrefix)
-	providerTagPrefix = "provider:"
+func TestProviderTagPrefix(t *testing.T) {
+	t.Parallel()
+
+	prov := providerConfig{tag: "provider:"}
 	it := &abs.Item{Media: abs.Media{Tags: []string{"zz-provider:audible", "provider:audible.ca"}}}
-	if got := providerTag(it); got != "audible.ca" {
+	if got := prov.providerTag(it); got != "audible.ca" {
 		t.Errorf("providerTag with a custom prefix = %q", got)
 	}
-	if got := withProviderTag([]string{"Fantasy"}, "audible"); !slices.Equal(got, []string{"Fantasy", "provider:audible"}) {
+	if got := prov.withProviderTag([]string{"Fantasy"}, "audible"); !slices.Equal(got, []string{"Fantasy", "provider:audible"}) {
 		t.Errorf("withProviderTag = %v", got)
 	}
-	providerTagPrefix = "off"
-	if providerTag(it) != "" || !slices.Equal(withProviderTag([]string{"Fantasy"}, "audible"), []string{"Fantasy"}) {
+	off := providerConfig{tag: "off"}
+	if off.providerTag(it) != "" || !slices.Equal(off.withProviderTag([]string{"Fantasy"}, "audible"), []string{"Fantasy"}) {
 		t.Error("off still tags")
 	}
 }

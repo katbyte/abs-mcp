@@ -21,6 +21,10 @@ const (
 	mcpPath           = "/mcp"
 	readHeaderTimeout = 10 * time.Second
 	shutdownTimeout   = 10 * time.Second
+	// sessionTimeout closes a session its client stopped using without
+	// closing it, so an always-on container does not keep every one it ever
+	// served
+	sessionTimeout = 30 * time.Minute
 )
 
 func serveCmd() *cobra.Command {
@@ -92,7 +96,7 @@ func checkAuth(token string, allowNoAuth bool) error {
 // separate from serveHTTP so the routing and the auth can be tested without
 // binding a port.
 func newMux(server *mcp.Server, authToken string) *http.ServeMux {
-	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
+	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{SessionTimeout: sessionTimeout})
 
 	mux := http.NewServeMux()
 	mux.Handle(mcpPath, requireBearer(authToken, handler))
@@ -115,6 +119,14 @@ func serveHTTP(ctx context.Context, server *mcp.Server, addr, authToken string) 
 		Handler:           mux,
 		ReadHeaderTimeout: readHeaderTimeout,
 	}
+	// a connected client holds its event stream open, and Shutdown waits for
+	// it: without closing the sessions a stop took the whole timeout and
+	// exited failing, racing a container's own ten-second grace
+	srv.RegisterOnShutdown(func() {
+		for ss := range server.Sessions() {
+			_ = ss.Close()
+		}
+	})
 
 	if authToken == "" {
 		clog.Log.Warnf("no auth token set (ABS_AUTH_TOKEN): anyone who can reach %s can use every tool", addr)
