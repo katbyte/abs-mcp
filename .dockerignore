@@ -9,3 +9,6 @@ abs-mcp
 *.md
 docker-compose.yml
 .env*
+.abs-mcp
+.testenv*.sh
+.coverage
