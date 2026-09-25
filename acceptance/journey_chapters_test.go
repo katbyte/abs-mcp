@@ -60,9 +60,15 @@ func (a *longBookStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	// the store names the region it answered from; the request's own value
+	// is not written back, only which of the two stores it was
+	region := "us"
+	if r.URL.Query().Get("region") == "ca" {
+		region = "ca"
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"asin": a.asin, "isAccurate": true, "region": r.URL.Query().Get("region"),
+		"asin": a.asin, "isAccurate": true, "region": region,
 		"brandIntroDurationMs": 0, "brandOutroDurationMs": 0,
 		"runtimeLengthMs": 9000000, "runtimeLengthSec": 9000, "chapters": a.chapters,
 	})
