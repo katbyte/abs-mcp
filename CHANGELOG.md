@@ -47,6 +47,11 @@
 - `item_cover_upgrade` returns the rows it finished and `not_tried` when a book fails part way
 - `item_chapters_set fit`: keep the book's own chapters, drop those past the end of the audio and end the last at its end, the fix `audit_chapters` gives for `past_end` and `short`; `dropped` and `end_s` say what it did
 - `audit_all` `partial`: audits run in part, with what was left out
+- `audit_abridged`: books probably abridged but not marked so, against the store's editions (the length of an abridged one, or under 60% of every unabridged one) and, for two readings of one book in the library, chapter lengths cut unevenly (a spread over 1.35 where two unabridged readings stay under 1.2). One store search per book: it pages, 50 at most, and `audit_all` runs it only with `deep`
+- `item_compare_audio`: are two items the same recording? Five points of one book are found in the other by their loudness, allowing for a copy up to 3% faster or slower; same when four of the five match. It reads through the API, so about half of the second book crosses the network: a lead to confirm, not a sweep. Needs ffmpeg, which the Docker image now carries
+- `audit_duplicates` `candidates` and `total_candidates`: pairs no key joins that are probably one recording - an edition label, the same title under another author, one copy's album tag naming the other, split files beside a single file - each to confirm with `item_compare_audio`; they are leads, not findings, and `audit_all` does not count them
+- `lib/audiosample`: decodes any stretch of a book's audio through the API, across its files, for the audio check now and transcripts later; the API key stays in the process, behind a local proxy ffmpeg reads from
+- `audit_series` `folder_style`: the folders of one series written two ways on disk - a bare title beside "Series - NN - Title" folders, another spelling of the series, a double space round a dash, a number padded unlike the rest - each with the folder name in the style the library's series mostly use. A series written one way throughout is left alone
 - `server_backup_create` `created`, the backup it made, with `replaced` when it took the place of one made in the same minute (the server names backups by the minute) and `pruned`, the old ones the server deleted to stay within its number
 - `providerproxy` `Rerecord` mode, and replay, tunnel and handshake lines in its log
 - `server_info` `abs_mcp_version`, the build answering, beside the server's own
@@ -98,7 +103,7 @@
 - `podcast_feed_episodes` was in the feed's order, or the search's, not newest first
 - `user_progress_set` took a percent outside 0-100, and any percent of a podcast with no episode as position 0; `podcast_add` joined a folder like `../x` onto the library's
 - `audit_missing` cover, author, genres and language listed every podcast
-- `audit_duplicates` missed a matched copy beside an unmatched one of the same book; it now joins copies by any key they share, never two different asins
+- `audit_duplicates` missed a matched copy beside an unmatched one of the same book; it now joins copies by any key they share, never two different asins, and never by title alone two readings that name different narrators
 - `audit_unembedded` never cleared a genre with a comma in it, or a publisher in an m4b (the server writes it there only as the copyright)
 - the series numbering checks never ran for an Author/Series/Title layout, and `audit_series` missed one-book series a library hides
 - names in other scripts were dropped by the name normalizer: every Cyrillic, Greek or CJK title was a path mismatch, and SF小説 and SF映画 one spelling

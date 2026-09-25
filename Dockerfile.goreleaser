@@ -2,7 +2,9 @@
 # tag: the build context holds the prebuilt binary per platform, so this only copies it onto
 # alpine. Dockerfile (from source) is what make docker uses; keep the two final stages in sync.
 FROM alpine:3.24
-RUN apk add --no-cache ca-certificates tzdata \
+# ffmpeg is how item_compare_audio reads a book's audio: where the library is
+# local, as in a container beside it, is where that is cheapest to run
+RUN apk add --no-cache ca-certificates tzdata ffmpeg \
     && adduser -D -H -u 65532 abs
 ARG TARGETPLATFORM
 COPY $TARGETPLATFORM/abs-mcp /usr/local/bin/abs-mcp

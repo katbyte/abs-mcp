@@ -18,7 +18,9 @@ RUN CGO_ENABLED=0 go build -trimpath -mod=vendor \
       -o /abs-mcp .
 
 FROM alpine:${ALPINE_VERSION}
-RUN apk add --no-cache ca-certificates tzdata \
+# ffmpeg is how item_compare_audio reads a book's audio: where the library is
+# local, as in a container beside it, is where that is cheapest to run
+RUN apk add --no-cache ca-certificates tzdata ffmpeg \
     && adduser -D -H -u 65532 abs
 COPY --from=build /abs-mcp /usr/local/bin/abs-mcp
 USER abs

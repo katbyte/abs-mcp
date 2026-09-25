@@ -31,6 +31,15 @@ func (c *Client) ItemFile(ctx context.Context, itemID, fileID string) (io.ReadCl
 	return c.stream(ctx, "/api/items/"+url.PathEscape(itemID)+"/file/"+url.PathEscape(fileID), nil)
 }
 
+// ItemFileRange opens one file of an item at a byte range, the Range header
+// passed through as given ("bytes=1000-"), so a reader that seeks - ffmpeg
+// reading a file over http - fetches only the part it plays. The whole
+// response comes back, since a reader of a range needs the 206's
+// Content-Range; the caller closes the body. An empty rng reads the file.
+func (c *Client) ItemFileRange(ctx context.Context, itemID, fileID, rng string) (*http.Response, error) {
+	return c.open(ctx, "/api/items/"+url.PathEscape(itemID)+"/file/"+url.PathEscape(fileID), nil, rng)
+}
+
 // DownloadItemFile streams one file as an attachment rather than inline.
 func (c *Client) DownloadItemFile(ctx context.Context, itemID, fileID string) (io.ReadCloser, error) {
 	return c.stream(ctx, "/api/items/"+url.PathEscape(itemID)+"/file/"+url.PathEscape(fileID)+"/download", nil)

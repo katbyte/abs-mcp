@@ -26,8 +26,9 @@ type numberingFinding struct {
 	Series       string `json:"series,omitempty"        jsonschema:"the series the item is in, or that its folder names"`
 	Sequence     string `json:"sequence,omitempty"      jsonschema:"the number the item has"`
 	FolderNumber string `json:"folder_number,omitempty" jsonschema:"the number the folder carries"`
-	Problem      string `json:"problem"                 jsonschema:"folder_disagrees: the folder's number is not the item's; unnumbered: the item is in the folder's series with no number; unlinked: the folder names a series the item is not in; duplicate_sequence: another title in the series has the same number (editions of one title sharing a number are fine and not reported); padding: the number is not zero-padded to the width of the series' highest number, a fixed convention rather than a reading of how the rest are written (one digit under ten, two from ten, three from a hundred: #2 in a twelve-book series is #02, #02 in a nine-book one is #2)"`
-	Suggest      string `json:"suggest,omitempty"       jsonschema:"the series value to set with item_edit, or for duplicate_sequence the other title"`
+	Problem      string `json:"problem"                 jsonschema:"folder_disagrees: the folder's number is not the item's; unnumbered: the item is in the folder's series with no number; unlinked: the folder names a series the item is not in; duplicate_sequence: another title in the series has the same number (editions of one title sharing a number are fine and not reported); padding: the number is not zero-padded to the width of the series' highest number, a fixed convention rather than a reading of how the rest are written (one digit under ten, two from ten, three from a hundred: #2 in a twelve-book series is #02, #02 in a nine-book one is #2); folder_style: the book's folder is written unlike the series' other folders beside it - another style (Pandora's Star beside Commonwealth Saga - 02 - Judas Unchained), another spelling of the series, a double space round a dash, or a number padded unlike the rest; a series written one way throughout is not reported, whatever the way"`
+	Suggest      string `json:"suggest,omitempty"       jsonschema:"the series value to set with item_edit; for duplicate_sequence the other title; for folder_style the path the folder would have in the style the library's series mostly use. Folders are renamed on disk, not by a tool here"`
+	Detail       string `json:"detail,omitempty"        jsonschema:"folder_style: how the folder differs"`
 }
 
 var (
@@ -335,6 +336,8 @@ func (c *numberingCollector) findings() []numberingFinding {
 			}
 		}
 	}
+
+	out = append(out, c.folderStyleFindings()...)
 
 	slices.SortFunc(out, func(a, b numberingFinding) int {
 		if a.Problem != b.Problem {

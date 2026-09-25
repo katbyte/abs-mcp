@@ -288,7 +288,7 @@ func TestJourneyPodcastAuditsGivenSomethingToFind(t *testing.T) {
 			"audit_unmatched", "audit_no_audio", "audit_path",
 			"audit_missing narrator", "audit_missing series", "audit_missing year", "audit_missing publisher", "audit_missing chapters",
 			"audit_chapters", "audit_authors", "audit_narrators", "audit_series", "audit_genres",
-			"audit_covers", "audit_unembedded", "audit_matched",
+			"audit_covers", "audit_unembedded", "audit_matched", "audit_abridged",
 		}
 		if got := strs(t, all["not_applicable"], "not_applicable"); !slices.Equal(got, bookOnly) {
 			t.Errorf("not_applicable over Podcasts = %v, want the book audits %v", got, bookOnly)
@@ -327,7 +327,7 @@ func TestJourneyPodcastAuditsGivenSomethingToFind(t *testing.T) {
 				t.Errorf("not_run over Fiction %s = %q, want it said the library holds books", name, reasons[name])
 			}
 		}
-		for _, name := range []string{"audit_covers", "audit_unembedded", "audit_matched"} {
+		for _, name := range []string{"audit_covers", "audit_unembedded", "audit_matched", "audit_abridged"} {
 			if !strings.Contains(reasons[name], "pass deep") {
 				t.Errorf("not_run over Fiction %s = %q, want it said to pass deep", name, reasons[name])
 			}
