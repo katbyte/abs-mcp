@@ -287,7 +287,7 @@ func TestAuditAbridgedReadings(t *testing.T) {
 
 	f := newFakeABS(t)
 	audibleLibrary(f)
-	serveListing(f, libID, listed...)
+	serveListing(f, listed...)
 	serveWhole(f, whole)
 	f.json("GET /api/search/books", `[]`)
 	call := toolCaller(t, f)
@@ -474,5 +474,49 @@ func TestSaysAbridgedReadsTheBooksOwnName(t *testing.T) {
 		if got := saysAbridged(it); got != want {
 			t.Errorf("saysAbridged(%q) = %v, want %v", path, got, want)
 		}
+	}
+}
+
+// Two releases of one book, neither cut, that the zbooks sort scored uneven:
+// Protector read by Sherman and by Weiner, 7.07h and 7.10h, and World of
+// Ptavvs plain and read by Hastings, 6.83h and 5.92h, whose sections share
+// names but split the book at different points (a middle ratio of 2.60
+// against 1.15 for the whole). Neither is reported; the real cut beside
+// them, 32% shorter and cut unevenly along its chapters, still is.
+func TestAuditAbridgedReadingsThatDoNotLineUp(t *testing.T) {
+	t.Parallel()
+
+	names := []string{"Sol", "Achilles", "Nessus", "Beowulf", "Louis", "Hindmost", "Ring", "Fleet"}
+	var listed []string
+	whole := map[string]string{}
+	shelve := func(id, path, title, author string, lengths []float64) {
+		l, w := readingOf(id, path, title, author, names, lengths, "")
+		listed = append(listed, l)
+		whole[id] = w
+	}
+	// a few percent apart, and uneven section by section: one recording
+	// split two ways, not a cut
+	shelve("sherman", "Larry Niven/Protector (Sherman)", "Protector", "Larry Niven", []float64{3000, 3200, 3100, 3300, 3000, 3200, 3100, 3500})
+	shelve("weiner", "Larry Niven/Protector (Weiner)", "Protector", "Larry Niven", []float64{2000, 4200, 2400, 4100, 2300, 4000, 2600, 4400})
+	// 13% apart, the same names on sections cut at other points
+	shelve("plain", "Larry Niven/World of Ptavvs", "World of Ptavvs", "Larry Niven", []float64{3000, 3000, 3000, 3000, 3000, 3000, 3000, 3000})
+	shelve("hastings", "Larry Niven/World of Ptavvs (Hastings)", "World of Ptavvs", "Larry Niven", []float64{1000, 1100, 1200, 1000, 1300, 1100, 1200, 12000})
+	// the real cut: a third shorter, each chapter cut by its own share
+	shelve("brick", "Isaac Asimov/The Gods Themselves (Brick)", "The Gods Themselves", "Isaac Asimov", []float64{1500, 1200, 1800, 1400, 1600, 1500, 1300, 1700})
+	shelve("morgan", "Isaac Asimov/The Gods Themselves (Morgan)", "The Gods Themselves", "Isaac Asimov", []float64{1350, 600, 1440, 630, 1120, 1275, 650, 1275})
+
+	f := newFakeABS(t)
+	audibleLibrary(f)
+	serveListing(f, listed...)
+	serveWhole(f, whole)
+	f.json("GET /api/search/books", `[]`)
+	call := toolCaller(t, f)
+
+	out, err := call("audit_abridged", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := idsOf(t, out["findings"]); !slices.Equal(got, []string{"morgan"}) {
+		t.Errorf("findings = %v, want Morgan's cut alone", got)
 	}
 }
