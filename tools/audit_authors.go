@@ -167,7 +167,7 @@ func registerAuthorAudit(r *registry) {
 
 	type authorsIn struct {
 		Library string `json:"library,omitempty" jsonschema:"library name or id; default every library"`
-		Limit   int    `json:"limit,omitempty"   jsonschema:"maximum rows per section, default 100"`
+		Limit   int    `json:"limit,omitempty"   jsonschema:"maximum rows per section, default 100, at most 1000"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name: "audit_authors",
@@ -206,7 +206,7 @@ func registerAuthorAudit(r *registry) {
 		out.Counts.Names = len(allNames)
 		out.Found = len(out.Items) + len(out.Records) + len(allNames)
 
-		limit := limitOr(in.Limit, 100)
+		limit := auditLimit(in.Limit, 100)
 		out.Items = out.Items[:min(len(out.Items), limit)]
 		out.Records = out.Records[:min(len(out.Records), limit)]
 		out.Names = append(out.Names, allNames[:min(len(allNames), limit)]...)

@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/katbyte/abs-mcp/lib/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -40,8 +41,8 @@ var (
 	pathVersus = regexp.MustCompile(`\bvs\b`)
 )
 
-// pathWords reduces a folder or title to comparable words: lower-case ascii,
-// no punctuation, no leading zeros, "vs" written out.
+// pathWords reduces a folder or title to comparable words: lower-case, no
+// punctuation, no leading zeros, "vs" written out.
 func pathWords(s string) string {
 	return pathVersus.ReplaceAllString(pathZeros.ReplaceAllString(norm(s), "$1"), "versus")
 }
@@ -103,7 +104,7 @@ type pathNameSet struct {
 
 func (n *pathNameSet) add(v string) bool {
 	v = pathWords(v)
-	hasLetter := strings.ContainsFunc(v, func(r rune) bool { return r >= 'a' && r <= 'z' })
+	hasLetter := strings.ContainsFunc(v, unicode.IsLetter)
 	if v == "" || n.seen[v] || (!hasLetter && !pathYearLike.MatchString(v)) {
 		return false
 	}
@@ -116,16 +117,24 @@ func (n *pathNameSet) add(v string) bool {
 }
 
 // pathAgree reports whether any name for the folder and any name for the
-// title is contained in the other.
+// title is contained in the other, word for word: a book matched to "It" in
+// a folder called "The Institute" is not named by its folder, though the
+// letters are there.
 func pathAgree(folder, title []string) bool {
 	for _, f := range folder {
 		for _, t := range title {
-			if strings.Contains(f, t) || strings.Contains(t, f) {
+			if containsWords(f, t) || containsWords(t, f) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// containsWords reports whether the words of part appear together in whole,
+// both already reduced to space-separated words.
+func containsWords(whole, part string) bool {
+	return strings.Contains(" "+whole+" ", " "+part+" ")
 }
 
 // checkPath flags items whose folder name does not name their title, or
@@ -244,7 +253,7 @@ func registerPathAudit(r *registry) {
 		}
 
 		out := auditOut{Check: spec.Check, Findings: []auditFinding{}}
-		limit := limitOr(in.Limit, 100)
+		limit := auditLimit(in.Limit, 100)
 		for i := range libs {
 			if err := sweepPath(ctx, client, &libs[i], in.Files, limit, &out); err != nil {
 				return nil, auditOut{}, err
@@ -354,7 +363,7 @@ func fileStem(names []string) string {
 func fileKeyWords(words []string) []string {
 	var out []string
 	for _, w := range words {
-		if fileGeneric[w] || !strings.ContainsFunc(w, func(r rune) bool { return r >= 'a' && r <= 'z' }) {
+		if fileGeneric[w] || !strings.ContainsFunc(w, unicode.IsLetter) {
 			continue
 		}
 		out = append(out, w)

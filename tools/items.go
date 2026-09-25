@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -16,25 +17,25 @@ import (
 // itemRef is the common way tools name an item: by id, or by title when it
 // is unambiguous.
 type itemRef struct {
-	Item    string `json:"item"              jsonschema:"library item id, or an exact title (must match one item)"`
+	Item    string `json:"item"              jsonschema:"library item id, or its title: the whole title of one item (a tool that only reads also takes a part of one title)"`
 	Library string `json:"library,omitempty" jsonschema:"narrow a title lookup to one library by name or id"`
 }
 
 func registerItemTools(r *registry) {
 	client := r.client
+	prov := r.providerConfig()
 
 	type chapterRow struct {
 		Index int     `json:"index"`
 		Title string  `json:"title"`
-		Start string  `json:"start"`
-		End   string  `json:"end"`
-		Sec   float64 `json:"start_seconds"`
+		Start float64 `json:"start_s" jsonschema:"seconds into the audio, as item_chapters_set's start_s takes it"`
+		End   float64 `json:"end_s"   jsonschema:"seconds into the audio"`
 	}
 	type fileRow struct {
 		Index    int    `json:"index,omitempty"`
 		Filename string `json:"filename"`
-		Duration string `json:"duration,omitempty"`
-		SizeMB   int64  `json:"size_mb"`
+		Duration int    `json:"duration_s,omitempty"   jsonschema:"length in seconds"`
+		Size     int64  `json:"size"                   jsonschema:"bytes"`
 		Codec    string `json:"codec,omitempty"`
 		Bitrate  int64  `json:"bitrate_kbps,omitempty"`
 		Channels int    `json:"channels,omitempty"`
@@ -99,7 +100,7 @@ func registerItemTools(r *registry) {
 			if f.FileType == "audio" {
 				continue
 			}
-			out.OtherFiles = append(out.OtherFiles, fileRow{Filename: f.Metadata.Filename, SizeMB: mb(f.Metadata.Size), Type: f.FileType})
+			out.OtherFiles = append(out.OtherFiles, fileRow{Filename: f.Metadata.Filename, Size: f.Metadata.Size, Type: f.FileType})
 		}
 		if it.IsPodcast() {
 			out.Downloads = &downloadSettings{
@@ -121,7 +122,7 @@ func registerItemTools(r *registry) {
 		if in.Chapters {
 			list := []chapterRow{}
 			for _, ch := range it.Media.Chapters {
-				list = append(list, chapterRow{Index: ch.ID, Title: ch.Title, Start: fmtDuration(ch.Start), End: fmtDuration(ch.End), Sec: ch.Start})
+				list = append(list, chapterRow{Index: ch.ID, Title: ch.Title, Start: ch.Start, End: ch.End})
 			}
 			out.ChapterList = &list
 		}
@@ -139,8 +140,8 @@ func registerItemTools(r *registry) {
 				list = append(list, fileRow{
 					Index:    af.Index,
 					Filename: af.Metadata.Filename,
-					Duration: fmtDuration(af.Duration),
-					SizeMB:   mb(af.Metadata.Size),
+					Duration: wholeSec(af.Duration),
+					Size:     af.Metadata.Size,
 					Codec:    af.Codec,
 					Bitrate:  af.BitRate / 1000,
 					Channels: af.Channels,
@@ -187,7 +188,7 @@ func registerItemTools(r *registry) {
 		Name:        "item_edit",
 		Description: "Edit an item's metadata: title, authors, narrators, series, genres, tags, year, publisher, description, isbn, asin, language, explicit/abridged flags. Only provided fields change; list a field in clear to blank it. series and tags replace the list, add_series, remove_series, add_tags and remove_tags edit it. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in editIn) (*mcp.CallToolResult, editOut, error) {
-		it, err := resolveItem(ctx, client, in.Library, in.Item)
+		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
 		if err != nil {
 			return nil, editOut{}, err
 		}
@@ -270,8 +271,19 @@ func registerItemTools(r *registry) {
 			fields = append(fields, "tags")
 		}
 
+		// a field both given and cleared would be cleared, the clear being
+		// applied last, and the value given lost without a word
+		given := map[string]bool{
+			"subtitle": in.Subtitle != "", "narrators": len(in.Narrators) > 0, "narrator": len(in.Narrators) > 0,
+			"series": len(in.Series) > 0, "genres": len(in.Genres) > 0, "tags": len(in.Tags) > 0,
+			"year": in.Year != "", "publisher": in.Publisher != "", "description": in.Description != "",
+			"isbn": in.ISBN != "", "asin": in.ASIN != "", "language": in.Language != "",
+		}
 		empty := ""
 		for _, c := range in.Clear {
+			if given[strings.ToLower(c)] {
+				return nil, editOut{}, fmt.Errorf("%s is both given and in clear; one or the other", c)
+			}
 			fields = append(fields, "clear:"+c)
 			switch strings.ToLower(c) {
 			case "subtitle":
@@ -330,7 +342,7 @@ func registerItemTools(r *registry) {
 		Series      []string `json:"series,omitempty"`
 		Year        string   `json:"year,omitempty"`
 		Publisher   string   `json:"publisher,omitempty"`
-		Duration    string   `json:"duration,omitempty"    jsonschema:"compare with the item's duration to confirm the edition"`
+		Duration    int      `json:"duration_s,omitempty"  jsonschema:"length in seconds; compare with item_duration_s to confirm the edition"`
 		ASIN        string   `json:"asin,omitempty"`
 		ISBN        string   `json:"isbn,omitempty"`
 		Language    string   `json:"language,omitempty"`
@@ -340,9 +352,9 @@ func registerItemTools(r *registry) {
 	}
 	type matchOut struct {
 		Item         string      `json:"item"`
-		ItemDuration string      `json:"item_duration,omitempty"`
+		ItemDuration int         `json:"item_duration_s,omitempty" jsonschema:"the book's length in seconds"`
 		Provider     string      `json:"provider"`
-		Candidates   []candidate `json:"candidates"              jsonschema:"suggestions only; nothing changes until item_match_apply"`
+		Candidates   []candidate `json:"candidates"                jsonschema:"suggestions only; nothing changes until item_match_apply"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "item_match",
@@ -356,13 +368,16 @@ func registerItemTools(r *registry) {
 			return nil, matchOut{}, errNotBook
 		}
 
-		provider, title, author := matchQuery(ctx, client, it, in.Provider, in.Title, in.Author)
+		if err := prov.checkNamed(ctx, client, in.Provider); err != nil {
+			return nil, matchOut{}, err
+		}
+		provider, title, author := prov.matchQuery(ctx, client, it, in.Provider, in.Title, in.Author)
 		results, err := client.SearchBooks(ctx, provider, title, author, it.ID)
 		if err != nil {
 			return nil, matchOut{}, err
 		}
 
-		out := matchOut{Item: it.Title(), ItemDuration: fmtDuration(it.Media.Duration), Provider: provider, Candidates: []candidate{}}
+		out := matchOut{Item: it.Title(), ItemDuration: wholeSec(it.Media.Duration), Provider: provider, Candidates: []candidate{}}
 		for i, res := range results {
 			if i >= limitOr(in.Limit, 8) {
 				break
@@ -375,7 +390,7 @@ func registerItemTools(r *registry) {
 				Narrator:    res.Narrator,
 				Year:        res.PublishedYear.String(),
 				Publisher:   res.Publisher,
-				Duration:    fmtDuration(res.Duration * 60),
+				Duration:    wholeSec(res.Duration * 60),
 				ASIN:        res.ASIN,
 				ISBN:        res.ISBN,
 				Language:    res.Language,
@@ -436,7 +451,7 @@ func registerItemTools(r *registry) {
 			return nil, applyOut{}, errors.New("pass candidate (an index from item_match), asin or isbn to say which book to apply")
 		}
 
-		it, err := resolveItem(ctx, client, in.Library, in.Item)
+		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
 		if err != nil {
 			return nil, applyOut{}, err
 		}
@@ -464,7 +479,10 @@ func registerItemTools(r *registry) {
 			return nil, applyOut{}, errors.New("preview only means something with smart")
 		}
 
-		provider, title, author := matchQuery(ctx, client, it, in.Provider, in.Title, in.Author)
+		if err := prov.checkNamed(ctx, client, in.Provider); err != nil {
+			return nil, applyOut{}, err
+		}
+		provider, title, author := prov.matchQuery(ctx, client, it, in.Provider, in.Title, in.Author)
 		opts := abs.MatchOptions{Provider: provider, ASIN: in.ASIN, ISBN: in.ISBN, OverrideCover: in.OverrideCover, OverrideDetails: in.OverrideDetails}
 		var applied appliedRef
 
@@ -501,8 +519,11 @@ func registerItemTools(r *registry) {
 				return nil, out, nil
 			}
 			out.Updated, out.Warning = res.Updated, res.Warning
-			if err := tagProvider(ctx, client, it.ID, it.Media.Tags, provider); err != nil {
-				out.Warning = joinWarnings(out.Warning, "recording the provider tag failed: "+err.Error())
+			// a match that found nothing has no store to record
+			if res.LibraryItem != nil {
+				if err := prov.tagProvider(ctx, client, it.ID, tagsAfter(it, res, nil), provider); err != nil {
+					out.Warning = joinWarnings(out.Warning, "recording the provider tag failed: "+err.Error())
+				}
 			}
 			if after, aerr := client.Item(ctx, it.ID); aerr == nil {
 				s := summarize(after)
@@ -516,15 +537,19 @@ func registerItemTools(r *registry) {
 			return nil, applyOut{}, err
 		}
 		out := applyOut{Updated: res.Updated, Warning: res.Warning, Applied: &applied}
-		tags := it.Media.Tags
-		if res.LibraryItem != nil && !slices.Contains(keep, "tags") {
-			tags = res.LibraryItem.Media.Tags
+		// a match that found nothing changed nothing: there is no field to
+		// put back, no store to record, and no id the item failed to take
+		if res.LibraryItem == nil {
+			s := summarize(it)
+			out.Item = &s
+			return nil, out, nil
 		}
+		tags := tagsAfter(it, res, keep)
 		if err := restoreKept(ctx, client, it, keep); err != nil {
 			return nil, applyOut{}, fmt.Errorf("matched, but restoring %s failed: %w", strings.Join(keep, ", "), err)
 		}
 		out.Kept = keep
-		if err := tagProvider(ctx, client, it.ID, tags, provider); err != nil {
+		if err := prov.tagProvider(ctx, client, it.ID, tags, provider); err != nil {
 			out.Warning = joinWarnings(out.Warning, "recording the provider tag failed: "+err.Error())
 		}
 		// the match result predates the restored fields and the provider
@@ -532,18 +557,16 @@ func registerItemTools(r *registry) {
 		if after, aerr := client.Item(ctx, it.ID); aerr == nil {
 			res.LibraryItem = after
 		}
-		if res.LibraryItem != nil {
-			s := summarize(res.LibraryItem)
-			out.Item = &s
-			// say when the id asked for is not the one the item ended up
-			// with: without override_details a field already set is kept
-			got := res.LibraryItem.Media.Metadata
-			switch {
-			case applied.ASIN != "" && !strings.EqualFold(got.ASIN, applied.ASIN):
-				out.Warning = joinWarnings(out.Warning, fmt.Sprintf("the item's asin is %q, not the applied %s; set override_details to replace it", got.ASIN, applied.ASIN))
-			case applied.ISBN != "" && got.ISBN != applied.ISBN:
-				out.Warning = joinWarnings(out.Warning, fmt.Sprintf("the item's isbn is %q, not the applied %s; set override_details to replace it", got.ISBN, applied.ISBN))
-			}
+		s := summarize(res.LibraryItem)
+		out.Item = &s
+		// say when the id asked for is not the one the item ended up with:
+		// without override_details a field already set is kept
+		got := res.LibraryItem.Media.Metadata
+		switch {
+		case applied.ASIN != "" && !strings.EqualFold(got.ASIN, applied.ASIN):
+			out.Warning = joinWarnings(out.Warning, fmt.Sprintf("the item's asin is %q, not the applied %s; set override_details to replace it", got.ASIN, applied.ASIN))
+		case applied.ISBN != "" && got.ISBN != applied.ISBN:
+			out.Warning = joinWarnings(out.Warning, fmt.Sprintf("the item's isbn is %q, not the applied %s; set override_details to replace it", got.ISBN, applied.ISBN))
 		}
 
 		return nil, out, nil
@@ -554,7 +577,7 @@ func registerItemTools(r *registry) {
 		Items   []string `json:"items"                   jsonschema:"the books to change, by id or exact title"`
 		Genres  []string `json:"genres,omitempty"        jsonschema:"replacement genre list, applied to every item"`
 		Tags    []string `json:"tags,omitempty"          jsonschema:"replacement tag list, applied to every item"`
-		AddTags []string `json:"add_tags,omitempty"      jsonschema:"tags to add to each item's own, keeping the rest; zz-provider:none marks a book as checked with nothing to match"`
+		AddTags []string `json:"add_tags,omitempty"      jsonschema:"tags to add to each item's own, keeping the rest; the provider tag set to none (zz-provider:none by default) marks a book as checked with nothing to match"`
 		DropTag []string `json:"remove_tags,omitempty"   jsonschema:"tags to remove from each item, keeping the rest"`
 		AddSer  []string `json:"add_series,omitempty"    jsonschema:"series to add to each item's own as 'Name' or 'Name #2', keeping the rest: 'Cosmere' on every Sanderson book"`
 		DropSer []string `json:"remove_series,omitempty" jsonschema:"series to take each item out of, by name, keeping the rest"`
@@ -606,7 +629,7 @@ func registerItemTools(r *registry) {
 		items := make([]*abs.Item, 0, len(in.Items))
 		ids := make([]string, 0, len(in.Items))
 		for _, ref := range in.Items {
-			it, err := resolveItem(ctx, client, in.Library, ref)
+			it, err := resolveItemToChange(ctx, client, in.Library, ref)
 			if err != nil {
 				return nil, batchEditOut{}, err
 			}
@@ -656,11 +679,21 @@ func registerItemTools(r *registry) {
 			out.Items = append(out.Items, it.Title())
 		}
 
-		n, err := client.BatchUpdate(ctx, updates)
-		if err != nil {
-			return nil, batchEditOut{}, err
+		// in pages: one request carrying hundreds of items is what a reverse
+		// proxy times out on, and a timeout after part of it landed would
+		// read as nothing done
+		for start := 0; start < len(updates); start += sweepBatchSize {
+			end := min(start+sweepBatchSize, len(updates))
+			n, err := client.BatchUpdate(ctx, updates[start:end])
+			if err != nil && len(updates) <= sweepBatchSize {
+				return nil, batchEditOut{}, err
+			}
+			if err != nil {
+				return nil, batchEditOut{}, fmt.Errorf("the batch of items %d to %d of %d failed and may have landed in part; %d items before it were updated, and the %d after it were not sent: %w",
+					start+1, end, len(updates), out.Updated, len(updates)-end, err)
+			}
+			out.Updated += n
 		}
-		out.Updated = n
 
 		return nil, out, nil
 	})
@@ -672,7 +705,7 @@ func registerItemTools(r *registry) {
 		Name:        "item_rescan",
 		Description: "Rescan one item's folder for changed files (new tracks, replaced cover, edited metadata.json). Admin only. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in itemRef) (*mcp.CallToolResult, rescanOut, error) {
-		it, err := resolveItem(ctx, client, in.Library, in.Item)
+		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
 		if err != nil {
 			return nil, rescanOut{}, err
 		}
@@ -702,7 +735,10 @@ func registerItemTools(r *registry) {
 		if err != nil {
 			return nil, coverSearchOut{}, err
 		}
-		provider, title, author := matchQuery(ctx, client, it, in.Provider, in.Title, in.Author)
+		if err := prov.checkNamed(ctx, client, in.Provider); err != nil {
+			return nil, coverSearchOut{}, err
+		}
+		provider, title, author := prov.matchQuery(ctx, client, it, in.Provider, in.Title, in.Author)
 		if it.IsPodcast() {
 			author = ""
 		}
@@ -717,8 +753,9 @@ func registerItemTools(r *registry) {
 		return nil, coverSearchOut{Item: it.Title(), Covers: covers}, nil
 	})
 
-	type doneOut struct {
-		Done bool `json:"done"`
+	type coverEditOut struct {
+		Item  string `json:"item"`
+		Cover string `json:"cover" jsonschema:"the cover file the server now has, read back after the change; empty once removed"`
 	}
 	type coverEditIn struct {
 		itemRef
@@ -729,15 +766,25 @@ func registerItemTools(r *registry) {
 	add(r, writeTool, &mcp.Tool{
 		Name:        "item_cover_edit",
 		Description: "Set an item's cover from a url (e.g. from item_cover_search) or from an image file already in its folder, or with remove delete the current cover. Changes server state.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in coverEditIn) (*mcp.CallToolResult, doneOut, error) {
-		// removal has to be asked for: a call that forgot its url must not
-		// take the cover away
-		if in.URL == "" && in.File == "" && !in.Remove {
-			return nil, doneOut{}, errors.New("pass url or file to set the cover, or remove to delete it")
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in coverEditIn) (*mcp.CallToolResult, coverEditOut, error) {
+		asked := 0
+		for _, given := range []bool{in.URL != "", in.File != "", in.Remove} {
+			if given {
+				asked++
+			}
 		}
-		it, err := resolveItem(ctx, client, in.Library, in.Item)
+		switch {
+		case asked == 0:
+			// removal has to be asked for: a call that forgot its url must
+			// not take the cover away
+			return nil, coverEditOut{}, errors.New("pass url or file to set the cover, or remove to delete it")
+		case asked > 1:
+			// only the first would be done: a remove that sets a cover instead
+			return nil, coverEditOut{}, errors.New("url, file and remove each say what to do with the cover; pass one")
+		}
+		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
 		if err != nil {
-			return nil, doneOut{}, err
+			return nil, coverEditOut{}, err
 		}
 
 		switch {
@@ -749,31 +796,54 @@ func registerItemTools(r *registry) {
 			err = client.RemoveCover(ctx, it.ID)
 		}
 		if err != nil {
-			return nil, doneOut{}, err
+			return nil, coverEditOut{}, err
+		}
+		// the cover the server now has, not the request's word for it: a url
+		// it could not fetch answers as a set that left nothing behind
+		after, err := client.Item(ctx, it.ID)
+		switch {
+		case err != nil:
+			return nil, coverEditOut{}, fmt.Errorf("the cover was sent, but reading %q back failed: %w", it.Title(), err)
+		case in.Remove && after.HasCover():
+			return nil, coverEditOut{}, fmt.Errorf("the server accepted the removal but %q still has a cover (%s)", it.Title(), after.Media.CoverPath)
+		case !in.Remove && !after.HasCover():
+			return nil, coverEditOut{}, fmt.Errorf("the server accepted the cover but %q has none afterwards", it.Title())
 		}
 
-		return nil, doneOut{Done: true}, nil
+		return nil, coverEditOut{Item: after.Title(), Cover: after.Media.CoverPath}, nil
 	})
 
 	type chapterIn struct {
 		Title string  `json:"title"`
-		Start float64 `json:"start" jsonschema:"start time in seconds"`
+		Start float64 `json:"start_s" jsonschema:"start time in seconds"`
 	}
 	type chaptersSetIn struct {
 		itemRef
-		Chapters []chapterIn `json:"chapters,omitempty"  jsonschema:"replacement chapter list in order; each ends where the next starts"`
+		Chapters []chapterIn `json:"chapters,omitempty"  jsonschema:"replacement chapter list in order, each starting after the one before and inside the audio; each ends where the next starts"`
 		FromASIN string      `json:"from_asin,omitempty" jsonschema:"instead of a list: fetch Audible's chapters for this asin (default the item's asin)"`
-		Region   string      `json:"region,omitempty"    jsonschema:"Audible region for from_asin: us, uk, ca, au, de, fr, it, es, jp, in"`
+		Region   string      `json:"region,omitempty"    jsonschema:"Audible region for from_asin: us, uk, ca, au, de, fr, it, es, jp, in; default the store the book's provider tag records (audible.ca is ca), else us"`
+		Fit      bool        `json:"fit,omitempty"       jsonschema:"instead of a list or an asin: keep the book's own chapters, drop those that start at or past the end of the audio, and end the last at the end of the audio. The fix audit_chapters gives for past_end and short, after a file is taken out of a book or a track added"`
 	}
 	type chaptersSetOut struct {
-		Updated  bool `json:"updated"`
-		Chapters int  `json:"chapters"`
+		Updated  bool    `json:"updated"`
+		Chapters int     `json:"chapters"`
+		Region   string  `json:"region,omitempty"  jsonschema:"the Audible region the chapters came from"`
+		Dropped  int     `json:"dropped,omitempty" jsonschema:"fit only: chapters dropped for starting at or past the end of the audio"`
+		EndS     float64 `json:"end_s,omitempty"   jsonschema:"fit only: where the last chapter now ends, the end of the audio, in seconds"`
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "item_chapters_set",
-		Description: "Replace a book's chapters, either with an explicit list or with the chapters Audible has for its asin. The last chapter runs to the end of the audio. Changes server state.",
+		Description: "Replace a book's chapters, either with an explicit list or with the chapters Audible has for its asin, or fit the ones it has to its audio (fit: drop those starting past the end, end the last at the end). The last chapter of a list runs to the end of the audio. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in chaptersSetIn) (*mcp.CallToolResult, chaptersSetOut, error) {
-		it, err := resolveItem(ctx, client, in.Library, in.Item)
+		// a list given alongside an asin would be set and the asin ignored
+		if len(in.Chapters) > 0 && strings.TrimSpace(in.FromASIN) != "" {
+			return nil, chaptersSetOut{}, errors.New("chapters is the list to set and from_asin fetches one; pass one or the other")
+		}
+		// and fit would throw away either
+		if in.Fit && (len(in.Chapters) > 0 || strings.TrimSpace(in.FromASIN) != "") {
+			return nil, chaptersSetOut{}, errors.New("fit keeps the book's own chapters, and chapters or from_asin replaces them; pass one of the three")
+		}
+		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
 		if err != nil {
 			return nil, chaptersSetOut{}, err
 		}
@@ -782,9 +852,25 @@ func registerItemTools(r *registry) {
 		}
 
 		var chapters []abs.Chapter
+		out := chaptersSetOut{}
 		switch {
+		case in.Fit:
+			if chapters, out.Dropped, err = fitChapters(it); err != nil {
+				return nil, chaptersSetOut{}, err
+			}
+			out.EndS = it.Media.Duration
 		case len(in.Chapters) > 0:
+			// the server takes any list and the player then seeks by it: a
+			// chapter out of order, or past the end, is one nobody can reach
 			for i, ch := range in.Chapters {
+				switch {
+				case ch.Start < 0:
+					return nil, chaptersSetOut{}, fmt.Errorf("chapter %d (%q) starts at %gs, before the audio does", i+1, ch.Title, ch.Start)
+				case i > 0 && ch.Start <= in.Chapters[i-1].Start:
+					return nil, chaptersSetOut{}, fmt.Errorf("chapter %d (%q) starts at %gs, not after chapter %d at %gs: list them in order", i+1, ch.Title, ch.Start, i, in.Chapters[i-1].Start)
+				case it.Media.Duration > 0 && ch.Start >= it.Media.Duration:
+					return nil, chaptersSetOut{}, fmt.Errorf("chapter %d (%q) starts at %gs, at or past the end of the audio at %gs", i+1, ch.Title, ch.Start, it.Media.Duration)
+				}
 				end := it.Media.Duration
 				if i+1 < len(in.Chapters) {
 					end = in.Chapters[i+1].Start
@@ -799,12 +885,35 @@ func registerItemTools(r *registry) {
 			if asin == "" {
 				return nil, chaptersSetOut{}, errors.New("pass chapters, or from_asin for an item without an asin")
 			}
-			chapters, err = client.SearchChapters(ctx, asin, in.Region)
+			// the store the book was matched from: an asin from the Canadian
+			// store may be sold nowhere else, and the lookup defaults to the US
+			region := strings.ToLower(strings.TrimSpace(in.Region))
+			if region == "" {
+				region = audibleRegion(prov.providerTag(it))
+			}
+			chapters, err = client.SearchChapters(ctx, asin, region)
 			if err != nil {
 				return nil, chaptersSetOut{}, err
 			}
 			if len(chapters) == 0 {
 				return nil, chaptersSetOut{}, fmt.Errorf("no chapters found for asin %s", asin)
+			}
+			// the store's list is for the recording the asin names, which is
+			// not always the one on disk: a chapter starting past the end of
+			// this book's audio is another edition's, and no player can reach it
+			if last := chapters[len(chapters)-1]; it.Media.Duration > 0 && last.Start >= it.Media.Duration {
+				return nil, chaptersSetOut{}, fmt.Errorf("asin %s's %d chapters run to %s, but this book's audio ends at %s: they are another recording's (another edition or narrator); check the asin, or pass the chapters",
+					asin, len(chapters), fmtDuration(last.Start), fmtDuration(it.Media.Duration))
+			}
+			// the store's last chapter ends where its recording does, a few
+			// seconds either side of this file's: the last runs to the end
+			// of this audio, as a list given here does
+			if it.Media.Duration > 0 {
+				chapters[len(chapters)-1].End = it.Media.Duration
+			}
+			out.Region = region
+			if out.Region == "" {
+				out.Region = "us"
 			}
 		}
 
@@ -812,8 +921,9 @@ func registerItemTools(r *registry) {
 		if err != nil {
 			return nil, chaptersSetOut{}, err
 		}
+		out.Updated, out.Chapters = updated, len(chapters)
 
-		return nil, chaptersSetOut{Updated: updated, Chapters: len(chapters)}, nil
+		return nil, out, nil
 	})
 
 	type embedIn struct {
@@ -831,7 +941,7 @@ func registerItemTools(r *registry) {
 		Name:        "item_embed_metadata",
 		Description: "Write the item's metadata and chapters into its audio files' tags so they travel with the files, then rescan the item and check the tags: embedded says they now match. audit_unembedded lists the books where this is due. Waits for the embed, up to two minutes; a longer one comes back running. Admin only. Changes the files on disk.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in embedIn) (*mcp.CallToolResult, embedOut, error) {
-		it, err := resolveItem(ctx, client, in.Library, in.Item)
+		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
 		if err != nil {
 			return nil, embedOut{}, err
 		}
@@ -881,20 +991,28 @@ func registerItemTools(r *registry) {
 	type deleteIn struct {
 		itemRef
 		DeleteFiles bool `json:"delete_files,omitempty" jsonschema:"also delete the item's folder from disk (irreversible); default keeps the files"`
+		Confirm     bool `json:"confirm,omitempty"      jsonschema:"true to delete; without it nothing changes and the answer says what a confirmed call would remove"`
 	}
 	type deleteOut struct {
-		Deleted          string `json:"deleted"`
-		FilesRemoved     bool   `json:"files_removed"`
-		BookmarksRemoved int    `json:"bookmarks_removed,omitempty" jsonschema:"the API key user's bookmarks on it, removed before the delete"`
+		Deleted          string   `json:"deleted,omitempty"           jsonschema:"the item deleted"`
+		WouldDelete      string   `json:"would_delete,omitempty"      jsonschema:"without confirm: the item a confirmed call deletes; nothing has changed"`
+		Files            string   `json:"files,omitempty"             jsonschema:"with delete_files: what is erased from disk, the item's folder and everything in it, or the one file of a book that is a single file at the library root"`
+		FilesRemoved     bool     `json:"files_removed"`
+		Bookmarks        []string `json:"bookmarks,omitempty"         jsonschema:"the API key user's bookmarks on it, which go before the item does"`
+		BookmarksRemoved int      `json:"bookmarks_removed,omitempty" jsonschema:"the API key user's bookmarks on it, removed before the delete"`
 	}
 	add(r, deleteTool, &mcp.Tool{
-		Name:        "item_delete",
-		Description: "Remove an item from the library, and with delete_files also erase its folder from disk. Listening progress for it is lost. The API key user's bookmarks on it are removed first: Audiobookshelf keeps a bookmark on a deleted item and will not remove it afterwards, though other accounts' bookmarks stay. Requires the delete permission.",
+		Name: "item_delete",
+		Description: "Remove an item from the library, and with delete_files also erase its folder from disk. Listening progress for it is lost. The API key user's bookmarks on it are removed first: Audiobookshelf keeps a bookmark on a deleted item and will not remove it afterwards, though other accounts' bookmarks stay. " +
+			"Without confirm=true nothing changes and the answer says what would go: the record, the folder or file on disk with delete_files, and the bookmarks. Requires the delete permission.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in deleteIn) (*mcp.CallToolResult, deleteOut, error) {
-		it, err := resolveItem(ctx, client, in.Library, in.Item)
+		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
 		if err != nil {
 			return nil, deleteOut{}, err
 		}
+		// the account's bookmarks are one list, which user_bookmark_edit
+		// reads and saves whole: held from reading them to the delete
+		defer r.locks.hold(append(itemKeys(it.ID), "bookmarks")...)()
 		me, err := client.Me(ctx)
 		if err != nil {
 			return nil, deleteOut{}, err
@@ -903,19 +1021,41 @@ func registerItemTools(r *registry) {
 		if !me.IsAdmin() && !me.Permissions.Delete {
 			return nil, deleteOut{}, fmt.Errorf("%s may not delete items: the account lacks the delete permission", me.Username)
 		}
-		out := deleteOut{Deleted: it.Title(), FilesRemoved: in.DeleteFiles}
-		for _, b := range me.Bookmarks {
-			if b.LibraryItemID != it.ID {
-				continue
+		out := deleteOut{}
+		if in.DeleteFiles {
+			out.Files = "the folder " + it.Path + " and everything in it"
+			if it.IsFile {
+				out.Files = "the file " + it.Path
 			}
+		}
+		var marks []abs.Bookmark
+		for _, b := range me.Bookmarks {
+			if b.LibraryItemID == it.ID {
+				marks = append(marks, b)
+				out.Bookmarks = append(out.Bookmarks, fmt.Sprintf("%q at %s", b.Title, cmp.Or(fmtDuration(b.Time), "0s")))
+			}
+		}
+		if !in.Confirm {
+			out.WouldDelete = it.Title()
+			return nil, out, nil
+		}
+
+		for _, b := range marks {
 			if err := client.DeleteBookmark(ctx, it.ID, b.Time); err != nil {
-				return nil, deleteOut{}, fmt.Errorf("removing the bookmark %q before deleting %q failed, and nothing was deleted: %w", b.Title, it.Title(), err)
+				if out.BookmarksRemoved == 0 {
+					return nil, deleteOut{}, fmt.Errorf("removing the bookmark %q before deleting %q failed, and nothing was deleted: %w", b.Title, it.Title(), err)
+				}
+				return nil, deleteOut{}, fmt.Errorf("removing the bookmark %q before deleting %q failed once %d of its %d bookmarks were removed; the item was not deleted: %w", b.Title, it.Title(), out.BookmarksRemoved, len(marks), err)
 			}
 			out.BookmarksRemoved++
 		}
 		if err := client.DeleteItem(ctx, it.ID, in.DeleteFiles); err != nil {
+			if out.BookmarksRemoved > 0 {
+				return nil, deleteOut{}, fmt.Errorf("%d of its bookmarks were removed, but deleting %q then failed: %w", out.BookmarksRemoved, it.Title(), err)
+			}
 			return nil, deleteOut{}, err
 		}
+		out.Deleted, out.FilesRemoved = it.Title(), in.DeleteFiles
 
 		return nil, out, nil
 	})
@@ -928,17 +1068,28 @@ var (
 	embedPoll = 500 * time.Millisecond
 )
 
+// checkNamed refuses a provider the caller named that the server does not
+// have. The server answers a name it does not know by searching Google, so a
+// misspelt audible.ca comes back as Google's guesses with nothing to say so.
+func (p providerConfig) checkNamed(ctx context.Context, client *abs.Client, provider string) error {
+	if provider == "" {
+		return nil
+	}
+
+	return p.checkProviders(ctx, client, []string{provider}, false)
+}
+
 // matchQuery fills in the provider, title and author for a provider search
-// from the item and its library when not overridden.
-func matchQuery(ctx context.Context, client *abs.Client, it *abs.Item, provider, title, author string) (resolvedProvider, resolvedTitle, resolvedAuthor string) {
+// from the item, the configured default and its library when not overridden.
+func (p providerConfig) matchQuery(ctx context.Context, client *abs.Client, it *abs.Item, provider, title, author string) (resolvedProvider, resolvedTitle, resolvedAuthor string) {
 	if title == "" {
 		title = it.Title()
 	}
 	if author == "" {
 		author = it.Media.Metadata.AuthorDisplay()
 	}
-	if provider == "" && len(defaultProviders) > 0 {
-		provider = defaultProviders[0]
+	if provider == "" && len(p.providers) > 0 {
+		provider = p.providers[0]
 	}
 	if provider == "" {
 		if lib, err := client.Library(ctx, it.LibraryID); err == nil {

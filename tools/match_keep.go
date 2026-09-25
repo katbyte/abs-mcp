@@ -102,6 +102,17 @@ func keptUpdate(before *abs.Item, keep []string) abs.MediaUpdate {
 	return upd
 }
 
+// tagsAfter is a book's tag list once a match, and the fields kept from it,
+// are written: the match's own, since it fills an empty list, unless the tags
+// were kept. The provider tag is added to this list, and one read from before
+// the match would wipe the tags the match had just filled.
+func tagsAfter(before *abs.Item, res *abs.MatchResult, keep []string) []string {
+	if slices.Contains(keep, "tags") {
+		return before.Media.Tags
+	}
+	return res.LibraryItem.Media.Tags
+}
+
 // restoreKept puts the kept fields back after a match.
 func restoreKept(ctx context.Context, client *abs.Client, before *abs.Item, keep []string) error {
 	if len(keep) == 0 {

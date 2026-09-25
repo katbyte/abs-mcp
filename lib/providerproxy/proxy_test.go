@@ -62,7 +62,7 @@ func TestReplayServesRecording(t *testing.T) {
 			Path:    "/authors",
 			Query:   "name=Isaac+Asimov",
 			Status:  200,
-			Headers: map[string]string{"Content-Type": "application/json"},
+			Headers: map[string]string{"Content-Type": contentJSON},
 			Body:    `[{"asin":"B000AP9A6K","name":"Isaac Asimov"}]`,
 		}},
 	})
@@ -90,7 +90,7 @@ func TestReplayServesRecording(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("status = %d, want 200", resp.StatusCode)
 	}
-	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
+	if ct := resp.Header.Get("Content-Type"); ct != contentJSON {
 		t.Errorf("content-type = %q", ct)
 	}
 	if !strings.Contains(string(body), "Isaac Asimov") {
@@ -243,14 +243,29 @@ func TestBodyStorage(t *testing.T) {
 		t.Errorf("large feed was not kept intact: elided=%v len=%d", rss.Elided, len(rss.Body))
 	}
 
+	// an episode a CDN serves as octet-stream is media all the same, told by
+	// the NUL bytes no text holds
+	var blob interaction
+	blob.setBody([]byte{0xff, 0xfe, 0x00}, "application/octet-stream")
+	if !blob.Elided || blob.BodyBase64 != "" || blob.Body != "" {
+		t.Errorf("a binary octet-stream was committed: %+v", blob)
+	}
+
+	// text a server fetches under that type is kept
+	var listing interaction
+	listing.setBody([]byte("one\ntwo\n"), "application/octet-stream")
+	if listing.Elided || listing.Body != "one\ntwo\n" {
+		t.Errorf("text under octet-stream was not kept: %+v", listing)
+	}
+
 	var binary interaction
-	binary.setBody([]byte{0xff, 0xfe, 0x00}, "application/octet-stream")
+	binary.setBody([]byte{0xff, 0xfe, 0x01}, "application/x-binary")
 	if binary.BodyBase64 == "" || binary.Body != "" {
 		t.Errorf("binary body not base64: %+v", binary)
 	}
 
 	var text interaction
-	text.setBody([]byte(`{"ok":true}`), "application/json")
+	text.setBody([]byte(`{"ok":true}`), contentJSON)
 	if text.Body != `{"ok":true}` || text.BodyBase64 != "" {
 		t.Errorf("text body not stored as text: %+v", text)
 	}

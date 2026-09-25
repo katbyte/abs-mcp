@@ -74,7 +74,7 @@ func vocabKey(field, value string) string {
 	if field != "languages" {
 		return n
 	}
-	if canonical, ok := languageAliases[n]; ok {
+	if canonical, ok := languageAliases[norm(languageBase(value))]; ok {
 		return canonical
 	}
 
@@ -99,15 +99,18 @@ func firstLast(value string) string {
 	return first + " " + last
 }
 
-// knownLanguage reports whether a language value is one this tool recognizes.
+// knownLanguage reports whether a language value is one this tool
+// recognizes, its region aside: en-US is English.
 func knownLanguage(value string) bool {
-	_, ok := languageAliases[norm(value)]
+	_, ok := languageAliases[norm(languageBase(value))]
 	return ok
 }
 
 // valuesOf pulls a field's values off one item. The sweep sees the minified
 // shape, which carries authors and narrators only as one joined string
-// (authorName, narratorName), so both fall back to splitting that.
+// (authorName, narratorName), so both fall back to splitting that; the
+// narrator audits fill the lists in first (joinedNames), since a name may
+// hold a comma.
 func valuesOf(field string, it *abs.Item) []string {
 	m := &it.Media.Metadata
 	switch field {
@@ -356,11 +359,11 @@ func registerSpellingTools(r *registry) {
 	type vocabIn struct {
 		Library string `json:"library,omitempty" jsonschema:"library name or id; default every library"`
 		Field   string `json:"field,omitempty"   jsonschema:"genres, tags, languages or publishers; default all of them (authors: audit_authors, narrators: audit_narrators)"`
-		Limit   int    `json:"limit,omitempty"   jsonschema:"maximum groups to return, default 50"`
+		Limit   int    `json:"limit,omitempty"   jsonschema:"maximum groups to return, default 50, at most 1000"`
 	}
 	type vocabOut struct {
 		Scanned      int          `json:"items_scanned"`
-		Found        int          `json:"total_findings"                   jsonschema:"groups of every kind, before limit"`
+		Found        int          `json:"total_findings"                   jsonschema:"groups of every kind before limit, and the unrecognized languages"`
 		Groups       []vocabGroup `json:"groups"`
 		OddLanguages []spelling   `json:"unrecognized_languages,omitempty" jsonschema:"language values that are not a code or name this tool knows, e.g. a placeholder like XXX"`
 	}
@@ -370,7 +373,8 @@ func registerSpellingTools(r *registry) {
 		Description: "Find values that mean the same thing but are spelled differently, across genres, tags, languages and publishers: 'Sci-Fi' and 'sci fi', 'en' and 'eng' and 'English', 'Harper Audio' and 'HarperAudio'. " +
 			"Publishers also get one name that is another cut short ('Recorded Books' and 'Recorded Books, Inc.') and two a typo apart, and every field gets spellings a letter or two apart ('Romance' and 'Romances'). Each group says which kind it is. Authors and narrators get the same treatment, and more, from audit_authors and audit_narrators. " +
 			"Merge any group with metadata_rename, passing the field and the spellings as reported here; a near group can also be two different people, so read both names first. " +
-			"Language values that are not a code or name this tool recognizes are reported separately, which is how placeholders like XXX surface.",
+			"Marker tags, the provider tag and any other 'prefix:value' tag, are left out: two stores' markers are a letter apart by design. " +
+			"Language values that are not a code or name this tool recognizes, a region aside (en-US is English), are reported separately and counted, which is how placeholders like XXX surface.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in vocabIn) (*mcp.CallToolResult, vocabOut, error) {
 		fields := spellingFields
 		if f := strings.ToLower(strings.TrimSpace(in.Field)); f != "" && f != "all" {
@@ -407,8 +411,9 @@ func registerSpellingTools(r *registry) {
 				return nil, vocabOut{}, err
 			}
 		}
+		counts.dropMarkers(r.providerConfig())
 
-		limit := limitOr(in.Limit, 50)
+		limit := auditLimit(in.Limit, 50)
 		for _, f := range fields {
 			for _, g := range counts.report(f) {
 				out.Found++
@@ -420,18 +425,8 @@ func registerSpellingTools(r *registry) {
 
 		// a language nobody recognizes is usually a placeholder rather than a
 		// spelling variant, so it needs looking at rather than merging
-		if slices.Contains(fields, "languages") {
-			for _, spellings := range counts["languages"] {
-				for v, n := range spellings {
-					if !knownLanguage(v) {
-						out.OddLanguages = append(out.OddLanguages, spelling{Value: v, Items: n})
-					}
-				}
-			}
-			slices.SortFunc(out.OddLanguages, func(a, b spelling) int {
-				return strings.Compare(a.Value, b.Value)
-			})
-		}
+		out.OddLanguages = oddLanguages(counts)
+		out.Found += len(out.OddLanguages)
 
 		return nil, out, nil
 	})
@@ -440,21 +435,24 @@ func registerSpellingTools(r *registry) {
 		Field   string          `json:"field"              jsonschema:"tags, genres, narrators, authors, languages or publishers, as audit_spelling reports it"`
 		From    string          `json:"from"               jsonschema:"the value to replace, exactly as it is spelled now"`
 		To      string          `json:"to,omitempty"       jsonschema:"the value to keep; renaming onto one that already exists merges the two"`
-		Remove  bool            `json:"remove,omitempty"   jsonschema:"instead of renaming: drop the value from every item that carries it (not authors)"`
+		Remove  bool            `json:"remove,omitempty"   jsonschema:"instead of renaming: drop the value from every item that carries it (not authors). Without confirm it only reports those items"`
+		Confirm bool            `json:"confirm,omitempty"  jsonschema:"with remove: true to drop the value; without it the call only reports what it would drop it from"`
 		Library string          `json:"library,omitempty"  jsonschema:"library name or id; default every library. Tags and genres are server-wide and refuse it"`
 		Into    []string        `json:"into,omitempty"     jsonschema:"tags and genres: split the value into these, so \"Science Fiction & Fantasy, Fantasy\" becomes two; with to_field the parts land in the other field"`
 		ToField string          `json:"to_field,omitempty" jsonschema:"tags and genres: move the value (or the into parts) to the other field, genres or tags, dropping it from this one"`
 		Split   *genreSplitPlan `json:"split,omitempty"    jsonschema:"tags and genres: replace the value with parts in both fields at once, {genres: [...], tags: [...]}, exactly as audit_genres suggests for a compound value; only the items carrying from change, so a part that is a genre on other books stays theirs"`
 	}
 	type renameOut struct {
-		Field        string   `json:"field"`
-		ItemsUpdated int      `json:"items_updated"`
-		Merged       bool     `json:"merged,omitempty" jsonschema:"authors: the rename merged into an author that already existed"`
-		Items        []string `json:"items,omitempty"  jsonschema:"languages and publishers: the titles changed, capped at 50"`
+		Field        string         `json:"field"`
+		ItemsUpdated int            `json:"items_updated"     jsonschema:"items changed; for authors, the books the author had, which now carry the new name, or after a merge the other author"`
+		Merged       bool           `json:"merged,omitempty"  jsonschema:"authors: the rename merged into an author that already existed"`
+		Items        []string       `json:"items,omitempty"   jsonschema:"languages and publishers: the titles changed, capped at 50"`
+		Preview      *removePreview `json:"preview,omitempty" jsonschema:"remove without confirm: what confirm=true would drop the value from; nothing was changed"`
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name: "metadata_rename",
 		Description: "Rename one metadata value everywhere it is used - a tag, genre, narrator, author, language or publisher - or with remove drop it from every item. " +
+			"A remove has nothing to put back and a tag or genre is server-wide, so without confirm=true it only says how many items carry the value and which, and changes nothing. " +
 			"Renaming onto a value that already exists merges the two, which is how a group from audit_spelling is fixed ('jim dale' into 'Jim Dale', 'Sci-Fi' into 'Science Fiction'). " +
 			"For tags and genres, into splits one value into several, to_field moves a value to the other field, and split does both at once, which is how audit_genres findings are fixed: pass a compound finding's suggest as split. " +
 			"Tags and genres are server-wide; the rest can be narrowed to one library. Changes server state.",
@@ -493,10 +491,21 @@ func registerSpellingTools(r *registry) {
 		}
 
 		out := renameOut{Field: field}
+		preview := in.Remove && !in.Confirm
 		switch field {
 		case "tags", "genres":
 			if in.Library != "" {
 				return nil, renameOut{}, fmt.Errorf("%s are server-wide: omit library", field)
+			}
+			if preview {
+				libs, err := resolveLibraries(ctx, client, "")
+				if err != nil {
+					return nil, renameOut{}, err
+				}
+				if out.Preview, err = carrying(ctx, client, libs, field, from); err != nil {
+					return nil, renameOut{}, err
+				}
+				break
 			}
 			if in.Split != nil || len(in.Into) > 0 || in.ToField != "" {
 				var genres, tags []string
@@ -519,7 +528,7 @@ func registerSpellingTools(r *registry) {
 				}
 				n, err := splitVocabulary(ctx, client, field, from, genres, tags)
 				if err != nil {
-					return nil, renameOut{}, err
+					return nil, renameOut{}, partly(n, err)
 				}
 				out.ItemsUpdated = n
 				break
@@ -534,6 +543,12 @@ func registerSpellingTools(r *registry) {
 			if err != nil {
 				return nil, renameOut{}, err
 			}
+			if preview {
+				if out.Preview, err = carrying(ctx, client, libs, field, from); err != nil {
+					return nil, renameOut{}, err
+				}
+				break
+			}
 			for i := range libs {
 				var n int
 				if in.Remove {
@@ -542,7 +557,7 @@ func registerSpellingTools(r *registry) {
 					n, err = client.RenameNarrator(ctx, libs[i].ID, from, to)
 				}
 				if err != nil {
-					return nil, renameOut{}, err
+					return nil, renameOut{}, partly(out.ItemsUpdated, fmt.Errorf("in %s: %w", libs[i].Name, err))
 				}
 				out.ItemsUpdated += n
 			}
@@ -551,25 +566,74 @@ func registerSpellingTools(r *registry) {
 			if err != nil {
 				return nil, renameOut{}, err
 			}
-			updated, merged, err := client.UpdateAuthor(ctx, a.ID, abs.AuthorUpdate{Name: &to})
+			_, merged, err := client.UpdateAuthor(ctx, a.ID, abs.AuthorUpdate{Name: &to})
 			if err != nil {
 				return nil, renameOut{}, err
 			}
+			// the books that changed are the ones this author had; the reply
+			// is the surviving record, whose count after a merge takes in
+			// the other author's books too
 			out.Merged = merged
-			out.ItemsUpdated = updated.NumBooks
+			out.ItemsUpdated = len(a.LibraryItems)
 			if out.ItemsUpdated == 0 {
-				out.ItemsUpdated = len(a.LibraryItems)
+				out.ItemsUpdated = a.NumBooks
 			}
 		default: // languages, publishers: no endpoint, so a sweep and a batch edit
-			n, titles, err := renameBySweep(ctx, client, in.Library, field, from, to)
+			n, titles, err := renameBySweep(ctx, client, in.Library, field, from, to, preview)
 			if err != nil {
-				return nil, renameOut{}, err
+				return nil, renameOut{}, partly(n, err)
+			}
+			if preview {
+				out.Preview = &removePreview{Found: n, Items: titles}
+				break
 			}
 			out.ItemsUpdated, out.Items = n, titles
 		}
 
 		return nil, out, nil
 	})
+}
+
+// removePreview is what a remove would drop a value from.
+type removePreview struct {
+	Found int      `json:"found" jsonschema:"items that carry the value"`
+	Items []string `json:"items" jsonschema:"their titles, the first 50"`
+}
+
+// carrying finds the items in libs that carry a tag, genre or narrator, by the
+// server's own filter for the field, which matches the value the way its
+// remove does: whole and exactly.
+func carrying(ctx context.Context, client *abs.Client, libs []abs.Library, field, value string) (*removePreview, error) {
+	p := &removePreview{Items: []string{}}
+	for i := range libs {
+		// a podcast library has no narrators, and answers a filter it does
+		// not know with every item it holds
+		if libs[i].IsPodcast() && !slices.Contains(podcastGroups, field) {
+			continue
+		}
+		res, err := client.Items(ctx, libs[i].ID, abs.ItemsOptions{Limit: previewCap, Sort: "media.metadata.title", Filter: abs.EncodeFilter(field, value), Minified: true})
+		if err != nil {
+			return nil, err
+		}
+		p.Found += res.Total
+		for _, t := range titles(res.Results) {
+			if len(p.Items) < previewCap {
+				p.Items = append(p.Items, t)
+			}
+		}
+	}
+
+	return p, nil
+}
+
+// partly says how far a change got before it failed: the batches written
+// before the error stay written, and a caller told only of the error would
+// take the whole change as not made.
+func partly(changed int, err error) error {
+	if changed == 0 {
+		return err
+	}
+	return fmt.Errorf("%d items were changed before this, and stay changed; the rest were not: %w", changed, err)
 }
 
 // renameVocabulary renames or removes a tag or genre server-wide.
@@ -658,8 +722,9 @@ func splitVocabulary(ctx context.Context, client *abs.Client, field, from string
 // it, which the server has no endpoint for: it walks the library and batch
 // updates the items that carry from, spelled exactly that way (a rename of
 // "english" must not touch the 400 books that say "English"). An empty to
-// clears the value.
-func renameBySweep(ctx context.Context, client *abs.Client, library, field, from, to string) (updated int, titles []string, err error) {
+// clears the value. With dryRun it changes nothing and answers how many items
+// it would have changed.
+func renameBySweep(ctx context.Context, client *abs.Client, library, field, from, to string, dryRun bool) (updated int, titles []string, err error) {
 	libs, err := resolveLibraries(ctx, client, library)
 	if err != nil {
 		return 0, nil, err
@@ -704,6 +769,9 @@ func renameBySweep(ctx context.Context, client *abs.Client, library, field, from
 
 	if len(updates) == 0 {
 		return 0, nil, fmt.Errorf("nothing carries %s %q", field, from)
+	}
+	if dryRun {
+		return len(updates), titles, nil
 	}
 
 	// in pages: one request carrying hundreds of items is what a reverse

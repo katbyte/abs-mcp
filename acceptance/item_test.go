@@ -75,6 +75,9 @@ func TestItemGetFiles(t *testing.T) {
 	if codec, _ := tracks[0]["codec"].(string); codec == "" {
 		t.Errorf("no codec probed: %v", tracks[0])
 	}
+	if num(t, tracks[0]["duration_s"], "duration_s") != 1 || num(t, tracks[0]["size"], "size") <= 0 {
+		t.Errorf("track = %v, want one second and its size in bytes", tracks[0])
+	}
 }
 
 // the fixtures are one-second files with no embedded chapters.
@@ -98,8 +101,8 @@ func TestItemChaptersSetExplicit(t *testing.T) {
 	out := call(t, "item_chapters_set", map[string]any{
 		"item": "War Is a Racket",
 		"chapters": []any{
-			map[string]any{"title": "Chapter One", "start": 0},
-			map[string]any{"title": "Chapter Two", "start": 0.5},
+			map[string]any{"title": "Chapter One", "start_s": 0},
+			map[string]any{"title": "Chapter Two", "start_s": 0.5},
 		},
 	})
 	if n := num(t, out["chapters"], "chapters"); n != 2 {
@@ -108,7 +111,7 @@ func TestItemChaptersSetExplicit(t *testing.T) {
 	t.Cleanup(func() {
 		call(t, "item_chapters_set", map[string]any{
 			"item":     "War Is a Racket",
-			"chapters": []any{map[string]any{"title": "Chapter One", "start": 0}},
+			"chapters": []any{map[string]any{"title": "Chapter One", "start_s": 0}},
 		})
 	})
 
@@ -187,14 +190,16 @@ func TestItemCoverRemove(t *testing.T) {
 
 	out := call(t, "item_cover_edit", map[string]any{"item": "A Brief History of Vice", "remove": true})
 
-	if done, _ := out["done"].(bool); !done {
-		t.Errorf("item_cover_edit done = %v", out["done"])
+	// read back: the book has no cover once it is removed
+	if cover, ok := out["cover"].(string); !ok || cover != "" {
+		t.Errorf("item_cover_edit cover = %v, want none", out["cover"])
 	}
 }
 
 // embedding rewrites the audio tags in the background; the tool waits for
 // it and reads the tags back (journey 11 follows one through a rescan).
 func TestItemEmbedMetadata(t *testing.T) {
+	keepAudioFiles(t, "A Brief History of Vice")
 	out := call(t, "item_embed_metadata", map[string]any{"item": "A Brief History of Vice", "backup": true})
 
 	if embedded, _ := out["embedded"].(bool); !embedded {
@@ -206,7 +211,7 @@ func TestItemPodcastGuards(t *testing.T) {
 	// a podcast is not a book, and the book-only tools must say so
 	if msg := callErr(t, "item_chapters_set", map[string]any{
 		"item":     "Behind the Bastards",
-		"chapters": []any{map[string]any{"title": "x", "start": 0}},
+		"chapters": []any{map[string]any{"title": "x", "start_s": 0}},
 	}); msg == "" {
 		t.Error("item_chapters_set should refuse a podcast")
 	}

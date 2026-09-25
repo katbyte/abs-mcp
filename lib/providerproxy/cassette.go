@@ -1,6 +1,7 @@
 package providerproxy
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -24,13 +25,39 @@ const maxBodyBytes = 4 << 20
 
 // elideTypes are the content types stored as a placeholder however small they
 // are: committing a provider's artwork or audio to the repository is never
-// right, and neither is what these tests assert on.
+// right, and neither is what these tests assert on. A binary blob under
+// application/octet-stream (a podcast CDN serving an episode that way) is
+// elided the same way, told by the NUL bytes text never holds.
 var elideTypes = []string{"audio/", "video/", "image/"}
 
 // volatileHeaders change on every response and would make a re-record a large
-// meaningless diff. Dropping them is not sanitizing: these are public APIs and
-// nothing here is a secret.
+// meaningless diff. Most are not secret, but a CDN's request ids can carry the
+// edge address and metro area of the machine that recorded, which has no
+// business in the repository either.
 var volatileHeaders = map[string]bool{
+	"akamai-cache-status":            true,
+	"akamai-grn":                     true,
+	"akamai-request-bc":              true,
+	"b3":                             true,
+	"etag":                           true,
+	"last-modified":                  true,
+	"via":                            true,
+	"x-amz-date":                     true,
+	"x-amz-id-2":                     true,
+	"x-amz-ir-id":                    true,
+	"x-amz-rid":                      true,
+	"x-amz-version-id":               true,
+	"x-amzn-requestid":               true,
+	"x-apple-request-uuid":           true,
+	"x-b3-spanid":                    true,
+	"x-b3-traceid":                   true,
+	"x-cache-hits":                   true,
+	"x-daiquiri-debug-worker-pid":    true,
+	"x-daiquiri-instance":            true,
+	"x-ratelimit-remaining":          true,
+	"x-ratelimit-reset":              true,
+	"x-responding-instance":          true,
+	"x-webobjects-loadaverage":       true,
 	"age":                            true,
 	"alt-svc":                        true,
 	"cf-cache-status":                true,
@@ -114,7 +141,7 @@ func (i *interaction) setBody(b []byte, contentType string) {
 			return
 		}
 	}
-	if len(b) > maxBodyBytes {
+	if len(b) > maxBodyBytes || (strings.HasPrefix(ct, "application/octet-stream") && bytes.IndexByte(b, 0) >= 0) {
 		i.Elided, i.ElidedType, i.ElidedSize = true, ct, len(b)
 		return
 	}

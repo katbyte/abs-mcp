@@ -45,7 +45,9 @@ func TestJourneyPlaybackReachesEveryListeningTool(t *testing.T) {
 	closed := false
 	t.Cleanup(func() {
 		if !closed {
-			_ = client.CloseSession(ctx, session.ID, nil)
+			if err := client.CloseSession(ctx, session.ID, nil); err != nil {
+				t.Errorf("closing the session the test left open: %v", err)
+			}
 		}
 	})
 	if err := client.SyncSession(ctx, session.ID, 0.5, 0.5); err != nil {
@@ -124,14 +126,14 @@ func TestJourneyPlaybackReachesEveryListeningTool(t *testing.T) {
 				continue
 			}
 			s := sessions[0]
-			if s["id"] != session.ID || s["title"] != book || s["user"] != listener.Name || s["listened"] == nil || s["started"] == nil {
+			if s["id"] != session.ID || s["title"] != book || s["user"] != listener.Name || s["listened_s"] == nil || s["started"] == nil {
 				t.Errorf("%s: history row = %v, want the session with its user, time and start", who, s)
 			}
 		}
 
 		// the stats, from both sides
 		selfStats, adminStats := listener.call(t, "user_stats", nil), call(t, "user_stats", named)
-		for _, key := range []string{"total_listened", "items_listened", "top_items"} {
+		for _, key := range []string{"total_listened_s", "items_listened", "top_items"} {
 			if !sameJSON(selfStats[key], adminStats[key]) || selfStats[key] == nil {
 				t.Errorf("user_stats %s: the listener sees %v, an admin sees %v", key, selfStats[key], adminStats[key])
 			}
@@ -139,6 +141,11 @@ func TestJourneyPlaybackReachesEveryListeningTool(t *testing.T) {
 		year := listener.call(t, "user_stats", map[string]any{"year": 2026})
 		if num(t, year["sessions"], "sessions") != 1 || num(t, year["books_listened"], "books_listened") != 1 {
 			t.Errorf("year in review = %v, want one session of one book", year)
+		}
+		// the server keeps a year in review only for the caller, so an admin
+		// asking for the listener's is told so rather than handed their own
+		if msg := callErr(t, "user_stats", map[string]any{"user": listener.Name, "year": 2026}); !strings.Contains(msg, "only available") {
+			t.Errorf("an admin asking for the listener's year in review: %q", msg)
 		}
 
 		// closing a session a second from the end of a one-second book marks
@@ -340,7 +347,7 @@ func TestJourneyWritesAnAccountMayNotMake(t *testing.T) {
 		{tool: "item_edit", args: map[string]any{"library": "Fiction", "item": "Foundation", "add_tags": []any{"zzyzx-refused"}}},
 		{tool: "item_edit", args: map[string]any{"item": racket, "add_tags": []any{"zzyzx-refused"}}},
 		{tool: "item_batch_edit", args: map[string]any{"library": "Fiction", "items": []any{"Foundation", "Second Foundation"}, "add_tags": []any{"zzyzx-refused"}}},
-		{tool: "item_chapters_set", args: map[string]any{"library": "Fiction", "item": "Foundation", "chapters": []any{map[string]any{"title": "Zzyzx", "start": 0}}}},
+		{tool: "item_chapters_set", args: map[string]any{"library": "Fiction", "item": "Foundation", "chapters": []any{map[string]any{"title": "Zzyzx", "start_s": 0}}}},
 		{tool: "item_cover_edit", args: map[string]any{"library": "Messy", "item": "Moving Pictures", "remove": true}},
 		// Foundation has no asin to look a cover up by
 		{tool: "item_cover_upgrade", args: map[string]any{"library": "Fiction", "items": []any{"Foundation"}}, mayPass: true},
@@ -349,12 +356,12 @@ func TestJourneyWritesAnAccountMayNotMake(t *testing.T) {
 		{tool: "item_match_tag", args: map[string]any{"library": "Messy", "overwrite": true}, refused: noneTagged},
 		{tool: "item_rescan", args: map[string]any{"library": "Fiction", "item": "Foundation"}},
 		{tool: "item_embed_metadata", args: map[string]any{"library": "Fiction", "item": "Foundation"}},
-		{tool: "item_delete", args: map[string]any{"library": "Fiction", "item": "Foundation"}},
+		{tool: "item_delete", args: map[string]any{"confirm": true, "library": "Fiction", "item": "Foundation"}},
 		{tool: "library_create", args: map[string]any{"name": "Zzyzx Refused", "folders": []any{"/scratch"}}},
 		{tool: "library_edit", args: map[string]any{"library": "Fiction", "name": "Zzyzx Refused Fiction"}},
 		{tool: "library_scan", args: map[string]any{"library": "Fiction"}},
 		// Fiction has no missing books, so there is nothing to send
-		{tool: "library_issues_remove", args: map[string]any{"library": "Fiction"}, mayPass: true},
+		{tool: "library_issues_remove", args: map[string]any{"library": "Fiction", "confirm": true}, mayPass: true},
 		{tool: "metadata_rename", args: map[string]any{"field": "tags", "from": "sf", "to": "zzyzx-refused-sf"}},
 		{tool: "metadata_rename", args: map[string]any{"field": "publishers", "library": "Fiction", "from": "Bantam", "to": "Zzyzx Refused"}},
 		{tool: "series_edit", args: map[string]any{"library": "Fiction", "series": "Foundation", "description": "Zzyzx refused"}},
@@ -372,12 +379,12 @@ func TestJourneyWritesAnAccountMayNotMake(t *testing.T) {
 		{tool: "podcast_episode_edit", args: map[string]any{"item": "Behind the Bastards", "episode": episode, "title": "Zzyzx Refused"}},
 		{tool: "podcast_episode_download", args: map[string]any{"item": "Behind the Bastards", "indexes": []any{0}}},
 		{tool: "podcast_check_new", args: map[string]any{"item": "Behind the Bastards"}},
-		{tool: "podcast_episode_delete", args: map[string]any{"item": "Behind the Bastards", "episode": episode}},
+		{tool: "podcast_episode_delete", args: map[string]any{"item": "Behind the Bastards", "episode": episode, "confirm": true}},
 		{tool: "server_backup_create"},
 		// its own things, but on a book in a library it cannot open
 		{tool: "user_progress_set", args: map[string]any{"item": racket, "percent": 50}},
 		{tool: "user_progress_remove", args: map[string]any{"item": racket}},
-		{tool: "user_bookmark_edit", args: map[string]any{"item": racket, "action": "add", "seconds": 0.5, "title": "Zzyzx Refused"}},
+		{tool: "user_bookmark_edit", args: map[string]any{"item": racket, "action": "add", "time_s": 0.5, "title": "Zzyzx Refused"}},
 		{tool: "playlist_create", args: map[string]any{"library": "Non-Fiction", "name": "Zzyzx Refused Queue", "entries": []any{map[string]any{"item": racket}}}},
 	}
 	// what any account may do with its own listening, in its own libraries
@@ -416,11 +423,11 @@ func TestJourneyWritesAnAccountMayNotMake(t *testing.T) {
 	t.Run("its own listening and playlists", func(t *testing.T) {
 		t.Cleanup(func() {
 			_, _ = account.invoke("user_progress_remove", map[string]any{"library": "Fiction", "item": "Foundation"})
-			_, _ = account.invoke("user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Foundation", "action": "remove", "seconds": 0.5})
+			_, _ = account.invoke("user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Foundation", "action": "remove", "time_s": 0.5})
 			_, _ = account.invoke("playlist_delete", map[string]any{"playlist": "Zzyzx Own Queue"})
 		})
 		account.call(t, "user_progress_set", map[string]any{"library": "Fiction", "item": "Foundation", "percent": 50})
-		account.call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Foundation", "action": "add", "seconds": 0.5, "title": "Zzyzx Own Mark"})
+		account.call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Foundation", "action": "add", "time_s": 0.5, "title": "Zzyzx Own Mark"})
 		account.call(t, "playlist_create", map[string]any{"library": "Fiction", "name": "Zzyzx Own Queue", "entries": []any{map[string]any{"item": "Foundation"}}})
 		account.call(t, "playlist_entries_edit", map[string]any{"playlist": "Zzyzx Own Queue", "action": "add", "entries": []any{map[string]any{"item": "Second Foundation"}}})
 		account.call(t, "playlist_edit", map[string]any{"playlist": "Zzyzx Own Queue", "description": "Zzyzx: the account's own"})
@@ -431,10 +438,10 @@ func TestJourneyWritesAnAccountMayNotMake(t *testing.T) {
 			t.Errorf("the account's progress = %v", p)
 		}
 		account.call(t, "playlist_delete", map[string]any{"playlist": "Zzyzx Own Queue"})
-		if done, _ := account.call(t, "user_progress_remove", map[string]any{"library": "Fiction", "item": "Foundation"})["done"].(bool); !done {
+		if done, _ := account.call(t, "user_progress_remove", map[string]any{"library": "Fiction", "item": "Foundation"})["removed"].(bool); !done {
 			t.Error("the account's progress was not removed")
 		}
-		account.call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Foundation", "action": "remove", "seconds": 0.5})
+		account.call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Foundation", "action": "remove", "time_s": 0.5})
 		// and none of it is the admin's
 		for _, p := range rows(t, call(t, "playlist_list", nil)["playlists"], "playlists") {
 			if p["name"] == "Zzyzx Own Queue" {

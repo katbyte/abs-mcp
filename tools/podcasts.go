@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"path"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/katbyte/abs-mcp/lib/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -27,40 +29,96 @@ func resolvePodcast(ctx context.Context, client *abs.Client, library, idOrTitle 
 	return it, nil
 }
 
-// findEpisode locates an episode of a podcast by id or exact title.
+// resolvePodcastToChange is resolvePodcast for a tool that writes or
+// deletes: a title must be the podcast's whole title (see
+// resolveItemToChange).
+func resolvePodcastToChange(ctx context.Context, client *abs.Client, library, idOrTitle string) (*abs.Item, error) {
+	it, err := resolveItemToChange(ctx, client, library, idOrTitle)
+	if err != nil {
+		return nil, err
+	}
+	if !it.IsPodcast() {
+		return nil, errNotPodcast
+	}
+	return it, nil
+}
+
+// findEpisode locates an episode of a podcast by id, or by a title only one
+// of its episodes has. The server's second download of an episode is added
+// under the same title, so a title can name the original and its copy, and
+// taking the first would act on whichever the server lists first: a title
+// that names several is refused with their ids.
 func findEpisode(it *abs.Item, idOrTitle string) (*abs.Episode, error) {
 	idOrTitle = strings.TrimSpace(idOrTitle)
+	if idOrTitle == "" {
+		return nil, errors.New("episode id or title is required (podcast_episodes lists them)")
+	}
+	var named []*abs.Episode
 	for i := range it.Media.Episodes {
 		e := &it.Media.Episodes[i]
-		if e.ID == idOrTitle || strings.EqualFold(e.Title, idOrTitle) {
+		if e.ID == idOrTitle {
 			return e, nil
 		}
+		if strings.EqualFold(e.Title, idOrTitle) {
+			named = append(named, e)
+		}
 	}
-	return nil, fmt.Errorf("no episode %q in %q (podcast_episodes lists them)", idOrTitle, it.Title())
+	switch len(named) {
+	case 1:
+		return named[0], nil
+	case 0:
+		return nil, fmt.Errorf("no episode %q in %q (podcast_episodes lists them)", idOrTitle, it.Title())
+	}
+	labels := make([]string, 0, len(named))
+	for _, e := range named {
+		labels = append(labels, episodeLabel(e))
+	}
+
+	return nil, fmt.Errorf("%d episodes of %q are titled %q; pass an id: %s", len(named), it.Title(), idOrTitle, strings.Join(labels, "; "))
+}
+
+// episodeLabel is an episode's id with what tells two of one title apart:
+// when it was published and added, and its file.
+func episodeLabel(e *abs.Episode) string {
+	var about []string
+	if published := cmp.Or(fmtDate(e.PublishedAt), e.PubDate); published != "" {
+		about = append(about, "published "+published)
+	}
+	if added := fmtTime(e.AddedAt); added != "" {
+		about = append(about, "added "+added)
+	}
+	if e.AudioFile != nil && e.AudioFile.Metadata.Filename != "" {
+		about = append(about, "file "+e.AudioFile.Metadata.Filename)
+	}
+	if len(about) == 0 {
+		return e.ID
+	}
+
+	return e.ID + " (" + strings.Join(about, ", ") + ")"
 }
 
 type feedEpisodeRow struct {
-	Index       int    `json:"index"                 jsonschema:"pass to podcast_episode_download"`
+	Index       *int   `json:"index,omitempty"       jsonschema:"pass to podcast_episode_download"`
 	Title       string `json:"title"`
 	Season      string `json:"season,omitempty"`
 	Episode     string `json:"episode,omitempty"`
 	Type        string `json:"type,omitempty"`
 	Published   string `json:"published,omitempty"`
-	Duration    string `json:"duration,omitempty"`
+	Duration    int    `json:"duration_s,omitempty"  jsonschema:"length in seconds, when the feed gives one"`
 	Description string `json:"description,omitempty"`
 }
 
 func feedEpisodeRows(eps []abs.FeedEpisode, withDescription bool) []feedEpisodeRow {
 	rows := make([]feedEpisodeRow, 0, len(eps))
 	for i, e := range eps {
-		row := feedEpisodeRow{Index: i, Title: e.Title, Season: e.Season.String(), Episode: e.Episode.String(), Type: e.EpisodeType, Published: fmtDate(e.PublishedAt)}
+		row := feedEpisodeRow{Index: &i, Title: e.Title, Season: e.Season.String(), Episode: e.Episode.String(), Type: e.EpisodeType, Published: fmtDate(e.PublishedAt)}
 		if row.Published == "" {
 			row.Published = e.PubDate
 		}
+		// the server parses the feed's own duration, and leaves this unset
+		// when it cannot
 		if e.DurationSeconds != nil {
-			row.Duration = fmtDuration(*e.DurationSeconds)
-		} else {
-			row.Duration = e.Duration.String()
+			row.Duration = wholeSec(*e.DurationSeconds)
 		}
 		if withDescription {
 			row.Description = clip(plain(e.Description), 200)
@@ -77,12 +135,14 @@ func registerPodcastTools(r *registry) {
 		Item    string `json:"item,omitempty"    jsonschema:"podcast id or exact title; omit for the newest episodes across every podcast"`
 		Library string `json:"library,omitempty" jsonschema:"narrow to one library by name or id"`
 		Limit   int    `json:"limit,omitempty"   jsonschema:"page size, default 50"`
-		Offset  int    `json:"offset,omitempty"  jsonschema:"only when a podcast is named"`
+		Offset  int    `json:"offset,omitempty"  jsonschema:"only when a podcast is named: episodes to skip, from next_offset"`
 	}
 	type episodesOut struct {
-		Podcast  string           `json:"podcast"`
-		Total    int              `json:"total"`
-		Episodes []episodeSummary `json:"episodes" jsonschema:"newest first, with the API key user's progress"`
+		Podcast    string           `json:"podcast"`
+		Total      int              `json:"total"`
+		Offset     int              `json:"offset"`
+		NextOffset int              `json:"next_offset,omitempty" jsonschema:"pass back as offset for the next page; absent at the end"`
+		Episodes   []episodeSummary `json:"episodes"              jsonschema:"newest first, with the API key user's progress"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "podcast_episodes",
@@ -137,11 +197,14 @@ func registerPodcastTools(r *registry) {
 		// a negative offset would index past the end of the list; treat it as
 		// the start, like an offset past the end yields nothing
 		offset := max(in.Offset, 0)
-		out := episodesOut{Podcast: it.Title(), Total: len(eps), Episodes: []episodeSummary{}}
+		out := episodesOut{Podcast: it.Title(), Total: len(eps), Offset: offset, Episodes: []episodeSummary{}}
 		for i := offset; i < len(eps) && len(out.Episodes) < limit; i++ {
 			e := &eps[i]
 			e.Progress = progress[e.ID]
 			out.Episodes = append(out.Episodes, summarizeEpisode(e, "", false))
+		}
+		if next := offset + len(out.Episodes); next < len(eps) {
+			out.NextOffset = next
 		}
 
 		return nil, out, nil
@@ -152,8 +215,8 @@ func registerPodcastTools(r *registry) {
 		Episode string `json:"episode" jsonschema:"episode id or exact title"`
 	}
 	type chapterRow struct {
-		Title string `json:"title"`
-		Start string `json:"start"`
+		Title string  `json:"title"`
+		Start float64 `json:"start_s" jsonschema:"seconds into the episode"`
 	}
 	type episodeGetOut struct {
 		episodeSummary
@@ -188,7 +251,7 @@ func registerPodcastTools(r *registry) {
 			out.URL = e.Enclosure.URL
 		}
 		for _, ch := range e.Chapters {
-			out.Chapters = append(out.Chapters, chapterRow{Title: ch.Title, Start: fmtDuration(ch.Start)})
+			out.Chapters = append(out.Chapters, chapterRow{Title: ch.Title, Start: ch.Start})
 		}
 
 		return nil, out, nil
@@ -204,61 +267,154 @@ func registerPodcastTools(r *registry) {
 		Type        string `json:"type,omitempty"        jsonschema:"full, trailer or bonus"`
 		PubDate     string `json:"pub_date,omitempty"`
 	}
-	type doneOut struct {
-		Done bool `json:"done"`
+	type episodeEditOut struct {
+		Podcast   string         `json:"podcast"`
+		Changed   []string       `json:"changed"             jsonschema:"the fields this call changed"`
+		Unchanged []string       `json:"unchanged,omitempty" jsonschema:"fields asked for that already had that value, so were not sent"`
+		Episode   episodeSummary `json:"episode"             jsonschema:"the episode as the server has it after the edit"`
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "podcast_episode_edit",
-		Description: "Edit an episode's title, subtitle, description, season/episode number, type or publish date. Changes server state.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in episodeEditIn) (*mcp.CallToolResult, doneOut, error) {
-		it, err := resolvePodcast(ctx, client, in.Library, in.Item)
+		Description: "Edit an episode's title, subtitle, description, season/episode number, type or publish date, and say which fields changed. Changes server state.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in episodeEditIn) (*mcp.CallToolResult, episodeEditOut, error) {
+		// the server stores any type it is sent, and its apps know only these
+		typ := strings.ToLower(strings.TrimSpace(in.Type))
+		if typ != "" && !slices.Contains(episodeTypes, typ) {
+			return nil, episodeEditOut{}, fmt.Errorf("type %q must be one of %s", in.Type, strings.Join(episodeTypes, ", "))
+		}
+		// the server keeps a publish date twice, as the feed's text and as the
+		// time it and these tools sort and judge by, and moves the time only
+		// when it is sent as well
+		var publishedMs int64
+		if in.PubDate != "" {
+			when, perr := parsePubDate(in.PubDate)
+			if perr != nil {
+				return nil, episodeEditOut{}, perr
+			}
+			publishedMs = when.UnixMilli()
+		}
+		it, err := resolvePodcastToChange(ctx, client, in.Library, in.Item)
 		if err != nil {
-			return nil, doneOut{}, err
+			return nil, episodeEditOut{}, err
 		}
 		e, err := findEpisode(it, in.Episode)
 		if err != nil {
-			return nil, doneOut{}, err
+			return nil, episodeEditOut{}, err
 		}
-		upd := abs.EpisodeUpdate{
-			Title:       strPtr(in.Title),
-			Subtitle:    strPtr(in.Subtitle),
-			Description: strPtr(in.Description),
-			Season:      strPtr(in.Season),
-			Episode:     strPtr(in.Number),
-			EpisodeType: strPtr(in.Type),
-			PubDate:     strPtr(in.PubDate),
-		}
-		if upd == (abs.EpisodeUpdate{}) {
-			return nil, doneOut{}, errors.New("nothing to change")
-		}
-		if _, err := client.UpdateEpisode(ctx, it.ID, e.ID, upd); err != nil {
-			return nil, doneOut{}, err
+		pubNow := e.PubDate
+		if in.PubDate != "" && e.PublishedAt != publishedMs {
+			pubNow = "" // the text may match, but not the time it stands for
 		}
 
-		return nil, doneOut{Done: true}, nil
+		out := episodeEditOut{Podcast: it.Title(), Changed: []string{}}
+		var upd abs.EpisodeUpdate
+		for _, f := range []struct {
+			name, now, want string
+			to              **string
+		}{
+			{"title", e.Title, in.Title, &upd.Title},
+			{"subtitle", e.Subtitle, in.Subtitle, &upd.Subtitle},
+			{"description", e.Description, in.Description, &upd.Description},
+			{"season", e.Season.String(), in.Season, &upd.Season},
+			{"number", e.Episode.String(), in.Number, &upd.Episode},
+			{"type", e.EpisodeType, typ, &upd.EpisodeType},
+			{"pub_date", pubNow, in.PubDate, &upd.PubDate},
+		} {
+			switch f.want {
+			case "":
+			case f.now:
+				out.Unchanged = append(out.Unchanged, f.name)
+			default:
+				*f.to = &f.want
+				out.Changed = append(out.Changed, f.name)
+			}
+		}
+		if upd.PubDate != nil {
+			upd.PublishedAt = &publishedMs
+		}
+		switch {
+		case len(out.Changed)+len(out.Unchanged) == 0:
+			return nil, episodeEditOut{}, errors.New("nothing to change")
+		case len(out.Changed) == 0:
+			out.Episode = summarizeEpisode(e, it.Title(), false)
+			return nil, out, nil
+		}
+		updated, err := client.UpdateEpisode(ctx, it.ID, e.ID, upd)
+		if err != nil {
+			return nil, episodeEditOut{}, err
+		}
+
+		// the reply is the podcast as saved; the episode is read out of it
+		after := episodeByID(updated, e.ID)
+		if after == nil {
+			if after, err = client.Episode(ctx, it.ID, e.ID); err != nil {
+				return nil, episodeEditOut{}, fmt.Errorf("edited %q, but reading it back failed: %w", e.Title, err)
+			}
+		}
+		out.Episode = summarizeEpisode(after, it.Title(), false)
+
+		return nil, out, nil
 	})
 
 	type episodeDeleteIn struct {
 		episodeIn
-		DeleteFile bool `json:"delete_file,omitempty" jsonschema:"also delete the audio file from disk"`
+		DeleteFile bool `json:"delete_file,omitempty" jsonschema:"also erase the audio file from disk"`
+		Confirm    bool `json:"confirm,omitempty"     jsonschema:"true to delete; without it nothing changes and the answer says what would go"`
+	}
+	type episodeDeleteOut struct {
+		Podcast    string `json:"podcast"`
+		Episode    string `json:"episode"`
+		ID         string `json:"episode_id"`
+		File       string `json:"file,omitempty"        jsonschema:"the episode's audio file on the server"`
+		Deleted    bool   `json:"deleted"               jsonschema:"false without confirm: nothing was changed"`
+		FileErased bool   `json:"file_erased,omitempty" jsonschema:"the audio file went from disk with the episode"`
+		Note       string `json:"note"                  jsonschema:"what was removed, or without confirm what would be"`
 	}
 	add(r, deleteTool, &mcp.Tool{
 		Name:        "podcast_episode_delete",
-		Description: "Remove an episode from a podcast, and with delete_file erase its audio from disk. Requires the delete permission.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in episodeDeleteIn) (*mcp.CallToolResult, doneOut, error) {
-		it, err := resolvePodcast(ctx, client, in.Library, in.Item)
+		Description: "Remove an episode from a podcast, and with delete_file erase its audio from disk. Without confirm=true it changes nothing and says what it would remove, the file's path included. Requires the delete permission.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in episodeDeleteIn) (*mcp.CallToolResult, episodeDeleteOut, error) {
+		it, err := resolvePodcastToChange(ctx, client, in.Library, in.Item)
 		if err != nil {
-			return nil, doneOut{}, err
+			return nil, episodeDeleteOut{}, err
 		}
 		e, err := findEpisode(it, in.Episode)
 		if err != nil {
-			return nil, doneOut{}, err
-		}
-		if err := client.DeleteEpisode(ctx, it.ID, e.ID, in.DeleteFile); err != nil {
-			return nil, doneOut{}, err
+			return nil, episodeDeleteOut{}, err
 		}
 
-		return nil, doneOut{Done: true}, nil
+		out := episodeDeleteOut{Podcast: it.Title(), Episode: e.Title, ID: e.ID}
+		if e.AudioFile != nil {
+			out.File = e.AudioFile.Metadata.Path
+		}
+		file := "its audio file"
+		if out.File != "" {
+			file += " " + out.File
+		}
+		what := "the episode, and " + file + " from disk"
+		if !in.DeleteFile {
+			what = "the episode; " + file + " stays on disk, where the next library scan adds it back"
+		}
+		if !in.Confirm {
+			out.Note = "not confirmed, so nothing changed: this would remove " + what + ". Pass confirm=true to delete."
+			return nil, out, nil
+		}
+
+		if err := client.DeleteEpisode(ctx, it.ID, e.ID, in.DeleteFile); err != nil {
+			return nil, episodeDeleteOut{}, err
+		}
+		// read back rather than trusted: the answer to a delete is not the
+		// episode gone
+		after, err := client.Item(ctx, it.ID)
+		if err != nil {
+			return nil, episodeDeleteOut{}, fmt.Errorf("deleted %q, but reading %q back failed: %w", e.Title, it.Title(), err)
+		}
+		if episodeByID(after, e.ID) != nil {
+			return nil, episodeDeleteOut{}, fmt.Errorf("the server accepted the delete but %q (%s) is still in %q", e.Title, e.ID, it.Title())
+		}
+		out.Deleted, out.FileErased, out.Note = true, in.DeleteFile, "removed "+what
+
+		return nil, out, nil
 	})
 
 	type checkNewIn struct {
@@ -273,7 +429,7 @@ func registerPodcastTools(r *registry) {
 		Name:        "podcast_check_new",
 		Description: "Fetch a podcast's feed and download any new episodes (up to limit). Admin only. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in checkNewIn) (*mcp.CallToolResult, checkNewOut, error) {
-		it, err := resolvePodcast(ctx, client, in.Library, in.Item)
+		it, err := resolvePodcastToChange(ctx, client, in.Library, in.Item)
 		if err != nil {
 			return nil, checkNewOut{}, err
 		}
@@ -282,7 +438,14 @@ func registerPodcastTools(r *registry) {
 			return nil, checkNewOut{}, err
 		}
 
-		return nil, checkNewOut{Podcast: it.Title(), Queued: feedEpisodeRows(eps, false)}, nil
+		// these are queued already, and their place in this list is not their
+		// place in the feed, so no index is offered for a second download
+		rows := feedEpisodeRows(eps, false)
+		for i := range rows {
+			rows[i].Index = nil
+		}
+
+		return nil, checkNewOut{Podcast: it.Title(), Queued: rows}, nil
 	})
 
 	type feedSearchIn struct {
@@ -331,7 +494,7 @@ func registerPodcastTools(r *registry) {
 		Name:        "podcast_episode_download",
 		Description: "Queue episodes from a podcast's feed for download, chosen by index from podcast_feed_episodes, and say which the podcast already holds or is already fetching (those are not downloaded twice). Admin only. Changes server state; downloads run in the background (podcast_downloads shows the queue, podcast_episodes what arrived).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in downloadIn) (*mcp.CallToolResult, downloadOut, error) {
-		it, err := resolvePodcast(ctx, client, in.Library, in.Item)
+		it, err := resolvePodcastToChange(ctx, client, in.Library, in.Item)
 		if err != nil {
 			return nil, downloadOut{}, err
 		}
@@ -535,12 +698,18 @@ func registerPodcastTools(r *registry) {
 		if dup != nil {
 			return nil, addOut{}, dup
 		}
-		folder := in.Folder
+		folder := strings.TrimSpace(in.Folder)
 		if folder == "" {
-			folder = safeFolderName(feed.Metadata.Title)
+			if folder = safeFolderName(feed.Metadata.Title); folder == "" {
+				return nil, addOut{}, errors.New("the feed has no title to name the podcast's folder after: pass folder")
+			}
+		}
+		dir, err := podcastDir(lib.Folders[0].FullPath, folder)
+		if err != nil {
+			return nil, addOut{}, err
 		}
 
-		np := abs.NewPodcast{LibraryID: lib.ID, FolderID: lib.Folders[0].ID, Path: path.Join(lib.Folders[0].FullPath, folder)}
+		np := abs.NewPodcast{LibraryID: lib.ID, FolderID: lib.Folders[0].ID, Path: dir}
 		np.Media.AutoDownloadEpisodes = in.AutoDownload
 		np.Media.Metadata = map[string]any{
 			"title":         feed.Metadata.Title,
@@ -586,50 +755,213 @@ func registerPodcastTools(r *registry) {
 	type settingsIn struct {
 		itemRef
 		AutoDownload *bool  `json:"auto_download,omitempty"`
-		Schedule     string `json:"schedule,omitempty"      jsonschema:"cron expression for the automatic check, e.g. '0 * * * *'"`
+		Schedule     string `json:"schedule,omitempty"      jsonschema:"cron expression for the automatic check: minute hour day-of-month month day-of-week, e.g. '0 * * * *'"`
 		KeepEpisodes *int   `json:"keep_episodes,omitempty" jsonschema:"maximum episodes to keep, 0 for all"`
 		NewPerCheck  *int   `json:"new_per_check,omitempty" jsonschema:"maximum new episodes to download per check"`
 	}
+	type settingsOut struct {
+		Podcast      string `json:"podcast"`
+		Updated      bool   `json:"updated"            jsonschema:"the server changed something; false when every setting already was as asked"`
+		AutoDownload bool   `json:"auto_download"      jsonschema:"read back from the server after the change"`
+		Schedule     string `json:"schedule,omitempty"`
+		KeepEpisodes int    `json:"keep_episodes"      jsonschema:"0 keeps them all"`
+		NewPerCheck  int    `json:"new_per_check"      jsonschema:"0 downloads every new one"`
+	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "podcast_settings",
-		Description: "Change a podcast's automatic download settings: on/off, schedule, how many episodes to keep and to fetch per check. Changes server state.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in settingsIn) (*mcp.CallToolResult, doneOut, error) {
-		it, err := resolvePodcast(ctx, client, in.Library, in.Item)
+		Description: "Change a podcast's automatic download settings: on/off, schedule, how many episodes to keep and to fetch per check, and answer them as the server now has them. Changes server state.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in settingsIn) (*mcp.CallToolResult, settingsOut, error) {
+		// the server saves whatever it is sent: a schedule its scheduler
+		// cannot read never runs, and a negative count means nothing
+		schedule := strings.TrimSpace(in.Schedule)
+		if schedule != "" {
+			if err := checkSchedule(schedule); err != nil {
+				return nil, settingsOut{}, err
+			}
+		}
+		for name, n := range map[string]*int{"keep_episodes": in.KeepEpisodes, "new_per_check": in.NewPerCheck} {
+			if n != nil && *n < 0 {
+				return nil, settingsOut{}, fmt.Errorf("%s is %d: it is a count, 0 or more", name, *n)
+			}
+		}
+		it, err := resolvePodcastToChange(ctx, client, in.Library, in.Item)
 		if err != nil {
-			return nil, doneOut{}, err
+			return nil, settingsOut{}, err
 		}
 		upd := abs.MediaUpdate{
 			AutoDownloadEpisodes:     in.AutoDownload,
-			AutoDownloadSchedule:     strPtr(in.Schedule),
+			AutoDownloadSchedule:     strPtr(schedule),
 			MaxEpisodesToKeep:        in.KeepEpisodes,
 			MaxNewEpisodesToDownload: in.NewPerCheck,
 		}
 		if upd.AutoDownloadEpisodes == nil && upd.AutoDownloadSchedule == nil && upd.MaxEpisodesToKeep == nil && upd.MaxNewEpisodesToDownload == nil {
-			return nil, doneOut{}, errors.New("nothing to change")
+			return nil, settingsOut{}, errors.New("nothing to change")
 		}
 		updated, err := client.UpdateMedia(ctx, it.ID, upd)
 		if err != nil {
-			return nil, doneOut{}, err
+			return nil, settingsOut{}, err
+		}
+		// the settings as saved, not as asked: the answer to the update
+		// says only whether anything changed
+		after, err := client.Item(ctx, it.ID)
+		if err != nil {
+			return nil, settingsOut{}, fmt.Errorf("the settings were sent, but reading %q back failed: %w", it.Title(), err)
 		}
 
-		return nil, doneOut{Done: updated}, nil
+		return nil, settingsOut{
+			Podcast: after.Title(), Updated: updated,
+			AutoDownload: after.Media.AutoDownloadEpisodes, Schedule: after.Media.AutoDownloadSchedule,
+			KeepEpisodes: after.Media.MaxEpisodesToKeep, NewPerCheck: after.Media.MaxNewEpisodesToDownload,
+		}, nil
 	})
 }
 
-// feedEpisodes lists a podcast's feed, filtered by title when given. The
-// server only exposes a title search, so an empty title uses a feed parse.
+// feedEpisodes lists a podcast's feed, newest first, filtered by title when
+// given. The server only exposes a title search, so an empty title uses a
+// feed parse. Neither comes back by date - a feed is in whatever order its
+// publisher wrote it, the search in order of how near each title is - so
+// both are sorted here, where podcast_feed_episodes and
+// podcast_episode_download both read them and their indexes agree.
 func feedEpisodes(ctx context.Context, client *abs.Client, it *abs.Item, title string) ([]abs.FeedEpisode, error) {
+	var eps []abs.FeedEpisode
 	if strings.TrimSpace(title) != "" {
-		return client.SearchFeedEpisodes(ctx, it.ID, title)
+		found, err := client.SearchFeedEpisodes(ctx, it.ID, title)
+		if err != nil {
+			return nil, err
+		}
+		eps = found
+	} else {
+		if it.Media.Metadata.FeedURL == "" {
+			return nil, errors.New("podcast has no feed url")
+		}
+		feed, err := client.ParseFeed(ctx, it.Media.Metadata.FeedURL)
+		if err != nil {
+			return nil, err
+		}
+		eps = feed.Episodes
 	}
-	if it.Media.Metadata.FeedURL == "" {
-		return nil, errors.New("podcast has no feed url")
+	slices.SortStableFunc(eps, func(a, b abs.FeedEpisode) int { return cmp.Compare(b.PublishedAt, a.PublishedAt) })
+
+	return eps, nil
+}
+
+// pubDateLayouts are the ways a publish date is written: as a feed writes
+// it, as a timestamp, or as a date.
+var pubDateLayouts = []string{
+	time.RFC1123Z, time.RFC1123, "Mon, 2 Jan 2006 15:04:05 -0700", "Mon, 2 Jan 2006 15:04:05 MST",
+	time.RFC3339, "2006-01-02T15:04:05", "2006-01-02",
+}
+
+// parsePubDate reads a publish date written the way a feed or a person
+// writes one.
+func parsePubDate(s string) (time.Time, error) {
+	for _, layout := range pubDateLayouts {
+		if when, err := time.Parse(layout, strings.TrimSpace(s)); err == nil {
+			return when, nil
+		}
 	}
-	feed, err := client.ParseFeed(ctx, it.Media.Metadata.FeedURL)
-	if err != nil {
-		return nil, err
+
+	return time.Time{}, fmt.Errorf("pub_date %q is not a date: write it as a feed does (Mon, 02 Jan 2006 15:04:05 -0700) or as 2006-01-02", s)
+}
+
+// episodeTypes are the episode types Audiobookshelf knows.
+var episodeTypes = []string{"full", "trailer", "bonus"}
+
+// episodeByID is the podcast's episode with an id, or nil.
+func episodeByID(it *abs.Item, id string) *abs.Episode {
+	for i := range it.Media.Episodes {
+		if it.Media.Episodes[i].ID == id {
+			return &it.Media.Episodes[i]
+		}
 	}
-	return feed.Episodes, nil
+	return nil
+}
+
+// podcastDir is where a new podcast goes: a folder under the library folder.
+// Joined as given, "../x" would make the podcast outside the library, where
+// no scan of it looks, so a folder that leaves it is refused.
+func podcastDir(root, folder string) (string, error) {
+	clean := path.Clean(folder)
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") || path.IsAbs(clean) {
+		return "", fmt.Errorf("folder %q is not a folder under the library folder %s: pass a name for one, such as the podcast's title", folder, root)
+	}
+
+	return path.Join(root, clean), nil
+}
+
+// cronField is one field of a schedule and the values it takes; names, for
+// the month and the weekday, count up from lo.
+type cronField struct {
+	name   string
+	lo, hi int
+	names  []string
+}
+
+// cronFields are a schedule's five fields, in order. A six-field schedule
+// has seconds first.
+var cronFields = []cronField{
+	{name: "minute", hi: 59},
+	{name: "hour", hi: 23},
+	{name: "day of month", lo: 1, hi: 31},
+	{name: "month", lo: 1, hi: 12, names: []string{"january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"}},
+	{name: "day of week", hi: 7, names: []string{"sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"}},
+}
+
+// checkSchedule refuses a schedule the server's cron scheduler cannot read,
+// which it would save and then never run: each field a *, a number or name
+// in range, a range of them, a list, or any of those with a /step.
+func checkSchedule(s string) error {
+	fields := strings.Fields(s)
+	spec := cronFields
+	switch len(fields) {
+	case len(cronFields):
+	case len(cronFields) + 1:
+		spec = append([]cronField{{name: "second", hi: 59}}, cronFields...)
+	default:
+		return fmt.Errorf("schedule %q has %d fields, want 5: minute hour day-of-month month day-of-week, e.g. '0 * * * *' for hourly", s, len(fields))
+	}
+	for i, f := range fields {
+		if !spec[i].accepts(f) {
+			return fmt.Errorf("schedule %q: %q is not a %s (%d-%d)", s, f, spec[i].name, spec[i].lo, spec[i].hi)
+		}
+	}
+
+	return nil
+}
+
+func (c *cronField) accepts(field string) bool {
+	for part := range strings.SplitSeq(field, ",") {
+		span, step, stepped := strings.Cut(part, "/")
+		if n, err := strconv.Atoi(step); stepped && (err != nil || n < 1) {
+			return false
+		}
+		if span == "*" {
+			continue
+		}
+		from, to, ranged := strings.Cut(span, "-")
+		a, ok := c.value(from)
+		if !ok {
+			return false
+		}
+		if b, ok := c.value(to); ranged && (!ok || b < a) {
+			return false
+		}
+	}
+	return true
+}
+
+// value reads one number or name of the field, and whether it is in range.
+func (c *cronField) value(s string) (int, bool) {
+	if n, err := strconv.Atoi(s); err == nil {
+		return n, n >= c.lo && n <= c.hi
+	}
+	s = strings.ToLower(s)
+	for i, name := range c.names {
+		if s == name || s == name[:3] {
+			return c.lo + i, true
+		}
+	}
+	return 0, false
 }
 
 // newestEpisodes is a podcast's episodes by publication, newest first. The

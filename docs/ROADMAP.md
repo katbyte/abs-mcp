@@ -36,5 +36,5 @@ Design rules, in priority order:
 
 ## Guarded / deliberately excluded
 
-- `item_delete`, `podcast_episode_delete`, `author_delete`, `library_issues_remove`: only registered with `--enable-delete` (`ABS_ENABLE_DELETE`).
+- `item_delete`, `podcast_episode_delete`, `author_delete`, `library_issues_remove`, `collection_delete`, `playlist_delete`: only registered with `--enable-delete` (`ABS_ENABLE_DELETE`).
 - Not wrapping **as tools**, ever: audio streaming and playback sessions, cover/image byte delivery, uploads, server settings and auth settings, API key management, notification config, cache purges, the file system browser. `lib/abs` covers all of them - it is a general Audiobookshelf client - but none of it is judgment an AI should be making.

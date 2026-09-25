@@ -7,9 +7,9 @@ import (
 )
 
 // there is only the root account, which is also the account the API key acts
-// as. That makes it the one fixture that can check both paths through
-// resolveUser against each other: omitting user goes to /api/me, naming it
-// goes through the admin user record, and the two should agree.
+// as. Omitting user and naming root are the same account, both read through
+// /api/me; the admin user record of someone else is the journeys' to check,
+// with accounts of their own.
 
 func TestUserList(t *testing.T) {
 	users := rows(t, call(t, "user_list", nil)["users"], "users")
@@ -44,11 +44,12 @@ func TestUserGetSelf(t *testing.T) {
 	}
 }
 
+// naming the API key's own account is still the key's own account
 func TestUserGetByName(t *testing.T) {
 	out := call(t, "user_get", map[string]any{"user": "root"})
 
-	if self, _ := out["self"].(bool); self {
-		t.Error("a named lookup should not report self")
+	if self, _ := out["self"].(bool); !self {
+		t.Error("naming the API key's own account should report self")
 	}
 	for _, perm := range []string{"can_update", "can_delete", "can_upload"} {
 		if ok, _ := out[perm].(bool); !ok {
@@ -129,8 +130,8 @@ func TestUserProgressRemove(t *testing.T) {
 	call(t, "user_progress_set", map[string]any{"item": "Second Foundation", "percent": 10})
 	out := call(t, "user_progress_remove", map[string]any{"item": "Second Foundation"})
 
-	if done, _ := out["done"].(bool); !done {
-		t.Errorf("user_progress_remove done = %v", out["done"])
+	if removed, _ := out["removed"].(bool); !removed {
+		t.Errorf("user_progress_remove removed = %v", out["removed"])
 	}
 	got := call(t, "user_progress_get", map[string]any{"item": "Second Foundation"})
 	if got["progress"] != nil {
@@ -140,11 +141,11 @@ func TestUserProgressRemove(t *testing.T) {
 
 func TestUserBookmarks(t *testing.T) {
 	added := call(t, "user_bookmark_edit", map[string]any{
-		"item": "Leviathan Wakes", "action": "add", "seconds": 0.25, "title": "A good bit",
+		"item": "Leviathan Wakes", "action": "add", "time_s": 0.25, "title": "A good bit",
 	})
 	t.Cleanup(func() {
 		call(t, "user_bookmark_edit", map[string]any{
-			"item": "Leviathan Wakes", "action": "remove", "seconds": 0.25,
+			"item": "Leviathan Wakes", "action": "remove", "time_s": 0.25,
 		})
 	})
 	bookmark, ok := added["bookmark"].(map[string]any)
@@ -191,8 +192,8 @@ func TestUserHistoryAndStats(t *testing.T) {
 		if stats["user"] != "root" {
 			t.Errorf("user = %v (args %v)", stats["user"], args)
 		}
-		if _, ok := stats["total_listened"].(string); !ok {
-			t.Errorf("total_listened = %T, want a formatted duration (args %v)", stats["total_listened"], args)
+		if _, ok := stats["total_listened_s"].(float64); !ok {
+			t.Errorf("total_listened_s = %T, want a number of seconds (args %v)", stats["total_listened_s"], args)
 		}
 	}
 
@@ -203,11 +204,12 @@ func TestUserHistoryAndStats(t *testing.T) {
 	}
 }
 
-// Audiobookshelf has no year-in-review for anyone but the caller, so the tool
-// says so rather than quietly returning someone else's all-time totals.
-func TestUserStatsYearForOther(t *testing.T) {
-	if msg := callErr(t, "user_stats", map[string]any{"user": "root", "year": 2026}); msg == "" {
-		t.Error("a year in review for a named user should be refused")
+// Audiobookshelf keeps a year in review only for the caller, and the caller
+// named by username is the caller: it was refused as someone else's. Asking
+// for another account's is refused in the playback journey.
+func TestUserStatsYearByOwnName(t *testing.T) {
+	if year := call(t, "user_stats", map[string]any{"user": "root", "year": 2026}); year["user"] != "root" {
+		t.Errorf("a year in review for the caller by name = %v", year)
 	}
 }
 

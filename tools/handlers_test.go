@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/katbyte/abs-mcp/lib/abs"
@@ -256,9 +257,23 @@ func TestItemCoverEditNeedsIntent(t *testing.T) {
 	t.Parallel()
 
 	f := newFakeABS(t)
-	f.json("GET /api/items/"+itemID, item(itemID, "Dune", "", `"coverPath":"/c.jpg"`))
-	f.json("DELETE /api/items/"+itemID+"/cover", `{}`)
-	f.json("POST /api/items/"+itemID+"/cover", `{}`)
+	var covered atomic.Bool
+	covered.Store(true)
+	f.mux.HandleFunc("GET /api/items/"+itemID, func(w http.ResponseWriter, _ *http.Request) {
+		if covered.Load() {
+			_, _ = io.WriteString(w, item(itemID, "Dune", "", `"coverPath":"/c.jpg"`))
+			return
+		}
+		_, _ = io.WriteString(w, item(itemID, "Dune", "", ""))
+	})
+	f.mux.HandleFunc("DELETE /api/items/"+itemID+"/cover", func(w http.ResponseWriter, _ *http.Request) {
+		covered.Store(false)
+		_, _ = io.WriteString(w, `{}`)
+	})
+	f.mux.HandleFunc("POST /api/items/"+itemID+"/cover", func(w http.ResponseWriter, _ *http.Request) {
+		covered.Store(true)
+		_, _ = io.WriteString(w, `{}`)
+	})
 	call := toolCaller(t, f)
 
 	if _, err := call("item_cover_edit", map[string]any{"item": itemID}); err == nil {
@@ -268,15 +283,22 @@ func TestItemCoverEditNeedsIntent(t *testing.T) {
 		t.Errorf("the cover was touched: %v", got)
 	}
 
-	if _, err := call("item_cover_edit", map[string]any{"item": itemID, "remove": true}); err != nil {
+	out, err := call("item_cover_edit", map[string]any{"item": itemID, "remove": true})
+	if err != nil {
 		t.Fatal(err)
 	}
 	if got := f.requests("/api/items/" + itemID + "/cover"); len(got) != 1 || got[0].Method != http.MethodDelete {
 		t.Errorf("remove sent %v, want one DELETE", got)
 	}
+	if out["cover"] != "" {
+		t.Errorf("after the removal cover = %v, want none, read back", out["cover"])
+	}
 
-	if _, err := call("item_cover_edit", map[string]any{"item": itemID, "url": "http://img/c.jpg"}); err != nil {
+	if out, err = call("item_cover_edit", map[string]any{"item": itemID, "url": "http://img/c.jpg"}); err != nil {
 		t.Fatal(err)
+	}
+	if out["cover"] != "/c.jpg" {
+		t.Errorf("after setting cover = %v, want the one read back", out["cover"])
 	}
 	if got := f.requests("/api/items/" + itemID + "/cover"); len(got) != 2 || got[1].Method != http.MethodPost || !strings.Contains(got[1].Body, "http://img/c.jpg") {
 		t.Errorf("url sent %v, want a POST carrying the url", got)
@@ -366,6 +388,7 @@ func TestAuditSpellingReadsMinifiedNarrators(t *testing.T) {
 		item("i2", "Two", `"narratorName":"jim dale, Someone Else","authorName":"a. writer"`, ""),
 		item("i3", "Three", `"narratorName":"Jim Dale","authorName":"A. Writer"`, ""),
 	))
+	f.json("GET /api/libraries/"+libID+"/narrators", `{"narrators":[{"name":"Jim Dale","numBooks":2},{"name":"jim dale","numBooks":1},{"name":"Someone Else","numBooks":1}]}`)
 	call := toolCaller(t, f)
 
 	out, err := call("audit_spelling", nil)
@@ -428,7 +451,8 @@ func TestAuditAllMatchesTheAudits(t *testing.T) {
 	t.Parallel()
 
 	f := newFakeABS(t)
-	oneLibrary(f)
+	audibleLibrary(f) // a library whose own store can look its asins up
+	f.json("GET /api/search/books", `[]`)
 	f.json("GET /api/libraries/"+libID+"/items", page(
 		item("i1", "Dune", `"authorName":"Frank Herbert","asin":"B0","genres":["Sci-Fi"]`, `"coverPath":"/c.jpg","numTracks":1,"numAudioFiles":1`),
 		item("i2", "Neuromancer", `"authorName":"Neuromancer"`, ""),
@@ -594,7 +618,7 @@ func TestMetadataRenameRoutesByField(t *testing.T) {
 	}
 
 	// genres with remove: a DELETE addressed by base64 of the value
-	out, err = call("metadata_rename", map[string]any{"field": "genres", "from": "Temp", "remove": true})
+	out, err = call("metadata_rename", map[string]any{"field": "genres", "from": "Temp", "remove": true, "confirm": true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -616,7 +640,7 @@ func TestMetadataRenameRoutesByField(t *testing.T) {
 	if sent := f.requests("/api/libraries/" + libB + "/narrators/amltIGRhbGU="); len(sent) != 1 || sent[0].Method != http.MethodPatch {
 		t.Errorf("narrator rename in the second library sent %v", sent)
 	}
-	out, err = call("metadata_rename", map[string]any{"field": "narrators", "from": "Nobody", "remove": true, "library": "B"})
+	out, err = call("metadata_rename", map[string]any{"field": "narrators", "from": "Nobody", "remove": true, "confirm": true, "library": "B"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -627,12 +651,13 @@ func TestMetadataRenameRoutesByField(t *testing.T) {
 		t.Errorf("a rename scoped to B touched A: %v", sent)
 	}
 
-	// authors: resolved by name, renamed on the record, merge reported
+	// authors: resolved by name, renamed on the record, merge reported, and
+	// the count is the renamed author's 2 books, not the merged total
 	out, err = call("metadata_rename", map[string]any{"field": "authors", "from": "jrr tolkien", "to": "J.R.R. Tolkien"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if merged, ok := out["merged"].(bool); !ok || !merged || num(t, out["items_updated"]) != 5 {
+	if merged, ok := out["merged"].(bool); !ok || !merged || num(t, out["items_updated"]) != 2 {
 		t.Errorf("authors: %v", out)
 	}
 	var patched []request
@@ -899,8 +924,20 @@ func TestPodcastEpisodesOffsetBelowZero(t *testing.T) {
 	if got := list(t, out["episodes"]); len(got) != 2 {
 		t.Errorf("episodes = %d, want both from the start", len(got))
 	}
-	if out, err := call("podcast_episodes", map[string]any{"item": podID, "offset": 5}); err != nil || len(list(t, out["episodes"])) != 0 {
-		t.Errorf("offset past the end = %v, %v; want none", out, err)
+	if past, err := call("podcast_episodes", map[string]any{"item": podID, "offset": 5}); err != nil || len(list(t, past["episodes"])) != 0 {
+		t.Errorf("offset past the end = %v, %v; want none", past, err)
+	}
+
+	// a page says where the next starts, and the last says nothing
+	out, err = call("podcast_episodes", map[string]any{"item": podID, "limit": 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if num(t, out["offset"]) != 0 || num(t, out["next_offset"]) != 1 {
+		t.Errorf("first page = %v, want offset 0 and next_offset 1", out)
+	}
+	if out, err = call("podcast_episodes", map[string]any{"item": podID, "limit": 1, "offset": 1}); err != nil || out["next_offset"] != nil {
+		t.Errorf("last page = %v, %v; want no next_offset", out, err)
 	}
 }
 
@@ -925,7 +962,11 @@ func TestNativeAuditCountsTheLibrary(t *testing.T) {
 			_, _ = io.WriteString(w, `{"results":[],"total":0}`)
 			return
 		}
-		_, _ = io.WriteString(w, `{"results":[],"total":5}`)
+		pods := make([]string, 0, 5)
+		for i := range 5 {
+			pods = append(pods, fmt.Sprintf(`{"id":"p%d","mediaType":"podcast","media":{"coverPath":"/c.jpg","metadata":{"title":"Show %d"}}}`, i, i))
+		}
+		_, _ = io.WriteString(w, `{"results":[`+strings.Join(pods, ",")+`],"total":5}`)
 	})
 	call := toolCaller(t, f)
 

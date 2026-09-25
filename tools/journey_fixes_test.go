@@ -483,8 +483,8 @@ func TestMetadataRenameSplitChangesOnlyTheCompound(t *testing.T) {
 	}
 }
 
-// audit_matched with no library runs its pages on through every book library,
-// as audit_all counts it, rather than refusing.
+// audit_matched with no library runs its windows on through every book
+// library, as audit_all counts it, rather than refusing.
 func TestAuditMatchedPagesAcrossBookLibraries(t *testing.T) {
 	t.Parallel()
 
@@ -500,19 +500,19 @@ func TestAuditMatchedPagesAcrossBookLibraries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if num(t, first["items_scanned"]) != 1 || num(t, first["next_page"]) != 1 {
-		t.Errorf("page 0 = %v, want one book and a next page", first)
+	if num(t, first["items_scanned"]) != 1 || num(t, first["next_offset"]) != 1 {
+		t.Errorf("offset 0 = %v, want one book and a next offset", first)
 	}
-	second, err := call("audit_matched", map[string]any{"limit": 1, "page": 1})
+	second, err := call("audit_matched", map[string]any{"limit": 1, "offset": 1})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if num(t, second["items_scanned"]) != 1 || second["next_page"] != nil {
-		t.Errorf("page 1 = %v, want the other library's book and no next page", second)
+	if num(t, second["items_scanned"]) != 1 || second["next_offset"] != nil {
+		t.Errorf("offset 1 = %v, want the other library's book and no next offset", second)
 	}
 	findings := list(t, second["findings"])
 	if len(findings) != 1 || str(t, findings[0]["title"]) != "Elsewhere" {
-		t.Errorf("page 1 findings = %v, want Elsewhere", second["findings"])
+		t.Errorf("offset 1 findings = %v, want Elsewhere", second["findings"])
 	}
 }
 
@@ -723,7 +723,7 @@ func TestBookmarksOnADeletedItem(t *testing.T) {
 				t.Errorf("bookmark %v: item_deleted = %v", b, deleted)
 			}
 		}
-		if _, err := call("user_bookmark_edit", map[string]any{"item": itemID, "action": "remove", "seconds": 5}); err == nil || !strings.Contains(err.Error(), "will not remove") {
+		if _, err := call("user_bookmark_edit", map[string]any{"item": itemID, "action": "remove", "time_s": 5}); err == nil || !strings.Contains(err.Error(), "will not remove") {
 			t.Errorf("removing a bookmark on a deleted item: %v", err)
 		}
 	})
@@ -738,7 +738,7 @@ func TestBookmarksOnADeletedItem(t *testing.T) {
 		f.json("DELETE /api/items/"+bookB1, `OK`)
 		call := toolCaller(t, f)
 
-		out, err := call("item_delete", map[string]any{"item": bookB1})
+		out, err := call("item_delete", map[string]any{"item": bookB1, "confirm": true})
 		if err != nil {
 			t.Fatal(err)
 		}

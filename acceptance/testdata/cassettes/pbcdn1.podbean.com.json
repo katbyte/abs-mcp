@@ -12,13 +12,7 @@
         "Access-Control-Allow-Origin": "*",
         "Cache-Control": "public,max-age=604800",
         "Content-Type": "image/jpeg",
-        "Etag": "\"bcd138578250ba3200a8424c58fe2451\"",
-        "Last-Modified": "Wed, 13 Nov 2019 16:43:25 GMT",
-        "Server": "AmazonS3",
-        "Via": "1.1 varnish",
-        "X-Amz-Id-2": "kqs5MClCrBJ22J/3CBVKejEfFBMqWzpwb/7U9tHItWoUVKCNhV33JPM2t6+TFmGSTSQfcs70YBKZnynX6nG9/+jvbRUUDZKF",
-        "X-Amz-Version-Id": "HKDbGWgphf0hDfUVlBvm7fOdKK5hAMSu",
-        "X-Cache-Hits": "0"
+        "Server": "AmazonS3"
       },
       "elided": true,
       "elided_type": "image/jpeg",

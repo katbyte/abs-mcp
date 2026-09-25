@@ -239,7 +239,7 @@ up() {
 
   log "starting ${IMAGE} as ${NAME} on ${PORT} (providers proxied via host.docker.internal:${PROXY_PORT})"
   docker run -d --name "$NAME" \
-    -p "${PORT}:80" \
+    -p "127.0.0.1:${PORT}:80" \
     --add-host "host.docker.internal:host-gateway" \
     -e "HTTP_PROXY=http://host.docker.internal:${PROXY_PORT}" \
     -e "HTTPS_PROXY=http://host.docker.internal:${PROXY_PORT}" \

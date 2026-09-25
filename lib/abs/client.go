@@ -16,6 +16,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -30,6 +31,11 @@ type Client struct {
 	baseURL string
 	token   string
 	http    *http.Client
+	// files carries downloads and uploads, which run as long as the file
+	// takes: http's two-minute limit covers reading the body too, and would
+	// cut an audiobook off part way. Only the wait for the server to start
+	// answering is bounded; the caller's context bounds the rest.
+	files *http.Client
 }
 
 // New returns a client for the Audiobookshelf server at baseURL that
@@ -51,11 +57,55 @@ func New(baseURL, token string) (*Client, error) {
 		return nil, errors.New("server URL must not contain credentials; pass the API key via --token / ABS_TOKEN")
 	}
 
+	transport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return nil, errors.New("the default HTTP transport is not an *http.Transport")
+	}
+	files := transport.Clone()
+	files.ResponseHeaderTimeout = 120 * time.Second
+
 	return &Client{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		token:   token,
-		http:    &http.Client{Timeout: 120 * time.Second},
+		http:    &http.Client{Timeout: 120 * time.Second, CheckRedirect: refuseRedirect},
+		files:   &http.Client{Transport: files, CheckRedirect: refuseRedirect},
 	}, nil
+}
+
+// isNil reports whether v is nil or holds a nil map, slice or pointer.
+func isNil(v any) bool {
+	if v == nil {
+		return true
+	}
+	switch rv := reflect.ValueOf(v); rv.Kind() {
+	case reflect.Map, reflect.Slice, reflect.Pointer, reflect.Interface:
+		return rv.IsNil()
+	default:
+		return false
+	}
+}
+
+// isWebPage reports whether an answer is an HTML document rather than the
+// API's JSON or its bare "OK".
+func isWebPage(contentType string, body []byte) bool {
+	if !strings.HasPrefix(strings.ToLower(contentType), "text/html") {
+		return false
+	}
+	head := strings.ToLower(strings.TrimSpace(string(body[:min(len(body), 512)])))
+
+	return strings.HasPrefix(head, "<!doctype html") || strings.HasPrefix(head, "<html")
+}
+
+// refuseRedirect stops the client following a redirect. Audiobookshelf's API
+// answers where it is asked, so a redirect means the server url points at
+// something in front of it: an http address a proxy moves to https, or a
+// login page. Following one is worse than failing. Go turns a DELETE, PATCH
+// or POST into a GET on a 301, 302 or 303, the GET answers 200, and the write
+// reports success having done nothing; and it keeps the key on a redirect
+// from https to http on the same host.
+func refuseRedirect(req *http.Request, via []*http.Request) error {
+	return fmt.Errorf("%s %s was redirected to %s: set the server url to the address Audiobookshelf itself answers on (--server / ABS_SERVER)",
+		via[0].Method, via[0].URL.Path, req.URL.Redacted())
 }
 
 // BaseURL is the server address the client was created with, without a
@@ -100,8 +150,14 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 		return err
 	}
 
-	if out == nil || len(bytes.TrimSpace(raw)) == 0 {
+	if out == nil {
 		return nil
+	}
+	// the API answers what it was asked for; nothing at all is something in
+	// front of it, and decoding nothing would hand back a blank record that
+	// reads as a real one with every field empty
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return fmt.Errorf("%s %s: answered with nothing where the server sends a record: check the server url (--server / ABS_SERVER)", method, path)
 	}
 
 	if err := json.Unmarshal(raw, out); err != nil {
@@ -117,6 +173,12 @@ func (c *Client) doRaw(ctx context.Context, method, path string, query url.Value
 		u += "?" + query.Encode()
 	}
 
+	// a nil map or pointer is no body: marshalled it is the JSON null, which
+	// the server's parser refuses, so a session closed with no final
+	// position was never closed
+	if isNil(body) {
+		body = nil
+	}
 	var reqBody io.Reader = http.NoBody
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -152,6 +214,13 @@ func (c *Client) doRaw(ctx context.Context, method, path string, query url.Value
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return nil, &HTTPError{Method: method, Path: path, Status: resp.StatusCode, Body: truncate(strings.TrimSpace(string(raw)), errBodyPreview)}
 	}
+	// the API answers JSON or a word of text; a web page is something in
+	// front of it (a login wall, a proxy's own page) answering 200 for a
+	// request that never arrived. The server's own text replies are labelled
+	// text/html too (Express's default for a string), so the body decides
+	if isWebPage(resp.Header.Get("Content-Type"), raw) {
+		return nil, fmt.Errorf("%s %s: answered with a web page, not the Audiobookshelf API: check the server url (--server / ABS_SERVER)", method, path)
+	}
 
 	return raw, nil
 }
@@ -172,7 +241,7 @@ func (c *Client) stream(ctx context.Context, path string, query url.Values) (io.
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("User-Agent", "abs-mcp")
 
-	resp, err := c.http.Do(req)
+	resp, err := c.files.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -186,10 +255,41 @@ func (c *Client) stream(ctx context.Context, path string, query url.Values) (io.
 }
 
 // uploadMultipart posts a multipart form with one file part, for the two endpoints that
-// take a file rather than JSON.
+// take a file rather than JSON. The form is written as it is sent, so an
+// audiobook is never held in memory whole.
 func (c *Client) uploadMultipart(ctx context.Context, path, field, filename string, content io.Reader, fields map[string]string) error {
-	var buf bytes.Buffer
-	w := multipart.NewWriter(&buf)
+	pr, pw := io.Pipe()
+	w := multipart.NewWriter(pw)
+	go func() {
+		pw.CloseWithError(writeForm(w, field, filename, content, fields))
+	}()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, pr)
+	if err != nil {
+		_ = pr.CloseWithError(err)
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("User-Agent", "abs-mcp")
+
+	resp, err := c.files.Do(req)
+	if err != nil {
+		_ = pr.CloseWithError(err)
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, errBodyPreview))
+		return &HTTPError{Method: http.MethodPost, Path: path, Status: resp.StatusCode, Body: truncate(strings.TrimSpace(string(body)), errBodyPreview)}
+	}
+
+	return nil
+}
+
+// writeForm writes the fields and then the file into a multipart form.
+func writeForm(w *multipart.Writer, field, filename string, content io.Reader, fields map[string]string) error {
 	for k, v := range fields {
 		if err := w.WriteField(k, v); err != nil {
 			return err
@@ -202,30 +302,8 @@ func (c *Client) uploadMultipart(ctx context.Context, path, field, filename stri
 	if _, err := io.Copy(part, content); err != nil {
 		return err
 	}
-	if err := w.Close(); err != nil {
-		return err
-	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, &buf)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	req.Header.Set("Content-Type", w.FormDataContentType())
-	req.Header.Set("User-Agent", "abs-mcp")
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, errBodyPreview))
-		return &HTTPError{Method: http.MethodPost, Path: path, Status: resp.StatusCode, Body: truncate(strings.TrimSpace(string(body)), errBodyPreview)}
-	}
-
-	return nil
+	return w.Close()
 }
 
 func (c *Client) get(ctx context.Context, path string, query url.Values, out any) error {

@@ -46,14 +46,27 @@ const (
 	// Replay serves from the cassettes and never reaches the network. A
 	// request with no recording is a loud failure, not an empty response.
 	Replay Mode = iota
-	// Record calls the real provider and writes what comes back.
+	// Record calls the real provider for a request no cassette holds and
+	// writes what comes back; a request already recorded is served from its
+	// recording, so recording a new test's lookups (ABS_TEST_RECORD=1) leaves
+	// every other recording as it was.
 	Record
 	// Verify calls the real provider and compares the shape of what comes
 	// back against the cassette, without writing. The recorded response is
 	// still what gets served, so a test outcome never depends on what a
 	// provider happened to return today - drift is reported separately.
 	Verify
+	// Rerecord is Record refreshing what is recorded as well (make record):
+	// the first time the proxy sees a request it calls the real provider and
+	// the answer replaces the recording, and the same request again in that
+	// run is served the fresh answer without another call.
+	Rerecord
 )
+
+// RecordEnv is the variable the suites record with: set, they run the proxy
+// in Record mode, and set to "all" (as make record does) New makes that a
+// Rerecord.
+const RecordEnv = "ABS_TEST_RECORD"
 
 // Proxy is a MITM HTTP proxy backed by cassettes.
 type Proxy struct {
@@ -79,6 +92,14 @@ type Proxy struct {
 
 	localMu sync.RWMutex
 	local   map[string]http.Handler
+
+	// fresh is the requests recorded in this proxy's run, which Rerecord
+	// serves from their new recording rather than calling for again
+	freshMu sync.Mutex
+	fresh   map[string]bool
+
+	tunnelsMu sync.Mutex
+	tunnels   map[string]bool
 }
 
 // Options configure a Proxy.
@@ -94,7 +115,7 @@ type Options struct {
 	Logger *log.Logger
 }
 
-// New starts a proxy and returns it. Close stops it and, in Record mode,
+// New starts a proxy and returns it. Close stops it and, when it records,
 // flushes the cassettes.
 func New(opts Options) (*Proxy, error) {
 	if opts.CassetteDir == "" {
@@ -105,6 +126,11 @@ func New(opts Options) (*Proxy, error) {
 	}
 	if opts.Logger == nil {
 		opts.Logger = log.New(os.Stderr, "providerproxy: ", 0)
+	}
+
+	// the suites pick Record whenever the variable is set, whatever its value
+	if opts.Mode == Record && strings.EqualFold(os.Getenv(RecordEnv), "all") {
+		opts.Mode = Rerecord
 	}
 
 	st, err := newStore(opts.CassetteDir)
@@ -125,6 +151,7 @@ func New(opts Options) (*Proxy, error) {
 		caKey:  caKey,
 		certs:  map[string]*tls.Certificate{},
 		local:  map[string]http.Handler{},
+		fresh:  map[string]bool{},
 		upstream: &http.Transport{
 			Proxy:                 nil, // go straight out; we are the proxy
 			ForceAttemptHTTP2:     false,
@@ -211,7 +238,7 @@ func (p *Proxy) Close() error {
 	defer cancel()
 	_ = p.srv.Shutdown(ctx)
 
-	if p.mode == Record {
+	if p.mode == Record || p.mode == Rerecord {
 		return p.store.flush()
 	}
 
@@ -236,6 +263,8 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 		host = r.Host
 	}
 
+	p.sawTunnel(host)
+
 	hj, ok := w.(http.Hijacker)
 	if !ok {
 		http.Error(w, "hijacking unsupported", http.StatusInternalServerError)
@@ -254,29 +283,53 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 
 	cert, err := p.certFor(host)
 	if err != nil {
-		p.logger.Printf("cert for %s: %v", host, err)
+		p.logger.Printf("cert for %s: %v", logSafe(host), err)
 		return
 	}
 	conn := tls.Server(raw, &tls.Config{
 		Certificates: []tls.Certificate{*cert},
 		MinVersion:   tls.VersionTLS12,
 	})
+	// a handshake with no deadline can hang forever on a client that opened
+	// the tunnel and then sent nothing, which is silence in the log exactly
+	// where an answer is needed
+	if err := raw.SetDeadline(time.Now().Add(30 * time.Second)); err != nil {
+		p.logger.Printf("deadline for %s: %v", logSafe(host), err)
+		return
+	}
 	if err := conn.HandshakeContext(r.Context()); err != nil {
 		// the client hung up or refused our certificate; with
-		// NODE_TLS_REJECT_UNAUTHORIZED=0 the latter should not happen
+		// NODE_TLS_REJECT_UNAUTHORIZED=0 the latter should not happen, so
+		// say so rather than leave the server timing out against a silent
+		// proxy
+		p.logger.Printf("tls handshake with %s: %v", logSafe(host), err)
 		return
 	}
 	defer func() { _ = conn.Close() }()
+	defer dropReader(conn)
+
+	if err := raw.SetDeadline(time.Time{}); err != nil {
+		p.logger.Printf("clearing the deadline for %s: %v", logSafe(host), err)
+		return
+	}
 
 	// serve every request on the tunnel until the peer closes it
+	served := 0
 	for {
 		if err := conn.SetReadDeadline(time.Now().Add(60 * time.Second)); err != nil {
 			return
 		}
 		req, err := http.ReadRequest(newReader(conn))
 		if err != nil {
-			return // EOF or timeout: the tunnel is done
+			// EOF is the peer closing a finished tunnel; anything else, on a
+			// tunnel that carried nothing, is worth saying out loud
+			if served == 0 {
+				p.logger.Printf("tunnel to %s carried no request: %v", logSafe(host), err)
+			}
+
+			return
 		}
+		served++
 		rec := &connResponse{conn: conn}
 		p.respond(rec, req, host)
 		if rec.closed || req.Close {
@@ -286,7 +339,8 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 }
 
 // respond serves one request from the cassettes, recording it first when in
-// Record mode.
+// Record mode and it has no recording, or in Rerecord mode and this run has
+// not recorded it yet.
 func (p *Proxy) respond(w http.ResponseWriter, r *http.Request, host string) {
 	if r.Body != nil {
 		defer func() { _ = r.Body.Close() }()
@@ -309,11 +363,12 @@ func (p *Proxy) respond(w http.ResponseWriter, r *http.Request, host string) {
 	}
 	k := key(r.Method, host, path, r.URL.Query())
 
-	if i, ok := p.store.lookup(k); ok {
+	if i, ok := p.store.lookup(k); ok && !p.stale(k) {
+		p.logger.Printf("replay %s -> %d", logSafe(k), i.Status)
 		if p.mode == Verify {
 			live, err := p.fetch(r, host, k, path)
 			if err != nil {
-				p.logger.Printf("verify %s: %v", k, err)
+				p.logger.Printf("verify %s: %v", logSafe(k), err)
 			} else {
 				p.compare(i, live)
 			}
@@ -326,22 +381,46 @@ func (p *Proxy) respond(w http.ResponseWriter, r *http.Request, host string) {
 		p.missMu.Lock()
 		p.misses = append(p.misses, k)
 		p.missMu.Unlock()
-		p.logger.Printf("REPLAY MISS %s (run `make record` to capture it)", k)
+		p.logger.Printf("REPLAY MISS %s (record it with %s=1, which records only what is missing)", logSafe(k), RecordEnv)
 		http.Error(w, "providerproxy: no recording for "+k, http.StatusBadGateway)
 		return
 	}
 
 	i, err := p.record(r, host, k, path)
 	if err != nil {
-		p.logger.Printf("record %s: %v", k, err)
+		p.logger.Printf("record %s: %v", logSafe(k), err)
 		http.Error(w, "providerproxy: "+err.Error(), http.StatusBadGateway)
 		return
 	}
-	p.logger.Printf("recorded %s -> %d", k, i.Status)
+	p.logger.Printf("recorded %s -> %d", logSafe(k), i.Status)
 	writeInteraction(w, i)
 }
 
-// record calls the real provider and stores what it returns.
+// logSafe keeps a value taken off a request to one line of the log: a
+// newline in a url or a host would start a line the proxy never wrote.
+func logSafe(s string) string {
+	s = strings.ReplaceAll(s, "\n", "")
+	return strings.ReplaceAll(s, "\r", "")
+}
+
+// sawTunnel logs the first CONNECT for a host, so a run that records or
+// replays nothing can be told apart from one whose requests never arrived.
+func (p *Proxy) sawTunnel(host string) {
+	p.tunnelsMu.Lock()
+	defer p.tunnelsMu.Unlock()
+
+	if p.tunnels == nil {
+		p.tunnels = map[string]bool{}
+	}
+	if p.tunnels[host] {
+		return
+	}
+	p.tunnels[host] = true
+	p.logger.Printf("tunnel to %s", logSafe(host))
+}
+
+// fetch calls the real provider and returns what it sent back, without
+// storing it.
 func (p *Proxy) fetch(r *http.Request, host, k, path string) (*interaction, error) {
 	target := &url.URL{Scheme: "https", Host: host, Path: path, RawQuery: r.URL.RawQuery}
 	if r.TLS == nil && r.URL.Scheme == "http" {
@@ -353,7 +432,11 @@ func (p *Proxy) fetch(r *http.Request, host, k, path string) (*interaction, erro
 		return nil, err
 	}
 	for name, vals := range r.Header {
-		if strings.EqualFold(name, "Proxy-Connection") {
+		// Accept-Encoding is left to the transport, which then asks for gzip
+		// alone and decodes it, dropping Content-Encoding: the cassette holds
+		// the answer as text a diff, a grep and Verify can read, and no
+		// provider is offered an encoding nothing here could decode
+		if strings.EqualFold(name, "Proxy-Connection") || strings.EqualFold(name, "Accept-Encoding") {
 			continue
 		}
 		for _, v := range vals {
@@ -387,16 +470,38 @@ func (p *Proxy) fetch(r *http.Request, host, k, path string) (*interaction, erro
 	return i, nil
 }
 
-// record fetches and stores. fetch alone is what Verify uses, so that a
-// verification run never writes to the cassettes.
+// record fetches and stores, replacing any recording of the same request.
+// fetch alone is what Verify uses, so that a verification run never writes to
+// the cassettes. A rate limit or a server error is passed on but not stored:
+// it says nothing about the provider's answer, and a recording of one would
+// be replayed as if it did.
 func (p *Proxy) record(r *http.Request, host, k, path string) (*interaction, error) {
 	i, err := p.fetch(r, host, k, path)
 	if err != nil {
 		return nil, err
 	}
+	if i.Status == http.StatusTooManyRequests || i.Status >= 500 {
+		p.logger.Printf("not recording %s: the provider answered %d", logSafe(k), i.Status)
+		return i, nil
+	}
 	p.store.put(i.Host, i)
+	p.freshMu.Lock()
+	p.fresh[k] = true
+	p.freshMu.Unlock()
 
 	return i, nil
+}
+
+// stale reports whether a recorded request is to be called for again rather
+// than replayed: in Rerecord mode, until this run has recorded it.
+func (p *Proxy) stale(k string) bool {
+	if p.mode != Rerecord {
+		return false
+	}
+	p.freshMu.Lock()
+	defer p.freshMu.Unlock()
+
+	return !p.fresh[k]
 }
 
 func writeInteraction(w http.ResponseWriter, i *interaction) {

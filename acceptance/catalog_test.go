@@ -92,6 +92,10 @@ func TestSeriesList(t *testing.T) {
 	for _, row := range rows(t, out["series"], "series") {
 		name, _ := row["name"].(string)
 		byName[name] = num(t, row["books"], "books")
+		// the numbers present are how the gap stands out
+		if name == "The Expanse" && (row["sequence"] == nil || !slices.Equal(strs(t, row["sequence"], "sequence"), []string{"1", "3"})) {
+			t.Errorf("The Expanse sequence = %v, want [1 3]", row["sequence"])
+		}
 	}
 	for name, want := range map[string]int{"Foundation": 3, "Otherland": 2, "The Expanse": 2} {
 		if byName[name] != want {

@@ -14,13 +14,33 @@ import (
 )
 
 // firstSentence trims a tool description to its opening sentence, so the list
-// stays one line per tool.
+// stays one line per tool. A full stop inside an abbreviation is not the end
+// of one: "from a url (e.g. from item_cover_search)" was cut at "(e.g.".
 func firstSentence(s string) string {
-	if i := strings.Index(s, ". "); i > 0 {
-		return s[:i+1]
+	for from := 0; ; {
+		i := strings.Index(s[from:], ". ")
+		if i < 0 {
+			return s
+		}
+		end := from + i
+		if !endsInAbbreviation(s[:end+1]) {
+			return s[:end+1]
+		}
+		from = end + 2
+	}
+}
+
+// endsInAbbreviation reports whether a stretch of text ends in a
+// dotted abbreviation rather than a sentence.
+func endsInAbbreviation(s string) bool {
+	lower := strings.ToLower(s)
+	for _, abbr := range []string{"e.g.", "i.e.", "etc.", "vs.", "ph.d."} {
+		if strings.HasSuffix(lower, abbr) {
+			return true
+		}
 	}
 
-	return s
+	return false
 }
 
 func ValidateParams(params []string) func(cmd *cobra.Command, args []string) error {

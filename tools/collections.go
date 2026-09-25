@@ -43,7 +43,7 @@ func libraryBooks(ctx context.Context, client *abs.Client, libraryID string, ref
 		if looksLikeID(ref) {
 			it, err = client.Item(ctx, ref)
 		} else {
-			it, err = resolveItem(ctx, client, libraryID, ref)
+			it, err = resolveItemToChange(ctx, client, libraryID, ref)
 		}
 		if err != nil {
 			return nil, err
@@ -195,25 +195,30 @@ func registerCollectionTools(r *registry) {
 		Name:        "collection_edit",
 		Description: "Rename a collection or change its description. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in editIn) (*mcp.CallToolResult, row, error) {
+		// a name of only spaces would leave a collection nothing can name
+		name := strings.TrimSpace(in.Name)
+		switch {
+		case in.Name != "" && name == "":
+			return nil, row{}, errors.New("name is blank: pass a name, or leave it out to keep the one it has")
+		case name == "" && in.Description == "":
+			return nil, row{}, errors.New("nothing to change: pass name or description")
+		}
 		c, err := resolveCollection(ctx, client, in.Collection)
 		if err != nil {
 			return nil, row{}, err
 		}
-		if in.Name == "" && in.Description == "" {
-			return nil, row{}, errors.New("nothing to change: pass name or description")
-		}
-		if in.Name != "" {
+		if name != "" {
 			others, cerr := client.Collections(ctx, c.LibraryID)
 			if cerr != nil {
 				return nil, row{}, cerr
 			}
 			for i := range others {
-				if others[i].ID != c.ID && strings.EqualFold(strings.TrimSpace(others[i].Name), strings.TrimSpace(in.Name)) {
+				if others[i].ID != c.ID && strings.EqualFold(strings.TrimSpace(others[i].Name), name) {
 					return nil, row{}, fmt.Errorf("a collection named %q already exists (%s): two collections with one name cannot be told apart by name", others[i].Name, others[i].ID)
 				}
 			}
 		}
-		updated, err := client.UpdateCollection(ctx, c.ID, strPtr(in.Name), strPtr(in.Description))
+		updated, err := client.UpdateCollection(ctx, c.ID, strPtr(name), strPtr(in.Description))
 		if err != nil {
 			return nil, row{}, err
 		}
@@ -307,10 +312,13 @@ func registerCollectionTools(r *registry) {
 
 	type deleteOut struct {
 		Deleted string `json:"deleted"`
+		ID      string `json:"id"`
 	}
-	add(r, writeTool, &mcp.Tool{
+	// a delete tool, registered only with --enable-delete: a collection is
+	// shared by every account, and what it gathered is not kept anywhere else
+	add(r, deleteTool, &mcp.Tool{
 		Name:        "collection_delete",
-		Description: "Delete a collection (its books stay in the library). Changes server state.",
+		Description: "Delete a collection, which every account shares (its books stay in the library). Requires the delete permission.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, deleteOut, error) {
 		c, err := resolveCollection(ctx, client, in.Collection)
 		if err != nil {
@@ -319,7 +327,18 @@ func registerCollectionTools(r *registry) {
 		if err := client.DeleteCollection(ctx, c.ID); err != nil {
 			return nil, deleteOut{}, err
 		}
+		// read back rather than trusted: the answer to a delete is not the
+		// collection gone
+		left, err := client.Collections(ctx, c.LibraryID)
+		if err != nil {
+			return nil, deleteOut{}, fmt.Errorf("deleted %q, but reading the collections back failed: %w", c.Name, err)
+		}
+		for i := range left {
+			if left[i].ID == c.ID {
+				return nil, deleteOut{}, fmt.Errorf("the server accepted the delete but %q (%s) is still listed", c.Name, c.ID)
+			}
+		}
 
-		return nil, deleteOut{Deleted: c.Name}, nil
+		return nil, deleteOut{Deleted: c.Name, ID: c.ID}, nil
 	})
 }

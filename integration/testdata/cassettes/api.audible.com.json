@@ -14,11 +14,7 @@
         "Edge-Cache-Control": "no-store,no-cache,stale-if-error=0,stale-while-revalidate=0",
         "Server": "Server",
         "Strict-Transport-Security": "max-age=47474747; includeSubDomains; preload",
-        "Vary": "User-Agent,Accept-Encoding",
-        "Via": "1.1 1f0a266e8b45c2a054f3aee4c598fc6c.cloudfront.net (CloudFront)",
-        "X-Amz-Date": "Sat, 12 Sep 2026 09:01:55 GMT",
-        "X-Amz-Rid": "ND6C97FHMNAFV4HMBB08",
-        "X-Amzn-Requestid": "214acd40-ddf8-4ed2-a9a7-5b5414a0d4a0"
+        "Vary": "User-Agent,Accept-Encoding"
       },
       "body": "{\"product_filters\":[],\"products\":[{\"asin\":\"B003D8W5VS\"},{\"asin\":\"B003FCV4O6\"},{\"asin\":\"B005T6ZETM\"},{\"asin\":\"B005WL4R7E\"},{\"asin\":\"B003D8S2ME\"},{\"asin\":\"B005WWT30E\"},{\"asin\":\"B005WWT7TQ\"},{\"asin\":\"8466355189\"},{\"asin\":\"B0BV7MGYFH\"},{\"asin\":\"B0BPYXHCCS\"}],\"response_groups\":[\"always-returned\"],\"total_results\":19}"
     },
@@ -35,11 +31,7 @@
         "Edge-Cache-Control": "no-store,no-cache,stale-if-error=0,stale-while-revalidate=0",
         "Server": "Server",
         "Strict-Transport-Security": "max-age=47474747; includeSubDomains; preload",
-        "Vary": "User-Agent,Accept-Encoding",
-        "Via": "1.1 1f0a266e8b45c2a054f3aee4c598fc6c.cloudfront.net (CloudFront)",
-        "X-Amz-Date": "Sat, 12 Sep 2026 09:01:57 GMT",
-        "X-Amz-Rid": "ZM61FP0BNKD49NV3BGQV",
-        "X-Amzn-Requestid": "a74bbf43-a321-4a6b-b55e-c44589b7199b"
+        "Vary": "User-Agent,Accept-Encoding"
       },
       "body": "{\"product_filters\":[],\"products\":[{\"asin\":\"B003FCV4O6\"},{\"asin\":\"B0BTV24S37\"}],\"response_groups\":[\"always-returned\"],\"total_results\":2}"
     },
@@ -56,11 +48,7 @@
         "Edge-Cache-Control": "no-store,no-cache,stale-if-error=0,stale-while-revalidate=0",
         "Server": "Server",
         "Strict-Transport-Security": "max-age=47474747; includeSubDomains; preload",
-        "Vary": "User-Agent,Accept-Encoding",
-        "Via": "1.1 1f0a266e8b45c2a054f3aee4c598fc6c.cloudfront.net (CloudFront)",
-        "X-Amz-Date": "Sat, 12 Sep 2026 09:01:57 GMT",
-        "X-Amz-Rid": "S47920QW3QAZAMW83XZ8",
-        "X-Amzn-Requestid": "127017d2-d24e-427e-bf46-fd62f0d7569b"
+        "Vary": "User-Agent,Accept-Encoding"
       },
       "body": "{\"product_filters\":[],\"products\":[{\"asin\":\"1549142194\"},{\"asin\":\"B07BN3PSPX\"}],\"response_groups\":[\"always-returned\"],\"total_results\":2}"
     },
@@ -77,11 +65,7 @@
         "Edge-Cache-Control": "no-store,no-cache,stale-if-error=0,stale-while-revalidate=0",
         "Server": "Server",
         "Strict-Transport-Security": "max-age=47474747; includeSubDomains; preload",
-        "Vary": "User-Agent,Accept-Encoding",
-        "Via": "1.1 1f0a266e8b45c2a054f3aee4c598fc6c.cloudfront.net (CloudFront)",
-        "X-Amz-Date": "Sat, 12 Sep 2026 09:01:56 GMT",
-        "X-Amz-Rid": "5NW94P78DKQD0YXJQ8NA",
-        "X-Amzn-Requestid": "ecc3464d-0e08-4953-bfcb-6cb521755d73"
+        "Vary": "User-Agent,Accept-Encoding"
       },
       "body": "{\"product_filters\":[],\"products\":[{\"asin\":\"B073H9PF2D\"}],\"response_groups\":[\"always-returned\"],\"total_results\":1}"
     },
@@ -98,11 +82,7 @@
         "Edge-Cache-Control": "no-store,no-cache,stale-if-error=0,stale-while-revalidate=0",
         "Server": "Server",
         "Strict-Transport-Security": "max-age=47474747; includeSubDomains; preload",
-        "Vary": "User-Agent,Accept-Encoding",
-        "Via": "1.1 1f0a266e8b45c2a054f3aee4c598fc6c.cloudfront.net (CloudFront)",
-        "X-Amz-Date": "Sat, 12 Sep 2026 09:01:56 GMT",
-        "X-Amz-Rid": "FS1WPPG9183Q45XNZH7W",
-        "X-Amzn-Requestid": "f32a3d78-9b58-4595-b92a-b71fc9b7d2b8"
+        "Vary": "User-Agent,Accept-Encoding"
       },
       "body": "{\"product_filters\":[],\"products\":[{\"asin\":\"B00OLBAV26\"}],\"response_groups\":[\"always-returned\"],\"total_results\":1}"
     },
@@ -119,11 +99,7 @@
         "Edge-Cache-Control": "no-store,no-cache,stale-if-error=0,stale-while-revalidate=0",
         "Server": "Server",
         "Strict-Transport-Security": "max-age=47474747; includeSubDomains; preload",
-        "Vary": "User-Agent,Accept-Encoding",
-        "Via": "1.1 1f0a266e8b45c2a054f3aee4c598fc6c.cloudfront.net (CloudFront)",
-        "X-Amz-Date": "Sat, 12 Sep 2026 09:01:56 GMT",
-        "X-Amz-Rid": "8KH1P0FKXQP8ZDMPC4MG",
-        "X-Amzn-Requestid": "9bcc0511-b87b-4ef0-8f84-9d0ed6faeef8"
+        "Vary": "User-Agent,Accept-Encoding"
       },
       "body": "{\"product_filters\":[],\"products\":[{\"asin\":\"B00UMK7CP4\"}],\"response_groups\":[\"always-returned\"],\"total_results\":1}"
     }

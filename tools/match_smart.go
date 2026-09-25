@@ -254,9 +254,13 @@ func smartApply(ctx context.Context, client *abs.Client, it *abs.Item, provider,
 		return decisions, nil, err
 	}
 	if upd, changed := smartUpdate(decisions, hit); changed {
-		if _, err := client.UpdateMedia(ctx, it.ID, upd); err != nil {
+		updated, err := client.UpdateMedia(ctx, it.ID, upd)
+		if err != nil {
 			return decisions, res, fmt.Errorf("matched, but writing the decided fields failed: %w", err)
 		}
+		// the book changed when either write changed it: a match with
+		// nothing empty to fill can still have fields decided in its favour
+		res.Updated = res.Updated || updated
 	}
 	return decisions, res, nil
 }

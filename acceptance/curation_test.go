@@ -68,6 +68,9 @@ func TestSeriesMerge(t *testing.T) {
 	if books := strs(t, out["books"], "books"); !slices.Contains(books, "Foundation #1") {
 		t.Errorf("books = %v, want Foundation at #1", books)
 	}
+	if removed, _ := out["from_removed"].(bool); !removed {
+		t.Errorf("from_removed = %v, note %v: the server drops a series its last book leaves", out["from_removed"], out["note"])
+	}
 
 	// the book is in the target once, at its number
 	if series := strs(t, call(t, "item_get", map[string]any{"item": book})["series"], "series"); !slices.Equal(series, []string{"Foundation #1"}) {
@@ -81,7 +84,7 @@ func TestSeriesMerge(t *testing.T) {
 	}
 }
 
-// item_match_batch scores a page of books against the store and writes
+// item_match_batch scores a window of books against the store and writes
 // nothing. The fixtures are one-second files, so nothing can be exact, but
 // every Foundation book has a real catalogue entry to be judged against.
 func TestItemMatchBatch(t *testing.T) {
@@ -93,8 +96,8 @@ func TestItemMatchBatch(t *testing.T) {
 	if total := num(t, out["total"], "total"); total != 3 {
 		t.Errorf("total = %d, want the 3 Foundation books", total)
 	}
-	if _, more := out["next_page"]; more {
-		t.Errorf("next_page = %v on a three-book filter", out["next_page"])
+	if _, more := out["next_offset"]; more {
+		t.Errorf("next_offset = %v on a three-book filter", out["next_offset"])
 	}
 
 	found := rows(t, out["rows"], "rows")
@@ -145,14 +148,20 @@ func TestItemMatchBatch(t *testing.T) {
 // item_cover_upgrade fetches the store's picture itself, straight from the
 // image host, which the proxy in front of the server cannot replay; what it
 // makes of the pictures is under the unit tests. Here: a book with nothing to
-// look up is said so, and nothing is fetched.
+// look up is said so, and nothing is fetched. Fiction is on google, which
+// cannot look an asin up: with no store named the call is refused before any
+// book, saying which library and how to name one.
 func TestItemCoverUpgradeNeedsAnASIN(t *testing.T) {
 	if msg := callErr(t, "item_cover_upgrade", map[string]any{"library": "Fiction"}); msg == "" {
 		t.Error("a call naming no items should be refused")
 	}
+	books := []any{"Foundation", "Leviathan Wakes"}
+	if msg := callErr(t, "item_cover_upgrade", map[string]any{"library": "Fiction", "items": books, "preview": true}); !strings.Contains(msg, `library "Fiction" is on the google provider, which cannot look up an asin`) || !strings.Contains(msg, "--providers (ABS_PROVIDERS)") {
+		t.Errorf("no store named for a library on google: %q, want the library, its provider and the fix", msg)
+	}
 
 	out := call(t, "item_cover_upgrade", map[string]any{
-		"library": "Fiction", "items": []any{"Foundation", "Leviathan Wakes"}, "preview": true,
+		"library": "Fiction", "items": books, "providers": []any{"audible"}, "preview": true,
 	})
 	if upgraded := num(t, out["upgraded"], "upgraded"); upgraded != 0 {
 		t.Errorf("upgraded = %d, want 0", upgraded)

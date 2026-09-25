@@ -5,6 +5,7 @@ package acceptance
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -146,11 +147,19 @@ func TestLibraryGetStatistics(t *testing.T) {
 	if rows(t, out["top_genres"], "top_genres") == nil {
 		t.Error("no top_genres")
 	}
-	if longest := rows(t, out["longest"], "longest"); len(longest) == 0 {
-		t.Error("no longest items")
+	if longest := rows(t, out["longest"], "longest"); len(longest) == 0 || num(t, longest[0]["duration_s"], "duration_s") < 1 {
+		t.Errorf("longest = %v, want them with a length in seconds", longest)
 	}
-	if largest := rows(t, out["largest"], "largest"); len(largest) == 0 {
-		t.Error("no largest items")
+	if largest := rows(t, out["largest"], "largest"); len(largest) == 0 || num(t, largest[0]["size"], "size") <= 0 {
+		t.Errorf("largest = %v, want them with a size in bytes", largest)
+	}
+	// seven books of a second or so: seconds and bytes, where whole
+	// gigabytes were 0
+	if d := num(t, out["total_duration_s"], "total_duration_s"); d < 7 {
+		t.Errorf("total_duration_s = %d, want the seven books' seconds", d)
+	}
+	if num(t, out["total_size"], "total_size") <= 0 {
+		t.Errorf("total_size = %v, want bytes", out["total_size"])
 	}
 }
 
@@ -182,7 +191,13 @@ func TestLibraryScanPicksUpANewBook(t *testing.T) {
 	t.Cleanup(func() {
 		// a rescan flags a vanished item as missing rather than removing it,
 		// so the record has to go explicitly for the count to come back down
-		call(t, "item_delete", map[string]any{"item": "The Dispossessed"})
+		call(t, "item_delete", map[string]any{"confirm": true, "item": "The Dispossessed"})
+		// the server usually drops an author its last book leaves, but not
+		// always by the time this runs, and a second run would find one more
+		// author than the fixtures hold
+		if _, err := invoke("author_delete", map[string]any{"library": "Fiction", "author": "Ursula K. Le Guin"}); err != nil && !strings.Contains(err.Error(), "no author named") {
+			t.Errorf("removing the added author: %v", err)
+		}
 		if err := os.RemoveAll(filepath.Dir(dir)); err != nil {
 			t.Errorf("removing the added book: %v", err)
 		}
@@ -202,17 +217,22 @@ func TestLibraryScanPicksUpANewBook(t *testing.T) {
 }
 
 func TestLibraryEdit(t *testing.T) {
-	out := call(t, "library_edit", map[string]any{"library": "Non-Fiction", "provider": "google"})
+	// put back what it was, not a guess: a later test that matches in this
+	// library would otherwise depend on the order the tests ran in
+	was, _ := call(t, "library_get", map[string]any{"library": "Non-Fiction"})["provider"].(string)
+	out := call(t, "library_edit", map[string]any{"library": "Non-Fiction", "provider": "audible"})
 	lib, ok := out["library"].(map[string]any)
 	if !ok {
 		t.Fatalf("library = %T", out["library"])
 	}
-	if lib["provider"] != "google" {
-		t.Errorf("provider = %v, want google", lib["provider"])
+	if lib["provider"] != "audible" {
+		t.Errorf("provider = %v, want audible", lib["provider"])
 	}
-	t.Cleanup(func() {
-		call(t, "library_edit", map[string]any{"library": "Non-Fiction", "provider": "audible"})
-	})
+	if was != "" && was != "audible" {
+		t.Cleanup(func() {
+			call(t, "library_edit", map[string]any{"library": "Non-Fiction", "provider": was})
+		})
+	}
 
 	if msg := callErr(t, "library_edit", map[string]any{"library": "Non-Fiction"}); msg == "" {
 		t.Error("an edit with no fields should be refused")
@@ -270,7 +290,27 @@ func TestLibraryRemoveIssues(t *testing.T) {
 		t.Fatal("audit_issues never reported the removed folder")
 	}
 
+	// without confirm it names what it would delete and deletes nothing
 	out := call(t, "library_issues_remove", map[string]any{"library": "Non-Fiction"})
+	if found, removed := num(t, out["found"], "found"), num(t, out["removed"], "removed"); found < 1 || removed != 0 {
+		t.Errorf("preview found %d removed %d, want the broken item found and nothing removed", found, removed)
+	}
+	// by path: the copied file carries the tags an earlier embed wrote into
+	// it, so the record is titled after the book it was copied from
+	var named bool
+	for _, row := range rows(t, out["items"], "items") {
+		if row["path"] == "Doomed Author/Doomed Book" {
+			named = true
+		}
+	}
+	if !named {
+		t.Errorf("preview items = %v, want the Doomed Book folder", out["items"])
+	}
+	if again := call(t, "audit_issues", map[string]any{"library": "Non-Fiction"}); num(t, again["total_findings"], "total_findings") < 1 {
+		t.Error("the preview removed the broken record")
+	}
+
+	out = call(t, "library_issues_remove", map[string]any{"library": "Non-Fiction", "confirm": true})
 	if removed := num(t, out["removed"], "removed"); removed < 1 {
 		t.Errorf("removed = %d, want at least the broken item", removed)
 	}

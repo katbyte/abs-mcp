@@ -10,11 +10,15 @@ package tools
 
 import (
 	"cmp"
+	"context"
 	"fmt"
+	"reflect"
+	"runtime/debug"
 	"slices"
 	"strings"
 
 	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/go-kt/clog"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -75,7 +79,7 @@ var Toolsets = map[string][]string{
 	// near-duplicate authors, narrators, tags, genres, languages and publishers
 	"curation": {
 		"audit_all", "audit_missing", "audit_unmatched", "audit_issues", "audit_no_audio",
-		"audit_podcast_no_episodes", "audit_single_chapter", "audit_authors",
+		"audit_podcast_no_episodes", "audit_chapters", "audit_authors",
 		"audit_path", "audit_covers", "audit_podcast_stale_feed",
 		"audit_duplicates", "audit_series", "audit_spelling", "audit_narrators", "audit_genres", "audit_unembedded", "audit_matched", "metadata_rename",
 		"item_edit", "item_batch_edit", "item_match", "item_match_apply", "item_match_batch", "item_match_apply_batch", "item_match_tag",
@@ -142,6 +146,9 @@ type registry struct {
 	opts    Options
 	pending []pending
 	locks   writeLocks
+	// errorLog is where a handler's panic is logged; nil is the process's
+	// own log, which writes to stderr
+	errorLog func(format string, args ...any)
 }
 
 // add queues a tool for registration. It sets the MCP annotations from kind so
@@ -153,27 +160,105 @@ func add[In, Out any](r *registry, kind toolKind, t *mcp.Tool, h mcp.ToolHandler
 	case readTool:
 		t.Annotations = &mcp.ToolAnnotations{ReadOnlyHint: true, DestructiveHint: &f, OpenWorldHint: &f}
 	case writeTool:
-		t.Annotations = &mcp.ToolAnnotations{DestructiveHint: &f, OpenWorldHint: &f}
+		// MCP reads destructive false as "only ever adds": true of a tool
+		// that creates something new, not of one that overwrites a field,
+		// replaces a cover or a list, or rewrites a file's tags
+		t.Annotations = &mcp.ToolAnnotations{DestructiveHint: new(!additiveTools[t.Name]), OpenWorldHint: &f}
 	case deleteTool:
 		t.Annotations = &mcp.ToolAnnotations{DestructiveHint: new(true), OpenWorldHint: &f}
+	}
+
+	wrapped := func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
+		res, out, err := recovered(ctx, r, t.Name, h, req, in)
+		if err == nil {
+			emptyNilSlices(reflect.ValueOf(&out).Elem())
+		}
+
+		return res, out, err
 	}
 
 	r.pending = append(r.pending, pending{
 		name:        t.Name,
 		kind:        kind,
 		description: t.Description,
-		register:    func() { mcp.AddTool(r.server, t, h) },
+		register:    func() { mcp.AddTool(r.server, t, wrapped) },
 	})
+}
+
+// additiveTools are the write tools that only ever add - a new library,
+// collection, playlist or podcast, or episodes the podcast did not hold - and
+// so can say they are not destructive. Every other write tool can overwrite
+// or remove something. A backup is not here: the server prunes the oldest
+// past its limit.
+var additiveTools = map[string]bool{
+	"library_create":           true,
+	"collection_create":        true,
+	"playlist_create":          true,
+	"podcast_add":              true,
+	"podcast_episode_download": true,
+}
+
+// emptyNilSlices walks v (structs, pointers, slices) and replaces every
+// settable nil slice with an empty one, so a list with nothing in it answers
+// [] rather than null: null cannot tell "none" from "not fetched", and Go
+// leaves a list nothing was appended to nil.
+func emptyNilSlices(v reflect.Value) {
+	switch v.Kind() {
+	case reflect.Pointer:
+		if !v.IsNil() {
+			emptyNilSlices(v.Elem())
+		}
+	case reflect.Struct:
+		for _, f := range v.Fields() {
+			emptyNilSlices(f)
+		}
+	case reflect.Slice:
+		if v.IsNil() {
+			if v.CanSet() {
+				v.Set(reflect.MakeSlice(v.Type(), 0, 0))
+			}
+
+			return
+		}
+		for i := range v.Len() {
+			emptyNilSlices(v.Index(i))
+		}
+	default:
+	}
+}
+
+// recovered calls a handler, turning a panic into an ordinary tool error.
+// Nothing above the handler recovers one - not the MCP SDK, not the CLI - so
+// one nil dereference in one tool would otherwise end the whole session. The
+// caller is told which tool failed; the stack goes to the log, which writes
+// to stderr, because in stdio mode stdout carries the protocol itself.
+func recovered[In, Out any](ctx context.Context, r *registry, name string, h mcp.ToolHandlerFor[In, Out], req *mcp.CallToolRequest, in In) (res *mcp.CallToolResult, out Out, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			r.logError("internal error in %s: %v\n%s", name, p, debug.Stack())
+			var zero Out
+			res, out, err = nil, zero, fmt.Errorf("internal error in %s: %v", name, p)
+		}
+	}()
+
+	return h(ctx, req, in)
+}
+
+// logError writes to the registry's log: the process's own, which writes to
+// stderr, unless a test gave it another.
+func (r *registry) logError(format string, args ...any) {
+	if r.errorLog != nil {
+		r.errorLog(format, args...)
+		return
+	}
+	clog.Log.Errorf(format, args...)
 }
 
 // RegisterAll adds every tool permitted by opts to the MCP server and returns
 // the names registered. It fails when an allow/deny pattern matches no tool,
 // so a typo cannot silently hide one.
 func RegisterAll(server *mcp.Server, client *abs.Client, opts Options) ([]string, error) {
-	if opts.ProviderTag != "" {
-		providerTagPrefix = opts.ProviderTag
-	}
-	defaultProviders = opts.Providers
+	opts.Providers = slices.Clone(opts.Providers) // the server's own, whatever the caller does with its slice
 	r := &registry{server: server, client: client, opts: opts}
 	queueTools(r)
 
@@ -205,6 +290,7 @@ func queueTools(r *registry) {
 	registerLibraryTools(r)
 	registerAuditTools(r)
 	registerPathAudit(r)
+	registerChaptersAudit(r)
 	registerCoverAudit(r)
 	registerEmbeddedAudit(r)
 	registerSpellingTools(r)

@@ -12,7 +12,6 @@
         "Access-Control-Allow-Origin": "*",
         "Apple-Originating-System": "MZStoreServices",
         "Apple-Timing-App": "211 ms",
-        "B3": "296badabf0d33052295ef6e0e5d6cae0-b6d26a9604041740",
         "Cache-Control": "max-age=85875",
         "Content-Disposition": "attachment; filename=1.txt",
         "Content-Type": "text/javascript; charset=utf-8",
@@ -20,16 +19,9 @@
         "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
         "Vary": "Accept-Encoding",
         "X-Apple-Partner": "origin.0",
-        "X-Apple-Request-Uuid": "296badab-f0d3-3052-295e-f6e0e5d6cae0",
         "X-Apple-Translated-Wo-Url": "/WebObjects/MZStoreServices.woa/ws/wsSearch?term=Well+There's+Your+Problem\u0026media=podcast\u0026entity=podcast\u0026country=us\u0026urlDesc=",
-        "X-B3-Spanid": "b6d26a9604041740",
-        "X-B3-Traceid": "296badabf0d33052295ef6e0e5d6cae0",
         "X-Content-Type-Options": "nosniff",
-        "X-Daiquiri-Debug-Worker-Pid": "8039",
-        "X-Daiquiri-Instance": "daiquiri:47317008:st44p00it-hyhk15044801:7987:26RELEASE153:daiquiri-amp-store-shared-int-001-st",
-        "X-Responding-Instance": "MZStoreServices:6002063:::",
-        "X-True-Cache-Key": "/L/itunes.apple.com/search vcd=2897 ci2=country=us\u0026entity=podcast\u0026media=podcast\u0026term=Well+There's+Your+Problem///",
-        "X-Webobjects-Loadaverage": "0"
+        "X-True-Cache-Key": "/L/itunes.apple.com/search vcd=2897 ci2=country=us\u0026entity=podcast\u0026media=podcast\u0026term=Well+There's+Your+Problem///"
       },
       "body": "\n\n\n{\n \"resultCount\":1,\n \"results\": [\n{\"wrapperType\":\"track\", \"kind\":\"podcast\", \"collectionId\":1487829595, \"trackId\":1487829595, \"artistName\":\"WTYP is Justin Roczniak, November Kelly, Liam McAnderson, and friends.\", \"collectionName\":\"Well There‘s Your Problem\", \"trackName\":\"Well There‘s Your Problem\", \"collectionCensoredName\":\"Well There‘s Your Problem\", \"trackCensoredName\":\"Well There‘s Your Problem\", \"collectionViewUrl\":\"https://podcasts.apple.com/us/podcast/well-there-s-your-problem/id1487829595?uo=4\", \"feedUrl\":\"https://feed.podbean.com/wtyppod/feed.xml\", \"trackViewUrl\":\"https://podcasts.apple.com/us/podcast/well-there-s-your-problem/id1487829595?uo=4\", \"artworkUrl30\":\"https://is1-ssl.mzstatic.com/image/thumb/Podcasts125/v4/21/da/66/21da66c0-ff2d-981c-862c-8d8138903ec5/mza_1840288066774406949.jpg/30x30bb.jpg\", \"artworkUrl60\":\"https://is1-ssl.mzstatic.com/image/thumb/Podcasts125/v4/21/da/66/21da66c0-ff2d-981c-862c-8d8138903ec5/mza_1840288066774406949.jpg/60x60bb.jpg\", \"artworkUrl100\":\"https://is1-ssl.mzstatic.com/image/thumb/Podcasts125/v4/21/da/66/21da66c0-ff2d-981c-862c-8d8138903ec5/mza_1840288066774406949.jpg/100x100bb.jpg\", \"collectionPrice\":0.00, \"trackPrice\":0.00, \"collectionHdPrice\":0, \"releaseDate\":\"2026-08-27T14:22:00Z\", \"collectionExplicitness\":\"notExplicit\", \"trackExplicitness\":\"explicit\", \"trackCount\":263, \"trackTimeMillis\":817, \"country\":\"USA\", \"currency\":\"USD\", \"primaryGenreName\":\"Technology\", \"contentAdvisoryRating\":\"Explicit\", \"artworkUrl600\":\"https://is1-ssl.mzstatic.com/image/thumb/Podcasts125/v4/21/da/66/21da66c0-ff2d-981c-862c-8d8138903ec5/mza_1840288066774406949.jpg/600x600bb.jpg\", \"genreIds\":[\"1318\", \"26\"], \"genres\":[\"Technology\", \"Podcasts\"]}]\n}\n\n\n"
     }

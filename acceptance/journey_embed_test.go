@@ -113,7 +113,7 @@ func TestJourneyEmbeddedIsWhatAScanReads(t *testing.T) {
 			"series": toAny(wantSeries), "genres": toAny(wantGenres), "year": want["year"], "publisher": want["publisher"],
 		})
 		call(t, "item_chapters_set", map[string]any{"item": id, "chapters": []any{
-			map[string]any{"title": wantChapters[0], "start": 0}, map[string]any{"title": wantChapters[1], "start": 0.5},
+			map[string]any{"title": wantChapters[0], "start_s": 0}, map[string]any{"title": wantChapters[1], "start_s": 0.5},
 		}})
 		check(t, id)
 		if detail, listed := unembedded(t, library, id); !listed || !strings.Contains(detail, "no tags") {
@@ -144,7 +144,7 @@ func TestJourneyEmbeddedIsWhatAScanReads(t *testing.T) {
 	})
 
 	t.Run("the record thrown away, scanned back from the file", func(t *testing.T) {
-		call(t, "item_delete", map[string]any{"item": id})
+		call(t, "item_delete", map[string]any{"confirm": true, "item": id})
 		if err := waitForItems(library, 0); err != nil {
 			t.Fatal(err)
 		}

@@ -181,19 +181,37 @@ func authorRowOf(a *abs.Author, withDescription bool) authorRow {
 	return row
 }
 
+// authorSorts and seriesSorts map the sort names author_list and series_list
+// take, and the server's own names for them, to what the server sorts by. A
+// name the server does not know leaves the listing in no order at all, so any
+// other is refused.
+var (
+	authorSorts = map[string]string{
+		"": "name", "name": "name", "last_first": "lastFirst", "books": "numBooks", "added": "addedAt", "updated": "updatedAt",
+		"lastfirst": "lastFirst", "numbooks": "numBooks", "addedat": "addedAt", "updatedat": "updatedAt",
+	}
+	seriesSorts = map[string]string{
+		"": "name", "name": "name", "books": "numBooks", "duration": "totalDuration", "added": "addedAt",
+		"last_book_added": "lastBookAdded", "last_book_updated": "lastBookUpdated", "random": "random",
+		"numbooks": "numBooks", "totalduration": "totalDuration", "addedat": "addedAt", "lastbookadded": "lastBookAdded", "lastbookupdated": "lastBookUpdated",
+	}
+)
+
 func registerAuthorTools(r *registry) {
 	client := r.client
 
 	type listIn struct {
 		Library string `json:"library,omitempty" jsonschema:"library name or id; optional when the server has one library"`
-		Sort    string `json:"sort,omitempty"    jsonschema:"name (default), books, added, updated"`
+		Sort    string `json:"sort,omitempty"    jsonschema:"name (default), last_first, books, added, updated"`
 		Desc    bool   `json:"desc,omitempty"`
-		Limit   int    `json:"limit,omitempty"   jsonschema:"page size, default 50"`
-		Offset  int    `json:"offset,omitempty"`
+		Limit   int    `json:"limit,omitempty"   jsonschema:"page size, default 50, at most 1000"`
+		Offset  int    `json:"offset,omitempty"  jsonschema:"skip this many authors: a previous page's next_offset"`
 	}
 	type listOut struct {
-		Total   int         `json:"total"`
-		Authors []authorRow `json:"authors"`
+		Total      int         `json:"total"`
+		Offset     int         `json:"offset"`
+		NextOffset int         `json:"next_offset,omitempty" jsonschema:"pass back as offset for the next page; absent on the last"`
+		Authors    []authorRow `json:"authors"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "author_list",
@@ -203,17 +221,19 @@ func registerAuthorTools(r *registry) {
 		if err != nil {
 			return nil, listOut{}, err
 		}
-		sortBy := map[string]string{"": "name", "name": "name", "books": "numBooks", "added": "addedAt", "updated": "updatedAt", "last_first": "lastFirst"}[strings.ToLower(in.Sort)]
-		if sortBy == "" {
-			sortBy = in.Sort
+		sortBy, ok := authorSorts[strings.ToLower(strings.TrimSpace(in.Sort))]
+		if !ok {
+			return nil, listOut{}, fmt.Errorf("unknown sort %q; choose one of: name, last_first, books, added, updated", in.Sort)
 		}
-		limit := limitOr(in.Limit, 50)
-		authors, total, err := client.Authors(ctx, lib.ID, abs.ListOptions{Limit: limit, Page: in.Offset / limit, Sort: sortBy, Desc: in.Desc})
+		limit, offset := pageArgs(in.Limit, in.Offset, 50)
+		authors, total, err := window(offset, limit, func(page int) ([]abs.Author, int, error) {
+			return client.Authors(ctx, lib.ID, abs.ListOptions{Limit: limit, Page: page, Sort: sortBy, Desc: in.Desc})
+		})
 		if err != nil {
 			return nil, listOut{}, err
 		}
 
-		out := listOut{Total: total, Authors: []authorRow{}}
+		out := listOut{Total: total, Offset: offset, NextOffset: nextOffset(offset, len(authors), total), Authors: []authorRow{}}
 		for i := range authors {
 			out.Authors = append(out.Authors, authorRowOf(&authors[i], false))
 		}
@@ -280,15 +300,20 @@ func registerAuthorTools(r *registry) {
 			return nil, editOut{}, err
 		}
 		updated, merged := a, false
-		if upd.Name != nil || upd.Description != nil || upd.ASIN != nil {
-			if updated, merged, err = client.UpdateAuthor(ctx, a.ID, upd); err != nil {
+		// the photo goes first, while the record is there: a rename that
+		// merges into another author deletes this one, and its photo with it,
+		// so clearing it afterwards asked for a record that was gone and
+		// failed a call whose merge had already happened. The surviving
+		// author's photo is theirs, not this one's, and is left alone.
+		// The server answers 400 to removing a photo that is not there, and
+		// clearing what is already blank is not a failure.
+		if clearImage && a.ImagePath != "" {
+			if updated, err = client.DeleteAuthorImage(ctx, a.ID); err != nil {
 				return nil, editOut{}, err
 			}
 		}
-		// the server answers 400 to removing a photo that is not there, and
-		// clearing what is already blank is not a failure
-		if clearImage && a.ImagePath != "" {
-			if updated, err = client.DeleteAuthorImage(ctx, a.ID); err != nil {
+		if upd.Name != nil || upd.Description != nil || upd.ASIN != nil {
+			if updated, merged, err = client.UpdateAuthor(ctx, a.ID, upd); err != nil {
 				return nil, editOut{}, err
 			}
 		}
@@ -474,21 +499,24 @@ func registerNarratorTools(r *registry) {
 // collapsed to the one series matched (docs/README.md), which is fine for the
 // sequence but not for anything that writes the list back: four Stormlight
 // books lost their Cosmere link to an edit built from it. So the order and
-// the sequence come from the filtered listing and the series lists from one
-// batch fetch of the same ids.
+// the sequence come from the filtered listing, every page of it, and the
+// series lists from a batch fetch of the same ids.
 func seriesBooks(ctx context.Context, client *abs.Client, s *abs.Series) ([]abs.Item, error) {
-	page, err := client.Items(ctx, s.LibraryID, abs.ItemsOptions{Limit: 500, Sort: "sequence", Filter: abs.EncodeFilter("series", s.ID), Minified: true})
-	if err != nil {
+	var books []abs.Item
+	if err := client.ItemsAll(ctx, s.LibraryID, abs.ItemsOptions{Sort: "sequence", Filter: abs.EncodeFilter("series", s.ID)}, func(items []abs.Item) bool {
+		books = append(books, items...)
+		return true
+	}); err != nil {
 		return nil, err
 	}
-	if err := fullSeriesLists(ctx, client, page.Results); err != nil {
+	if err := fullSeriesLists(ctx, client, books); err != nil {
 		return nil, err
 	}
-	return page.Results, nil
+	return books, nil
 }
 
 // fullSeriesLists puts every series each item is in back onto items that came
-// from a listing filtered by series, with one batch fetch of their ids.
+// from a listing filtered by series, with batch fetches of their ids.
 func fullSeriesLists(ctx context.Context, client *abs.Client, items []abs.Item) error {
 	if len(items) == 0 {
 		return nil
@@ -497,13 +525,17 @@ func fullSeriesLists(ctx context.Context, client *abs.Client, items []abs.Item) 
 	for i := range items {
 		ids = append(ids, items[i].ID)
 	}
-	full, err := client.ItemsBatch(ctx, ids)
-	if err != nil {
-		return err
-	}
-	refs := make(map[string]abs.SeriesRefs, len(full))
-	for i := range full {
-		refs[full[i].ID] = full[i].Media.Metadata.Series
+	refs := make(map[string]abs.SeriesRefs, len(ids))
+	// in batches: the fetch is of the expanded items, and a thousand of those
+	// in one reply is what a reverse proxy times out on
+	for chunk := range slices.Chunk(ids, sweepBatchSize) {
+		full, err := client.ItemsBatch(ctx, chunk)
+		if err != nil {
+			return err
+		}
+		for i := range full {
+			refs[full[i].ID] = full[i].Media.Metadata.Series
+		}
 	}
 	for i := range items {
 		it := &items[i]
@@ -563,23 +595,25 @@ func registerSeriesTools(r *registry) {
 
 	type listIn struct {
 		Library string `json:"library,omitempty" jsonschema:"library name or id; optional when the server has one library"`
-		Sort    string `json:"sort,omitempty"    jsonschema:"name (default), books, duration, added, last_book_added"`
+		Sort    string `json:"sort,omitempty"    jsonschema:"name (default), books, duration, added, last_book_added, last_book_updated, random"`
 		Desc    bool   `json:"desc,omitempty"`
-		Limit   int    `json:"limit,omitempty"   jsonschema:"page size, default 50"`
-		Offset  int    `json:"offset,omitempty"`
+		Limit   int    `json:"limit,omitempty"   jsonschema:"page size, default 50, at most 1000"`
+		Offset  int    `json:"offset,omitempty"  jsonschema:"skip this many series in each library: a previous page's next_offset"`
 	}
 	type seriesRow struct {
 		ID       string   `json:"id"`
 		Name     string   `json:"name"`
-		Library  string   `json:"library,omitempty"  jsonschema:"when more than one library is listed"`
+		Library  string   `json:"library,omitempty"    jsonschema:"when more than one library is listed"`
 		Books    int      `json:"books"`
-		Duration string   `json:"duration,omitempty"`
+		Duration int      `json:"duration_s,omitempty" jsonschema:"its books' lengths added together, in seconds"`
 		Author   string   `json:"author,omitempty"`
-		Sequence []string `json:"sequence,omitempty" jsonschema:"the sequence numbers present; gaps mean missing books"`
+		Sequence []string `json:"sequence,omitempty"   jsonschema:"the sequence numbers present; gaps mean missing books"`
 	}
 	type listOut struct {
-		Total  int         `json:"total"`
-		Series []seriesRow `json:"series"`
+		Total      int         `json:"total"`
+		Offset     int         `json:"offset"`
+		NextOffset int         `json:"next_offset,omitempty" jsonschema:"pass back as offset for the next page; absent when no library has more"`
+		Series     []seriesRow `json:"series"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "series_list",
@@ -589,26 +623,31 @@ func registerSeriesTools(r *registry) {
 		if err != nil {
 			return nil, listOut{}, err
 		}
-		sortBy := map[string]string{"": "name", "name": "name", "books": "numBooks", "duration": "totalDuration", "added": "addedAt", "last_book_added": "lastBookAdded", "last_book_updated": "lastBookUpdated"}[strings.ToLower(in.Sort)]
-		if sortBy == "" {
-			sortBy = in.Sort
+		sortBy, ok := seriesSorts[strings.ToLower(strings.TrimSpace(in.Sort))]
+		if !ok {
+			return nil, listOut{}, fmt.Errorf("unknown sort %q; choose one of: name, books, duration, added, last_book_added, last_book_updated, random", in.Sort)
 		}
-		limit := limitOr(in.Limit, 50)
+		limit, offset := pageArgs(in.Limit, in.Offset, 50)
 
-		out := listOut{Series: []seriesRow{}}
+		out := listOut{Offset: offset, Series: []seriesRow{}}
 		for i := range libs {
 			lib := &libs[i]
 			if lib.IsPodcast() {
 				continue
 			}
-			series, total, err := client.SeriesList(ctx, lib.ID, abs.ListOptions{Limit: limit, Page: in.Offset / limit, Sort: sortBy, Desc: in.Desc})
+			series, total, err := window(offset, limit, func(page int) ([]abs.Series, int, error) {
+				return client.SeriesList(ctx, lib.ID, abs.ListOptions{Limit: limit, Page: page, Sort: sortBy, Desc: in.Desc})
+			})
 			if err != nil {
 				return nil, listOut{}, err
 			}
 			out.Total += total
+			if nextOffset(offset, len(series), total) > 0 {
+				out.NextOffset = offset + limit
+			}
 			for j := range series {
 				s := &series[j]
-				row := seriesRow{ID: s.ID, Name: s.Name, Books: len(s.Books), Duration: fmtDuration(s.TotalDuration)}
+				row := seriesRow{ID: s.ID, Name: s.Name, Books: len(s.Books), Duration: wholeSec(s.TotalDuration)}
 				if len(libs) > 1 {
 					row.Library = lib.Name
 				}
@@ -617,8 +656,10 @@ func registerSeriesTools(r *registry) {
 					if row.Author == "" {
 						row.Author = m.AuthorDisplay()
 					}
-					for _, ref := range m.Series {
-						if ref.ID == s.ID && ref.Sequence != "" {
+					// the listing's books are minified, with the series only
+					// as the joined "Name #1" string, so by name as well as id
+					for _, ref := range seriesRefsOf(&s.Books[k]) {
+						if (ref.ID == s.ID || strings.EqualFold(ref.Name, s.Name)) && ref.Sequence != "" {
 							row.Sequence = append(row.Sequence, ref.Sequence)
 						}
 					}
@@ -699,11 +740,15 @@ func registerSeriesTools(r *registry) {
 		Name:        "series_edit",
 		Description: "Rename a series or set its description. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in editIn) (*mcp.CallToolResult, editOut, error) {
+		name := strings.TrimSpace(in.Name)
+		if in.Name != "" && name == "" {
+			return nil, editOut{}, errors.New("name cannot be blank")
+		}
 		s, err := resolveSeries(ctx, client, in.Library, in.Series)
 		if err != nil {
 			return nil, editOut{}, err
 		}
-		upd := abs.SeriesUpdate{Name: strPtr(in.Name), Description: strPtr(in.Description)}
+		upd := abs.SeriesUpdate{Name: strPtr(name), Description: strPtr(in.Description)}
 		if upd.Name == nil && upd.Description == nil {
 			return nil, editOut{}, errors.New("nothing to change: pass name or description")
 		}
@@ -715,7 +760,7 @@ func registerSeriesTools(r *registry) {
 				return nil, editOut{}, ferr
 			}
 			for _, other := range others {
-				if other.ID != s.ID && strings.EqualFold(strings.TrimSpace(other.Name), strings.TrimSpace(in.Name)) {
+				if other.ID != s.ID && strings.EqualFold(strings.TrimSpace(other.Name), name) {
 					return nil, editOut{}, fmt.Errorf("a series named %q already exists (%s): series_merge from=%q into=%q moves the books there instead", other.Name, other.ID, s.Name, other.Name)
 				}
 			}
@@ -729,20 +774,22 @@ func registerSeriesTools(r *registry) {
 	})
 
 	type mergeIn struct {
-		From    string `json:"from"              jsonschema:"series id or exact name whose books move; it is empty afterwards and goes away"`
+		From    string `json:"from"              jsonschema:"series id or exact name whose books move; it is empty afterwards"`
 		Into    string `json:"into"              jsonschema:"series id or exact name the books move into"`
 		Library string `json:"library,omitempty" jsonschema:"narrow a name lookup to one library"`
 	}
 	type mergeOut struct {
-		From   string   `json:"from"`
-		Into   string   `json:"into"`
-		IntoID string   `json:"into_id"`
-		Moved  int      `json:"moved"`
-		Books  []string `json:"books"   jsonschema:"each book as it now stands in the series, 'Title #2'"`
+		From        string   `json:"from"`
+		Into        string   `json:"into"`
+		IntoID      string   `json:"into_id"`
+		Moved       int      `json:"moved"`
+		Books       []string `json:"books"          jsonschema:"each book as it now stands in the series, 'Title #2'"`
+		FromRemoved bool     `json:"from_removed"   jsonschema:"the emptied series is gone from the server; false means it is still listed, with no books"`
+		Note        string   `json:"note,omitempty"`
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name: "series_merge",
-		Description: "Move every book of one series into another, keeping each book's number and every other series it is in; the emptied series goes away. " +
+		Description: "Move every book of one series into another, keeping each book's number and every other series it is in. The server usually drops the emptied series; from_removed says whether it did, read back after the move. " +
 			"For two spellings of one series that audit_series names reports ('The Wheel of Time' into 'Wheel of Time'), and for a one-book 'Skyward Series' beside 'Skyward'. " +
 			"A book already in both keeps its number in the target, or takes the one it had if the target had none. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in mergeIn) (*mcp.CallToolResult, mergeOut, error) {
@@ -779,11 +826,27 @@ func registerSeriesTools(r *registry) {
 				}
 			}
 		}
-		n, err := client.BatchUpdate(ctx, updates)
-		if err != nil {
-			return nil, mergeOut{}, err
+		// in batches, as the sweeps write: one request carrying hundreds of
+		// books is what a reverse proxy times out on. A batch that fails
+		// leaves the ones before it moved, and the error says how many.
+		for chunk := range slices.Chunk(updates, sweepBatchSize) {
+			n, berr := client.BatchUpdate(ctx, chunk)
+			if berr != nil {
+				return nil, mergeOut{}, fmt.Errorf("%d of the %d books of %q were moved into %q before this, and stay there; the rest were not: %w", out.Moved, len(books), from.Name, into.Name, berr)
+			}
+			out.Moved += n
 		}
-		out.Moved = n
+
+		// read back rather than promised: a series can outlive its books
+		left, err := allSeries(ctx, client, from.LibraryID)
+		if err != nil {
+			out.Note = fmt.Sprintf("the books moved, but the series could not be read back to see whether %q is gone: %v", from.Name, err)
+			return nil, out, nil
+		}
+		out.FromRemoved = !slices.ContainsFunc(left, func(s abs.Series) bool { return s.ID == from.ID })
+		if !out.FromRemoved {
+			out.Note = fmt.Sprintf("the server still lists %q (%s), with no books; a lookup by its name refuses it", from.Name, from.ID)
+		}
 
 		return nil, out, nil
 	})

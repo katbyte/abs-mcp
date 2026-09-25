@@ -15,6 +15,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -61,7 +62,15 @@ func binary(t *testing.T) string {
 			return
 		}
 		binPath = filepath.Join(binDir, "abs-mcp")
-		out, err := exec.CommandContext(ctx, "go", "build", "-o", binPath, "..").CombinedOutput()
+		args := []string{"build", "-o", binPath}
+		if coverDir() != "" {
+			// the main package too: without it the binary registers no exit
+			// hook and writes no counters at all
+			args = append(args, "-cover", "-coverpkg=.,./tools/...,./lib/...,./cli/...")
+		}
+		build := exec.CommandContext(ctx, "go", append(args, ".")...) //nolint:gosec // go build of this checkout
+		build.Dir = ".."
+		out, err := build.CombinedOutput()
 		if err != nil {
 			binErr = fmt.Errorf("building abs-mcp: %v\n%s", err, out)
 		}
@@ -124,7 +133,7 @@ func stdio(t *testing.T, dir string, env []string, args ...string) (*mcp.ClientS
 	t.Helper()
 
 	cmd := exec.CommandContext(context.WithoutCancel(ctx), binary(t), append([]string{"serve"}, args...)...)
-	cmd.Env = env
+	cmd.Env = withCover(env)
 	cmd.Dir = dir
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -258,12 +267,12 @@ func TestBinaryRegistersWhatTheFlagsAsk(t *testing.T) {
 			name:     "delete tools need --enable-delete",
 			args:     []string{"--toolsets", "all"},
 			want:     []string{"item_edit"},
-			unwanted: []string{"item_delete", "author_delete", "podcast_episode_delete"},
+			unwanted: []string{"item_delete", "author_delete", "podcast_episode_delete", "collection_delete", "playlist_delete"},
 		},
 		{
 			name: "--enable-delete from the environment",
 			env:  []string{"ABS_TOOLSETS=all", "ABS_ENABLE_DELETE=true"},
-			want: []string{"item_delete", "author_delete"},
+			want: []string{"item_delete", "author_delete", "collection_delete", "playlist_delete"},
 		},
 		{
 			name:     "--allow-tools narrows what a toolset registered",
@@ -324,7 +333,7 @@ func TestBinaryServesHTTP(t *testing.T) {
 
 	addr := freePort(t)
 	cmd := exec.CommandContext(context.WithoutCancel(ctx), binary(t), "serve", "--listen", addr, "--auth-token", token, "--toolsets", "all")
-	cmd.Env = serverEnv(t)
+	cmd.Env = withCover(serverEnv(t))
 	errOut := &syncBuffer{}
 	cmd.Stderr, cmd.Stdout = errOut, errOut
 	if err := cmd.Start(); err != nil {
@@ -369,15 +378,19 @@ func TestBinaryServesHTTP(t *testing.T) {
 		}
 	})
 
+	// the session stays open through the shutdown below, as a client that is
+	// still connected when the container is stopped would
+	var session *mcp.ClientSession
 	t.Run("and serves the protocol with it", func(t *testing.T) {
-		session, err := mcp.NewClient(&mcp.Implementation{Name: "binary-test", Version: "0"}, nil).Connect(ctx, &mcp.StreamableClientTransport{
+		var err error
+		session, err = mcp.NewClient(&mcp.Implementation{Name: "binary-test", Version: "0"}, nil).Connect(ctx, &mcp.StreamableClientTransport{
 			Endpoint:   base + "/mcp",
 			HTTPClient: &http.Client{Transport: bearer(token)},
 		}, nil)
 		if err != nil {
 			t.Fatalf("connecting over HTTP: %v\n%s", err, errOut)
 		}
-		defer func() { _ = session.Close() }()
+		t.Cleanup(func() { _ = session.Close() })
 
 		if names := toolNamesOf(t, session); !slices.Contains(names, "audit_all") {
 			t.Errorf("tools over HTTP = %v", names)
@@ -387,7 +400,11 @@ func TestBinaryServesHTTP(t *testing.T) {
 		}
 	})
 
-	t.Run("and shuts down when asked", func(t *testing.T) {
+	t.Run("and shuts down when asked, with a client still connected", func(t *testing.T) {
+		if session == nil {
+			t.Skip("no session to hold open")
+		}
+		asked := time.Now()
 		if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
 			t.Fatal(err)
 		}
@@ -396,10 +413,35 @@ func TestBinaryServesHTTP(t *testing.T) {
 			if err != nil {
 				t.Errorf("exit after SIGTERM: %v\n%s", err, errOut)
 			}
+			// a container gets ten seconds to stop before it is killed
+			if took := time.Since(asked); took > 5*time.Second {
+				t.Errorf("took %s to stop with a client connected", took.Round(time.Millisecond))
+			}
 		case <-time.After(shutdownGrace):
 			t.Errorf("still running %s after SIGTERM", shutdownGrace)
 		}
 	})
+}
+
+// coverDir is where a coverage run (make cover) writes its counters, or ""
+// outside one. The binary is then built with coverage on and writes beside the
+// suite, so what the process ran counts too: the serve path is only ever run
+// by these tests.
+func coverDir() string {
+	if f := flag.Lookup("test.gocoverdir"); f != nil {
+		return f.Value.String()
+	}
+
+	return ""
+}
+
+// withCover points a binary at the coverage directory during a coverage run.
+func withCover(env []string) []string {
+	if dir := coverDir(); dir != "" {
+		return append(env, "GOCOVERDIR="+dir)
+	}
+
+	return env
 }
 
 // shutdownGrace is how long the binary gets to drain and exit.
@@ -502,7 +544,7 @@ func TestBinaryRefusesAStartItCannotMake(t *testing.T) {
 				env = serverEnv(t)
 			}
 			cmd := exec.CommandContext(context.WithoutCancel(ctx), binary(t), append([]string{"serve"}, c.args...)...)
-			cmd.Env = env
+			cmd.Env = withCover(env)
 			cmd.Dir = t.TempDir() // no .abs-mcp to fall back on
 			out := &syncBuffer{}
 			cmd.Stdout, cmd.Stderr = out, out
@@ -534,7 +576,7 @@ func TestBinaryCommands(t *testing.T) {
 	run := func(t *testing.T, args ...string) string {
 		t.Helper()
 		cmd := exec.CommandContext(context.WithoutCancel(ctx), binary(t), args...)
-		cmd.Env = serverEnv(t)
+		cmd.Env = withCover(serverEnv(t))
 		cmd.Dir = t.TempDir()
 		out, err := cmd.Output()
 		if err != nil {

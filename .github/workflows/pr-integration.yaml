@@ -1,5 +1,5 @@
 ---
-name: live tests
+name: tests
 on:
   push:
     branches: [ 'main' ]
@@ -22,8 +22,22 @@ permissions:
   contents: read
 
 jobs:
-  # the two suites are separate jobs so a failure names which layer broke:
-  # the client's view of the API, or the tools' behaviour on top of it
+  # the unit tests need no server: the tools against a canned one, and the
+  # client, proxy and CLI on their own
+  unit:
+    name: unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: ./.go-version
+      - run: make test
+
+  # the two live suites are separate jobs so a failure names which layer
+  # broke: the client's view of the API, or the tools' behaviour on top of it
   integration:
     name: integration (lib/abs against a real server)
     runs-on: ubuntu-latest

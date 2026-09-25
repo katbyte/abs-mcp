@@ -127,7 +127,7 @@ func registerNarratorAudit(r *registry) {
 
 	type rolesIn struct {
 		Library string `json:"library,omitempty" jsonschema:"library name or id; default every library"`
-		Limit   int    `json:"limit,omitempty"   jsonschema:"maximum findings, default 50"`
+		Limit   int    `json:"limit,omitempty"   jsonschema:"maximum findings, default 50, at most 1000"`
 	}
 	type rolesOut struct {
 		Scanned int           `json:"items_scanned"`
@@ -147,21 +147,30 @@ func registerNarratorAudit(r *registry) {
 		roles := newRoleCounts()
 		names := newSpellingCounts([]string{"narrators"})
 		out := rolesOut{Roles: []roleFinding{}, Names: []vocabGroup{}}
+		read := func(it *abs.Item) {
+			roles.add(it)
+			names.add(it)
+		}
+		var people joinedNames // a name with a comma in it is not two names
 		for i := range libs {
 			if err := client.ItemsAll(ctx, libs[i].ID, abs.ItemsOptions{}, func(items []abs.Item) bool {
 				for j := range items {
 					out.Scanned++
-					roles.add(&items[j])
-					names.add(&items[j])
+					if !people.hold(&items[j]) {
+						read(&items[j])
+					}
 				}
 				return true
 			}); err != nil {
 				return nil, rolesOut{}, err
 			}
+			if err := people.resolve(ctx, client, libs[i].ID, read); err != nil {
+				return nil, rolesOut{}, err
+			}
 		}
 		allRoles, allNames := roles.findings(), names.report("narrators")
 		out.Found = len(allRoles) + len(allNames)
-		limit := limitOr(in.Limit, 50)
+		limit := auditLimit(in.Limit, 50)
 		out.Roles = append(out.Roles, allRoles[:min(len(allRoles), limit)]...)
 		out.Names = append(out.Names, allNames[:min(len(allNames), limit-len(out.Roles))]...)
 

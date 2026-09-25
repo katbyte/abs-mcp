@@ -8,8 +8,7 @@ import (
 type progressSummary struct {
 	Percent     int    `json:"percent"`
 	Finished    bool   `json:"finished"`
-	CurrentTime string `json:"current_time,omitempty"         jsonschema:"position as h m s"`
-	Seconds     int    `json:"current_seconds,omitempty"`
+	CurrentTime int    `json:"current_time_s"                 jsonschema:"position in seconds"`
 	LastUpdate  string `json:"last_update,omitempty"`
 	FinishedAt  string `json:"finished_at,omitempty"`
 	Hidden      bool   `json:"hidden_from_continue,omitempty"`
@@ -23,8 +22,7 @@ func progressOf(p *abs.MediaProgress) *progressSummary {
 	return &progressSummary{
 		Percent:     percent(p.Progress),
 		Finished:    p.IsFinished,
-		CurrentTime: fmtDuration(p.CurrentTime),
-		Seconds:     int(p.CurrentTime),
+		CurrentTime: wholeSec(p.CurrentTime),
 		LastUpdate:  fmtTime(p.LastUpdate),
 		FinishedAt:  fmtTime(p.FinishedAt),
 		Hidden:      p.HideFromContinueListening,
@@ -50,8 +48,8 @@ type itemSummary struct {
 	Language  string           `json:"language,omitempty"`
 	ASIN      string           `json:"asin,omitempty"`
 	ISBN      string           `json:"isbn,omitempty"`
-	Duration  string           `json:"duration,omitempty"`
-	SizeMB    int64            `json:"size_mb,omitempty"`
+	Duration  int              `json:"duration_s,omitempty"   jsonschema:"length in seconds"`
+	Size      int64            `json:"size,omitempty"         jsonschema:"bytes on disk"`
 	Tracks    int              `json:"audio_tracks,omitempty"`
 	Chapters  int              `json:"chapters,omitempty"`
 	Episodes  int              `json:"episodes,omitempty"     jsonschema:"podcasts only"`
@@ -84,8 +82,8 @@ func summarize(it *abs.Item) itemSummary {
 		Language:  m.Language,
 		ASIN:      m.ASIN,
 		ISBN:      m.ISBN,
-		Duration:  fmtDuration(it.Media.Duration),
-		SizeMB:    mb(it.SizeBytes()),
+		Duration:  wholeSec(it.Media.Duration),
+		Size:      it.SizeBytes(),
 		Tracks:    it.Media.NumTracks,
 		Chapters:  it.Media.NumChapters,
 		Ebook:     it.Media.EbookFormat,
@@ -138,8 +136,8 @@ type episodeSummary struct {
 	Episode     string           `json:"episode,omitempty"`
 	Type        string           `json:"type,omitempty"        jsonschema:"full, trailer or bonus"`
 	Published   string           `json:"published,omitempty"`
-	Duration    string           `json:"duration,omitempty"`
-	SizeMB      int64            `json:"size_mb,omitempty"`
+	Duration    int              `json:"duration_s,omitempty"  jsonschema:"length in seconds"`
+	Size        int64            `json:"size,omitempty"        jsonschema:"bytes on disk"`
 	Description string           `json:"description,omitempty"`
 	Progress    *progressSummary `json:"progress,omitempty"`
 }
@@ -154,16 +152,16 @@ func summarizeEpisode(e *abs.Episode, podcastTitle string, withDescription bool)
 		Episode:   e.Episode.String(),
 		Type:      e.EpisodeType,
 		Published: fmtDate(e.PublishedAt),
-		Duration:  fmtDuration(e.DurationSeconds()),
+		Duration:  wholeSec(e.DurationSeconds()),
 		Progress:  progressOf(e.Progress),
 	}
 	if s.Published == "" {
 		s.Published = e.PubDate
 	}
 	if e.Size > 0 {
-		s.SizeMB = mb(e.Size)
+		s.Size = e.Size
 	} else if e.AudioFile != nil {
-		s.SizeMB = mb(e.AudioFile.Metadata.Size)
+		s.Size = e.AudioFile.Metadata.Size
 	}
 	if withDescription {
 		s.Description = clip(plain(e.Description), descriptionCap)
@@ -199,8 +197,8 @@ type sessionSummary struct {
 	Title       string `json:"title"`
 	Author      string `json:"author,omitempty"`
 	Type        string `json:"type,omitempty"`
-	Listened    string `json:"listened,omitempty"     jsonschema:"time spent listening in this session"`
-	Position    string `json:"position,omitempty"     jsonschema:"playback position at the end of the session"`
+	Listened    int    `json:"listened_s"             jsonschema:"seconds spent listening in this session"`
+	Position    int    `json:"position_s"             jsonschema:"playback position at the end of the session, in seconds"`
 	Percent     int    `json:"percent,omitempty"`
 	Device      string `json:"device,omitempty"`
 	Started     string `json:"started,omitempty"`
@@ -216,8 +214,8 @@ func summarizeSession(s *abs.Session) sessionSummary {
 		Title:       s.DisplayTitle,
 		Author:      s.DisplayAuthor,
 		Type:        s.MediaType,
-		Listened:    fmtDuration(s.TimeListening),
-		Position:    fmtDuration(s.CurrentTime),
+		Listened:    wholeSec(s.TimeListening),
+		Position:    wholeSec(s.CurrentTime),
 		Device:      s.DeviceInfo.Describe(),
 		Started:     fmtTime(s.StartedAt),
 		LastUpdated: fmtTime(s.UpdatedAt),

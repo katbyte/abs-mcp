@@ -92,7 +92,20 @@ func TestMetadataRemoveGenre(t *testing.T) {
 		call(t, "item_edit", map[string]any{"item": "War Is a Racket", "genres": []any{"History"}})
 	})
 
+	// without confirm it names what it would drop the genre from and drops nothing
 	out := call(t, "metadata_rename", map[string]any{"field": "genres", "from": "Temporary Genre", "remove": true})
+	preview, _ := out["preview"].(map[string]any)
+	if found := num(t, preview["found"], "preview.found"); found != 1 || num(t, out["items_updated"], "items_updated") != 0 {
+		t.Errorf("preview = %v, want the one book and nothing changed", out)
+	}
+	if items := strs(t, preview["items"], "preview.items"); len(items) != 1 || items[0] != "War Is a Racket" {
+		t.Errorf("preview items = %v, want War Is a Racket", items)
+	}
+	if genres := strs(t, call(t, "item_get", map[string]any{"item": "War Is a Racket"})["genres"], "genres"); len(genres) != 2 {
+		t.Errorf("the preview dropped the genre: %v", genres)
+	}
+
+	out = call(t, "metadata_rename", map[string]any{"field": "genres", "from": "Temporary Genre", "remove": true, "confirm": true})
 	if n := num(t, out["items_updated"], "items_updated"); n != 1 {
 		t.Errorf("items_updated = %d, want 1", n)
 	}

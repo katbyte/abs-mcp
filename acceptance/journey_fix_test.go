@@ -442,6 +442,10 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 					switch suggest := finding["suggest"].(type) {
 					case string:
 						tool, args := suggestCall(t, suggest)
+						// a suggested remove only previews until confirmed
+						if args["remove"] == true {
+							args["confirm"] = true
+						}
 						call(t, tool, args)
 					case map[string]any:
 						field, _ := finding["field"].(string)
@@ -522,7 +526,7 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 			fix: func(t *testing.T) {
 				// pick the copy outside the series and delete its record; the
 				// folder stays on disk
-				call(t, "item_delete", map[string]any{"item": outside})
+				call(t, "item_delete", map[string]any{"confirm": true, "item": outside})
 				if err := waitForItems("Messy", len(messyBooks)-1); err != nil {
 					t.Fatal(err)
 				}

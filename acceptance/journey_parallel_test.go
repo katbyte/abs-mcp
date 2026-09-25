@@ -114,11 +114,11 @@ func TestJourneyCallsAtOnce(t *testing.T) {
 		seconds := func(i int) float64 { return 0.1 + float64(i)/10 }
 		t.Cleanup(func() {
 			for i := range n {
-				_, _ = invoke("user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Second Foundation", "action": "remove", "seconds": seconds(i)})
+				_, _ = invoke("user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Second Foundation", "action": "remove", "time_s": seconds(i)})
 			}
 		})
 		atOnce(t, n, func(i int) (string, map[string]any) {
-			return "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Second Foundation", "action": "add", "seconds": seconds(i), "title": fmt.Sprintf("Zzyzx At Once %d", i)}
+			return "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Second Foundation", "action": "add", "time_s": seconds(i), "title": fmt.Sprintf("Zzyzx At Once %d", i)}
 		})
 		if got := rows(t, call(t, "user_bookmarks", map[string]any{"library": "Fiction", "item": "Second Foundation"})["bookmarks"], "bookmarks"); len(got) != n {
 			t.Errorf("bookmarks = %v, want all %d", titlesIn(t, got, "bookmarks"), n)

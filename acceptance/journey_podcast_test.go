@@ -132,7 +132,7 @@ func TestJourneyPodcastLife(t *testing.T) {
 	var id string
 	t.Cleanup(func() {
 		if id != "" {
-			_, _ = invoke("item_delete", map[string]any{"item": id, "delete_files": true})
+			_, _ = invoke("item_delete", map[string]any{"confirm": true, "item": id, "delete_files": true})
 		}
 		_, _ = invoke("playlist_delete", map[string]any{"playlist": "Zzyzx Feed Queue"})
 		if err := os.RemoveAll(folder); err != nil {
@@ -170,7 +170,7 @@ func TestJourneyPodcastLife(t *testing.T) {
 		switch {
 		case err == nil:
 			t.Errorf("a second subscription to the feed was made: %v", again)
-			_, _ = invoke("item_delete", map[string]any{"item": again["id"], "delete_files": true})
+			_, _ = invoke("item_delete", map[string]any{"confirm": true, "item": again["id"], "delete_files": true})
 		case !strings.Contains(err.Error(), id):
 			t.Errorf("a second subscription to the feed: %v", err)
 		}
@@ -278,7 +278,19 @@ func TestJourneyPodcastLife(t *testing.T) {
 		call(t, "user_progress_set", map[string]any{"item": id, "episode": one, "percent": 50})
 		t.Cleanup(func() { _, _ = invoke("user_progress_remove", map[string]any{"item": id, "episode": one}) })
 
-		call(t, "podcast_episode_delete", map[string]any{"item": id, "episode": one, "delete_file": true})
+		// unconfirmed, it says what it would erase and erases nothing
+		preview := call(t, "podcast_episode_delete", map[string]any{"item": id, "episode": one, "delete_file": true})
+		if deleted, _ := preview["deleted"].(bool); deleted || !strings.HasSuffix(text(preview["file"]), "/"+file) || !strings.Contains(text(preview["note"]), file) {
+			t.Errorf("podcast_episode_delete without confirm = %v, want nothing deleted and the file named", preview)
+		}
+		if _, err := os.Stat(filepath.Join(folder, file)); err != nil {
+			t.Fatalf("an unconfirmed delete took the file: %v", err)
+		}
+		if got := episodeTitles(t, id); len(got) != 4 {
+			t.Fatalf("an unconfirmed delete took the episode: %v", got)
+		}
+
+		call(t, "podcast_episode_delete", map[string]any{"item": id, "episode": one, "delete_file": true, "confirm": true})
 
 		if _, err := os.Stat(filepath.Join(folder, file)); !os.IsNotExist(err) {
 			t.Errorf("the deleted episode's file is still on disk: %v", err)
@@ -307,7 +319,9 @@ func TestJourneyPodcastLife(t *testing.T) {
 	})
 
 	t.Run("an episode whose audio is gone", func(t *testing.T) {
-		feed.publish(feedItem{guid: "zzyzx-ep-5", title: "Zzyzx Episode Five", published: time.Now(), gone: true})
+		// after Four, which went out two seconds ahead: the feed is listed by
+		// publication, so this is what index 0 is
+		feed.publish(feedItem{guid: "zzyzx-ep-5", title: "Zzyzx Episode Five", published: time.Now().Add(3 * time.Second), gone: true})
 		call(t, "podcast_episode_download", map[string]any{"item": id, "indexes": []any{0}})
 		if got := waitEpisodes(t, id, 4); slices.Contains(got, "Zzyzx Episode Five") {
 			t.Errorf("an episode with no audio was added: %v", got)
@@ -326,7 +340,7 @@ func TestJourneyPodcastLife(t *testing.T) {
 				t.Errorf("a show published today is stale: %v", f)
 			}
 		}
-		call(t, "item_delete", map[string]any{"item": id, "delete_files": true})
+		call(t, "item_delete", map[string]any{"confirm": true, "item": id, "delete_files": true})
 		deleted := id
 		id = ""
 		if _, err := os.Stat(folder); !os.IsNotExist(err) {
