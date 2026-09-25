@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"regexp"
 	"slices"
@@ -176,14 +177,14 @@ func registerAuditTools(r *registry) {
 	}
 	type allIn struct {
 		Library string `json:"library,omitempty" jsonschema:"library name or id; default every library"`
-		Deep    bool   `json:"deep,omitempty"    jsonschema:"also run audit_covers, audit_unembedded and audit_matched, which fetch something for every item and can take minutes on a large library"`
+		Deep    bool   `json:"deep,omitempty"    jsonschema:"also run audit_covers, audit_unembedded, audit_matched and audit_abridged, which fetch something for every item and can take minutes on a large library"`
 	}
 	type allOut struct {
 		Scanned       int         `json:"items_scanned"`
 		Total         int         `json:"total_findings"`
 		Audits        []allRow    `json:"audits"                   jsonschema:"every audit with something to report, worst first; call that audit for the worklist"`
 		Clean         []string    `json:"clean"                    jsonschema:"audits that ran and found nothing"`
-		Skipped       []string    `json:"skipped,omitempty"        jsonschema:"audits not run: the three that fetch something for every item, unless deep is set; with deep, audit_matched when a library's provider cannot look up an asin and --providers is not set"`
+		Skipped       []string    `json:"skipped,omitempty"        jsonschema:"audits not run: the four that fetch something for every item, unless deep is set; with deep, audit_matched and audit_abridged when a library's provider is not an Audible store and --providers is not set"`
 		NotApplicable []string    `json:"not_applicable,omitempty" jsonschema:"audits that cannot find anything in the libraries asked about: the book audits when every one holds podcasts, the podcast audits when every one holds books. Neither run nor clean"`
 		NotRun        []allNotRun `json:"not_run,omitempty"        jsonschema:"every audit in skipped and not_applicable, with why"`
 		Partial       []allNotRun `json:"partial,omitempty"        jsonschema:"audits run in part, their count covering only some of their problems, with what was left out and why"`
@@ -192,7 +193,7 @@ func registerAuditTools(r *registry) {
 		Name: "audit_all",
 		Description: "Run every audit and return only the counts, so one call says where a library needs work; call the individual audit for the worklist. Start here after a scan. " +
 			"The per-item checks, audit_missing for every field, audit_chapters, audit_duplicates, audit_spelling, audit_authors, audit_narrators, audit_series and audit_genres all run. " +
-			"audit_covers, audit_unembedded and audit_matched fetch something for every item, so they run only with deep and are reported as skipped otherwise; audit_chapters without deep counts only one chapter over a long book, as the rest needs every chaptered book read whole, and says so under partial. " +
+			"audit_covers, audit_unembedded, audit_matched and audit_abridged fetch something for every item, so they run only with deep and are reported as skipped otherwise; audit_chapters without deep counts only one chapter over a long book, as the rest needs every chaptered book read whole, and says so under partial. " +
 			"An audit that cannot find anything in the libraries asked about, a book audit over podcasts or a podcast audit over books, is listed as not applicable rather than clean; not_run says why each audit left out was left out.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in allIn) (*mcp.CallToolResult, allOut, error) {
 		libs, err := resolveLibraries(ctx, client, in.Library)
@@ -227,6 +228,12 @@ func registerAuditTools(r *registry) {
 		var noLookup error
 		for i := 0; i < len(libs) && noLookup == nil; i++ {
 			noLookup = prov.lookupRefusal(nil, &libs[i])
+		}
+		// and audit_abridged one whose stores give no edition lengths
+		var abridged abridgedOut
+		var noStore error
+		for i := 0; i < len(libs) && noStore == nil; i++ {
+			noStore = abridgedRefusal(prov, nil, &libs[i])
 		}
 		out := allOut{Audits: []allRow{}, Clean: []string{}}
 		for i := range libs {
@@ -310,6 +317,11 @@ func registerAuditTools(r *registry) {
 						return nil, allOut{}, err
 					}
 				}
+				if noStore == nil {
+					if err := sweepAbridged(ctx, client, prov, lib, &abridged); err != nil {
+						return nil, allOut{}, err
+					}
+				}
 			}
 		}
 		if err := numbering.resolve(ctx, client); err != nil {
@@ -330,6 +342,7 @@ func registerAuditTools(r *registry) {
 			found["audit_covers"] = covers.Found
 			found["audit_unembedded"] = embedded.Found
 			found["audit_matched"] = matched.Found
+			found["audit_abridged"] = abridged.Found
 		}
 
 		// an audit that can only fire for a book says nothing about a
@@ -378,10 +391,14 @@ func registerAuditTools(r *registry) {
 			{"audit_covers", "reads every cover file, one request per book: pass deep to run it"},
 			{"audit_unembedded", "fetches every audio file's tags: pass deep to run it"},
 			{"audit_matched", "asks the provider about every matched book: pass deep to run it"},
+			{"audit_abridged", "searches the store for every book: pass deep to run it"},
 		} {
-			if deep.tool == "audit_matched" && in.Deep && noLookup != nil {
+			switch {
+			case deep.tool == "audit_matched" && in.Deep && noLookup != nil:
 				deep.why = noLookup.Error()
-			} else if in.Deep || !hasBooks {
+			case deep.tool == "audit_abridged" && in.Deep && noStore != nil:
+				deep.why = noStore.Error()
+			case in.Deep || !hasBooks:
 				report(deep.tool, "")
 				continue
 			}
@@ -408,7 +425,9 @@ func registerAuditTools(r *registry) {
 	add(r, readTool, &mcp.Tool{
 		Name: "audit_duplicates",
 		Description: "Find items that appear to be the same work: sharing an asin, an isbn, or a title and author, any one of them, so a matched copy and an unmatched copy of one book are found together. Two copies with different asins are never grouped: those are editions (a full-cast and a single-narrator recording), not duplicates. " +
-			"Each group lists every copy with size, duration and path so you can pick which to keep.",
+			"Each group lists every copy with size, duration and path so you can pick which to keep. " +
+			"candidates lists pairs no key joins that are probably one recording, each with why: the same title once edition labels, brackets and subtitles are set aside, under the same author, or under another with lengths within 4%; or one's album tag naming the other's title, lengths within 1%. Two copies naming different readers, or lengths too far apart for the evidence, are left out. " +
+			"A candidate is a lead, not a finding: confirm it with item_compare_audio before deleting either. They are counted in total_candidates, not total_findings, and audit_all counts only the groups.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in dupIn) (*mcp.CallToolResult, dupOut, error) {
 		libs, err := resolveLibraries(ctx, client, in.Library)
 		if err != nil {
@@ -428,9 +447,14 @@ func registerAuditTools(r *registry) {
 		}
 
 		groups := collector.groups()
-		out := dupOut{Scanned: len(collector.items), Found: len(groups), Groups: []dupGroup{}}
+		candidates, err := collector.candidates(ctx, client, groups)
+		if err != nil {
+			return nil, dupOut{}, err
+		}
+		out := dupOut{Scanned: len(collector.items), Found: len(groups), Groups: []dupGroup{}, CandidatesFound: len(candidates), Candidates: []dupCandidate{}}
 		limit := auditLimit(in.Limit, 50)
 		out.Groups = append(out.Groups, groups[:min(len(groups), limit)]...)
+		out.Candidates = append(out.Candidates, candidates[:min(len(candidates), limit)]...)
 
 		return nil, out, nil
 	})
@@ -442,9 +466,11 @@ type dupGroup struct {
 }
 
 type dupOut struct {
-	Scanned int        `json:"items_scanned"`
-	Found   int        `json:"total_findings" jsonschema:"groups, before limit"`
-	Groups  []dupGroup `json:"groups"         jsonschema:"each group is one work with several copies"`
+	Scanned         int            `json:"items_scanned"`
+	Found           int            `json:"total_findings"   jsonschema:"groups, before limit; candidates are not counted here"`
+	Groups          []dupGroup     `json:"groups"           jsonschema:"each group is one work with several copies"`
+	CandidatesFound int            `json:"total_candidates" jsonschema:"candidate pairs, before limit"`
+	Candidates      []dupCandidate `json:"candidates"       jsonschema:"pairs no key joins that are probably one recording: leads to confirm with item_compare_audio, not findings"`
 }
 
 // dupCollector files each item under everything that would make two items
@@ -455,9 +481,10 @@ type dupOut struct {
 // collects most. It holds the summary rather than the item: a whole library
 // is here until the sweep ends, and the summary is what the answer carries.
 type dupCollector struct {
-	items []itemSummary
-	asins []string         // each item's asin, "" when it has none
-	byKey map[string][]int // key -> the items filed under it, in sweep order
+	items   []itemSummary
+	asins   []string          // each item's asin, "" when it has none
+	readers []map[string]bool // each item's narrators, by name key
+	byKey   map[string][]int  // key -> the items filed under it, in sweep order
 }
 
 func newDupCollector() *dupCollector {
@@ -470,6 +497,21 @@ func (d *dupCollector) add(it *abs.Item) {
 	asin := strings.ToUpper(strings.TrimSpace(m.ASIN))
 	d.items = append(d.items, summarize(it))
 	d.asins = append(d.asins, asin)
+	// each name, and each pair of neighbours read as one "Last, First" name:
+	// the listing joins names with commas, so "Planer, Nigel" arrives in two
+	readers := map[string]bool{}
+	names := splitNames(m.NarratorDisplay())
+	for i, n := range names {
+		if k := vocabKey("narrators", n); k != "" {
+			readers[k] = true
+		}
+		if i > 0 {
+			if k := vocabKey("narrators", names[i-1]+", "+n); k != "" {
+				readers[k] = true
+			}
+		}
+	}
+	d.readers = append(d.readers, readers)
 	var keys []string
 	if asin != "" {
 		keys = append(keys, "asin:"+asin)
@@ -489,10 +531,17 @@ func (d *dupCollector) add(it *abs.Item) {
 // groups joins the items that share a key into groups of more than one,
 // sorted by what they share. The asins are joined first, then the isbns,
 // then the titles, and two items with different asins are never joined: an
-// unmatched copy goes with the first matched edition its title reaches.
+// unmatched copy goes with the first matched edition its title reaches. Nor
+// does a title alone join two readings: where both name their readers and
+// no reader is shared, they are two recordings of one book - a full-cast and
+// a single-narrator set, kept on purpose - not one held twice.
 func (d *dupCollector) groups() []dupGroup {
 	parent := make([]int, len(d.items))
 	asin := slices.Clone(d.asins) // for each root, the asin its group carries
+	readers := make([]map[string]bool, len(d.items))
+	for i := range readers {
+		readers[i] = maps.Clone(d.readers[i]) // for each root, every reader its group names
+	}
 	for i := range parent {
 		parent[i] = i
 	}
@@ -510,15 +559,20 @@ func (d *dupCollector) groups() []dupGroup {
 	slices.Sort(keys) // asin: before isbn: before title:
 	for _, k := range keys {
 		members := d.byKey[k]
+		byTitle := strings.HasPrefix(k, "title:")
 		for _, m := range members[1:] {
 			ra, rb := find(members[0]), find(m)
 			if ra == rb || (asin[ra] != "" && asin[rb] != "" && asin[ra] != asin[rb]) {
+				continue
+			}
+			if byTitle && len(readers[ra]) > 0 && len(readers[rb]) > 0 && !sharesKey(readers[ra], readers[rb]) {
 				continue
 			}
 			parent[rb] = ra
 			if asin[ra] == "" {
 				asin[ra] = asin[rb]
 			}
+			maps.Copy(readers[ra], readers[rb])
 		}
 	}
 
@@ -558,6 +612,16 @@ func (d *dupCollector) groups() []dupGroup {
 		return strings.Compare(a.Items[0].ID, b.Items[0].ID)
 	})
 	return out
+}
+
+// sharesKey reports whether two sets have a key in common.
+func sharesKey(a, b map[string]bool) bool {
+	for k := range a {
+		if b[k] {
+			return true
+		}
+	}
+	return false
 }
 
 type seriesGap struct {
@@ -780,7 +844,7 @@ var podcastOnlyChecks = map[string]bool{"stale_feed": true, "no_episodes": true}
 // books alone.
 var bookOnlyAudits = map[string]bool{
 	"audit_authors": true, "audit_narrators": true, "audit_series": true, "audit_genres": true, "audit_chapters": true,
-	"audit_covers": true, "audit_unembedded": true, "audit_matched": true,
+	"audit_covers": true, "audit_unembedded": true, "audit_matched": true, "audit_abridged": true,
 }
 
 // allScope is the kind of library an audit_all row can find anything in:

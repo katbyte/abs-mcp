@@ -196,6 +196,7 @@ type EbookFile struct {
 
 type AudioTrack struct {
 	Index       int           `json:"index"`
+	Ino         string        `json:"ino"` // the file's id for the file route; older servers name it only in ContentURL
 	StartOffset float64       `json:"startOffset"`
 	Duration    float64       `json:"duration"`
 	Title       string        `json:"title"`

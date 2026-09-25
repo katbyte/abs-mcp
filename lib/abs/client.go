@@ -229,6 +229,18 @@ func (c *Client) doRaw(ctx context.Context, method, path string, query url.Value
 // endpoints that return a file rather than JSON. The caller must close it.
 // doRaw buffers into memory with a cap, which is wrong for an audiobook.
 func (c *Client) stream(ctx context.Context, path string, query url.Values) (io.ReadCloser, error) {
+	resp, err := c.open(ctx, path, query, "")
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Body, nil
+}
+
+// open is stream with the whole response handed back, and a byte range
+// asked for when rng is set, for a reader that needs the status and headers
+// of a ranged answer. The caller closes the body.
+func (c *Client) open(ctx context.Context, path string, query url.Values, rng string) (*http.Response, error) {
 	u := c.baseURL + path
 	if len(query) > 0 {
 		u += "?" + query.Encode()
@@ -240,6 +252,9 @@ func (c *Client) stream(ctx context.Context, path string, query url.Values) (io.
 	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("User-Agent", "abs-mcp")
+	if rng != "" {
+		req.Header.Set("Range", rng)
+	}
 
 	resp, err := c.files.Do(req)
 	if err != nil {
@@ -251,7 +266,7 @@ func (c *Client) stream(ctx context.Context, path string, query url.Values) (io.
 		return nil, &HTTPError{Method: http.MethodGet, Path: path, Status: resp.StatusCode, Body: truncate(strings.TrimSpace(string(body)), errBodyPreview)}
 	}
 
-	return resp.Body, nil
+	return resp, nil
 }
 
 // uploadMultipart posts a multipart form with one file part, for the two endpoints that

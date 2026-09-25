@@ -422,6 +422,8 @@ func TestJourneyLookupsChangeNothing(t *testing.T) {
 		{tool: "library_recent"},
 		{tool: "item_get", args: map[string]any{"library": "Fiction", "item": "Foundation", "files": true, "chapters": true}},
 		{tool: "item_get", args: map[string]any{"item": "Behind the Bastards"}},
+		// the seeded books are a second long, too short to compare by ear
+		{tool: "item_compare_audio", args: map[string]any{"library": "Fiction", "item": "Foundation", "other": "Second Foundation"}, mayErr: true},
 		{tool: "author_list", args: map[string]any{"library": "Messy"}},
 		{tool: "author_get", args: map[string]any{"library": "Fiction", "author": "Isaac Asimov"}},
 		{tool: "author_match", args: map[string]any{"library": "Fiction", "author": "Isaac Asimov", "query": "Isaac Asimov"}},
@@ -450,6 +452,8 @@ func TestJourneyLookupsChangeNothing(t *testing.T) {
 		{tool: "audit_spelling", args: map[string]any{"library": "Messy"}},
 		{tool: "audit_unembedded", args: map[string]any{"library": "Messy"}},
 		{tool: "audit_unmatched", args: map[string]any{"library": "Messy"}},
+		// the seeded books are a second long, too short to search a store for
+		{tool: "audit_abridged", args: map[string]any{"library": "Messy"}},
 		{tool: "collection_list"},
 		{tool: "collection_get", args: map[string]any{"collection": "Zzyzx Lookup Collection"}},
 		{tool: "playlist_list"},
