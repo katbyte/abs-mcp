@@ -715,10 +715,10 @@ func TestAuditAllSaysWhatDoesNotApply(t *testing.T) {
 	if na := strs(t, out["not_applicable"]); !slices.Equal(na, []string{"audit_podcast_stale_feed", "audit_podcast_no_episodes"}) {
 		t.Errorf("not_applicable over books = %v", na)
 	}
-	if skipped := strs(t, out["skipped"]); !slices.Equal(skipped, []string{"audit_covers", "audit_unembedded", "audit_matched"}) {
+	if skipped := strs(t, out["skipped"]); !slices.Equal(skipped, []string{"audit_covers", "audit_unembedded", "audit_matched", "audit_abridged"}) {
 		t.Errorf("skipped = %v", skipped)
 	}
-	reasons(t, out, 5)
+	reasons(t, out, 6)
 }
 
 // reasons checks audit_all gave every audit it left out a reason.
@@ -831,5 +831,47 @@ func TestGenreSuggestionsConfirmTheirRemoves(t *testing.T) {
 	}
 	if len(out.Placeholders) != 1 || len(out.Redundant) != 1 {
 		t.Errorf("placeholders %v redundant %v", out.Placeholders, out.Redundant)
+	}
+}
+
+// A title alone does not join two readings: both name their readers and
+// share none, so they are two recordings of one book - a full-cast and a
+// single-narrator set kept on purpose - not one held twice. The same reader
+// written two ways is one reader, and a copy naming none still joins.
+func TestDuplicatesKeepTwoReadingsApart(t *testing.T) {
+	t.Parallel()
+
+	book := func(id, narrator string) *abs.Item {
+		it := &abs.Item{ID: id, MediaType: "book"}
+		it.Media.Metadata.Title = "Wyrd Sisters"
+		it.Media.Metadata.AuthorName = "Terry Pratchett"
+		it.Media.Metadata.NarratorName = narrator
+		return it
+	}
+	groupsOf := func(items ...*abs.Item) [][]string {
+		d := newDupCollector()
+		for _, it := range items {
+			d.add(it)
+		}
+		groups := d.groups()
+		out := make([][]string, 0, len(groups))
+		for _, g := range groups {
+			var ids []string
+			for _, it := range g.Items {
+				ids = append(ids, it.ID)
+			}
+			out = append(out, ids)
+		}
+		return out
+	}
+
+	if got := groupsOf(book("full", "Peter Serafinowicz, Bill Nighy"), book("single", "Nigel Planer")); len(got) != 0 {
+		t.Errorf("two readings were grouped: %v", got)
+	}
+	if got := groupsOf(book("a", "Nigel Planer"), book("b", "Planer, Nigel")); len(got) != 1 {
+		t.Errorf("one reader written two ways was not grouped: %v", got)
+	}
+	if got := groupsOf(book("a", "Nigel Planer"), book("b", "")); len(got) != 1 {
+		t.Errorf("a copy naming no reader was not grouped: %v", got)
 	}
 }

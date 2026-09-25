@@ -278,14 +278,14 @@ func serveListing(f *fakeABS, library string, books ...string) {
 	})
 }
 
-// idsOf reads a field off every row of a list.
-func idsOf(t *testing.T, v any, field string) []string {
+// idsOf reads the id off every row of a list.
+func idsOf(t *testing.T, v any) []string {
 	t.Helper()
 
 	rows := list(t, v)
 	out := make([]string, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, str(t, row[field]))
+		out = append(out, str(t, row["id"]))
 	}
 	return out
 }
@@ -326,7 +326,7 @@ func TestMatchedWindowsCountMatchedBooks(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := idsOf(t, out["findings"], "id"); !slices.Equal(got, tc.want) || num(t, out["items_scanned"]) != len(tc.want) || out["next_offset"] != tc.next {
+		if got := idsOf(t, out["findings"]); !slices.Equal(got, tc.want) || num(t, out["items_scanned"]) != len(tc.want) || out["next_offset"] != tc.next {
 			t.Errorf("audit_matched offset %d = %v (%v scanned, next %v), want %v and next %v", tc.offset, got, out["items_scanned"], out["next_offset"], tc.want, tc.next)
 		}
 	}
@@ -344,7 +344,7 @@ func TestMatchedWindowsCountMatchedBooks(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := idsOf(t, out["rows"], "id"); !slices.Equal(got, tc.want) || num(t, out["checked"]) != len(tc.want) || out["next_offset"] != tc.next {
+		if got := idsOf(t, out["rows"]); !slices.Equal(got, tc.want) || num(t, out["checked"]) != len(tc.want) || out["next_offset"] != tc.next {
 			t.Errorf("item_match_tag offset %d = %v (%v checked, next %v), want %v and next %v", tc.offset, got, out["checked"], out["next_offset"], tc.want, tc.next)
 		}
 	}
@@ -479,8 +479,8 @@ func TestLookupRefusesALibraryOnGoogle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if skipped, ok := all["skipped"].([]any); !ok || !slices.Equal(skipped, []any{"audit_matched"}) {
-		t.Errorf("audit_all deep skipped %v, want audit_matched alone", all["skipped"])
+	if skipped, ok := all["skipped"].([]any); !ok || !slices.Equal(skipped, []any{"audit_matched", "audit_abridged"}) {
+		t.Errorf("audit_all deep skipped %v, want audit_matched and audit_abridged", all["skipped"])
 	}
 	var why string
 	for _, row := range list(t, all["not_run"]) {

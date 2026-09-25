@@ -72,7 +72,8 @@ func TestEveryAuditRuns(t *testing.T) {
 		switch name {
 		case "audit_all", "audit_missing", "audit_duplicates", "audit_series",
 			"audit_spelling", "audit_unembedded",
-			"audit_covers", "audit_authors", "audit_narrators", "audit_matched", "audit_genres":
+			"audit_covers", "audit_authors", "audit_narrators", "audit_matched", "audit_genres",
+			"audit_abridged": // journey_abridged_test.go
 			continue // asserted individually below
 		}
 		if !slices.Contains(auditTools, name) {
@@ -197,7 +198,7 @@ func TestAuditAll(t *testing.T) {
 			t.Errorf("%s is in %d of found, clean and not applicable, want 1", name, lists)
 		}
 	}
-	perItem := []string{"audit_covers", "audit_unembedded", "audit_matched"}
+	perItem := []string{"audit_covers", "audit_unembedded", "audit_matched", "audit_abridged"}
 	if skipped := strs(t, all["skipped"], "skipped"); !slices.Equal(skipped, perItem) {
 		t.Errorf("skipped = %v, want %v", skipped, perItem)
 	}
@@ -210,10 +211,11 @@ func TestAuditAll(t *testing.T) {
 	// with deep the covers and the embedded tags run as well, and agree
 	// with the tools themselves. Fiction is on the server's default
 	// provider, google, which cannot look an asin up, and no --providers is
-	// set: audit_matched refuses it alone, and deep skips it saying so
+	// set: audit_matched and audit_abridged refuse it, and deep skips them
+	// saying so
 	deep := call(t, "audit_all", map[string]any{"library": "Fiction", "deep": true})
-	if skipped := strs(t, deep["skipped"], "skipped"); !slices.Equal(skipped, []string{"audit_matched"}) {
-		t.Errorf("deep skipped %v, want audit_matched alone", skipped)
+	if skipped := strs(t, deep["skipped"], "skipped"); !slices.Equal(skipped, []string{"audit_matched", "audit_abridged"}) {
+		t.Errorf("deep skipped %v, want audit_matched and audit_abridged", skipped)
 	}
 	const onGoogle = `library "Fiction" is on the google provider, which cannot look up an asin`
 	for _, row := range rows(t, deep["not_run"], "not_run") {

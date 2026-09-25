@@ -508,8 +508,8 @@ func TestAuditAllMatchesTheAudits(t *testing.T) {
 	if !ok {
 		t.Fatalf("skipped is %T, want a list", all["skipped"])
 	}
-	if !slices.Equal(skipped, []any{"audit_covers", "audit_unembedded", "audit_matched"}) {
-		t.Errorf("skipped = %v, want the three per-item-request audits", all["skipped"])
+	if !slices.Equal(skipped, []any{"audit_covers", "audit_unembedded", "audit_matched", "audit_abridged"}) {
+		t.Errorf("skipped = %v, want the four per-item-request audits", all["skipped"])
 	}
 	if _, ran := found["audit_covers"]; ran || slices.Contains(clean, any("audit_covers")) {
 		t.Errorf("audit_covers was reported without deep: %v", all)

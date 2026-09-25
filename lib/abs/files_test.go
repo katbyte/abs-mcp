@@ -89,3 +89,44 @@ func TestAnUploadArrivesWhole(t *testing.T) {
 		t.Errorf("fields = %v", gotFields)
 	}
 }
+
+// A ranged read passes the Range through with the key, and hands back the
+// 206 whole, Content-Range included, which is what a seeking reader needs; a
+// refusal is an HTTPError like any other.
+func TestARangedReadPassesTheRangeThrough(t *testing.T) {
+	t.Parallel()
+
+	file := []byte("0123456789abcdef")
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/items/li_1/file/42" {
+			http.NotFound(w, r)
+			return
+		}
+		gotAuth = r.Header.Get("Authorization")
+		http.ServeContent(w, r, "a.mp3", time.Time{}, bytes.NewReader(file))
+	}))
+	defer srv.Close()
+
+	c, err := New(srv.URL, "k")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := c.ItemFileRange(t.Context(), "li_1", "42", "bytes=10-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusPartialContent || string(got) != "abcdef" || resp.Header.Get("Content-Range") != "bytes 10-15/16" || gotAuth != "Bearer k" {
+		t.Errorf("ranged read = %d %q %q with %q; want 206 \"abcdef\" \"bytes 10-15/16\" with the key", resp.StatusCode, got, resp.Header.Get("Content-Range"), gotAuth)
+	}
+
+	missing, err := c.ItemFileRange(t.Context(), "li_1", "43", "")
+	if err == nil {
+		_ = missing.Body.Close()
+	}
+	if !IsNotFound(err) {
+		t.Errorf("a file the server does not have = %v, want a 404", err)
+	}
+}

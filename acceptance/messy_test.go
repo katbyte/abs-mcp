@@ -101,6 +101,7 @@ func TestMessySeries(t *testing.T) {
 
 	t.Run("numbering", func(t *testing.T) {
 		padding := map[string]string{}
+		folders := map[string]string{}
 		var unlinked []string
 		for _, row := range rows(t, out["numbering"], "numbering") {
 			title, _ := row["title"].(string)
@@ -109,7 +110,24 @@ func TestMessySeries(t *testing.T) {
 				padding[title], _ = row["suggest"].(string)
 			case "unlinked":
 				unlinked = append(unlinked, title)
+			case "folder_style":
+				folders[title], _ = row["suggest"].(string)
 			}
+		}
+		// the Wheel of Time folders spell the series two ways, two and two:
+		// the two without its article are the ones renamed, to the spelling
+		// that sorts first
+		wantFolders := map[string]string{
+			"The Dragon Reborn": "Robert Jordan/The Wheel of Time - 03 - The Dragon Reborn",
+			"The Shadow Rising": "Robert Jordan/The Wheel of Time - 04 - The Shadow Rising",
+		}
+		for title, want := range wantFolders {
+			if folders[title] != want {
+				t.Errorf("folder_style for %s = %q, want %q", title, folders[title], want)
+			}
+		}
+		if len(folders) != len(wantFolders) {
+			t.Errorf("folder_style flagged %v, want only the Wheel of Time folders without the article", folders)
 		}
 		if padding["The Light Fantastic"] != "Discworld #02" || padding["Sourcery"] != "Discworld #05" {
 			t.Errorf("padding = %v, want #2 and #5 restyled as two digits", padding)
