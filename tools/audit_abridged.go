@@ -52,6 +52,18 @@ const (
 	spreadMinChapters = 5
 	spreadMinSeconds  = 60.0
 	spreadMinCover    = 0.5
+	// spreadMinCut is how much shorter one reading must be than the other to
+	// be read as cut rather than read faster: Morgan's abridged Gods
+	// Themselves is 32% shorter than Brick's, while two copies a few percent
+	// apart are one recording, or two paces, split into sections two ways
+	spreadMinCut = 0.10
+	// spreadMaxDrift is how far the middle chapter's ratio may sit from the
+	// ratio of the two whole readings before the chapters are taken not to
+	// line up: two releases that cut the book at different points, under
+	// the same names, compare different stretches of text. World of Ptavvs,
+	// 6.83h against 5.92h (1.15), gave a middle ratio of 2.60; the real cut,
+	// Gods Themselves, 1.38 against 1.44
+	spreadMaxDrift = 1.3
 )
 
 var (
@@ -401,9 +413,9 @@ func sweepReadings(ctx context.Context, client *abs.Client, lib *abs.Library, fi
 				if short.Media.Duration > long.Media.Duration {
 					short, long = long, short
 				}
-				// two copies the same length are one recording chaptered two
-				// ways, not a cut
-				if short.Media.Duration <= 0 || short.Media.Duration >= long.Media.Duration*(1-abridgedTolerance) {
+				// two copies near one length are one recording, or two paces,
+				// chaptered two ways, not a cut
+				if short.Media.Duration <= 0 || short.Media.Duration >= long.Media.Duration*(1-spreadMinCut) {
 					continue
 				}
 				sp, lo, hi, n, ok := chapterSpread(long, short)
@@ -482,6 +494,14 @@ func chapterSpread(long, short *abs.Item) (spread, lo, hi float64, n int, ok boo
 	if lo <= 0 {
 		return 0, 0, 0, len(ratios), false
 	}
+	// sections that line up run, in the middle, about as much longer as the
+	// whole reading does; far from it, they are different stretches of text
+	if short.Media.Duration > 0 {
+		whole := long.Media.Duration / short.Media.Duration
+		if mid := decile(ratios, 5); mid > whole*spreadMaxDrift || mid < whole/spreadMaxDrift {
+			return 0, 0, 0, len(ratios), false
+		}
+	}
 	return hi / lo, lo, hi, len(ratios), true
 }
 
@@ -525,7 +545,7 @@ func registerAbridgedAudit(r *registry) {
 		Name: "audit_abridged",
 		Description: "Find books that are probably abridged but not marked so: the abridged flag is off and neither the title nor the folder says abridged (or dramatised). Two checks. " +
 			"The store: each book is searched by title and author, and its editions there compared by length: abridged_length is within 5% of an edition the store marks abridged and of no unabridged one; far_shorter is under 60% of the shortest unabridged edition, where the fastest reader against the slowest measured came to 77%. " +
-			"The library: two readings of one book (same title and author, a parenthetical such as the reader's name aside) are compared chapter by chapter, matched by title; two unabridged readings keep a steady length ratio from chapter to chapter, spread 1.05 to 1.19 in the cases measured, and uneven_chapters is the shorter of a pair spread over 1.35, cut more in some chapters than others. That needs chapter titles naming the book's own chapters in both, and fetches the books held twice whole; it runs at offset 0 only. " +
+			"The library: two readings of one book (same title and author, a parenthetical such as the reader's name aside) are compared chapter by chapter, matched by title; two unabridged readings keep a steady length ratio from chapter to chapter, spread 1.05 to 1.19 in the cases measured, and uneven_chapters is the shorter of a pair spread over 1.35, cut more in some chapters than others. That needs chapter titles naming the book's own chapters in both, and fetches the books held twice whole; it runs at offset 0 only. Two readings within 10% of each other's length are not compared (a pace, not a cut), nor two whose chapters do not line up, where the middle chapter's ratio is far from the whole readings' (two releases cutting the book at different points under the same names). " +
 			"The store check is one search per book (more when providers lists several and the first has no edition), so it works through limit books per call in the order they were added, over a library or a filter; audit_all runs it only with deep. Books under ten minutes, and ones whose provider tag says none, are not searched. " +
 			"Fix with item_edit abridged=true; a far_shorter book may instead be one part of a split release, or missing files, so check it first.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in abridgedIn) (*mcp.CallToolResult, abridgedOut, error) {

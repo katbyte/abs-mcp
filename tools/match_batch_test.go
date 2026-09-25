@@ -264,10 +264,10 @@ func TestAuditMatched(t *testing.T) {
 	}
 }
 
-// serveListing answers a library's item listing from books, paged by the
+// serveListing answers the library's item listing from books, paged by the
 // limit and page asked for, the way the server pages.
-func serveListing(f *fakeABS, library string, books ...string) {
-	f.mux.HandleFunc("GET /api/libraries/"+library+"/items", func(w http.ResponseWriter, r *http.Request) {
+func serveListing(f *fakeABS, books ...string) {
+	f.mux.HandleFunc("GET /api/libraries/"+libID+"/items", func(w http.ResponseWriter, r *http.Request) {
 		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 		pg, _ := strconv.Atoi(r.URL.Query().Get("page"))
 		if limit <= 0 {
