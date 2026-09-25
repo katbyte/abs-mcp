@@ -300,7 +300,7 @@ func TestMatchedWindowsCountMatchedBooks(t *testing.T) {
 
 	f := newFakeABS(t)
 	audibleLibrary(f)
-	serveListing(f, libID,
+	serveListing(f,
 		item("m1", "One", `"asin":"B001"`, ""),
 		item("u1", "Unmatched A", "", ""),
 		item("u2", "Unmatched B", "", ""),

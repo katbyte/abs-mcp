@@ -83,7 +83,7 @@ func TestAuditAbridgedAgainstTheStore(t *testing.T) {
 	f.json("GET /api/libraries/"+libID+"/series", `{"results":[],"total":0}`)
 	f.json("GET /api/libraries/"+libID+"/authors", `{"results":[],"total":0}`)
 	f.json("POST /api/items/batch/get", `{"libraryItems":[]}`)
-	serveListing(f, libID,
+	serveListing(f,
 		shelved("heartfire", "Orson Scott Card/Alvin Maker - 05 - Heartfire (Nana Visitor)", "Heartfire (Nana Visitor)", "Orson Scott Card", 21420, `"narratorName":"Nana Visitor"`, `"tags":["zz-provider:audible.ca"]`),
 		shelved("enchantment", "Orson Scott Card/Enchantment (Alyssa Bresnahan)", "Enchantment", "Orson Scott Card", 23364, "", ""),
 		shelved("shock", "politics/The Shock Doctrine", "The Shock Doctrine: The Rise of Disaster Capitalism, Part 1", "Naomi Klein", 32580, "", ""),
