@@ -283,7 +283,7 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 
 	cert, err := p.certFor(host)
 	if err != nil {
-		p.logger.Printf("cert for %s: %v", host, err)
+		p.logger.Printf("cert for %s: %v", logSafe(host), err)
 		return
 	}
 	conn := tls.Server(raw, &tls.Config{
@@ -294,7 +294,7 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 	// the tunnel and then sent nothing, which is silence in the log exactly
 	// where an answer is needed
 	if err := raw.SetDeadline(time.Now().Add(30 * time.Second)); err != nil {
-		p.logger.Printf("deadline for %s: %v", host, err)
+		p.logger.Printf("deadline for %s: %v", logSafe(host), err)
 		return
 	}
 	if err := conn.HandshakeContext(r.Context()); err != nil {
@@ -302,14 +302,14 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 		// NODE_TLS_REJECT_UNAUTHORIZED=0 the latter should not happen, so
 		// say so rather than leave the server timing out against a silent
 		// proxy
-		p.logger.Printf("tls handshake with %s: %v", host, err)
+		p.logger.Printf("tls handshake with %s: %v", logSafe(host), err)
 		return
 	}
 	defer func() { _ = conn.Close() }()
 	defer dropReader(conn)
 
 	if err := raw.SetDeadline(time.Time{}); err != nil {
-		p.logger.Printf("clearing the deadline for %s: %v", host, err)
+		p.logger.Printf("clearing the deadline for %s: %v", logSafe(host), err)
 		return
 	}
 
@@ -324,7 +324,7 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 			// EOF is the peer closing a finished tunnel; anything else, on a
 			// tunnel that carried nothing, is worth saying out loud
 			if served == 0 {
-				p.logger.Printf("tunnel to %s carried no request: %v", host, err)
+				p.logger.Printf("tunnel to %s carried no request: %v", logSafe(host), err)
 			}
 
 			return
@@ -364,11 +364,11 @@ func (p *Proxy) respond(w http.ResponseWriter, r *http.Request, host string) {
 	k := key(r.Method, host, path, r.URL.Query())
 
 	if i, ok := p.store.lookup(k); ok && !p.stale(k) {
-		p.logger.Printf("replay %s -> %d", k, i.Status)
+		p.logger.Printf("replay %s -> %d", logSafe(k), i.Status)
 		if p.mode == Verify {
 			live, err := p.fetch(r, host, k, path)
 			if err != nil {
-				p.logger.Printf("verify %s: %v", k, err)
+				p.logger.Printf("verify %s: %v", logSafe(k), err)
 			} else {
 				p.compare(i, live)
 			}
@@ -381,19 +381,26 @@ func (p *Proxy) respond(w http.ResponseWriter, r *http.Request, host string) {
 		p.missMu.Lock()
 		p.misses = append(p.misses, k)
 		p.missMu.Unlock()
-		p.logger.Printf("REPLAY MISS %s (record it with %s=1, which records only what is missing)", k, RecordEnv)
+		p.logger.Printf("REPLAY MISS %s (record it with %s=1, which records only what is missing)", logSafe(k), RecordEnv)
 		http.Error(w, "providerproxy: no recording for "+k, http.StatusBadGateway)
 		return
 	}
 
 	i, err := p.record(r, host, k, path)
 	if err != nil {
-		p.logger.Printf("record %s: %v", k, err)
+		p.logger.Printf("record %s: %v", logSafe(k), err)
 		http.Error(w, "providerproxy: "+err.Error(), http.StatusBadGateway)
 		return
 	}
-	p.logger.Printf("recorded %s -> %d", k, i.Status)
+	p.logger.Printf("recorded %s -> %d", logSafe(k), i.Status)
 	writeInteraction(w, i)
+}
+
+// logSafe keeps a value taken off a request to one line of the log: a
+// newline in a url or a host would start a line the proxy never wrote.
+func logSafe(s string) string {
+	s = strings.ReplaceAll(s, "\n", "")
+	return strings.ReplaceAll(s, "\r", "")
 }
 
 // sawTunnel logs the first CONNECT for a host, so a run that records or
@@ -409,7 +416,7 @@ func (p *Proxy) sawTunnel(host string) {
 		return
 	}
 	p.tunnels[host] = true
-	p.logger.Printf("tunnel to %s", host)
+	p.logger.Printf("tunnel to %s", logSafe(host))
 }
 
 // fetch calls the real provider and returns what it sent back, without
@@ -474,7 +481,7 @@ func (p *Proxy) record(r *http.Request, host, k, path string) (*interaction, err
 		return nil, err
 	}
 	if i.Status == http.StatusTooManyRequests || i.Status >= 500 {
-		p.logger.Printf("not recording %s: the provider answered %d", k, i.Status)
+		p.logger.Printf("not recording %s: the provider answered %d", logSafe(k), i.Status)
 		return i, nil
 	}
 	p.store.put(i.Host, i)
