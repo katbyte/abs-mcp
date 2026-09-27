@@ -28,9 +28,10 @@ func TestDuplicateCandidatesFromTheZbooksSort(t *testing.T) {
 	f := newFakeABS(t)
 	oneLibrary(f)
 	f.json("GET /api/libraries/"+libID+"/items", page(
-		// an edition in the title, and two asins: never a group, but a candidate
-		shelfBook("a1", osc+"/The Ender Saga - 01 - Ender's Game", "Ender's Game", osc, "", 37981, 2, "B000ENDER1"),
-		shelfBook("a2", osc+"/The Ender Saga - 01 - Ender's Game (20th Anniversary full cast)", "Ender's Game (20th Anniversary full cast)", osc, "", 40307, 107, "B000ENDER2"),
+		// an edition in the title, 6% longer; the other unmatched, titled by
+		// its folder and with a track tag for its author, filed beside it
+		shelfBook("a1", osc+"/The Ender Saga - 01 - Ender's Game", "The Ender Saga - 01 - Ender's Game", "Enders Game 1", "", 37981, 2, ""),
+		shelfBook("a2", osc+"/The Ender Saga - 01 - Ender's Game (20th Anniversary full cast)", "Ender's Game (20th Anniversary full cast)", osc, "", 40302, 107, "B000ENDER2"),
 		// filed under another author, 3% longer
 		shelfBook("b1", "Peter F. Hamilton/Salvation Sequence - 03 - The Saints of Salvation", "The Saints of Salvation", "Peter F. Hamilton", "", 60887, 1, ""),
 		shelfBook("b2", "Philip K. Dick/The Saints of Salvation", "The Saints of Salvation: Salvation Sequence Series, Book 3", "Philip K. Dick", "", 62879, 52, ""),
@@ -58,6 +59,10 @@ func TestDuplicateCandidatesFromTheZbooksSort(t *testing.T) {
 		// one author, lengths within 1%, and nothing in the tags joins them
 		shelfBook("s1", osc+"/Speaker for the Dead", "Speaker for the Dead", osc, "", 50000, 12, ""),
 		shelfBook("s2", osc+"/Xenocide", "Xenocide", osc, "", 50200, 14, ""),
+		// two volumes of one series: one title once the subtitle goes, one
+		// reader, lengths within 1%
+		shelfBook("v1", "Mushoku Tensei/Mushoku Tensei - Jobless Reincarnation, Vol. 17", "Mushoku Tensei: Jobless Reincarnation, Vol. 17", "Cliff Kurt", "Rifujin na Magonote", 25000, 1, ""),
+		shelfBook("v2", "Mushoku Tensei/Mushoku Tensei - Jobless Reincarnation, Vol. 18", "Mushoku Tensei: Jobless Reincarnation, Vol. 18", "Cliff Kurt", "Rifujin na Magonote", 25100, 1, ""),
 		// joined by their asin already: a group, not a candidate
 		shelfBook("q1", "Neal Stephenson/Anathem", "Anathem", "Neal Stephenson", "", 118000, 1, "B001ANATHM"),
 		shelfBook("q2", "Neal Stephenson/Anathem (Unabridged)", "Anathem: A Novel", "Neal Stephenson", "", 118100, 30, "B001ANATHM"),
@@ -87,7 +92,7 @@ func TestDuplicateCandidatesFromTheZbooksSort(t *testing.T) {
 		why[str(t, items[0]["id"])+"+"+str(t, items[1]["id"])] = str(t, c["why"])
 	}
 	want := map[string]string{
-		"a1+a2": `the same title, "Ender's Game", and author, one marked "20th Anniversary full cast"; lengths 5.8% apart`,
+		"a1+a2": `the same title, "Ender's Game", and author folder, one marked "20th Anniversary full cast"; lengths 5.8% apart`,
 		"b1+b2": `the same title, "The Saints of Salvation", under another author (Peter F. Hamilton, Philip K. Dick); lengths 3.2% apart; one is a single file, the other 52`,
 		"c1+c2": `the same title, "The Redemption of Time", and author; lengths 0.0% apart; one is a single file, the other 16`,
 		"d1+d2": `the album tag of the first, "Treason", is the second's title; same author, lengths 0.7% apart`,
@@ -106,7 +111,8 @@ func TestDuplicateCandidatesFromTheZbooksSort(t *testing.T) {
 	}
 
 	// the tags were read only for books one author wrote within 1% of each
-	// other's length: Treason's pair, and two pairs that are not one book
+	// other's length and not numbered apart: Treason's pair, and a pair that
+	// is not one book; Heartfire and Red Prophet are Alvin Maker 5 and 2
 	reqs := f.requests("/api/items/batch/get")
 	fetched := make([]string, 0, len(reqs)*embedBatchSize)
 	for _, req := range reqs {
@@ -117,7 +123,7 @@ func TestDuplicateCandidatesFromTheZbooksSort(t *testing.T) {
 		fetched = append(fetched, body.IDs...)
 	}
 	slices.Sort(fetched)
-	if !slices.Equal(fetched, []string{"d1", "d2", "e1", "f1", "s1", "s2"}) {
+	if !slices.Equal(fetched, []string{"d1", "d2", "s1", "s2"}) {
 		t.Errorf("fetched whole = %v, want only the pairs by one author within 1%%", fetched)
 	}
 
@@ -142,6 +148,7 @@ func TestCandidateFactsReadTitlesAndFolders(t *testing.T) {
 		"'All You Zombies'":                                      "all you zombies",
 		"A Planet Called Treason":                                "planet called treason",
 		"The Gods Themselves (Morgan, Abridged)":                 "gods themselves",
+		"The Ender Saga - 01 - Ender's Game":                     "enders game",
 	} {
 		if got := candidateCore(title); got != want {
 			t.Errorf("candidateCore(%q) = %q, want %q", title, got, want)
@@ -160,6 +167,7 @@ func TestCandidateFactsReadTitlesAndFolders(t *testing.T) {
 		{"the author in brackets is not a reader", facts("The Redemption of Time", "Liu Cixin/The Redemption of Time (Baoshu) (single file)", "Baoshu", ""), nil, [][]string{{"single file"}}},
 		{"a year and a novel are neither", facts("Dune (1965) (A Novel)", "Frank Herbert/Dune", "Frank Herbert", ""), nil, nil},
 		{"the field, full cast aside", facts("Red Prophet", "Orson Scott Card/Red Prophet", "Orson Scott Card", "Full Cast, Emily Janice Card"), [][]string{{"emily", "janice", "card"}}, nil},
+		{"a note on the copy is no reader", facts("Dune", "Frank Herbert/Dune (old rip) (copy)", "Frank Herbert", ""), nil, nil},
 	} {
 		var labels [][]string
 		for _, l := range c.got.labels {
@@ -180,5 +188,76 @@ func TestCandidateFactsReadTitlesAndFolders(t *testing.T) {
 	}
 	if unnamed := facts("X", "", "Larry Niven", ""); unnamed.otherReader(&delotel) {
 		t.Error("a copy naming no reader read as another reading")
+	}
+}
+
+// What tells two items apart as two books, however alike their titles: a
+// number in the name, folders naming different books, another place in one
+// series where the folders do not name one book. And what does not: one
+// recording filed under two numberings.
+func TestDifferentBooks(t *testing.T) {
+	t.Parallel()
+
+	book := func(title, path, author string, series ...string) candidateFacts {
+		return candidateFactsOf(&itemSummary{Title: title, Path: path, Author: author, Series: series})
+	}
+	vol17 := book("Mushoku Tensei: Jobless Reincarnation, Vol. 17", "Mushoku Tensei/Mushoku Tensei - Jobless Reincarnation, Vol. 17", "Cliff Kurt", "Mushoku Tensei: Jobless Reincarnation #17")
+	vol18 := book("Mushoku Tensei: Jobless Reincarnation, Vol. 18", "Mushoku Tensei/Mushoku Tensei - Jobless Reincarnation, Vol. 18", "Cliff Kurt")
+	matched18 := book("Mushoku Tensei: Jobless Reincarnation", "Mushoku Tensei/Mushoku Tensei - Jobless Reincarnation, Vol. 18", "Cliff Kurt", "Mushoku Tensei: Jobless Reincarnation #18")
+	honor1, honor2 := book("Honor", "Radclyffe/Honor - 01 - Above All", "Radclyffe"), book("Honor", "Radclyffe/Honor - 02 - Honor Bound", "Radclyffe")
+	honorBound := book("Honor", "Radclyffe/Honor Bound", "Radclyffe", "Honor #2")
+	for _, c := range []struct {
+		name     string
+		a, b     candidateFacts
+		byFolder bool
+		want     string
+	}{
+		{"volumes 17 and 18", vol17, vol18, false, "numbered apart in their names"},
+		{"volume 17 and a copy of 18 numbered by its folder and series", vol17, matched18, false, "numbered apart in their names"},
+		{"one volume, numbered by its title and by its folder", vol18, matched18, true, ""},
+		{"Vol. 17 and Vol. 18, one naming more of the series", book("Mushoku Tensei: Jobless Reincarnation, Vol. 17", "", "Cliff Kurt"), book("Mushoku Tensei: Vol. 18", "", "Cliff Kurt"), false, "numbered apart in their names"},
+		{"Vol. 17 in a title and Volume 18 in a folder", vol17, book("Mushoku Tensei: Jobless Reincarnation", "Mushoku Tensei/Mushoku Tensei - Jobless Reincarnation, Volume 18", "Cliff Kurt"), false, "numbered apart in their names"},
+		{"part 1 volumes 2 and 3", book("Ascendance of a Bookworm", "Miya Kazuki/Ascendance of a Bookworm - Part 1 Volume 2", "Miya Kazuki"), book("Ascendance of a Bookworm", "Miya Kazuki/Ascendance of a Bookworm - Part 1 Volume 3", "Miya Kazuki"), true, "numbered apart in their names"},
+		{"Honor 1 and 2, titled alike", honor1, honor2, true, "at different places in one series"},
+		{"Honor 1 and 2, the folders alone set aside", honor1, honor2, false, "at different places in one series"},
+		{"Honor 1 by its folder and 2 by its series", honor1, honorBound, true, "at different places in one series"},
+		{"folders naming different books, nothing more", book("Foundation", "Isaac Asimov/Foundation", "Isaac Asimov"), book("Foundation", "Isaac Asimov/Foundation and Empire", "Isaac Asimov"), true, `their folders name different books, "foundation" and "foundation and empire"`},
+		{"the same, with the folders set aside", book("Foundation", "Isaac Asimov/Foundation", "Isaac Asimov"), book("Foundation", "Isaac Asimov/Foundation and Empire", "Isaac Asimov"), false, ""},
+		{"a book numbered Book 4 and Book 1 in two series' folders", book("Mort", "Terry Pratchett/Discworld/Book 04 - Mort", "Terry Pratchett"), book("Mort", "Terry Pratchett/Death/Book 01 - Mort", "Terry Pratchett"), true, "numbered apart in their names"},
+		{"Narnia 6 and 1 by their titles, one folder", book("The Magician's Nephew: The Chronicles of Narnia, Book 6", "C. S. Lewis/The Magician's Nephew", "C. S. Lewis"), book("The Magician's Nephew: The Chronicles of Narnia, Book 1", "C. S. Lewis/The Magician's Nephew (2)", "C. S. Lewis"), true, "numbered apart in their names"},
+		{"Honor 1 and 2 in Title - Author folders", book("Honor", "Radclyffe/Above All - Radclyffe", "Radclyffe", "Honor #1"), book("Honor", "Radclyffe/Honor Bound - Radclyffe", "Radclyffe", "Honor #2"), true, "at different places in one series"},
+		{"Title - Author folders naming different books", book("Honor", "Radclyffe/Above All - Radclyffe", "Radclyffe"), book("Honor", "Radclyffe/Honor Bound - Radclyffe", "Radclyffe"), true, `their folders name different books, "above all radclyffe" and "honor bound radclyffe"`},
+		{"a bare number is no note on the copy", book("Honor", "Radclyffe/Honor - 1", "Radclyffe"), book("Honor", "Radclyffe/Honor - 2", "Radclyffe"), true, `their folders name different books, "honor 1" and "honor 2"`},
+		{"a number with nothing before it against one after a series name", book("Mort", "Terry Pratchett/Discworld/Book 04 - Mort", "Terry Pratchett"), book("Mort: Death, Book 1", "", "Terry Pratchett"), false, ""},
+		{"Honor #1 and #2", book("Honor", "Radclyffe/Honor #1", "Radclyffe"), book("Honor", "Radclyffe/Honor #2", "Radclyffe"), false, "numbered apart in their names"},
+		{"Honor 2 by its folder and by its series", honor2, honorBound, true, ""},
+		// one book numbered two ways is kept apart too, and shown in split:
+		// a false split costs less than a false group
+		{"Narnia numbered in two orders", book("The Magician's Nephew", "C. S. Lewis/The Chronicles of Narnia - 06 - The Magician's Nephew", "C. S. Lewis"), book("The Magician's Nephew", "C. S. Lewis/The Chronicles of Narnia - 01 - The Magician's Nephew", "C. S. Lewis"), true, "at different places in one series"},
+		{"Mort as Discworld 4 and Death 1", book("Mort", "Terry Pratchett/Discworld/04 - Mort", "Terry Pratchett"), book("Mort", "Terry Pratchett/Death/01 - Mort", "Terry Pratchett"), true, ""},
+		{"Mort numbered in two series by its titles", book("Mort: Discworld, Book 4", "Mort.m4b", "Terry Pratchett"), book("Mort: Death, Book 1", "Mort (Death).m4b", "Terry Pratchett"), true, ""},
+		{"Ender's Game and its anniversary copy", book("The Ender Saga - 01 - Ender's Game", "Orson Scott Card/The Ender Saga - 01 - Ender's Game", "Enders Game 1"), book("Ender's Game (20th Anniversary full cast)", "Orson Scott Card/The Ender Saga - 01 - Ender's Game (20th Anniversary full cast)", "Orson Scott Card", "Ender's Saga #1"), true, ""},
+		{"an author and title folder beside a title folder", book("Dune", "Frank Herbert - Dune", "Frank Herbert"), book("Dune", "Frank Herbert/Dune (2)", "Frank Herbert"), true, ""},
+		{"no numbers and no folder to read", book("Dune", "", "Frank Herbert"), book("Dune", "Frank Herbert/Dune", "Frank Herbert"), true, ""},
+	} {
+		if got, back := c.a.differentBooks(&c.b, c.byFolder), c.b.differentBooks(&c.a, c.byFolder); got != c.want || back != c.want {
+			t.Errorf("%s: differentBooks = %q and back %q, want %q (numbers %v %v, names %v %v, positions %v %v)", c.name, got, back, c.want, c.a.numbers, c.b.numbers, c.a.names, c.b.names, c.a.positions, c.b.positions)
+		}
+	}
+
+	// the author's folder counts, a genre shelf does not
+	for _, c := range []struct {
+		name string
+		a, b candidateFacts
+		want bool
+	}{
+		{"filed under the author one of them names", book("Ender's Game", "Orson Scott Card/Ender's Game", "Enders Game 1"), book("Ender's Game", "Orson Scott Card/Ender's Game (full cast)", "Orson Scott Card"), true},
+		{"one genre shelf, two authors", book("Legend", "Fiction/Legend (Unabridged)", "David Gemmell"), book("Legend", "Fiction/Legend", "Marie Lu"), false},
+		{"one genre shelf above two author folders", book("Legend", "Fantasy/David Gemmell/Legend", "David Gemmell"), book("Legend", "Fantasy/Marie Lu/Legend", "Marie Lu"), false},
+		{"the library's root", book("Legend", "Legend", "David Gemmell"), book("Legend", "Legend (2)", "David Gemmell"), false},
+	} {
+		if got := c.a.sameShelf(&c.b); got != c.want || c.b.sameShelf(&c.a) != c.want {
+			t.Errorf("%s: sameShelf = %v, want %v", c.name, got, c.want)
+		}
 	}
 }

@@ -681,9 +681,10 @@ func TestJourneyOneASINOnTwoBooks(t *testing.T) {
 }
 
 // Copies and editions: the duplicates audit joins a matched copy with the
-// unmatched copy beside it, joins two books that share an isbn however it is
-// hyphenated, and never joins two books whose asins differ, since those are
-// two recordings of one work that a collector keeps on purpose. It catches a
+// unmatched copy beside it, joins two copies that share an isbn however it
+// is hyphenated, and never joins two books whose asins differ, since those
+// are two recordings of one work that a collector keeps on purpose, nor two
+// books a wrong match gave one isbn, which split shows. It catches a
 // grouping by a single key (the asin, else the title), which splits the copy
 // a scan brought in from the one already matched.
 func TestJourneyDuplicatesJoinCopiesNotEditions(t *testing.T) {
@@ -693,7 +694,7 @@ func TestJourneyDuplicatesJoinCopiesNotEditions(t *testing.T) {
 	blue := messyID(t, "Kim Stanley Robinson/Mars Trilogy - 03 - Blue Mars")
 	t.Cleanup(func() {
 		for _, id := range []string{inSeries, loose} {
-			call(t, "item_edit", map[string]any{"item": id, "clear": []any{"asin"}})
+			call(t, "item_edit", map[string]any{"item": id, "clear": []any{"asin", "isbn"}})
 		}
 		for _, id := range []string{red, blue} {
 			call(t, "item_edit", map[string]any{"item": id, "clear": []any{"isbn"}})
@@ -734,16 +735,27 @@ func TestJourneyDuplicatesJoinCopiesNotEditions(t *testing.T) {
 		t.Errorf("one asin on both: %q %v, want grouped by the asin and the title", key, ids)
 	}
 
-	// an isbn two different titles share, hyphenated on one of them
+	// one isbn on both copies, hyphenated on one of them: grouped by it too
+	call(t, "item_edit", map[string]any{"item": inSeries, "isbn": "978-0-06-223571-9"})
+	call(t, "item_edit", map[string]any{"item": loose, "isbn": "9780062235719"})
+	if key, ids := groupOf(t, inSeries); !slices.Equal(ids, morts) || !strings.Contains(key, "isbn:9780062235719") {
+		t.Errorf("one isbn on both, hyphenated on one: %q %v, want grouped by it", key, ids)
+	}
+
+	// an isbn two different books share, as a wrong match leaves it: the
+	// print edition's number joins no two books, and split shows them
 	call(t, "item_edit", map[string]any{"item": red, "isbn": "978-0-553-56073-8"})
 	call(t, "item_edit", map[string]any{"item": blue, "isbn": "9780553560738"})
-	mars := []string{red, blue}
-	slices.Sort(mars)
-	if key, ids := groupOf(t, red); !slices.Equal(ids, mars) || key != "isbn:9780553560738" {
-		t.Errorf("a shared isbn: %q %v, want Red and Blue Mars grouped by it", key, ids)
-	}
-	call(t, "item_edit", map[string]any{"item": blue, "clear": []any{"isbn"}})
 	if key, ids := groupOf(t, red); ids != nil {
-		t.Errorf("the isbn group outlived the clear: %q %v", key, ids)
+		t.Errorf("Red and Blue Mars on one isbn were grouped: %q %v", key, ids)
+	}
+	var split map[string]any
+	for _, row := range rows(t, call(t, "audit_duplicates", messy)["split"], "split") {
+		if row["key"] == "isbn:9780553560738" {
+			split = row
+		}
+	}
+	if split == nil || num(t, split["copies"], "copies") != 2 || !strings.Contains(fmt.Sprint(split["why"]), "at different places in one series") {
+		t.Errorf("split for the shared isbn = %v, want both books, at different places in one series", split)
 	}
 }

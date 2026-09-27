@@ -8,7 +8,9 @@ import (
 	"path"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/katbyte/abs-mcp/lib/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -38,6 +40,18 @@ const (
 	// of 12.1h, The Shock Doctrine 9h of 22.3h); a fast reader against a
 	// slow one at 77% (Destroyer of Worlds, 10.95h against 14.2h).
 	abridgedShare = 0.6
+	// a book under shorterWorkSeconds and under shorterWorkShare of the
+	// shortest unabridged edition is more likely another, shorter work
+	// sharing the title than a cut: Heinlein's "—All You Zombies—", one
+	// 28-minute story, came to 15% of the collection named after it, and The
+	// Green Hills of Earth read alone to 7% of its collection
+	shorterWorkSeconds = 3600
+	shorterWorkShare   = 0.2
+	// unless the store sells a cut near its length: an abridged edition
+	// under this many times the book's length says a cut that short exists,
+	// and the book is judged as one (a 50-minute Matilda beside Audible's
+	// 58-minute abridged edition is far_shorter, not another work)
+	shorterWorkCutRatio = 2.0
 	// abridgedMinSeconds: an item this short is a sample or a stub, not a
 	// reading of a book, and asking the store about it only says it is
 	// shorter than the book
@@ -70,9 +84,17 @@ var (
 	// abridgedWord is abridged and not unabridged, which has no word
 	// boundary before the a
 	abridgedWord = regexp.MustCompile(`(?i)\babridged\b`)
-	// a dramatisation is shorter than the book by design; it is not an
-	// abridgement to flag
-	dramatisedWord = regexp.MustCompile(`(?i)\bdramati[sz]`)
+	// a production - a dramatisation, a full cast, a radio or audio drama or
+	// play - is shorter than the book by design; it is not an abridgement to
+	// flag. "Neuromancer [Full Cast]", the BBC's 1h55m radio drama, came out
+	// far shorter than the 6h reading. Read by productionName, which first
+	// turns what a folder name joins words with into spaces. The BBC alone is
+	// not a production: a Book at Bedtime is one reader's cut, which is what
+	// this audit finds. "Dramatis Personae" and "The Dramatist" are not one
+	dramatisedWord = regexp.MustCompile(`(?i)\b(dramati[sz](e|ed|es|ing|ation|ations)\b|full[\s.\-]*cast\b|(radio|audio)([\s.\-]*(\d+|four))?[\s.\-]*(dramas?|plays?|theat(re|er)s?)\b|h(ö|oe)rspiele?\b)`)
+	// unabridgedWord: a production that says so is a reading of the whole
+	// book, "A Full-Cast Unabridged Recording", and is measured as one
+	unabridgedWord = regexp.MustCompile(`(?i)\bunabridged\b`)
 	// chapterNumber is the "12: " or "03 - " a chapter title opens with
 	chapterNumber = regexp.MustCompile(`^\d+\s*[:.-]?\s*`)
 	// readingNote is a parenthetical naming no number, "(Nana Visitor)" or
@@ -90,10 +112,11 @@ var abridgedFixes = map[string]string{
 	"abridged_length": "item_edit abridged=true; the edition's asin is this recording, for item_match_apply",
 	"far_shorter":     "item_edit abridged=true once it is confirmed cut: a book split into parts, or a copy with files missing, is far shorter too",
 	"uneven_chapters": "item_edit abridged=true",
+	"shorter_work":    "probably not abridged: a story or excerpt sharing the title of a longer work, or one part of a split release or a copy with most files missing. Check it with item_get; item_match for the shorter work itself, and item_edit abridged=true only if it proves a cut",
 }
 
 // abridgedProblemOrder is the order the rows come in, surest first.
-var abridgedProblemOrder = []string{"abridged_length", "uneven_chapters", "far_shorter"}
+var abridgedProblemOrder = []string{"abridged_length", "uneven_chapters", "far_shorter", "shorter_work"}
 
 type storeEdition struct {
 	ASIN     string `json:"asin,omitempty"`
@@ -117,9 +140,9 @@ type abridgedFinding struct {
 	Author   string           `json:"author,omitempty"`
 	Path     string           `json:"path,omitempty"`
 	Duration int              `json:"duration_s"`
-	Problem  string           `json:"problem"                     jsonschema:"abridged_length: within 5% of an edition the store marks abridged, and of no unabridged one; far_shorter: under 60% of the shortest unabridged edition, further than a reader's pace goes; uneven_chapters: against another reading of the book, its chapters are cut unevenly"`
+	Problem  string           `json:"problem"                     jsonschema:"abridged_length: within 5% of an edition the store marks abridged, and of no unabridged one; far_shorter: under 60% of the shortest unabridged edition, further than a reader's pace goes; shorter_work: probably not abridged - under an hour and under 20% of the shortest unabridged edition, with no abridged edition under twice its length, so more likely a shorter work sharing the title (a story beside the collection named after it) than a cut; it takes the place of far_shorter; uneven_chapters: against another reading of the book, its chapters are cut unevenly"`
 	Detail   string           `json:"detail"`
-	Edition  *storeEdition    `json:"edition,omitempty"           jsonschema:"abridged_length and far_shorter: the store's edition the book was measured against"`
+	Edition  *storeEdition    `json:"edition,omitempty"           jsonschema:"abridged_length, far_shorter and shorter_work: the store's edition the book was measured against"`
 	Reading  *abridgedReading `json:"other_reading,omitempty"     jsonschema:"uneven_chapters: the longer reading it was compared with, the one it differs from most"`
 	Spread   float64          `json:"spread,omitempty"            jsonschema:"uneven_chapters: the 90th percentile of the per-chapter length ratios over the 10th; two unabridged readings kept 1.05 to 1.19, and over 1.35 is reported"`
 	Chapters int              `json:"chapters_compared,omitempty" jsonschema:"uneven_chapters: chapters matched by title, each over a minute in both readings"`
@@ -130,15 +153,16 @@ type abridgedCounts struct {
 	AbridgedLength int `json:"abridged_length"`
 	FarShorter     int `json:"far_shorter"`
 	UnevenChapters int `json:"uneven_chapters"`
+	ShorterWork    int `json:"shorter_work"`
 }
 
 type abridgedOut struct {
 	Scanned    int               `json:"items_scanned"         jsonschema:"books in this call's window, abridged or not"`
-	Searched   int               `json:"store_checked"         jsonschema:"books in the window searched at the store; the rest are marked or say abridged or dramatised, are under ten minutes, or carry the provider tag's none"`
+	Searched   int               `json:"store_checked"         jsonschema:"books in the window searched at the store; the rest are marked or say abridged, name a production in their names or reader credit (dramatised, full cast, a radio or audio drama, play or theatre, a Hörspiel, and not also unabridged), are under ten minutes, or carry the provider tag's none"`
 	Compared   int               `json:"readings_compared"     jsonschema:"pairs of readings of one book whose chapters could be compared, at offset 0 only"`
-	Found      int               `json:"total_findings"`
+	Found      int               `json:"total_findings"        jsonschema:"every row, shorter_work among them though it is probably not abridged"`
 	Counts     abridgedCounts    `json:"counts"`
-	Findings   []abridgedFinding `json:"findings"              jsonschema:"surest first: abridged_length, uneven_chapters, far_shorter. A book can be a row under two problems"`
+	Findings   []abridgedFinding `json:"findings"              jsonschema:"surest first: abridged_length, uneven_chapters, far_shorter, shorter_work. A book can be a row under two problems"`
 	NextOffset int               `json:"next_offset,omitempty" jsonschema:"pass back as offset to search the next books; absent when every one has been searched"`
 }
 
@@ -152,6 +176,8 @@ func (o *abridgedOut) add(f abridgedFinding) {
 		o.Counts.FarShorter++
 	case "uneven_chapters":
 		o.Counts.UnevenChapters++
+	case "shorter_work":
+		o.Counts.ShorterWork++
 	}
 	o.Found++
 	o.Findings = append(o.Findings, f)
@@ -160,11 +186,40 @@ func (o *abridgedOut) add(f abridgedFinding) {
 // saysAbridged reports whether a book already says what this audit would:
 // the flag, or abridged in its title or its own folder or file name. Only the
 // book's own name counts: a shelf folder called "Abridged" says nothing about
-// a book filed under it by mistake. A dramatisation is left out with them.
+// a book filed under it by mistake. A production is left out with them: a
+// dramatisation, a full cast, a radio or audio drama or play.
 func saysAbridged(it *abs.Item) bool {
 	m := &it.Media.Metadata
 	text := m.Title + " " + m.Subtitle + " " + path.Base(strings.Trim(it.RelPath, "/"))
-	return m.Abridged || abridgedWord.MatchString(text) || dramatisedWord.MatchString(text)
+	// the reader credit counts for a production, "Full Cast" read it, and
+	// the name's "Unabridged" counts against it
+	return m.Abridged || abridgedWord.MatchString(nameWords(text)) || productionName(text+" "+m.NarratorDisplay())
+}
+
+// nameWords is a name with what a folder joins its words with - an
+// underscore, a slash, a plus, any space or dash - made a space or a
+// hyphen, so the words read as words: an underscore is a letter to \b, and
+// "Heartfire_Abridged" would not say abridged.
+func nameWords(s string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r == '_' || r == '/' || r == '+' || unicode.IsSpace(r) || r == 0xA0 || r == 0x202F:
+			return ' '
+		case unicode.Is(unicode.Pd, r) || r == 0x2212: // any dash or hyphen, and the minus sign
+			return '-'
+		}
+		return r
+	}, s)
+}
+
+// productionName reports whether a name says the recording is a production,
+// and not also that it is unabridged. A folder name joins its words with
+// anything - "Neuromancer_Full_Cast", "Full–Cast", "Full/Cast", a
+// non-breaking space - and an underscore is a letter to \b, so each of those
+// is a space before the words are read.
+func productionName(s string) bool {
+	s = nameWords(s)
+	return !unabridgedWord.MatchString(s) && dramatisedWord.MatchString(s)
 }
 
 // abridgedLimitMax is the most books one call searches the store for.
@@ -211,8 +266,10 @@ func storeTitled(it *abs.Item) *abs.Item {
 // so a store with none can be passed over for the next.
 func judgeEditions(it *abs.Item, results []abs.BookSearchResult, provider string) (row *abridgedFinding, editions int) {
 	book, probe := it.Media.Duration, storeTitled(it)
-	var near, shortest *abs.BookSearchResult // the closest abridged edition in tolerance; the shortest unabridged
-	nearDelta, unabridgedNear := math.Inf(1), false
+	// the closest abridged edition in tolerance; the shortest unabridged;
+	// the shortest abridged, whatever its length
+	var near, shortest, shortestCut *abs.BookSearchResult
+	nearDelta, unabridgedNear, productionNear := math.Inf(1), false, false
 	for i := range results {
 		r := &results[i]
 		if r.Duration <= 0 {
@@ -220,6 +277,17 @@ func judgeEditions(it *abs.Item, results []abs.BookSearchResult, provider string
 		}
 		s := scoreMatch(probe, r, abridgedTolerance)
 		if s.TitleLevel == 0 || !s.AuthorOK {
+			continue
+		}
+		// the store's own production is not a reading of the book: neither
+		// the whole book to measure against nor a cut of it. A book its
+		// length is that production, whatever its own name says ("The
+		// Hobbit (BBC)" beside the BBC's full-cast dramatisation), and is
+		// no finding. An Audible Original credits its full cast as the reader
+		if productionName(r.Title + " " + r.Subtitle + " " + r.Narrator) {
+			if math.Abs(s.DurationDelta) <= abridgedTolerance {
+				productionNear = true
+			}
 			continue
 		}
 		editions++
@@ -233,7 +301,12 @@ func judgeEditions(it *abs.Item, results []abs.BookSearchResult, provider string
 		if !abridged && (shortest == nil || r.Duration < shortest.Duration) {
 			shortest = r
 		}
+		if abridged && (shortestCut == nil || r.Duration < shortestCut.Duration) {
+			shortestCut = r
+		}
 	}
+	// a cut near the book's length is on sale: the book may be one
+	cutNear := shortestCut != nil && shortestCut.Duration*60 < shorterWorkCutRatio*book
 	edition := func(r *abs.BookSearchResult) *storeEdition {
 		return &storeEdition{ASIN: r.ASIN, Title: r.Title, Narrator: r.Narrator, Duration: wholeSec(r.Duration * 60), Abridged: abridgedEdition(r), Provider: provider}
 	}
@@ -241,16 +314,24 @@ func judgeEditions(it *abs.Item, results []abs.BookSearchResult, provider string
 	switch {
 	case unabridgedNear:
 		return nil, editions // the length of an unabridged edition: it is that one
+	case productionNear:
+		// the length of the store's production: it is that one, and the next
+		// store, which may sell only the reading, is not asked
+		return nil, max(editions, 1)
 	case near != nil:
 		f.Problem, f.Edition = "abridged_length", edition(near)
 		f.Detail = fmt.Sprintf("%s, the length of the abridged edition %s at %s (%s%s)", fmtDuration(book), near.ASIN, provider, fmtDuration(near.Duration*60), readBy(near.Narrator))
 		if shortest != nil {
 			f.Detail += "; the unabridged runs " + fmtDuration(shortest.Duration*60)
 		}
+	case shortest != nil && wholeSec(book) < shorterWorkSeconds && book < shorterWorkShare*shortest.Duration*60 && !cutNear:
+		f.Problem, f.Edition = "shorter_work", edition(shortest)
+		f.Detail = fmt.Sprintf("%s, %s of the shortest unabridged edition %s at %s (%s%s): under an hour and under %d%%, and the store sells no cut near its length, so more likely a shorter work of the same name than a cut",
+			fmtDuration(book), percentUnder(book/(shortest.Duration*60), shorterWorkShare), shortest.ASIN, provider, fmtDuration(shortest.Duration*60), readBy(shortest.Narrator), percent(shorterWorkShare))
 	case shortest != nil && book < abridgedShare*shortest.Duration*60:
 		f.Problem, f.Edition = "far_shorter", edition(shortest)
-		f.Detail = fmt.Sprintf("%s, %d%% of the shortest unabridged edition %s at %s (%s%s): under %d%%, further than a reader's pace goes",
-			fmtDuration(book), percent(book/(shortest.Duration*60)), shortest.ASIN, provider, fmtDuration(shortest.Duration*60), readBy(shortest.Narrator), percent(abridgedShare))
+		f.Detail = fmt.Sprintf("%s, %s of the shortest unabridged edition %s at %s (%s%s): under %d%%, further than a reader's pace goes",
+			fmtDuration(book), percentUnder(book/(shortest.Duration*60), abridgedShare), shortest.ASIN, provider, fmtDuration(shortest.Duration*60), readBy(shortest.Narrator), percent(abridgedShare))
 	default:
 		return nil, editions
 	}
@@ -260,7 +341,32 @@ func judgeEditions(it *abs.Item, results []abs.BookSearchResult, provider string
 // abridgedEdition reports whether the store says an edition is abridged: its
 // format, or its title.
 func abridgedEdition(r *abs.BookSearchResult) bool {
-	return r.Abridged || abridgedWord.MatchString(r.Title+" "+r.Subtitle)
+	return r.Abridged || abridgedWord.MatchString(nameWords(r.Title+" "+r.Subtitle))
+}
+
+// percentUnder is a share found under a limit, as a percent to one place,
+// rounded down: it reads under the limit, where rounding would print 19.96%
+// as the limit's 20%. The nudge keeps a share the float arithmetic lands a
+// hair under a tenth, 0.29 as 28.999...%, at the tenth it is, and a share a
+// hair under the limit is shown a tenth under it, never at it.
+func percentUnder(p, limit float64) string {
+	shown, top := math.Floor(p*1000+1e-9)/10, math.Round(limit*1000)/10
+	if shown >= top {
+		shown = top - 0.1
+	}
+	return strconv.FormatFloat(shown, 'f', 1, 64) + "%"
+}
+
+// spreadOver is a chapter spread found over the limit, rounded down to two
+// places, or to as many more as it takes to read over it: 1.352 is not
+// shown as the limit's 1.35.
+func spreadOver(sp, limit float64) float64 {
+	for places := 100.0; places <= 1e6; places *= 10 {
+		if shown := math.Floor(sp*places) / places; shown > limit {
+			return shown
+		}
+	}
+	return sp
 }
 
 // readBy is ", read by X", or nothing when the narrator is not known.
@@ -428,10 +534,10 @@ func sweepReadings(ctx context.Context, client *abs.Client, lib *abs.Library, fi
 				}
 				row := abridgedFinding{
 					ID: short.ID, Title: short.Title(), Author: short.Media.Metadata.AuthorDisplay(), Path: short.RelPath, Duration: wholeSec(short.Media.Duration),
-					Problem: "uneven_chapters", Spread: math.Round(sp*100) / 100, Chapters: n,
+					Problem: "uneven_chapters", Spread: spreadOver(sp, abridgedSpread), Chapters: n,
 					Reading: &abridgedReading{ID: long.ID, Title: long.Title(), Path: long.RelPath, Duration: wholeSec(long.Media.Duration)},
-					Detail: fmt.Sprintf("against the reading at %s (%s), whose chapters run %.2f to %.2f times as long as this one's over %d in common, a spread of %.2f: a reader's pace alone keeps under 1.2",
-						long.RelPath, fmtDuration(long.Media.Duration), lo, hi, n, sp),
+					Detail: fmt.Sprintf("against the reading at %s (%s), whose chapters run %.2f to %.2f times as long as this one's over %d in common, a spread of %s: a reader's pace alone keeps under 1.2",
+						long.RelPath, fmtDuration(long.Media.Duration), lo, hi, n, strconv.FormatFloat(spreadOver(sp, abridgedSpread), 'f', -1, 64)),
 				}
 				if j, seen := at[short.ID]; seen {
 					if rows[j].Spread < row.Spread {
@@ -543,11 +649,12 @@ func registerAbridgedAudit(r *registry) {
 	}
 	add(r, readTool, &mcp.Tool{
 		Name: "audit_abridged",
-		Description: "Find books that are probably abridged but not marked so: the abridged flag is off and neither the title nor the folder says abridged (or dramatised). Two checks. " +
-			"The store: each book is searched by title and author, and its editions there compared by length: abridged_length is within 5% of an edition the store marks abridged and of no unabridged one; far_shorter is under 60% of the shortest unabridged edition, where the fastest reader against the slowest measured came to 77%. " +
+		Description: "Find books that are probably abridged but not marked so: the abridged flag is off and neither the title, the subtitle nor the folder says abridged, nor do they or the reader credit name a production - dramatised, full cast, a radio or audio drama, play or theatre, a Hörspiel, however the words are joined, and not also saying unabridged - which is shorter by design. Two checks. " +
+			"The store: each book is searched by title and author, and its editions there compared by length, the store's own productions set aside (named so in the title, the subtitle or the reader credit, 'Full Cast'); a book the length of one of them is that production and no finding, and a book a store has only productions for is looked for at the next store, and not judged if none has anything else: abridged_length is within 5% of an edition the store marks abridged and of no unabridged one; far_shorter is under 60% of the shortest unabridged edition, where the fastest reader against the slowest measured came to 77%. " +
+			"shorter_work takes the place of far_shorter for a book under an hour and under 20% of the shortest unabridged edition when the store sells no abridged edition under twice its length: probably not abridged but a shorter work sharing the title, a story beside the collection named after it. It is still a row, counted in total_findings and by audit_all, as the match needs checking. " +
 			"The library: two readings of one book (same title and author, a parenthetical such as the reader's name aside) are compared chapter by chapter, matched by title; two unabridged readings keep a steady length ratio from chapter to chapter, spread 1.05 to 1.19 in the cases measured, and uneven_chapters is the shorter of a pair spread over 1.35, cut more in some chapters than others. That needs chapter titles naming the book's own chapters in both, and fetches the books held twice whole; it runs at offset 0 only. Two readings within 10% of each other's length are not compared (a pace, not a cut), nor two whose chapters do not line up, where the middle chapter's ratio is far from the whole readings' (two releases cutting the book at different points under the same names). " +
 			"The store check is one search per book (more when providers lists several and the first has no edition), so it works through limit books per call in the order they were added, over a library or a filter; audit_all runs it only with deep. Books under ten minutes, and ones whose provider tag says none, are not searched. " +
-			"Fix with item_edit abridged=true; a far_shorter book may instead be one part of a split release, or missing files, so check it first.",
+			"Fix with item_edit abridged=true; a far_shorter book may instead be one part of a split release, or missing files, so check it first; a shorter_work book is usually not abridged at all: check its match, and item_match for the shorter work.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in abridgedIn) (*mcp.CallToolResult, abridgedOut, error) {
 		libs, err := resolveLibraries(ctx, client, in.Library)
 		if err != nil {

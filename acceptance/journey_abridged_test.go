@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -186,8 +187,10 @@ func TestJourneyAbridgedNotMarked(t *testing.T) {
 			t.Errorf("Morgan = %v, want against Leclercq, spread about 2.18 over 6 chapters", found[1])
 		}
 		enchantment, _ := found[2]["edition"].(map[string]any)
-		if enchantment["asin"] != "B0ZZYZXU02" || enchantment["abridged"] != false || num(t, enchantment["duration_s"], "duration_s") != 2400 || !strings.Contains(text(found[2]["detail"]), "38% of the shortest unabridged edition") {
-			t.Errorf("Enchantment = %v, want 38%% of the unabridged edition", found[2])
+		if enchantment["asin"] != "B0ZZYZXU02" || enchantment["abridged"] != false || num(t, enchantment["duration_s"], "duration_s") != 2400 || !regexp.MustCompile(`37\.[45]% of the shortest unabridged edition`).MatchString(text(found[2]["detail"])) {
+			// 900 s of silence against 40 minutes, shown rounded down to a
+			// tenth; the encoded silence can land a hair under 900 s
+			t.Errorf("Enchantment = %v, want 37.5%% of the unabridged edition", found[2])
 		}
 		for _, f := range found {
 			if !strings.HasPrefix(text(f["fix"]), "item_edit abridged=true") {

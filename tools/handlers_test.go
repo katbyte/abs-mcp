@@ -54,6 +54,9 @@ func newFakeABS(t *testing.T) *fakeABS {
 		f.mux.ServeHTTP(w, r)
 	}))
 	t.Cleanup(f.srv.Close)
+	// every library has a narrator list, empty unless a test serves its
+	// own: audit_all and audit_whitespace read it for every book library
+	f.json("GET /api/libraries/{lib}/narrators", `{"narrators":[]}`)
 
 	return f
 }
@@ -591,6 +594,9 @@ func TestMetadataRenameRoutesByField(t *testing.T) {
 	f.json("DELETE /api/genres/{id}", `{"numItemsUpdated":2}`)
 	f.json("PATCH /api/libraries/{lib}/narrators/{id}", `{"updated":3}`)
 	f.json("DELETE /api/libraries/{lib}/narrators/{id}", `{"updated":1}`)
+	for _, lib := range []string{libID, libB} {
+		f.json("GET /api/libraries/"+lib+"/narrators", `{"narrators":[{"name":"jim dale","numBooks":3},{"name":"Nobody","numBooks":1}]}`)
+	}
 	f.json("GET /api/libraries/"+libID+"/authors", `{"results":[{"id":"`+authorID+`","name":"jrr tolkien","libraryId":"`+libID+`","numBooks":2}],"total":1}`)
 	f.json("GET /api/libraries/"+libB+"/authors", `{"results":[],"total":0}`)
 	f.json("GET /api/authors/"+authorID, `{"id":"`+authorID+`","name":"jrr tolkien","libraryId":"`+libID+`","numBooks":2}`)

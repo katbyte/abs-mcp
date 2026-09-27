@@ -44,6 +44,7 @@ func TestMetadataRenameRemoveNeedsConfirm(t *testing.T) {
 	})
 	f.json("DELETE /api/tags/{id}", `{"numItemsUpdated":3}`)
 	f.json("DELETE /api/libraries/{lib}/narrators/{id}", `{"updated":1}`)
+	f.json("GET /api/libraries/"+libID+"/narrators", `{"narrators":[{"name":"Jim Dale","numBooks":1}]}`)
 	f.json("POST /api/items/batch/update", `{"updates":1}`)
 	call := toolCaller(t, f)
 
@@ -126,6 +127,9 @@ func TestMetadataRenameSaysHowFarItGotBeforeAFailure(t *testing.T) {
 		}
 		_, _ = fmt.Fprintf(w, `{"updates":%d}`, len(body))
 	})
+	for _, lib := range []string{libID, libB} {
+		f.json("GET /api/libraries/"+lib+"/narrators", `{"narrators":[{"name":"jim dale","numBooks":3}]}`)
+	}
 	f.json("PATCH /api/libraries/"+libID+"/narrators/{id}", `{"updated":3}`)
 	f.mux.HandleFunc("PATCH /api/libraries/"+libB+"/narrators/{id}", func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "boom", http.StatusInternalServerError)

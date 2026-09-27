@@ -449,6 +449,7 @@ func TestLookupRefusesALibraryOnGoogle(t *testing.T) {
 	f.json("GET /api/libraries/"+libID+"/series", `{"results":[],"total":0}`)
 	f.json("GET /api/libraries/"+libID+"/authors", `{"results":[],"total":0}`)
 	f.json("GET /api/search/books", `[]`)
+	f.json("POST /api/items/batch/get", `{"libraryItems":[]}`) // audit_all deep reads every book's files
 	call := toolCaller(t, f)
 
 	for _, tc := range []struct {

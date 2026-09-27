@@ -33,22 +33,109 @@ func allAuthors(ctx context.Context, client *abs.Client, libraryID string, opts 
 	}
 }
 
+// nameTier says how a stored name answers one a caller gave: 2 when it is
+// the name exactly as given, spaces and all; 1 when it is the given name
+// with case set aside, and the given name has no space at either end; 0
+// otherwise. A name given with a space at an end, as audit_whitespace
+// reports one, is that record or none, never its tidy twin; and a stored
+// name is never trimmed to answer a tidy one, so "Brandon Sanderson" does
+// not reach "Brandon Sanderson " - a delete or rename by the tidy name must
+// not land on a record spelled otherwise.
+func nameTier(stored, given string) int {
+	switch {
+	case stored == given:
+		return 2
+	case given == strings.TrimSpace(given) && strings.EqualFold(stored, given):
+		return 1
+	}
+	return 0
+}
+
+// nearNames is the error for a name nothing answers, naming the records
+// that differ from it only by spaces at an end or case, with their ids, to
+// pass one of them instead.
+func nearNames(kind, given string, names, ids []string) error {
+	msg := fmt.Sprintf("no %s named %q", kind, given)
+	if near := nearList(given, names, ids); near != "" {
+		return fmt.Errorf("%s; %s", msg, near)
+	}
+	return fmt.Errorf("%s (library_search finds partial names)", msg)
+}
+
+// nearList names the records that differ from a name only by spaces at an
+// end or case, with their ids, or "" when none does.
+func nearList(given string, names, ids []string) string {
+	var near []string
+	for i, n := range names {
+		if n != given && strings.EqualFold(strings.TrimSpace(n), strings.TrimSpace(given)) {
+			near = append(near, fmt.Sprintf("%q %s", n, ids[i]))
+		}
+	}
+	if len(near) == 0 {
+		return ""
+	}
+	return "spelled otherwise only by spaces or case: " + strings.Join(near, "; ") + " - pass the id of the one meant"
+}
+
+// severalNamed is the error for a name that picks out more than one record:
+// each with its name, as the names may differ in their spaces, and its id.
+func severalNamed(kind, given string, names, ids, libraries []string) error {
+	where := "in one library"
+	if slices.ContainsFunc(libraries, func(l string) bool { return l != libraries[0] }) {
+		where = "across several libraries"
+	}
+	list := make([]string, 0, len(ids))
+	for i := range ids {
+		list = append(list, fmt.Sprintf("%q %s in library %s", names[i], ids[i], libraries[i]))
+	}
+	return fmt.Errorf("%q matches several %s %s; pass an id: %s", given, kind, where, strings.Join(list, "; "))
+}
+
 // resolveAuthor finds an author by id or name, searching the named library or
-// all of them.
+// all of them: the name exactly as given, and with case aside when it has no
+// space at an end; several such are refused, each named with its id.
 func resolveAuthor(ctx context.Context, client *abs.Client, library, nameOrID string) (*abs.Author, error) {
+	if id := strings.TrimSpace(nameOrID); looksLikeID(id) {
+		return client.Author(ctx, id, true)
+	}
+	candidates, err := authorsNamed(ctx, client, library, nameOrID)
+	if err != nil {
+		return nil, err
+	}
+	if len(candidates) == 1 {
+		return client.Author(ctx, candidates[0].ID, true)
+	}
+	names, ids, libraries := make([]string, 0, len(candidates)), make([]string, 0, len(candidates)), make([]string, 0, len(candidates))
+	for _, c := range candidates {
+		names, ids, libraries = append(names, c.Name), append(ids, c.ID), append(libraries, c.LibraryID)
+	}
+	return nil, severalNamed("authors", nameOrID, names, ids, libraries)
+}
+
+// authorsNamed is every author a name or id picks out, at least one: the
+// records whose name is the one given exactly, spaces and all, and, for a
+// name with no space at an end, those equal to it case aside. A stored name
+// is never trimmed to answer. An id is its record.
+func authorsNamed(ctx context.Context, client *abs.Client, library, nameOrID string) ([]abs.Author, error) {
+	given := nameOrID
 	nameOrID = strings.TrimSpace(nameOrID)
 	if nameOrID == "" {
 		return nil, errors.New("author id or name is required")
 	}
 	if looksLikeID(nameOrID) {
-		return client.Author(ctx, nameOrID, true)
+		a, err := client.Author(ctx, nameOrID, true)
+		if err != nil {
+			return nil, err
+		}
+		return []abs.Author{*a}, nil
 	}
 
 	libs, err := resolveLibraries(ctx, client, library)
 	if err != nil {
 		return nil, err
 	}
-	var candidates []abs.Author
+	matches := [3][]abs.Author{} // by tier
+	var names, ids []string
 	for i := range libs {
 		// the live authors endpoint, not FilterData: the server caches filter
 		// data and does not invalidate it on an edit or a scan, so a renamed
@@ -58,27 +145,19 @@ func resolveAuthor(ctx context.Context, client *abs.Client, library, nameOrID st
 			return nil, err
 		}
 		for _, a := range authors {
-			if strings.EqualFold(a.Name, nameOrID) {
-				full, err := client.Author(ctx, a.ID, true)
-				if err != nil {
-					return nil, err
-				}
-				candidates = append(candidates, *full)
+			names, ids = append(names, a.Name), append(ids, a.ID)
+			if tier := nameTier(a.Name, given); tier > 0 {
+				matches[tier] = append(matches[tier], a)
 			}
 		}
 	}
-	switch len(candidates) {
-	case 1:
-		return &candidates[0], nil
-	case 0:
-		return nil, fmt.Errorf("no author named %q (library_search finds partial names)", nameOrID)
+	// the name exactly as given and its case variants alike: two records
+	// one name answers, case aside, are both named and neither picked
+	candidates := slices.Concat(matches[2], matches[1])
+	if len(candidates) == 0 {
+		return nil, nearNames("author", given, names, ids)
 	}
-	ids := make([]string, 0, len(candidates))
-	for _, c := range candidates {
-		ids = append(ids, fmt.Sprintf("%s in library %s", c.ID, c.LibraryID))
-	}
-
-	return nil, fmt.Errorf("%q exists in several libraries; pass an id: %s", nameOrID, strings.Join(ids, "; "))
+	return candidates, nil
 }
 
 // allSeries lists every series in a library from the live series route, a
@@ -100,8 +179,9 @@ func allSeries(ctx context.Context, client *abs.Client, libraryID string) ([]abs
 }
 
 // resolveSeries finds a series by id or name in the named library or all of
-// them.
+// them, as resolveAuthor finds an author.
 func resolveSeries(ctx context.Context, client *abs.Client, library, nameOrID string) (*abs.Series, error) {
+	given := nameOrID
 	nameOrID = strings.TrimSpace(nameOrID)
 	if nameOrID == "" {
 		return nil, errors.New("series id or name is required")
@@ -116,39 +196,80 @@ func resolveSeries(ctx context.Context, client *abs.Client, library, nameOrID st
 	}
 	// a series whose books have all gone can outlive them: the server lists
 	// it, with no books, and answers 404 to opening it
-	var found []string
-	empty := false
+	matches := [3][]abs.Series{} // by tier
+	var names, ids, hiding []string
 	for i := range libs {
 		if libs[i].IsPodcast() {
 			continue
+		}
+		if libs[i].Settings.HideSingleBookSeries {
+			hiding = append(hiding, libs[i].Name)
 		}
 		series, err := allSeries(ctx, client, libs[i].ID)
 		if err != nil {
 			return nil, err
 		}
 		for _, s := range series {
-			if !strings.EqualFold(s.Name, nameOrID) {
-				continue
+			names, ids = append(names, s.Name), append(ids, s.ID)
+			if tier := nameTier(s.Name, given); tier > 0 {
+				matches[tier] = append(matches[tier], s)
 			}
-			// an empty list, not an absent one: that would be a reply that
-			// left the books out, and says nothing about them
-			if s.Books != nil && len(s.Books) == 0 {
-				empty = true
-				continue
-			}
-			found = append(found, s.ID)
 		}
+	}
+	// a series with no books left is set aside before the closest match is
+	// chosen: an empty "Mistborn" must not hide "Mistborn " holding the books.
+	// An empty list, not an absent one: that would be a reply that left the
+	// books out, and says nothing about them
+	empty := false
+	var exactEmpty []abs.Series // the name as given, held only by series with no books
+	for t := range matches {
+		matches[t] = slices.DeleteFunc(matches[t], func(s abs.Series) bool {
+			gone := s.Books != nil && len(s.Books) == 0
+			empty = empty || gone
+			if gone && t == 2 {
+				exactEmpty = append(exactEmpty, s)
+			}
+			return gone
+		})
+	}
+	// the name exactly as given and its case variants alike, as a name
+	// answers both; but where the name as written is an empty series and
+	// only a case variant has books, neither is picked
+	found := slices.Concat(matches[2], matches[1])
+	if len(matches[2]) == 0 && len(exactEmpty) > 0 && len(found) > 0 {
+		list := func(ss []abs.Series) string {
+			out := make([]string, 0, len(ss))
+			for _, s := range ss {
+				out = append(out, fmt.Sprintf("%q (%s)", s.Name, s.ID))
+			}
+			return strings.Join(out, ", ")
+		}
+		return nil, fmt.Errorf("the series named exactly %s has no books left, and %s differs from it only in case: pass the id of the one meant", list(exactEmpty), list(found))
 	}
 	switch {
 	case len(found) == 1:
-		return client.Series(ctx, found[0])
+		return client.Series(ctx, found[0].ID)
 	case len(found) == 0 && empty:
-		return nil, fmt.Errorf("no series named %q with a book in it: the server still lists one by that name, but its books are gone and it cannot be opened", nameOrID)
+		err := fmt.Errorf("no series named %q with a book in it: the server still lists one by that name, but its books are gone and it cannot be opened", given)
+		if near := nearList(given, names, ids); near != "" {
+			err = fmt.Errorf("%w; %s", err, near)
+		}
+		return nil, err
 	case len(found) == 0:
-		return nil, fmt.Errorf("no series named %q (library_search finds partial names)", nameOrID)
+		err := nearNames("series", given, names, ids)
+		// a one-book series such a library leaves out of its list, which is
+		// all a lookup by name can read
+		if len(hiding) > 0 {
+			err = fmt.Errorf("%w; %s hides one-book series from its series list, so one of those is found by id alone, as audit_whitespace gives it", err, strings.Join(hiding, ", "))
+		}
+		return nil, err
+	}
+	names, ids, libraries := make([]string, 0, len(found)), make([]string, 0, len(found)), make([]string, 0, len(found))
+	for _, s := range found {
+		names, ids, libraries = append(names, s.Name), append(ids, s.ID), append(libraries, s.LibraryID)
 	}
 
-	return nil, fmt.Errorf("%q exists in several libraries; pass an id: %s", nameOrID, strings.Join(found, ", "))
+	return nil, severalNamed("series", given, names, ids, libraries)
 }
 
 type authorRow struct {
@@ -269,8 +390,9 @@ func registerAuthorTools(r *registry) {
 		Clear       []string `json:"clear,omitempty"       jsonschema:"fields to blank: description, asin, image. How to undo an author_match that found the wrong person"`
 	}
 	type editOut struct {
-		Merged bool      `json:"merged" jsonschema:"true when the rename merged into an existing author"`
-		Author authorRow `json:"author"`
+		Merged    bool      `json:"merged"              jsonschema:"true when the rename merged into an existing author"`
+		Unchanged bool      `json:"unchanged,omitempty" jsonschema:"the author already had this name and nothing else was asked for: nothing was written"`
+		Author    authorRow `json:"author"`
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "author_edit",
@@ -298,6 +420,11 @@ func registerAuthorTools(r *registry) {
 		a, err := resolveAuthor(ctx, client, in.Library, in.Author)
 		if err != nil {
 			return nil, editOut{}, err
+		}
+		// a rename that changes nothing writes nothing, and says so rather
+		// than report a rename done
+		if upd.Name != nil && *upd.Name == a.Name && upd.Description == nil && upd.ASIN == nil && !clearImage {
+			return nil, editOut{Unchanged: true, Author: authorRowOf(a, true)}, nil
 		}
 		updated, merged := a, false
 		// the photo goes first, while the record is there: a rename that
@@ -552,8 +679,18 @@ func fullSeriesLists(ctx context.Context, client *abs.Client, items []abs.Item) 
 // there with a number of its own, in which case the from entry just goes.
 // Every other series is kept as it was.
 func mergeSeriesRefs(refs []abs.SeriesRef, from, into *abs.Series) []abs.SeriesRef {
+	// by id where the book's entry has one: "Mistborn " and "Mistborn" are
+	// two records, and a name compared trimmed would take the one for the
+	// other. An entry with no id goes by its name as written, and only when
+	// neither series has that name exactly, by the name trimmed and folded
 	sameSeries := func(ref abs.SeriesRef, s *abs.Series) bool {
-		return (ref.ID != "" && ref.ID == s.ID) || strings.EqualFold(strings.TrimSpace(ref.Name), strings.TrimSpace(s.Name))
+		switch {
+		case ref.ID != "":
+			return ref.ID == s.ID
+		case ref.Name == from.Name || ref.Name == into.Name:
+			return ref.Name == s.Name
+		}
+		return strings.EqualFold(strings.TrimSpace(ref.Name), strings.TrimSpace(s.Name))
 	}
 	out := make([]abs.SeriesRef, 0, len(refs))
 	seq, fromAt, intoAt := "", -1, -1
@@ -733,8 +870,9 @@ func registerSeriesTools(r *registry) {
 		Description string `json:"description,omitempty"`
 	}
 	type editOut struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
+		ID        string `json:"id"`
+		Name      string `json:"name"`
+		Unchanged bool   `json:"unchanged,omitempty" jsonschema:"the series already had this name and nothing else was asked for: nothing was written"`
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "series_edit",
@@ -752,7 +890,17 @@ func registerSeriesTools(r *registry) {
 		if upd.Name == nil && upd.Description == nil {
 			return nil, editOut{}, errors.New("nothing to change: pass name or description")
 		}
-		if upd.Name != nil {
+		// the name it already has, spaces and all, is no rename: a
+		// description set beside it leaves the name as it is
+		if upd.Name != nil && (*upd.Name == s.Name || in.Name == s.Name) {
+			upd.Name = nil
+		}
+		// a rename that changes nothing writes nothing, and says so rather
+		// than report a rename done
+		if upd.Name == nil && upd.Description == nil {
+			return nil, editOut{ID: s.ID, Name: s.Name, Unchanged: true}, nil
+		}
+		if upd.Name != nil && *upd.Name != s.Name {
 			// two series with one name is not a merge, it is two series
 			// with one name; series_merge is how books move
 			others, ferr := allSeries(ctx, client, s.LibraryID)
@@ -761,7 +909,7 @@ func registerSeriesTools(r *registry) {
 			}
 			for _, other := range others {
 				if other.ID != s.ID && strings.EqualFold(strings.TrimSpace(other.Name), name) {
-					return nil, editOut{}, fmt.Errorf("a series named %q already exists (%s): series_merge from=%q into=%q moves the books there instead", other.Name, other.ID, s.Name, other.Name)
+					return nil, editOut{}, fmt.Errorf("a series named %q already exists (%s): series_merge from=%s into=%s moves the books of %q there instead", other.Name, other.ID, s.ID, other.ID, s.Name)
 				}
 			}
 		}

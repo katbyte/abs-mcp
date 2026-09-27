@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -94,6 +95,7 @@ func TestAuditAbridgedAgainstTheStore(t *testing.T) {
 		shelved("stub", "Isaac Asimov/Sample", "Sample", "Isaac Asimov", 30, "", ""),
 		shelved("none", "Nobody/Homebrew", "Homebrew", "Nobody", 20000, "", `"tags":["zz-provider:none"]`),
 		shelved("seventh", "Orson Scott Card/Alvin Maker - 01 - Seventh Son (Orson Scott Card)", "Seventh Son", "Orson Scott Card", 26028, "", ""),
+		shelved("zombies", "Robert A. Heinlein/—All You Zombies—", "—All You Zombies—", "Robert A. Heinlein", 1692, "", ""),
 	)
 	store := map[string]string{
 		"audible.ca Heartfire": `[{"title":"Heartfire","author":"Orson Scott Card","narrator":"Nana Visitor","asin":"B0HFABRIDG","duration":357,"abridged":true},
@@ -104,7 +106,8 @@ func TestAuditAbridgedAgainstTheStore(t *testing.T) {
 		"audible Destroyer of Worlds": `[{"title":"Destroyer of Worlds","author":"Larry Niven, Edward M. Lerner","narrator":"James","asin":"B0DESTROYR","duration":853}]`,
 		"audible Red Prophet": `[{"title":"Red Prophet","author":"Orson Scott Card","narrator":"Scott Brick","asin":"B0REDUNABR","duration":733},
 			{"title":"Red Prophet","author":"Orson Scott Card","narrator":"Someone","asin":"B0REDABRID","duration":360,"abridged":true}]`,
-		"audible Seventh Son": `[{"title":"Seventh Son","author":"Orson Scott Card","narrator":"Scott Brick","asin":"B0SEVENTHU","duration":548}]`,
+		"audible Seventh Son":       `[{"title":"Seventh Son","author":"Orson Scott Card","narrator":"Scott Brick","asin":"B0SEVENTHU","duration":548}]`,
+		"audible —All You Zombies—": `[{"title":"—All You Zombies—","subtitle":"Five Classic Stories","author":"Robert A. Heinlein","narrator":"Various","asin":"B0ZOMBIES5","duration":192}]`,
 	}
 	f.mux.HandleFunc("GET /api/search/books", func(w http.ResponseWriter, r *http.Request) {
 		asked := r.URL.Query().Get("provider") + " " + r.URL.Query().Get("title")
@@ -122,18 +125,18 @@ func TestAuditAbridgedAgainstTheStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if num(t, out["items_scanned"]) != 10 || num(t, out["store_checked"]) != 6 || num(t, out["total_findings"]) != 3 || out["next_offset"] != nil {
-		t.Errorf("scanned %v, searched %v, found %v, next %v; want 10, 6, 3 and no more", out["items_scanned"], out["store_checked"], out["total_findings"], out["next_offset"])
+	if num(t, out["items_scanned"]) != 11 || num(t, out["store_checked"]) != 7 || num(t, out["total_findings"]) != 4 || out["next_offset"] != nil {
+		t.Errorf("scanned %v, searched %v, found %v, next %v; want 11, 7, 4 and no more", out["items_scanned"], out["store_checked"], out["total_findings"], out["next_offset"])
 	}
 	findings := list(t, out["findings"])
-	if got := idsOf(t, out["findings"]); !slices.Equal(got, []string{"heartfire", "enchantment", "shock"}) {
-		t.Fatalf("findings = %v, want Heartfire and Enchantment by length, then The Shock Doctrine", findings)
+	if got := idsOf(t, out["findings"]); !slices.Equal(got, []string{"heartfire", "enchantment", "shock", "zombies"}) {
+		t.Fatalf("findings = %v, want Heartfire and Enchantment by length, then The Shock Doctrine, then the story", findings)
 	}
 	wantNumbers(t, "audit_abridged", out, map[string]float64{
 		"findings.0.duration_s": 21420, "findings.0.edition.duration_s": 21420,
 		"findings.1.duration_s": 23364, "findings.1.edition.duration_s": 22620,
 		"findings.2.duration_s": 32580, "findings.2.edition.duration_s": 80280,
-		"counts.abridged_length": 2, "counts.far_shorter": 1, "counts.uneven_chapters": 0,
+		"counts.abridged_length": 2, "counts.far_shorter": 1, "counts.uneven_chapters": 0, "counts.shorter_work": 1,
 	})
 	for i, want := range []struct{ problem, asin, provider string }{
 		{"abridged_length", "B0HFABRIDG", "audible.ca"},
@@ -149,8 +152,13 @@ func TestAuditAbridgedAgainstTheStore(t *testing.T) {
 			t.Errorf("finding %d has fix %q and path %q", i, row["fix"], row["path"])
 		}
 	}
-	if d := str(t, findings[2]["detail"]); !strings.Contains(d, "41% of the shortest unabridged edition") {
+	if d := str(t, findings[2]["detail"]); !strings.Contains(d, "40.5% of the shortest unabridged edition") {
 		t.Errorf("The Shock Doctrine detail = %q, want the share it is of the unabridged", d)
+	}
+	// one 28-minute story, 15% of the collection named after it: another
+	// work, not a cut
+	if row := findings[3]; row["problem"] != "shorter_work" || !strings.Contains(str(t, row["detail"]), "14.6% of the shortest unabridged edition") || strings.HasPrefix(str(t, row["fix"]), "item_edit abridged=true") {
+		t.Errorf("the story = %v, want shorter_work at 14.6%% and no abridged fix", row)
 	}
 
 	asked := searched(f)
@@ -193,8 +201,8 @@ func TestAuditAbridgedAgainstTheStore(t *testing.T) {
 		}
 		paged = append(paged, idsOf(t, window["findings"])...)
 		if window["next_offset"] == nil {
-			if n := num(t, window["items_scanned"]); n != 2 {
-				t.Errorf("the last window scanned %d, want 2", n)
+			if n := num(t, window["items_scanned"]); n != 3 {
+				t.Errorf("the last window scanned %d, want 3", n)
 			}
 			break
 		}
@@ -204,8 +212,8 @@ func TestAuditAbridgedAgainstTheStore(t *testing.T) {
 		offset += 4
 	}
 	slices.Sort(paged)
-	if !slices.Equal(paged, []string{"enchantment", "heartfire", "shock"}) {
-		t.Errorf("the windows found %v, want the three", paged)
+	if !slices.Equal(paged, []string{"enchantment", "heartfire", "shock", "zombies"}) {
+		t.Errorf("the windows found %v, want the four", paged)
 	}
 
 	// audit_all deep counts what the audit reports, asking the library's own
@@ -220,8 +228,8 @@ func TestAuditAbridgedAgainstTheStore(t *testing.T) {
 			found = num(t, row["found"])
 		}
 	}
-	if found != 3 {
-		t.Errorf("audit_all deep counts audit_abridged %d, want 3: %v", found, all["audits"])
+	if found != 4 {
+		t.Errorf("audit_all deep counts audit_abridged %d, want 4: %v", found, all["audits"])
 	}
 }
 
@@ -404,6 +412,30 @@ func TestSaysAbridged(t *testing.T) {
 		{"Heartfire", "", "Orson Scott Card/Heartfire (Nana Visitor)", true, true},
 		{"Heartfire", "", "Orson Scott Card/Heartfire (Nana Visitor)", false, false},
 		{"Dune (Dramatized Adaptation)", "", "Frank Herbert/Dune", false, true},
+		{"Neuromancer", "", "William Gibson/Sprawl - 1 - Neuromancer [Full Cast]", false, true},
+		{"The Lord of the Rings (BBC Radio Drama)", "", "J.R.R. Tolkien/The Lord of the Rings", false, true},
+		{"Ender's Game Alive: The Full Cast Audioplay", "", "Orson Scott Card/Ender's Game Alive", false, true},
+		{"Castaway", "", "Unknown/Castaway (Full-Cast Radio Play)", false, true},
+		{"Abbey Road", "", "music/Abbey Road", false, false},
+		// every separator a folder puts between the words, and none
+		{"X", "", "A/X [Full_Cast]", false, true},
+		{"X", "", "A/X [Full.Cast]", false, true},
+		{"X", "", "A/X (Full  Cast)", false, true},
+		{"X", "", "A/X (Full–Cast)", false, true},
+		{"X (fullcast)", "", "A/X", false, true},
+		{"X", "", "A/X (Radio-Drama)", false, true},
+		{"X", "", "A/X (Radiodrama)", false, true},
+		{"X", "", "A/X (Audio Play)", false, true},
+		{"X (Audioplay)", "", "A/X", false, true},
+		{"X", "BBC Radio Dramas", "A/X", false, true},
+		// the words inside others are not a production
+		{"Castaway", "", "Unknown/Castaway", false, false},
+		{"Full Castle", "", "Unknown/Full Castle", false, false},
+		{"Fullcasting", "", "Unknown/Fullcasting", false, false},
+		// the BBC alone is not a production: a Book at Bedtime is one
+		// reader's cut, which the audit is for
+		{"Wolf Hall", "", "Hilary Mantel/Wolf Hall (BBC Radio 4 Book at Bedtime)", false, false},
+		{"Inside the BBC", "", "history/Inside the BBC", false, false},
 	} {
 		it := &abs.Item{RelPath: tc.path}
 		it.Media.Metadata.Title, it.Media.Metadata.Subtitle, it.Media.Metadata.Abridged = tc.title, tc.subtitle, tc.flag
@@ -426,6 +458,7 @@ func TestAuditAbridgedRefusesAStoreWithNoLengths(t *testing.T) {
 	f.json("GET /api/libraries/"+libID+"/series", `{"results":[],"total":0}`)
 	f.json("GET /api/libraries/"+libID+"/authors", `{"results":[],"total":0}`)
 	f.json("GET /api/search/books", `[]`)
+	f.json("POST /api/items/batch/get", `{"libraryItems":[]}`) // audit_all deep reads every book's files
 	call := toolCaller(t, f)
 
 	if _, err := call("audit_abridged", nil); err == nil || !strings.Contains(err.Error(), `library "Books" is on the google provider, which gives no edition lengths`) || !strings.Contains(err.Error(), "--providers") {
@@ -518,5 +551,193 @@ func TestAuditAbridgedReadingsThatDoNotLineUp(t *testing.T) {
 	}
 	if got := idsOf(t, out["findings"]); !slices.Equal(got, []string{"morgan"}) {
 		t.Errorf("findings = %v, want Morgan's cut alone", got)
+	}
+}
+
+// judged is a book of the given length against the store's editions of it.
+func judged(t *testing.T, seconds float64, editions ...abs.BookSearchResult) *abridgedFinding {
+	t.Helper()
+
+	it := &abs.Item{ID: "b", MediaType: "book", RelPath: "Roald Dahl/Matilda"}
+	it.Media.Metadata.Title, it.Media.Metadata.AuthorName, it.Media.Duration = "Matilda", "Roald Dahl", seconds
+	for i := range editions {
+		editions[i].Title, editions[i].Author = cmp.Or(editions[i].Title, "Matilda"), "Roald Dahl"
+	}
+	row, _ := judgeEditions(it, editions, "audible")
+	return row
+}
+
+// A book under an hour and a fifth of the unabridged is a shorter work only
+// when the store sells no cut near its length: beside Audible's 58-minute
+// abridged Matilda, a 50-minute copy is a cut like it.
+func TestShorterWorkNotBesideACutOfItsLength(t *testing.T) {
+	t.Parallel()
+
+	unabridged := abs.BookSearchResult{ASIN: "B0MATILDAU", Duration: 280}
+	if row := judged(t, 3000, unabridged, abs.BookSearchResult{ASIN: "B0MATILDAA", Duration: 58, Abridged: true}); row == nil || row.Problem != "far_shorter" {
+		t.Errorf("beside a 58-minute cut = %+v, want far_shorter", row)
+	}
+	// a cut at twice the book's length or more says nothing of it
+	if row := judged(t, 3000, unabridged, abs.BookSearchResult{ASIN: "B0MATILDAL", Duration: 100, Abridged: true}); row == nil || row.Problem != "shorter_work" {
+		t.Errorf("beside a 100-minute cut = %+v, want shorter_work", row)
+	}
+	if row := judged(t, 3000, unabridged); row == nil || row.Problem != "shorter_work" {
+		t.Errorf("with no cut on sale = %+v, want shorter_work", row)
+	}
+}
+
+// A share just under a limit reads under it: rounded, 3599 s of 300 minutes
+// printed "20% ... under 20%", and 59.8% "60% ... under 60%".
+func TestSharesReadUnderTheirLimit(t *testing.T) {
+	t.Parallel()
+
+	for _, c := range []struct {
+		seconds float64
+		minutes float64
+		problem string
+		share   string
+	}{
+		{3599, 300, "shorter_work", "19.9% of the shortest unabridged edition"},
+		{0.598 * 300 * 60, 300, "far_shorter", "59.8% of the shortest unabridged edition"},
+		{0.5999 * 300 * 60, 300, "far_shorter", "59.9% of the shortest unabridged edition"},
+		// a share the arithmetic lands a hair under its tenth stays on it
+		{0.29 * 300 * 60, 300, "far_shorter", "29.0% of the shortest unabridged edition"},
+		// a hair under the limit is shown a tenth under it, never at it
+		{0.6*300*60 - 1e-8, 300, "far_shorter", "59.9% of the shortest unabridged edition"},
+		// an hour to the second is not under an hour: far_shorter, whose
+		// limit is 60%, at the share it is
+		{3599.99999999, 300, "far_shorter", "20.0% of the shortest unabridged edition"},
+	} {
+		row := judged(t, c.seconds, abs.BookSearchResult{ASIN: "B0MATILDAU", Duration: c.minutes})
+		if row == nil || row.Problem != c.problem || !strings.Contains(row.Detail, c.share) {
+			t.Errorf("%v s of %v min = %+v, want %s at %q", c.seconds, c.minutes, row, c.problem, c.share)
+		}
+	}
+}
+
+// The store's own production is not a reading: a 6h copy is measured against
+// the 630-minute unabridged edition, not the 115-minute dramatisation, nor
+// against a production its reader credit alone names. A copy the length of a
+// production is that production, whatever its own name says, and no finding.
+func TestStoreProductionsAreNotReadings(t *testing.T) {
+	t.Parallel()
+
+	unabridged := abs.BookSearchResult{ASIN: "B0BOOKUNAB", Duration: 630}
+	drama := abs.BookSearchResult{ASIN: "B0BOOKDRAM", Title: "Matilda (Dramatised)", Duration: 115}
+	row := judged(t, 6*3600, unabridged, drama)
+	if row == nil || row.Problem != "far_shorter" || row.Edition == nil || row.Edition.ASIN != "B0BOOKUNAB" || !strings.Contains(row.Detail, "57.1% of the shortest unabridged edition") {
+		t.Errorf("6h against 630 min and a dramatisation = %+v, want far_shorter at 57.1%% of the unabridged", row)
+	}
+	credited := abs.BookSearchResult{ASIN: "B0BOOKORIG", Title: "Matilda", Narrator: "Full Cast", Duration: 220}
+	if row := judged(t, 6*3600, unabridged, credited); row == nil || row.Problem != "far_shorter" || row.Edition.ASIN != "B0BOOKUNAB" {
+		t.Errorf("6h beside a production credited to a full cast = %+v, want far_shorter against the unabridged", row)
+	}
+	castCut := abs.BookSearchResult{ASIN: "B0BOOKCAST", Subtitle: "A Full Cast Production", Duration: 360, Abridged: true}
+	if row := judged(t, 6*3600, unabridged, castCut); row != nil {
+		t.Errorf("6h beside a 6h full-cast production = %+v, want no row: the copy is that production", row)
+	}
+	bbc := abs.BookSearchResult{ASIN: "B0MATILBBC", Subtitle: "BBC Radio 4 Full-Cast Dramatisation", Duration: 220}
+	if row := judged(t, 220*60, abs.BookSearchResult{ASIN: "B0MATILUNA", Duration: 626}, bbc); row != nil {
+		t.Errorf("a 3h40m copy beside the BBC's 3h40m dramatisation = %+v, want no row", row)
+	}
+}
+
+// What names a production, however a folder joins the words, and what does
+// not: a title that merely starts the same, and the BBC alone.
+func TestProductionName(t *testing.T) {
+	t.Parallel()
+
+	for name, want := range map[string]bool{
+		"Neuromancer_Full_Cast":               true,
+		"The_Hobbit_Dramatised":               true,
+		"X_Radio_Drama_Series":                true,
+		"Full\u00a0Cast":                      true,
+		"Radio\u00a0Drama":                    true,
+		"Full\u2011Cast":                      true,
+		"Full/Cast":                           true,
+		"BBC Radio 4 Drama":                   true,
+		"Radio 4 Drama":                       true,
+		"The Hitchhiker's Guide (Radio Play)": true,
+		"A Dramatization":                     true,
+		"Dramatis Personae":                   false,
+		"The Dramatist":                       false,
+		"Audioplayer Manual":                  false,
+		"Castaway":                            false,
+		"BBC Radio 4 Book at Bedtime":         false,
+		"The Full Monty":                      false,
+		"Focus on the Family Radio Theatre":   true,
+		"Colonial Audio Theater":              true,
+		"Der kleine Hobbit (Hörspiel)":        true,
+		"Radio Four Drama":                    true,
+		"A Full-Cast Unabridged Recording":    false,
+	} {
+		if got := productionName(name); got != want {
+			t.Errorf("productionName(%q) = %v, want %v", name, got, want)
+		}
+	}
+}
+
+// A spread over the limit never reads as the limit.
+func TestSpreadReadsOverTheLimit(t *testing.T) {
+	t.Parallel()
+
+	for sp, want := range map[float64]float64{1.352: 1.352, 1.3504: 1.3504, 2.0578: 2.05, 1.36: 1.36} {
+		if got := spreadOver(sp, abridgedSpread); got != want || got <= abridgedSpread {
+			t.Errorf("spreadOver(%v) = %v, want %v", sp, got, want)
+		}
+	}
+}
+
+// A copy the length of a production at the first store asked is that
+// production: the judgement counts it as an edition, so the next store,
+// which may sell only the reading, is not asked and cannot flag it.
+func TestProductionAtTheFirstStoreSettlesIt(t *testing.T) {
+	t.Parallel()
+
+	it := &abs.Item{ID: "b", MediaType: "book", RelPath: "J.R.R. Tolkien/The Hobbit"}
+	it.Media.Metadata.Title, it.Media.Metadata.AuthorName, it.Media.Duration = "The Hobbit", "J.R.R. Tolkien", 220*60
+	bbc := abs.BookSearchResult{ASIN: "B0HOBBITBB", Title: "The Hobbit", Subtitle: "BBC Radio Full-Cast Dramatisation", Author: "J.R.R. Tolkien", Duration: 220}
+	row, editions := judgeEditions(it, []abs.BookSearchResult{bbc}, "audible.ca")
+	if row != nil || editions == 0 {
+		t.Errorf("a copy the length of the store's only edition, a production = %+v with %d editions; want no row, and the store counted as having the book", row, editions)
+	}
+}
+
+// A production that says it is unabridged is a reading of the whole book,
+// and the copy is measured against it; the book's own reader credit names a
+// production as its title does.
+func TestUnabridgedFullCastIsAReading(t *testing.T) {
+	t.Parallel()
+
+	cast := abs.BookSearchResult{ASIN: "B0CASTUNAB", Subtitle: "A Full-Cast Unabridged Recording", Duration: 630}
+	if row := judged(t, 6*3600, cast); row == nil || row.Problem != "far_shorter" || row.Edition.ASIN != "B0CASTUNAB" {
+		t.Errorf("6h against an unabridged full-cast 630 min = %+v, want far_shorter against it", row)
+	}
+	it := &abs.Item{RelPath: "Robert A. Heinlein/The Rolling Stones"}
+	it.Media.Metadata.Title, it.Media.Metadata.NarratorName = "The Rolling Stones", "Full Cast"
+	if !saysAbridged(it) {
+		t.Error("a book read by a full cast was searched as a reading")
+	}
+}
+
+// "Unabridged" anywhere in a book's own names counts against a production
+// its reader credit names, and words joined by underscores read as words.
+func TestSaysAbridgedReadsWordsHoweverJoined(t *testing.T) {
+	t.Parallel()
+
+	for _, c := range []struct {
+		title, path, narrator string
+		want                  bool
+	}{
+		{"Neuromancer (Unabridged)", "William Gibson/Neuromancer", "Full Cast", false},
+		{"Neuromancer", "William Gibson/Neuromancer_Full_Cast_Unabridged", "", false},
+		{"Heartfire", "Orson Scott Card/Heartfire_Abridged", "", true},
+		{"Neuromancer", "William Gibson/Neuromancer_Full_Cast", "", true},
+	} {
+		it := &abs.Item{RelPath: c.path}
+		it.Media.Metadata.Title, it.Media.Metadata.NarratorName = c.title, c.narrator
+		if got := saysAbridged(it); got != c.want {
+			t.Errorf("saysAbridged(%q, %q, %q) = %v, want %v", c.title, c.path, c.narrator, got, c.want)
+		}
 	}
 }

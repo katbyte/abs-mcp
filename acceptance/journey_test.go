@@ -454,6 +454,7 @@ func TestJourneyLookupsChangeNothing(t *testing.T) {
 		{tool: "audit_unmatched", args: map[string]any{"library": "Messy"}},
 		// the seeded books are a second long, too short to search a store for
 		{tool: "audit_abridged", args: map[string]any{"library": "Messy"}},
+		{tool: "audit_whitespace", args: map[string]any{"library": "Messy"}},
 		{tool: "collection_list"},
 		{tool: "collection_get", args: map[string]any{"collection": "Zzyzx Lookup Collection"}},
 		{tool: "playlist_list"},

@@ -95,7 +95,12 @@ func TestDuplicatesJoinACopyByAnyKey(t *testing.T) {
 		item("d", "Small Gods", `"authorName":"Terry Pratchett","asin":"B0NIGEL"`, ""),
 		item("g", "Small Gods", `"authorName":"Terry Pratchett"`, ""),
 		item("e", "Solo", `"authorName":"X","isbn":"978-1"`, ""),
-		item("h", "Solo Again", `"authorName":"Y","isbn":"9781"`, ""),
+		// retitled, filed as a copy of the same book: the isbn joins them
+		`{"id":"h","libraryId":"`+libID+`","mediaType":"book","relPath":"A/Solo - Copy","media":{"metadata":{"title":"Solo Again","authorName":"Y","isbn":"9781"}}}`,
+		// one print isbn on two books: an isbn is the print edition's, and
+		// joins only copies nothing tells apart
+		item("i1", "Mistborn", `"authorName":"Brandon Sanderson","isbn":"9780765350381"`, ""),
+		item("i2", "The Well of Ascension", `"authorName":"Brandon Sanderson","isbn":"9780765350381"`, ""),
 	))
 	call := toolCaller(t, f)
 
@@ -103,8 +108,8 @@ func TestDuplicatesJoinACopyByAnyKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := num(t, out["items_scanned"]); got != 7 {
-		t.Errorf("items_scanned = %d, want 7", got)
+	if got := num(t, out["items_scanned"]); got != 9 {
+		t.Errorf("items_scanned = %d, want 9", got)
 	}
 	groups := map[string][]string{}
 	for _, g := range list(t, out["groups"]) {
@@ -121,6 +126,13 @@ func TestDuplicatesJoinACopyByAnyKey(t *testing.T) {
 	}
 	if !reflect.DeepEqual(groups, want) || num(t, out["total_findings"]) != 3 {
 		t.Errorf("groups = %v, want %v", groups, want)
+	}
+	split := map[string]bool{}
+	for _, row := range list(t, out["split"]) {
+		split[str(t, row["key"])] = true
+	}
+	if !split["isbn:9780765350381"] {
+		t.Errorf("split = %v, want the two books one isbn joins kept apart and shown", split)
 	}
 }
 
@@ -873,5 +885,250 @@ func TestDuplicatesKeepTwoReadingsApart(t *testing.T) {
 	}
 	if got := groupsOf(book("a", "Nigel Planer"), book("b", "")); len(got) != 1 {
 		t.Errorf("a copy naming no reader was not grouped: %v", got)
+	}
+}
+
+// A title from a bad album tag is shared by books that are not one work: all
+// nine of Radclyffe's Honor books carried the title "Honor". The folders'
+// numbers keep them apart, and so do lengths too far apart for one recording.
+func TestDuplicatesKeepBooksOfASeriesApart(t *testing.T) {
+	t.Parallel()
+
+	honor := func(id, path string, seconds float64) *abs.Item {
+		it := &abs.Item{ID: id, MediaType: "book", RelPath: "Radclyffe/" + path}
+		it.Media.Metadata.Title = "Honor"
+		it.Media.Metadata.AuthorName = "Radclyffe"
+		it.Media.Duration = seconds
+		return it
+	}
+	d := newDupCollector()
+	for _, it := range []*abs.Item{
+		honor("1", "Honor - 01 - Above All", 30000),
+		honor("2", "Honor - 02 - Honor Bound", 31000),
+		honor("2b", "Honor - 02 - Honor Bound (single file)", 31020),
+		honor("3", "Honor - 03 - Love & Honor", 30500),
+		// no numbers: the length alone says two books, and not one
+		honor("x", "Innocent Hearts", 20000),
+		honor("y", "Passion's Bright Fury", 40000),
+		honor("y2", "Passion's Bright Fury (mp3)", 39000),
+	} {
+		d.add(it)
+	}
+	groups := d.groups()
+	got := make([][]string, 0, len(groups))
+	for _, g := range groups {
+		var ids []string
+		for _, it := range g.Items {
+			ids = append(ids, it.ID)
+		}
+		got = append(got, ids)
+	}
+	slices.SortFunc(got, func(a, b []string) int { return strings.Compare(a[0], b[0]) })
+	if want := [][]string{{"2", "2b"}, {"y", "y2"}}; !reflect.DeepEqual(got, want) {
+		t.Errorf("groups = %v, want %v: book 2's two copies, and nothing joining two numbers or lengths far apart", got, want)
+	}
+}
+
+// One recording filed under two numberings is one book held twice, and two
+// books under one bad title are not, whatever order the listing gives them
+// in.
+func TestDuplicatesGroupByTheBookNotItsNumber(t *testing.T) {
+	t.Parallel()
+
+	book := func(id, path, title string, seconds float64, series ...string) *abs.Item {
+		it := &abs.Item{ID: id, MediaType: "book", RelPath: path}
+		it.Media.Metadata.Title = title
+		it.Media.Metadata.AuthorName = "Terry Pratchett"
+		it.Media.Metadata.SeriesName = strings.Join(series, ", ")
+		it.Media.Duration = seconds
+		return it
+	}
+	groupsOf := func(items ...*abs.Item) [][]string {
+		d := newDupCollector()
+		for _, it := range items {
+			d.add(it)
+		}
+		groups := d.groups()
+		out := make([][]string, 0, len(groups))
+		for _, g := range groups {
+			var ids []string
+			for _, it := range g.Items {
+				ids = append(ids, it.ID)
+			}
+			slices.Sort(ids)
+			out = append(out, ids)
+		}
+		slices.SortFunc(out, func(a, b []string) int { return strings.Compare(a[0], b[0]) })
+		return out
+	}
+	if got := groupsOf(book("dw", "Terry Pratchett/Discworld/04 - Mort", "Mort", 30000), book("de", "Terry Pratchett/Death/01 - Mort", "Mort", 30000)); !reflect.DeepEqual(got, [][]string{{"de", "dw"}}) {
+		t.Errorf("Mort filed as Discworld 4 and Death 1 = %v, want one group", got)
+	}
+	// numbered in two orders in one series: kept apart, as a false split
+	// costs less than a false group, and shown in split
+	if got := groupsOf(book("n6", "C. S. Lewis/The Chronicles of Narnia - 06 - The Magician's Nephew", "The Magician's Nephew", 20000, "The Chronicles of Narnia #6"),
+		book("n1", "C. S. Lewis/The Chronicles of Narnia - 01 - The Magician's Nephew", "The Magician's Nephew", 20000, "The Chronicles of Narnia #1")); len(got) != 0 {
+		t.Errorf("Narnia numbered in two orders = %v, want no group", got)
+	}
+	if got := groupsOf(book("h1", "Radclyffe/Honor - 01 - Above All", "Honor", 30000), book("h2", "Radclyffe/Honor Bound", "Honor", 30900, "Honor #2")); len(got) != 0 {
+		t.Errorf("Honor 1 by its folder and 2 by its series = %v, want no group", got)
+	}
+	// copies joined by an isbn, two with their own asins: the same group
+	// whichever the listing gives first
+	isbn := func(id, asin string) *abs.Item {
+		it := book(id, "Terry Pratchett/Small Gods "+id, "Small Gods "+id, 30000)
+		it.Media.Metadata.ISBN, it.Media.Metadata.ASIN = "9780552152976", asin
+		return it
+	}
+	if one, other := groupsOf(isbn("x", "B01"), isbn("y", "B02"), isbn("z", "")), groupsOf(isbn("y", "B02"), isbn("x", "B01"), isbn("z", "")); !reflect.DeepEqual(one, other) {
+		t.Errorf("an isbn's groups depend on the listing's order: %v against %v", one, other)
+	}
+	// three copies, the ends 18% apart: the same groups in either order
+	a, b, c := book("a", "Terry Pratchett/Eric", "Eric", 10000), book("b", "Terry Pratchett/Eric (2)", "Eric", 11500), book("c", "Terry Pratchett/Eric (3)", "Eric", 9700)
+	if one, other := groupsOf(a, b, c), groupsOf(c, a, b); !reflect.DeepEqual(one, other) {
+		t.Errorf("the groups depend on the listing's order: %v against %v", one, other)
+	}
+}
+
+// A reader named only in a folder's brackets is a reader: two readings of one
+// book, each naming its own, are not one held twice, and a note on the copy
+// names nobody.
+func TestDuplicatesReadTheReaderInBrackets(t *testing.T) {
+	t.Parallel()
+
+	book := func(id, path string, seconds float64, narrator string) *abs.Item {
+		it := &abs.Item{ID: id, MediaType: "book", RelPath: path}
+		it.Media.Metadata.Title = "Starship Troopers"
+		it.Media.Metadata.AuthorName = "Robert A. Heinlein"
+		it.Media.Metadata.NarratorName = narrator
+		it.Media.Duration = seconds
+		return it
+	}
+	groupsOf := func(items ...*abs.Item) int {
+		d := newDupCollector()
+		for _, it := range items {
+			d.add(it)
+		}
+		return len(d.groups())
+	}
+	if n := groupsOf(book("bray", "Robert A. Heinlein/Starship Troopers", 29772, "R.C. Bray"), book("wilson", "Robert A. Heinlein/Starship Troopers (Wilson)", 34776, ""),
+		book("james", "Robert A. Heinlein/Starship Troopers (James)", 35676, "Lloyd James")); n != 0 {
+		t.Errorf("three readers, two named only in brackets = %d groups, want none", n)
+	}
+	if n := groupsOf(book("a", "Robert A. Heinlein/Starship Troopers (James)", 35676, ""), book("b", "Robert A. Heinlein/Starship Troopers", 35690, "Lloyd James")); n != 1 {
+		t.Errorf("one reader, in brackets on one and the field on the other = %d groups, want one", n)
+	}
+	if n := groupsOf(book("a", "Robert A. Heinlein/Starship Troopers (copy)", 35676, ""), book("b", "Robert A. Heinlein/Starship Troopers (old rip)", 35690, "")); n != 1 {
+		t.Errorf("two notes on copies = %d groups, want one", n)
+	}
+}
+
+// A title many books share, a tag's placeholder, joins none of them: one
+// split row says so, counting them all and listing the first parts, and
+// each copy is read against at most dupApartMax others for incomplete.
+func TestDuplicatesBoundAPlaceholderTitle(t *testing.T) {
+	t.Parallel()
+
+	const n = 200
+	d := newDupCollector()
+	for i := range n {
+		name := string(rune('a'+i%26)) + string(rune('a'+i/26%26)) + string(rune('a'+i/676))
+		it := &abs.Item{ID: fmt.Sprintf("i%04d", i), MediaType: "book", RelPath: "Unknown/The Tale of " + name}
+		it.Media.Metadata.Title, it.Media.Metadata.AuthorName = "Audiobook", "Unknown"
+		it.Media.Duration = float64(3600 + (i*7919)%(40*3600))
+		d.add(it)
+	}
+	if groups := d.groups(); len(groups) != 0 {
+		t.Errorf("groups %d, want none: a placeholder title joins nothing", len(groups))
+	}
+	if len(d.splits) != 1 || d.splits[0].Copies != n || len(d.splits[0].Parts) != dupSplitParts || !strings.Contains(fmt.Sprint(d.splits[0].Why), "placeholder") {
+		t.Errorf("split = %d rows, want one counting %d copies with %d parts listed and the placeholder said: %+v", len(d.splits), n, dupSplitParts, d.splits)
+	}
+	if len(d.apart) > n*dupApartMax || len(d.close) > dupClosePerKey {
+		t.Errorf("%d pairs and %d close pairs, want at most %d and %d", len(d.apart), len(d.close), n*dupApartMax, dupClosePerKey)
+	}
+
+	// copies nothing else tells apart, one length, one folder name: a
+	// placeholder title still joins none of them
+	d = newDupCollector()
+	for i := range dupPlaceholderMax + 1 {
+		it := &abs.Item{ID: fmt.Sprintf("j%04d", i), MediaType: "book", RelPath: fmt.Sprintf("Unknown/Audiobook - Copy %d", i)}
+		it.Media.Metadata.Title, it.Media.Metadata.AuthorName = "Audiobook", "Unknown"
+		it.Media.Duration = 36000
+		d.add(it)
+	}
+	if groups := d.groups(); len(groups) != 0 {
+		t.Errorf("%d groups of a placeholder title's copies, want none", len(groups))
+	}
+
+	// an isbn is no placeholder, however many copies carry it: its parts
+	// are split by what tells them apart, not by the count
+	d = newDupCollector()
+	for i := range dupPlaceholderMax + 1 {
+		it := &abs.Item{ID: fmt.Sprintf("k%04d", i), MediaType: "book", RelPath: fmt.Sprintf("Author %d/Book %d", i, i)}
+		it.Media.Metadata.Title, it.Media.Metadata.AuthorName = fmt.Sprintf("Book %d", i), fmt.Sprintf("Author %d", i)
+		it.Media.Metadata.ISBN = "9780765350381"
+		it.Media.Duration = float64(36000 + 36000*(i%2))
+		d.add(it)
+	}
+	d.groups()
+	if len(d.splits) != 1 || strings.Contains(fmt.Sprint(d.splits[0].Why), "placeholder") {
+		t.Errorf("split = %+v, want the isbn's row with no placeholder said", d.splits)
+	}
+	// and joins the copies nothing tells apart, as many as there are
+	d = newDupCollector()
+	for i := range dupPlaceholderMax + 1 {
+		it := &abs.Item{ID: fmt.Sprintf("m%04d", i), MediaType: "book", RelPath: fmt.Sprintf("Shelf %d/Dune", i)}
+		it.Media.Metadata.Title, it.Media.Metadata.AuthorName = "Dune", "Frank Herbert"
+		it.Media.Metadata.ISBN = "9780441172719"
+		it.Media.Duration = 36000
+		d.add(it)
+	}
+	if groups := d.groups(); len(groups) != 1 || len(groups[0].Items) != dupPlaceholderMax+1 {
+		t.Errorf("%d groups, want the isbn's %d copies in one", len(groups), dupPlaceholderMax+1)
+	}
+}
+
+// An ebook and the recording of its book share a title and an isbn but are
+// not two copies of one thing: kept apart, and split says why.
+func TestDuplicatesKeepAnEbookApart(t *testing.T) {
+	t.Parallel()
+
+	d := newDupCollector()
+	for _, c := range []struct {
+		id, path string
+		seconds  float64
+	}{{"a", "Frank Herbert/Dune", 75000}, {"b", "Frank Herbert/Dune (ebook)", 0}} {
+		it := &abs.Item{ID: c.id, MediaType: "book", RelPath: c.path}
+		it.Media.Metadata.Title, it.Media.Metadata.AuthorName = "Dune", "Frank Herbert"
+		it.Media.Metadata.ISBN = "9780441172719"
+		it.Media.Duration = c.seconds
+		d.add(it)
+	}
+	if groups := d.groups(); len(groups) != 0 {
+		t.Errorf("%d groups, want none", len(groups))
+	}
+	if len(d.splits) != 2 || !strings.Contains(fmt.Sprint(d.splits), "no audio") {
+		t.Errorf("split = %+v, want the title's and the isbn's rows saying one holds no audio", d.splits)
+	}
+}
+
+// A year beside a reader in a folder's brackets is not part of the name the
+// split row gives.
+func TestDuplicatesNameAReaderWithoutTheYear(t *testing.T) {
+	t.Parallel()
+
+	d := newDupCollector()
+	for _, c := range []struct{ id, path string }{{"a", "Frank Herbert/Dune [Scott Brick 2007]"}, {"b", "Frank Herbert/Dune [George Guidall 1993]"}} {
+		it := &abs.Item{ID: c.id, MediaType: "book", RelPath: c.path}
+		it.Media.Metadata.Title, it.Media.Metadata.AuthorName = "Dune", "Frank Herbert"
+		it.Media.Duration = 72000
+		d.add(it)
+	}
+	if groups := d.groups(); len(groups) != 0 {
+		t.Errorf("%d groups, want none", len(groups))
+	}
+	if why := fmt.Sprint(d.splits); len(d.splits) != 1 || !strings.Contains(why, `"George Guidall" and "Scott Brick"`) {
+		t.Errorf("split = %+v, want the two readers named without their years", d.splits)
 	}
 }

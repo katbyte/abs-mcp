@@ -320,6 +320,24 @@ func TestMergeSeriesRefs(t *testing.T) {
 			t.Errorf("%s: got %v, want %v", tc.name, got, tc.want)
 		}
 	}
+
+	// two records whose names differ only by a space: each entry goes by its
+	// id, so the book keeps the tidy series once, with its own number
+	spaced, tidy := &abs.Series{ID: "sp", Name: "Mistborn "}, &abs.Series{ID: "ti", Name: "Mistborn"}
+	have := []abs.SeriesRef{{ID: "sp", Name: "Mistborn ", Sequence: "1"}, {ID: "ti", Name: "Mistborn", Sequence: "3"}}
+	if got, want := mergeSeriesRefs(have, spaced, tidy), []abs.SeriesRef{{ID: "ti", Name: "Mistborn", Sequence: "3"}}; !sameRefs(got, want) {
+		t.Errorf("merging the spaced series into the tidy one: got %v, want %v", got, want)
+	}
+	// an entry whose name is out of date still goes by its id
+	have = []abs.SeriesRef{{ID: "sp", Name: "Mistborn Era One", Sequence: "1"}}
+	if got, want := mergeSeriesRefs(have, spaced, tidy), []abs.SeriesRef{{Name: "Mistborn", Sequence: "1"}}; !sameRefs(got, want) {
+		t.Errorf("an entry with the spaced series' id under an old name: got %v, want %v", got, want)
+	}
+	// with no ids, a name as written picks its series before a name folded
+	have = []abs.SeriesRef{{Name: "Mistborn ", Sequence: "1"}}
+	if got, want := mergeSeriesRefs(have, spaced, tidy), []abs.SeriesRef{{Name: "Mistborn", Sequence: "1"}}; !sameRefs(got, want) {
+		t.Errorf("an entry with no id named as the spaced series: got %v, want %v", got, want)
+	}
 }
 
 // A gap whose book is on the shelf unlinked, a gap that closes once two

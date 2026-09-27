@@ -199,6 +199,8 @@ fixtures() {
   silent_m4b "${DATA}/messy/Discworld - 09 - Eric.m4b"
   # a cover with the ribbon on it
   ribbon "${DATA}/messy/Terry Pratchett/Discworld - 10 - Moving Pictures/cover.jpg" 600
+  # a note whose name has a space before its extension
+  printf 'notes\n' > "${DATA}/messy/Andy Weir/The Egg/notes .txt"
 
   # podcasts are "<podcast>/<episode file>"
   while read -r show; do

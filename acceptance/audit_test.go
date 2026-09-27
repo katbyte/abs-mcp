@@ -73,7 +73,8 @@ func TestEveryAuditRuns(t *testing.T) {
 		case "audit_all", "audit_missing", "audit_duplicates", "audit_series",
 			"audit_spelling", "audit_unembedded",
 			"audit_covers", "audit_authors", "audit_narrators", "audit_matched", "audit_genres",
-			"audit_abridged": // journey_abridged_test.go
+			"audit_abridged",   // journey_abridged_test.go
+			"audit_whitespace": // messy_test.go
 			continue // asserted individually below
 		}
 		if !slices.Contains(auditTools, name) {
@@ -185,7 +186,7 @@ func TestAuditAll(t *testing.T) {
 	if !slices.Equal(notApplicable, []string{"audit_podcast_stale_feed", "audit_podcast_no_episodes"}) {
 		t.Errorf("not_applicable = %v, want the two podcast audits", notApplicable)
 	}
-	crossItem := []string{"audit_duplicates", "audit_spelling", "audit_authors", "audit_narrators", "audit_series", "audit_genres"}
+	crossItem := []string{"audit_duplicates", "audit_spelling", "audit_authors", "audit_narrators", "audit_series", "audit_genres", "audit_whitespace"}
 	for _, name := range slices.Concat(auditTools, crossItem) {
 		_, reported := counts[name]
 		lists := 0

@@ -76,6 +76,7 @@ var podcasts = []string{"Well There's Your Problem", "Behind the Bastards"}
 // after another book, one book twice, a single-file m4b, a ribboned cover.
 type messyBook struct {
 	Path, Title, Author string
+	Subtitle            string
 	Narrators           []string
 	Series              []string // nil clears whatever the scan guessed
 	Genres, Tags        []string
@@ -111,7 +112,8 @@ var messyBooks = []messyBook{
 	{Path: "Andy Weir/The Martian", Title: "The Martian", Author: "Andy Weir", Narrators: []string{"R. C. Bray"}, Genres: []string{"Science Fiction"}, Description: "Read by R. C. Bray"},
 	{Path: "Andy Weir/Artemis", Title: "Artemis", Author: "Andy Weir", Narrators: []string{"Rosario Dawson"}, Genres: []string{"Science Fiction"}, Description: "https://www.andyweir.com/artemis"},
 	{Path: "Andy Weir/Project Hail Mary", Title: "Project Hail Mary", Author: "Andy Weir", Narrators: []string{"Ray Porter"}, Genres: []string{"Science Fiction"}, Description: "A lone astronaut must save the earth."},
-	{Path: "Andy Weir/The Egg", Title: "The Egg", Author: "Andy Weir", Narrators: []string{"Andy Weir"}, Genres: []string{"Science Fiction"}},
+	// and a double space in its subtitle, for audit_whitespace
+	{Path: "Andy Weir/The Egg", Title: "The Egg", Subtitle: "A  Short Story", Author: "Andy Weir", Narrators: []string{"Andy Weir"}, Genres: []string{"Science Fiction"}},
 
 	// one series spelled two ways, and its narrator too
 	{Path: "Robert Jordan/The Wheel of Time - 01 - The Eye of the World", Title: "The Eye of the World", Author: "Robert Jordan", Narrators: []string{"Michael Kramer", "Kate Reading"}, Series: []string{"The Wheel of Time #1"}, Genres: []string{"Fantasy"}, Description: filler},
@@ -447,6 +449,9 @@ func seedMessy() error {
 		}
 		if b.Description != "" {
 			args["description"] = b.Description
+		}
+		if b.Subtitle != "" {
+			args["subtitle"] = b.Subtitle
 		}
 		if b.ASIN != "" {
 			args["asin"] = b.ASIN

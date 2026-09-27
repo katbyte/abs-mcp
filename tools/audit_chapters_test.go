@@ -191,7 +191,7 @@ func TestAuditChaptersFetchesOnlyChapteredBooks(t *testing.T) {
 		t.Errorf("audit_all read %d batches without deep and %d with it, want fewer without", extra, fetched)
 	}
 	partial := list(t, all["partial"])
-	if len(partial) != 1 || partial[0]["audit"] != "audit_chapters" || !strings.Contains(str(t, partial[0]["reason"]), "deep") {
+	if i := slices.IndexFunc(partial, func(row map[string]any) bool { return row["audit"] == "audit_chapters" }); i < 0 || !strings.Contains(str(t, partial[i]["reason"]), "deep") {
 		t.Errorf("partial = %v, want audit_chapters and why", all["partial"])
 	}
 }

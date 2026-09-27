@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -177,7 +178,7 @@ func registerAuditTools(r *registry) {
 	}
 	type allIn struct {
 		Library string `json:"library,omitempty" jsonschema:"library name or id; default every library"`
-		Deep    bool   `json:"deep,omitempty"    jsonschema:"also run audit_covers, audit_unembedded, audit_matched and audit_abridged, which fetch something for every item and can take minutes on a large library"`
+		Deep    bool   `json:"deep,omitempty"    jsonschema:"also run audit_covers, audit_unembedded, audit_matched and audit_abridged, which fetch something for every item and can take minutes on a large library, and count audit_chapters and audit_whitespace whole, reading every book's chapters and file names"`
 	}
 	type allOut struct {
 		Scanned       int         `json:"items_scanned"`
@@ -192,8 +193,8 @@ func registerAuditTools(r *registry) {
 	add(r, readTool, &mcp.Tool{
 		Name: "audit_all",
 		Description: "Run every audit and return only the counts, so one call says where a library needs work; call the individual audit for the worklist. Start here after a scan. " +
-			"The per-item checks, audit_missing for every field, audit_chapters, audit_duplicates, audit_spelling, audit_authors, audit_narrators, audit_series and audit_genres all run. " +
-			"audit_covers, audit_unembedded, audit_matched and audit_abridged fetch something for every item, so they run only with deep and are reported as skipped otherwise; audit_chapters without deep counts only one chapter over a long book, as the rest needs every chaptered book read whole, and says so under partial. " +
+			"The per-item checks, audit_missing for every field, audit_chapters, audit_duplicates, audit_spelling, audit_authors, audit_narrators, audit_series, audit_genres and audit_whitespace all run. " +
+			"audit_covers, audit_unembedded, audit_matched and audit_abridged fetch something for every item, so they run only with deep and are reported as skipped otherwise; audit_chapters without deep counts only one chapter over a long book, as the rest needs every chaptered book read whole, and audit_whitespace without deep counts titles, names and the folders of each item's path, but not the folders inside a book or its file names, which need every book read whole; both say so under partial. " +
 			"An audit that cannot find anything in the libraries asked about, a book audit over podcasts or a podcast audit over books, is listed as not applicable rather than clean; not_run says why each audit left out was left out.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in allIn) (*mcp.CallToolResult, allOut, error) {
 		libs, err := resolveLibraries(ctx, client, in.Library)
@@ -217,6 +218,7 @@ func registerAuditTools(r *registry) {
 		genres := newGenresCollector()
 		genres.prov = prov
 		chapters := chapterSweep{singleOnly: !in.Deep}
+		whitespace := whitespaceSweep{namesOnly: !in.Deep}
 		var people joinedNames // roles and narrators read names, which the listing joins
 		authorAsTitle := auditChecksByName["author_as_title"]
 		staleFeed := auditChecksByName["stale_feed"]
@@ -271,6 +273,7 @@ func registerAuditTools(r *registry) {
 					genres.add(it)
 					numbering.add(it)
 					chapters.add(it)
+					whitespace.add(it)
 				}
 				return true
 			}); err != nil {
@@ -284,6 +287,9 @@ func registerAuditTools(r *registry) {
 				return nil, allOut{}, err
 			}
 			if err := chapters.resolve(ctx, client); err != nil {
+				return nil, allOut{}, err
+			}
+			if err := whitespace.resolve(ctx, client); err != nil {
 				return nil, allOut{}, err
 			}
 			if err := people.resolve(ctx, client, lib.ID, func(it *abs.Item) {
@@ -331,13 +337,18 @@ func registerAuditTools(r *registry) {
 			return nil, allOut{}, err
 		}
 		spellings.dropMarkers(prov)
-		found["audit_duplicates"] = len(dups.groups())
+		dupGroups, incomplete, err := dups.settle(ctx, client)
+		if err != nil {
+			return nil, allOut{}, err
+		}
+		found["audit_duplicates"] = len(dupGroups) + len(incomplete)
 		found["audit_spelling"] = spellings.findingCount() + len(oddLanguages(spellings))
 		found["audit_narrators"] = len(roles.findings()) + narrators.findingCount()
 		found["audit_series"] = gaps.Found + len(withSeriesAuthors(seriesNamesCount.report("series"), seriesAuthors)) + len(series.Odd) + len(numbering.findings()) + len(numbering.titleFindings())
 		found["audit_authors"] = authors.Counts.AuthorAsTitle + len(authors.Records) + authorNames.findingCount()
 		found["audit_genres"] = genres.findings(5, 0).Found
 		found["audit_chapters"] = len(chapters.rows)
+		found["audit_whitespace"] = len(whitespace.rows)
 		if in.Deep {
 			found["audit_covers"] = covers.Found
 			found["audit_unembedded"] = embedded.Found
@@ -381,11 +392,13 @@ func registerAuditTools(r *registry) {
 		for _, field := range missingFields {
 			report("audit_missing", field)
 		}
-		for _, tool := range []string{"audit_chapters", "audit_duplicates", "audit_spelling", "audit_authors", "audit_narrators", "audit_series", "audit_genres"} {
+		for _, tool := range []string{"audit_chapters", "audit_duplicates", "audit_spelling", "audit_authors", "audit_narrators", "audit_series", "audit_genres", "audit_whitespace"} {
 			report(tool, "")
 		}
 		if !in.Deep && hasBooks {
-			out.Partial = append(out.Partial, allNotRun{Audit: "audit_chapters", Reason: "counted one chapter over a long book only: chapters past the end, out of order or short need every chaptered book read whole, fifty to a request: pass deep, or run audit_chapters"})
+			out.Partial = append(out.Partial,
+				allNotRun{Audit: "audit_chapters", Reason: "counted one chapter over a long book only: chapters past the end, out of order or short need every chaptered book read whole, fifty to a request: pass deep, or run audit_chapters"},
+				allNotRun{Audit: "audit_whitespace", Reason: "counted titles, names and the folders of each item's path only: the folders inside a book, a disc's, and its file names need every book read whole, fifty to a request: pass deep, or run audit_whitespace"})
 		}
 		for _, deep := range []struct{ tool, why string }{
 			{"audit_covers", "reads every cover file, one request per book: pass deep to run it"},
@@ -420,14 +433,17 @@ func registerAuditTools(r *registry) {
 
 	type dupIn struct {
 		Library string `json:"library,omitempty" jsonschema:"library name or id; default all libraries"`
-		Limit   int    `json:"limit,omitempty"   jsonschema:"maximum groups to return, default 50, at most 1000"`
+		Limit   int    `json:"limit,omitempty"   jsonschema:"maximum rows of each list to return - groups, incomplete, split and candidates - default 50, at most 1000"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name: "audit_duplicates",
 		Description: "Find items that appear to be the same work: sharing an asin, an isbn, or a title and author, any one of them, so a matched copy and an unmatched copy of one book are found together. Two copies with different asins are never grouped: those are editions (a full-cast and a single-narrator recording), not duplicates. " +
-			"Each group lists every copy with size, duration and path so you can pick which to keep. " +
-			"candidates lists pairs no key joins that are probably one recording, each with why: the same title once edition labels, brackets and subtitles are set aside, under the same author, or under another with lengths within 4%; or one's album tag naming the other's title, lengths within 1%. Two copies naming different readers, or lengths too far apart for the evidence, are left out. " +
-			"A candidate is a lead, not a finding: confirm it with item_compare_audio before deleting either. They are counted in total_candidates, not total_findings, and audit_all counts only the groups.",
+			"An asin names one recording and joins whatever it names. A title and author, or an isbn - the print edition's, which every recording of it carries - groups no copies anything tells apart, as a false group costs a deletion and a false split only a look: the readers each part names sharing no name (the narrator field, a 'Last, First' pair read as one name, or a folder's brackets, which on a book folder name its reader unless they are a year, an edition, a format, a source such as '(Audible)', a language, a note on the copy or the author); a number in their names ('Vol. 17', 'Part 2', 'CD1', 'Book One', '#3') or a place in one series (the folder's 'Series - 03 -', a number the folder opens with inside a series folder, or the series field), whatever the folders say, so one book numbered in two orders is kept apart too; folders that name different books ('Foundation' and 'Foundation and Empire', both titled Foundation; an article, '&', the server's {narrator} braces, a note such as '- Copy' and a trailing author's name are set aside first); one holding audio and the other none, an ebook; or lengths spreading more than 15% among the key's own copies, further than one recording goes. A title and author more than 50 copies share is a tag's placeholder, not a book, and joins none of them. " +
+			"split lists every title and author, and every isbn, whose copies were kept in more than one part, or beside a copy incomplete reports: how many copies it has, the first twenty parts, and what keeps each two parts apart, worked out between them. Nothing a title or isbn joins is dropped. Most are two readings or two books; a part a listen proves one recording is a duplicate the rules kept apart. split is not counted in total_findings. " +
+			"The copies under each key are taken longest first, each joining the copies closest to it in length first, so the groups do not depend on the listing's order and a copy with no asin joins the edition it matches. Each group lists every copy with size, duration and path so you can pick which to keep. " +
+			"incomplete lists copies that are not a second copy but a bad one: more than 15% shorter than a copy they share a title and author, an asin or an isbn with, and holding only some of its tracks, in play order, each the same length to the second; where the copy holds few tracks, or under a quarter of the other's, each must share its file name or size too, and a longer folder that only plays the book twice, the tracks and one file of them all, holds nothing it lacks. It is read against the fullest copy of the other part - the most tracks - and ten such copies at most. Each is one row, saying what joined them and naming the first five files it lacks, and is left out of the groups, which are made again without it until no new one turns up, four rounds at most. A record whose folder is gone or holds nothing playable has only a stale length and stale files: its length does not keep it out of a group, it is never judged incomplete or whole, and audit_issues reports it. " +
+			"candidates lists pairs no key joins that are probably one recording, each with why: the same title once edition labels, brackets and subtitles are set aside, under the same author (or filed in one folder that names the author of one of them), or under another with lengths within 4%; or one's album tag naming the other's title, lengths within 1%. Two copies naming different readers, numbered apart in their names or in one series, or with lengths too far apart for the evidence, are left out, and so is a copy incomplete reports. Copies sharing a title and author are in groups or split, and here only where their folders alone kept them apart, the two naming no different readers, with lengths within 4%, likely one recording ('Treason' filed under 'A Planet Called Treason', 0.7% apart), saying so: the closest such pair a copy, five a title. " +
+			"A candidate is a lead, not a finding: confirm it with item_compare_audio before deleting either. They are counted in total_candidates, not total_findings; the groups and incomplete rows are findings, and audit_all counts both.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in dupIn) (*mcp.CallToolResult, dupOut, error) {
 		libs, err := resolveLibraries(ctx, client, in.Library)
 		if err != nil {
@@ -446,14 +462,30 @@ func registerAuditTools(r *registry) {
 			}
 		}
 
-		groups := collector.groups()
-		candidates, err := collector.candidates(ctx, client, groups)
+		// an incomplete copy is a bad copy, not a duplicate: the groups are
+		// made again without it, and the candidates leave it out
+		groups, incomplete, err := collector.settle(ctx, client)
 		if err != nil {
 			return nil, dupOut{}, err
 		}
-		out := dupOut{Scanned: len(collector.items), Found: len(groups), Groups: []dupGroup{}, CandidatesFound: len(candidates), Candidates: []dupCandidate{}}
+		reported := map[string]bool{}
+		for _, row := range incomplete {
+			reported[row.Items[0].ID] = true
+		}
+		candidates, err := collector.candidates(ctx, client, groups, reported)
+		if err != nil {
+			return nil, dupOut{}, err
+		}
+		out := dupOut{
+			Scanned: len(collector.items), Found: len(groups) + len(incomplete), Groups: []dupGroup{},
+			IncompleteFound: len(incomplete), Incomplete: []dupIncomplete{},
+			SplitFound: len(collector.splits), Split: []dupSplit{},
+			CandidatesFound: len(candidates), Candidates: []dupCandidate{},
+		}
 		limit := auditLimit(in.Limit, 50)
 		out.Groups = append(out.Groups, groups[:min(len(groups), limit)]...)
+		out.Incomplete = append(out.Incomplete, incomplete[:min(len(incomplete), limit)]...)
+		out.Split = append(out.Split, collector.splits[:min(len(collector.splits), limit)]...)
 		out.Candidates = append(out.Candidates, candidates[:min(len(candidates), limit)]...)
 
 		return nil, out, nil
@@ -466,11 +498,15 @@ type dupGroup struct {
 }
 
 type dupOut struct {
-	Scanned         int            `json:"items_scanned"`
-	Found           int            `json:"total_findings"   jsonschema:"groups, before limit; candidates are not counted here"`
-	Groups          []dupGroup     `json:"groups"           jsonschema:"each group is one work with several copies"`
-	CandidatesFound int            `json:"total_candidates" jsonschema:"candidate pairs, before limit"`
-	Candidates      []dupCandidate `json:"candidates"       jsonschema:"pairs no key joins that are probably one recording: leads to confirm with item_compare_audio, not findings"`
+	Scanned         int             `json:"items_scanned"`
+	Found           int             `json:"total_findings"   jsonschema:"groups and incomplete rows, before limit; candidates are not counted here"`
+	Groups          []dupGroup      `json:"groups"           jsonschema:"each group is one work with several copies"`
+	IncompleteFound int             `json:"total_incomplete" jsonschema:"incomplete copies, before limit"`
+	SplitFound      int             `json:"total_split"      jsonschema:"titles and isbns split, before limit; not findings"`
+	Split           []dupSplit      `json:"split"            jsonschema:"each title and author, and each isbn, whose copies the groups kept in more than one part: how many copies, the first twenty parts, and what kept the parts apart. Two readings or two books are why most are split; a part that is one recording after all, which a listen settles, is a duplicate the rules kept apart"`
+	Incomplete      []dupIncomplete `json:"incomplete"       jsonschema:"a copy holding only some of another copy's tracks, in play order, each the same length to the second: not a second copy but a bad one with files missing, and left out of the groups. Keep the whole copy, or fill this one in from it"`
+	CandidatesFound int             `json:"total_candidates" jsonschema:"candidate pairs, before limit"`
+	Candidates      []dupCandidate  `json:"candidates"       jsonschema:"pairs no key joins that are probably one recording: leads to confirm with item_compare_audio, not findings"`
 }
 
 // dupCollector files each item under everything that would make two items
@@ -481,11 +517,68 @@ type dupOut struct {
 // collects most. It holds the summary rather than the item: a whole library
 // is here until the sweep ends, and the summary is what the answer carries.
 type dupCollector struct {
-	items   []itemSummary
-	asins   []string          // each item's asin, "" when it has none
-	readers []map[string]bool // each item's narrators, by name key
-	byKey   map[string][]int  // key -> the items filed under it, in sweep order
+	items     []itemSummary
+	asins     []string                   // each item's asin, "" when it has none
+	readers   []map[string]bool          // each item's narrators, by name key
+	facts     []candidateFacts           // what the title rules read of each book: its readers in brackets, its folder's book, its numbers
+	byKey     map[string][]int           // key -> the items filed under it, in sweep order
+	apart     []dupPair                  // pairs far apart in length, for incomplete: a title's or isbn's the groups kept apart, an asin's they joined
+	excluded  map[int]bool               // the copies incomplete reported, left out of the groups
+	titleKeys []string                   // each item's title key, "" for none
+	splits    []dupSplit                 // each title whose copies the groups kept apart, and why
+	tracks    map[string][]abs.AudioFile // the audio files of books read for incomplete, by id
+	close     []dupClose                 // pairs kept apart only on uncertain evidence, their lengths near enough for one recording
 }
+
+// dupClose is two copies one title joined, kept apart on evidence a listen
+// settles - folders naming different books, brackets naming no known reader
+// - with lengths within 4% of each other: likely one recording, a candidate.
+type dupClose struct {
+	i, j int
+	why  string
+}
+
+// dupSplit is a title whose copies the groups kept in more than one part:
+// every copy it joins is here, grouped or alone, so nothing a title joins is
+// lost to a rule that kept it out, and why says what kept the parts apart.
+type dupSplit struct {
+	Key        string          `json:"key"                  jsonschema:"the title and author, or the isbn, the copies share"`
+	Copies     int             `json:"copies"               jsonschema:"how many copies share it"`
+	Parts      [][]itemSummary `json:"parts"                jsonschema:"its copies as the groups left them, each part the ones one group holds or one alone; the first twenty parts"`
+	Incomplete []itemSummary   `json:"incomplete,omitempty" jsonschema:"its copies incomplete reports, left out of the parts"`
+	Why        []string        `json:"why"                  jsonschema:"what keeps the parts apart, worked out between them: different asins, readers sharing no name (the narrator field, or a folder's brackets), a number in the names or a place in a series, folders naming different books, one holding no audio, lengths further apart than one recording goes, a placeholder title"`
+}
+
+// dupPair is two copies read for incomplete, and what joined them: a
+// title and author, an asin or an isbn.
+type dupPair struct {
+	i, j int
+	by   string
+}
+
+const (
+	// dupWhyMax is how many reasons a split row gives
+	dupWhyMax = 6
+	// dupSplitParts is how many parts a split row lists
+	dupSplitParts = 20
+	// dupPlaceholderMax is how many copies a title and author may share
+	// and still be read as one book: more is a tag's placeholder,
+	// "Audiobook" by "Unknown", and joins nothing
+	dupPlaceholderMax = 50
+	// dupClosePerKey is how many close pairs one title gives candidates
+	dupClosePerKey = 5
+)
+
+// dupApartMax is how many copies, the closest in length first, a copy is
+// kept apart from and read against for incomplete: a title many books
+// share, a tag's placeholder, would otherwise read every pair's files.
+const dupApartMax = 10
+
+// dupTitleLength is how far apart, as a share of the longest, the lengths of
+// copies joined by title alone may be. Further apart they are not one
+// recording: another reading, an abridgement, or a copy with files missing,
+// which incomplete reports.
+const dupTitleLength = 0.15
 
 func newDupCollector() *dupCollector {
 	return &dupCollector{byKey: map[string][]int{}}
@@ -497,18 +590,20 @@ func (d *dupCollector) add(it *abs.Item) {
 	asin := strings.ToUpper(strings.TrimSpace(m.ASIN))
 	d.items = append(d.items, summarize(it))
 	d.asins = append(d.asins, asin)
-	// each name, and each pair of neighbours read as one "Last, First" name:
-	// the listing joins names with commas, so "Planer, Nigel" arrives in two
+	d.facts = append(d.facts, candidateFacts{})
+	if it.MediaType == "book" {
+		d.facts[i] = candidateFactsOf(&d.items[i])
+	}
+	// each reader the field names - the listing joins names with commas, so
+	// "Planer, Nigel" arrives in two, and is read as one name - and "Full
+	// Cast", "Unknown", "Various", "Audible" as none
 	readers := map[string]bool{}
-	names := splitNames(m.NarratorDisplay())
-	for i, n := range names {
+	for _, n := range readerNames(m.NarratorDisplay()) {
+		if len(candidateWords(n)) == 0 || candidateLabel.MatchString(n) || candidateNoName.MatchString(n) {
+			continue
+		}
 		if k := vocabKey("narrators", n); k != "" {
 			readers[k] = true
-		}
-		if i > 0 {
-			if k := vocabKey("narrators", names[i-1]+", "+n); k != "" {
-				readers[k] = true
-			}
 		}
 	}
 	d.readers = append(d.readers, readers)
@@ -520,8 +615,10 @@ func (d *dupCollector) add(it *abs.Item) {
 		keys = append(keys, "isbn:"+isbn)
 	}
 	// an item with no title shares nothing with another untitled one
+	d.titleKeys = append(d.titleKeys, "")
 	if title := strings.ToLower(strings.TrimSpace(m.Title)); title != "" {
-		keys = append(keys, "title:"+title+"|"+strings.ToLower(strings.TrimSpace(m.AuthorDisplay())))
+		d.titleKeys[i] = "title:" + title + "|" + strings.ToLower(strings.TrimSpace(m.AuthorDisplay()))
+		keys = append(keys, d.titleKeys[i])
 	}
 	for _, k := range keys {
 		d.byKey[k] = append(d.byKey[k], i)
@@ -531,20 +628,33 @@ func (d *dupCollector) add(it *abs.Item) {
 // groups joins the items that share a key into groups of more than one,
 // sorted by what they share. The asins are joined first, then the isbns,
 // then the titles, and two items with different asins are never joined: an
-// unmatched copy goes with the first matched edition its title reaches. Nor
-// does a title alone join two readings: where both name their readers and
-// no reader is shared, they are two recordings of one book - a full-cast and
-// a single-narrator set, kept on purpose - not one held twice.
+// unmatched copy goes with the first matched edition its title reaches. An
+// asin names one recording and joins whatever it names; a title or an isbn,
+// which every recording of a print edition carries, does not join two
+// readings: where both name their readers and no reader is shared, they are
+// two recordings of one book - a full-cast and a single-narrator set, kept
+// on purpose - not one held twice. Nor two books a bad title made alike,
+// nor copies whose lengths spread more than 15%, which are not one
+// recording, nor an ebook and a recording. The evidence is strong or weak:
+// the readers, pooled from the fields and the folders' brackets, a number in
+// the names or a place in one series keep two copies apart without a word;
+// folders that merely name different books keep them apart too, and a pair
+// of those near enough in length is a candidate, as a listen settles it. The
+// copies under each key are taken longest first, each trying the copies
+// before it closest in length first, so the groups do not depend on the
+// listing's order and a copy with no asin joins the edition it matches.
+// The copies excluded, which incomplete found to be bad copies, join none.
 func (d *dupCollector) groups() []dupGroup {
 	parent := make([]int, len(d.items))
 	asin := slices.Clone(d.asins) // for each root, the asin its group carries
 	readers := make([]map[string]bool, len(d.items))
+	members := make([][]int, len(d.items)) // for each root, its items
 	for i := range readers {
 		readers[i] = maps.Clone(d.readers[i]) // for each root, every reader its group names
-	}
-	for i := range parent {
+		members[i] = []int{i}
 		parent[i] = i
 	}
+	d.apart, d.splits, d.close = nil, nil, nil
 	find := func(i int) int {
 		for parent[i] != i {
 			parent[i] = parent[parent[i]]
@@ -557,23 +667,248 @@ func (d *dupCollector) groups() []dupGroup {
 		keys = append(keys, k)
 	}
 	slices.Sort(keys) // asin: before isbn: before title:
-	for _, k := range keys {
-		members := d.byKey[k]
-		byTitle := strings.HasPrefix(k, "title:")
-		for _, m := range members[1:] {
-			ra, rb := find(members[0]), find(m)
-			if ra == rb || (asin[ra] != "" && asin[rb] != "" && asin[ra] != asin[rb]) {
-				continue
+
+	// spread is how far apart the known lengths of the copies are, as a
+	// share of the longest
+	spread := func(copies ...[]int) float64 {
+		lo, hi := 0, 0
+		for _, c := range copies {
+			for _, i := range c {
+				if n := d.lengthOf(i); n > 0 {
+					lo, hi = cmp.Or(min(lo, n), n), max(hi, n)
+				}
 			}
-			if byTitle && len(readers[ra]) > 0 && len(readers[rb]) > 0 && !sharesKey(readers[ra], readers[rb]) {
-				continue
-			}
-			parent[rb] = ra
-			if asin[ra] == "" {
-				asin[ra] = asin[rb]
-			}
-			maps.Copy(readers[ra], readers[rb])
 		}
+		if lo == 0 {
+			return 0
+		}
+		return float64(hi-lo) / float64(hi)
+	}
+	// evidence is what tells one set of copies from another, and why: their
+	// readers, pooled, sharing no name, or any copy of one another book than
+	// any of the other - strong, or weak, a folder naming another book
+	evidence := func(xs, ys []int) (strong bool, why string) {
+		facts := func(c []int) []*candidateFacts {
+			out := make([]*candidateFacts, 0, len(c))
+			for _, x := range c {
+				out = append(out, &d.facts[x])
+			}
+			return out
+		}
+		if apart, readers := readersApart(facts(xs), facts(ys)); apart {
+			return true, readers
+		}
+		for _, x := range xs {
+			for _, y := range ys {
+				bs, bw := d.facts[x].bookConflict(&d.facts[y], true)
+				if bs != "" {
+					return true, bs
+				}
+				why = cmp.Or(why, bw)
+			}
+		}
+		return false, why
+	}
+	// fullest is the copy another may be cut from: the one with the most
+	// tracks, the longest of those, and one whose length is known - a
+	// record whose folder is gone has stale tracks
+	fullest := func(c []int) int {
+		return slices.MaxFunc(c, func(a, b int) int {
+			return cmp.Or(cmp.Compare(min(d.lengthOf(a), 1), min(d.lengthOf(b), 1)), cmp.Compare(d.items[a].Tracks, d.items[b].Tracks), cmp.Compare(d.lengthOf(a), d.lengthOf(b)))
+		})
+	}
+	// farApart reports whether two copies' own lengths are further apart
+	// than one recording goes
+	farApart := func(a, b int) bool {
+		x, y := d.lengthOf(a), d.lengthOf(b)
+		return x > 0 && y > 0 && float64(max(x, y)-min(x, y)) > dupTitleLength*float64(max(x, y))
+	}
+	gap := func(a, b int) int {
+		return max(d.items[a].Duration, d.items[b].Duration) - min(d.items[a].Duration, d.items[b].Duration)
+	}
+	// audioApart reports whether one set of copies holds audio and the
+	// other none: an ebook is not a recording of the book it shares a
+	// title with
+	audioApart := func(xs, ys []int) bool {
+		holds := func(c []int) bool {
+			return slices.ContainsFunc(c, func(i int) bool { return d.items[i].Duration > 0 || d.items[i].Tracks > 0 })
+		}
+		return len(xs) > 0 && len(ys) > 0 && holds(xs) != holds(ys)
+	}
+
+	for _, k := range keys {
+		by, _, _ := strings.Cut(k, ":")
+		// a title, or an isbn - the print edition's, which every recording of
+		// it carries - joins only copies nothing tells apart; an asin names
+		// one recording and joins whatever it names
+		byTitle := by == "title" || by == "isbn"
+		keyed := slices.DeleteFunc(slices.Clone(d.byKey[k]), func(i int) bool { return d.excluded[i] })
+		// a title and author this many copies share is a tag's placeholder,
+		// not a book: it joins none of them, and split says so
+		if by == "title" && len(keyed) > dupPlaceholderMax {
+			continue
+		}
+		inKey := map[int]bool{}
+		for _, i := range keyed {
+			inKey[i] = true
+		}
+		// the copies of a group filed under this key: a title's length rule
+		// is measured over them, as an asin or isbn has accepted its own
+		onKey := func(r int) []int {
+			return slices.DeleteFunc(slices.Clone(members[r]), func(i int) bool { return !inKey[i] })
+		}
+		// longest first, so the whole copy is the one the others join, and
+		// the groups do not depend on the listing's order
+		slices.SortStableFunc(keyed, func(a, b int) int {
+			return cmp.Or(cmp.Compare(d.items[b].Duration, d.items[a].Duration), strings.Compare(d.items[a].ID, d.items[b].ID))
+		})
+		closeN := 0
+		// each copy is tried against every group before it, not the first
+		// copy alone: where the first is another reading or another book of
+		// the series, two copies after it may still be one. The closest in
+		// length first, and each group once
+		for x, m := range keyed {
+			earlier := slices.Clone(keyed[:x])
+			slices.SortStableFunc(earlier, func(a, b int) int {
+				return cmp.Or(cmp.Compare(gap(a, m), gap(b, m)), strings.Compare(d.items[a].ID, d.items[b].ID))
+			})
+			tried, apart, closeOne := map[int]bool{}, 0, false
+			for _, e := range earlier {
+				ra, rb := find(e), find(m)
+				if ra == rb || tried[ra] {
+					continue
+				}
+				tried[ra] = true
+				if asin[ra] != "" && asin[rb] != "" && asin[ra] != asin[rb] {
+					continue
+				}
+				if byTitle && len(readers[ra]) > 0 && len(readers[rb]) > 0 && !sharesKey(readers[ra], readers[rb]) {
+					continue
+				}
+				if byTitle && audioApart(onKey(ra), onKey(rb)) {
+					continue
+				}
+				if byTitle && spread(onKey(ra), onKey(rb)) > dupTitleLength {
+					// for incomplete: the shorter may be the group's
+					// fullest copy with files missing. A copy is read
+					// against dupApartMax others at most, so a title many
+					// books share does not ask for every pair's files
+					if y := fullest(onKey(ra)); apart < dupApartMax && farApart(y, m) {
+						d.apart = append(d.apart, dupPair{y, m, by})
+						apart++
+					}
+					continue
+				}
+				if byTitle {
+					if strong, why := evidence(members[ra], members[rb]); strong || why != "" {
+						// uncertain, and near enough in length for one
+						// recording: a candidate, the closest one a copy
+						if !strong && !closeOne && closeN < dupClosePerKey && candidateApart(d.items[e].Duration, d.items[m].Duration) <= candidateSameLength && !d.facts[e].otherReader(&d.facts[m]) {
+							d.close = append(d.close, dupClose{e, m, why})
+							closeOne = true
+							closeN++
+						}
+						continue
+					}
+				}
+				// an asin joins them whatever their lengths; the shorter,
+				// further from the group's fullest copy than a recording
+				// goes, may be it with files missing
+				if y := fullest(members[ra]); !byTitle && farApart(y, m) {
+					d.apart = append(d.apart, dupPair{y, m, by})
+				}
+				parent[rb] = ra
+				if asin[ra] == "" {
+					asin[ra] = asin[rb]
+				}
+				maps.Copy(readers[ra], readers[rb])
+				members[ra] = append(members[ra], members[rb]...)
+			}
+		}
+	}
+	// a title's or isbn's pair that other copies joined after all is in a
+	// group; an asin's is in one by design, and read all the same
+	d.apart = slices.DeleteFunc(d.apart, func(p dupPair) bool { return p.by != "asin" && find(p.i) == find(p.j) })
+
+	// every title or isbn whose copies ended in more than one part, or a
+	// part beside a copy incomplete reports, and what keeps each two parts
+	// apart
+	fieldReaders := func(c []int) map[string]bool {
+		out := map[string]bool{}
+		for _, i := range c {
+			maps.Copy(out, d.readers[i])
+		}
+		return out
+	}
+	reasonBetween := func(xs, ys []int) string {
+		ax, ay := map[string]bool{}, map[string]bool{}
+		for _, i := range xs {
+			if d.asins[i] != "" {
+				ax[d.asins[i]] = true
+			}
+		}
+		for _, i := range ys {
+			if d.asins[i] != "" {
+				ay[d.asins[i]] = true
+			}
+		}
+		rx, ry := fieldReaders(xs), fieldReaders(ys)
+		switch {
+		case len(ax) > 0 && len(ay) > 0 && !sharesKey(ax, ay):
+			return "two editions, with different asins"
+		case len(rx) > 0 && len(ry) > 0 && !sharesKey(rx, ry):
+			return "their narrator fields name different readers"
+		case audioApart(xs, ys):
+			return "one holds no audio, an ebook rather than a recording"
+		case spread(xs, ys) > dupTitleLength:
+			return fmt.Sprintf("lengths %.0f%% apart, further than one recording goes", 100*spread(xs, ys))
+		}
+		_, why := evidence(xs, ys)
+		return why
+	}
+	for _, k := range keys {
+		if !strings.HasPrefix(k, "title:") && !strings.HasPrefix(k, "isbn:") {
+			continue
+		}
+		parts := map[int][]int{}
+		var order []int
+		var incomplete []itemSummary
+		for _, i := range d.byKey[k] {
+			if d.excluded[i] {
+				incomplete = append(incomplete, d.items[i])
+				continue
+			}
+			r := find(i)
+			if parts[r] == nil {
+				order = append(order, r)
+			}
+			parts[r] = append(parts[r], i)
+		}
+		if len(order) < 2 && (len(order) == 0 || len(incomplete) == 0) {
+			continue
+		}
+		split := dupSplit{Key: k, Copies: len(d.byKey[k]), Incomplete: incomplete, Why: []string{}}
+		if strings.HasPrefix(k, "title:") && len(d.byKey[k])-len(incomplete) > dupPlaceholderMax {
+			split.Why = append(split.Why, fmt.Sprintf("a title and author %d copies share, a tag's placeholder rather than a book: not joined by it", len(d.byKey[k])-len(incomplete)))
+		}
+		for a := 0; a < len(order) && a < dupSplitParts; a++ {
+			for b := a + 1; b < len(order) && b < dupSplitParts && len(split.Why) < dupWhyMax; b++ {
+				if why := reasonBetween(parts[order[a]], parts[order[b]]); why != "" && !slices.Contains(split.Why, why) {
+					split.Why = append(split.Why, why)
+				}
+			}
+		}
+		if len(incomplete) > 0 {
+			split.Why = append(split.Why, "a copy incomplete reports, a bad copy rather than a duplicate")
+		}
+		for _, r := range order[:min(len(order), dupSplitParts)] {
+			part := make([]itemSummary, 0, len(parts[r]))
+			for _, i := range parts[r] {
+				part = append(part, d.items[i])
+			}
+			split.Parts = append(split.Parts, part)
+		}
+		d.splits = append(d.splits, split)
 	}
 
 	byRoot := map[int][]int{}
@@ -612,6 +947,27 @@ func (d *dupCollector) groups() []dupGroup {
 		return strings.Compare(a.Items[0].ID, b.Items[0].ID)
 	})
 	return out
+}
+
+// exclude leaves copies out of the groups: the ones incomplete found to be
+// bad copies, reported there and not as duplicates.
+func (d *dupCollector) exclude(ids map[string]bool) {
+	d.excluded = map[int]bool{}
+	for i := range d.items {
+		if ids[d.items[i].ID] {
+			d.excluded[i] = true
+		}
+	}
+}
+
+// lengthOf is an item's length, 0 when it is not known: a record whose
+// folder is gone, or holds nothing playable, keeps a length that says
+// nothing.
+func (d *dupCollector) lengthOf(i int) int {
+	if d.items[i].Missing || d.items[i].Invalid {
+		return 0
+	}
+	return d.items[i].Duration
 }
 
 // sharesKey reports whether two sets have a key in common.

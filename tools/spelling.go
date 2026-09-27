@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/katbyte/abs-mcp/lib/abs"
@@ -444,10 +445,11 @@ func registerSpellingTools(r *registry) {
 	}
 	type renameOut struct {
 		Field        string         `json:"field"`
-		ItemsUpdated int            `json:"items_updated"     jsonschema:"items changed; for authors, the books the author had, which now carry the new name, or after a merge the other author"`
-		Merged       bool           `json:"merged,omitempty"  jsonschema:"authors: the rename merged into an author that already existed"`
-		Items        []string       `json:"items,omitempty"   jsonschema:"languages and publishers: the titles changed, capped at 50"`
-		Preview      *removePreview `json:"preview,omitempty" jsonschema:"remove without confirm: what confirm=true would drop the value from; nothing was changed"`
+		ItemsUpdated int            `json:"items_updated"       jsonschema:"items changed; for authors, the books the author had, which now carry the new name, or after a merge the other author"`
+		Merged       bool           `json:"merged,omitempty"    jsonschema:"authors: the rename merged into an author that already existed"`
+		Items        []string       `json:"items,omitempty"     jsonschema:"languages and publishers: the titles changed, capped at 50"`
+		Preview      *removePreview `json:"preview,omitempty"   jsonschema:"remove without confirm: what confirm=true would drop the value from; nothing was changed"`
+		Unchanged    bool           `json:"unchanged,omitempty" jsonschema:"nothing was written: from and to are the same, or the narrator or author already has the name asked for everywhere it was found"`
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name: "metadata_rename",
@@ -491,6 +493,13 @@ func registerSpellingTools(r *registry) {
 		}
 
 		out := renameOut{Field: field}
+		// from and to the same, spaces and all, asks for nothing: before any
+		// trimming, "Brandon Sanderson " to "Brandon Sanderson " would
+		// otherwise rename the spaced record onto its tidy twin and merge them
+		if !in.Remove && in.From == in.To && len(in.Into) == 0 && in.ToField == "" && in.Split == nil {
+			out.Unchanged = true
+			return nil, out, nil
+		}
 		preview := in.Remove && !in.Confirm
 		switch field {
 		case "tags", "genres":
@@ -543,26 +552,96 @@ func registerSpellingTools(r *registry) {
 			if err != nil {
 				return nil, renameOut{}, err
 			}
+			// the name as given, spaces and all, in every library that has
+			// it, and nothing written until each is known: "Michael Kramer "
+			// is the spaced name, and a library with only the tidy one has
+			// nothing to do with it
+			type named struct {
+				lib  abs.Library
+				name string
+			}
+			var holding []named
+			var all []string
+			for i := range libs {
+				if libs[i].IsPodcast() {
+					continue // a podcast library has no narrators
+				}
+				rows, nerr := client.Narrators(ctx, libs[i].ID)
+				if nerr != nil {
+					return nil, renameOut{}, fmt.Errorf("reading the narrators of %s: %w", libs[i].Name, nerr)
+				}
+				for _, r := range rows {
+					all = append(all, r.Name)
+					if r.Name == in.From {
+						holding = append(holding, named{libs[i], r.Name})
+					}
+				}
+			}
+			if len(holding) == 0 {
+				missing := fmt.Errorf("no narrator named %q", in.From)
+				var near []string
+				for _, n := range all {
+					if n != in.From && strings.EqualFold(strings.TrimSpace(n), strings.TrimSpace(in.From)) && !slices.Contains(near, strconv.Quote(n)) {
+						near = append(near, strconv.Quote(n))
+					}
+				}
+				if len(near) > 0 {
+					missing = fmt.Errorf("%w; spelled otherwise only by spaces or case: %s - pass from= exactly as quoted", missing, strings.Join(near, ", "))
+				}
+				return nil, renameOut{}, missing
+			}
+			// a library whose narrator already has the name asked for has
+			// nothing to rename; with none left, nothing is written
+			if !in.Remove {
+				if holding = slices.DeleteFunc(holding, func(h named) bool { return h.name == to }); len(holding) == 0 {
+					out.Unchanged = true
+					break
+				}
+			}
 			if preview {
-				if out.Preview, err = carrying(ctx, client, libs, field, from); err != nil {
-					return nil, renameOut{}, err
+				out.Preview = &removePreview{Items: []string{}}
+				for _, h := range holding {
+					p, cerr := carrying(ctx, client, []abs.Library{h.lib}, field, h.name)
+					if cerr != nil {
+						return nil, renameOut{}, cerr
+					}
+					out.Preview.Found += p.Found
+					out.Preview.Items = append(out.Preview.Items, p.Items[:min(len(p.Items), previewCap-len(out.Preview.Items))]...)
 				}
 				break
 			}
-			for i := range libs {
+			for _, h := range holding {
 				var n int
 				if in.Remove {
-					n, err = client.RemoveNarrator(ctx, libs[i].ID, from)
+					n, err = client.RemoveNarrator(ctx, h.lib.ID, h.name)
 				} else {
-					n, err = client.RenameNarrator(ctx, libs[i].ID, from, to)
+					n, err = client.RenameNarrator(ctx, h.lib.ID, h.name, to)
 				}
 				if err != nil {
-					return nil, renameOut{}, partly(out.ItemsUpdated, fmt.Errorf("in %s: %w", libs[i].Name, err))
+					return nil, renameOut{}, partly(out.ItemsUpdated, fmt.Errorf("in %s: %w", h.lib.Name, err))
 				}
 				out.ItemsUpdated += n
 			}
 		case "authors":
-			a, err := resolveAuthor(ctx, client, in.Library, from)
+			// a rename that changes nothing writes nothing, and says so: a
+			// rename run again, the name in two libraries already the one
+			// asked for, is done, not ambiguous
+			named, err := authorsNamed(ctx, client, in.Library, in.From)
+			if err != nil {
+				return nil, renameOut{}, err
+			}
+			if !slices.ContainsFunc(named, func(a abs.Author) bool { return a.Name != to }) {
+				out.Unchanged = true
+				break
+			}
+			if len(named) > 1 {
+				names, ids, libraries := make([]string, 0, len(named)), make([]string, 0, len(named)), make([]string, 0, len(named))
+				for _, c := range named {
+					names, ids, libraries = append(names, c.Name), append(ids, c.ID), append(libraries, c.LibraryID)
+				}
+				return nil, renameOut{}, severalNamed("authors", in.From, names, ids, libraries)
+			}
+			a, err := client.Author(ctx, named[0].ID, true)
 			if err != nil {
 				return nil, renameOut{}, err
 			}

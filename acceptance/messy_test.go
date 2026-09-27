@@ -363,6 +363,38 @@ func TestMessyMatched(t *testing.T) {
 	}
 }
 
+// audit_whitespace: the double space seeded in The Egg's subtitle, and the
+// note in its folder with a space before the extension, each with the
+// spaces made visible and the name put right; nothing else in Messy.
+func TestMessyWhitespace(t *testing.T) {
+	out := call(t, "audit_whitespace", messy)
+
+	got := map[string]map[string]any{}
+	for _, row := range rows(t, out["findings"], "findings") {
+		got[text(row["where"])+"|"+text(row["problem"])] = row
+	}
+	want := map[string][2]string{
+		"subtitle|double_space":       {"A␣␣Short Story", "A Short Story"},
+		"file|space_before_extension": {"notes␣.txt", "notes.txt"},
+	}
+	if n := num(t, out["total_findings"], "total_findings"); n != len(want) || len(got) != len(want) {
+		t.Errorf("%d findings = %v, want only %v", n, got, want)
+	}
+	for key, w := range want {
+		row := got[key]
+		if row == nil {
+			t.Errorf("%s not reported: %v", key, got)
+			continue
+		}
+		if row["text"] != w[0] || row["suggest"] != w[1] || row["title"] != "The Egg" {
+			t.Errorf("%s = %v, want %q put right as %q on The Egg", key, row, w[0], w[1])
+		}
+	}
+	if read := num(t, out["files_read"], "files_read"); read != len(messyBooks) {
+		t.Errorf("files_read = %d, want every book, %d", read, len(messyBooks))
+	}
+}
+
 // audit_all on the messy library runs every audit and counts what each found.
 func TestMessyAuditAll(t *testing.T) {
 	out := call(t, "audit_all", withMessy(map[string]any{"deep": true}))
