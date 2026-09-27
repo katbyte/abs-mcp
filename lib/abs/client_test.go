@@ -52,7 +52,7 @@ func TestFlexStringAndSeriesRefs(t *testing.T) {
 	if err := json.Unmarshal([]byte(raw), &m); err != nil {
 		t.Fatal(err)
 	}
-	if m.PublishedYear != "1965" || m.PublishedYear.Int() != 1965 {
+	if m.PublishedYear != "1965" {
 		t.Errorf("publishedYear = %q", m.PublishedYear)
 	}
 	if len(m.Series) != 1 || m.Series[0].Sequence != "1" {

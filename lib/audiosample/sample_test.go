@@ -21,6 +21,8 @@ import (
 const (
 	testItem = "li_1"
 	bookType = "book"
+	// brokenFile is the file the fake stops sending a third of the way in
+	brokenFile = "broken"
 )
 
 // fakeFiles is Audiobookshelf's file route over files made at runtime:
@@ -51,6 +53,20 @@ func newFakeFiles(t *testing.T, files map[string][]byte) *fakeFiles {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 		case !ok:
 			http.NotFound(w, r)
+		case ino == brokenFile:
+			// the whole file promised, a third of it sent, and the
+			// connection dropped: a server or a disk failing mid-file
+			w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(body[:len(body)/3])
+			if fl, ok := w.(http.Flusher); ok {
+				fl.Flush()
+			}
+			if hj, ok := w.(http.Hijacker); ok {
+				if conn, _, err := hj.Hijack(); err == nil {
+					_ = conn.Close()
+				}
+			}
 		default:
 			http.ServeContent(w, r, ino, time.Time{}, bytes.NewReader(body))
 		}
@@ -200,6 +216,34 @@ func TestReadSaysWhyTheServerRefused(t *testing.T) {
 	_, err := s.Read(t.Context(), &Book{ItemID: testItem, Tracks: []Track{{FileID: "locked", Duration: 60}}}, 0, 5, 4000)
 	if err == nil || !strings.Contains(err.Error(), "HTTP 403") || !strings.Contains(err.Error(), "lacks permission") {
 		t.Errorf("a refused file = %v, want the server's 403 and what it means", err)
+	}
+}
+
+// A file the server stops sending partway is an error, not a stretch that
+// comes back short as if the book ended there.
+func TestReadSaysWhenTheServerBrokeOff(t *testing.T) {
+	t.Parallel()
+	needFFmpeg(t)
+
+	wav := generate(t, "tone.wav", "sine=frequency=440:sample_rate=8000", 30)
+	s := newFakeFiles(t, map[string][]byte{brokenFile: wav}).sampler(t)
+	pcm, err := s.Read(t.Context(), &Book{ItemID: testItem, Tracks: []Track{{FileID: brokenFile, Duration: 30}}}, 0, 25, 4000)
+	if err == nil || !strings.Contains(err.Error(), "broke off") {
+		t.Errorf("a file cut off a third in = %d samples, %v; want an error saying the server's reply broke off", len(pcm), err)
+	}
+}
+
+// A file that ends before the length the server gives it is an error, not
+// a stretch that comes back short as if the rest were silence.
+func TestReadSaysWhenAFileEndsEarly(t *testing.T) {
+	t.Parallel()
+	needFFmpeg(t)
+
+	wav := generate(t, "tone.wav", "sine=frequency=440:sample_rate=8000", 10)
+	s := newFakeFiles(t, map[string][]byte{"short": wav}).sampler(t)
+	pcm, err := s.Read(t.Context(), &Book{ItemID: testItem, Tracks: []Track{{FileID: "short", Duration: 30}}}, 0, 25, 4000)
+	if err == nil || !strings.Contains(err.Error(), "short of the length the server gives it") {
+		t.Errorf("a 10s file the server calls 30s = %d samples, %v; want an error saying it ended early", len(pcm), err)
 	}
 }
 

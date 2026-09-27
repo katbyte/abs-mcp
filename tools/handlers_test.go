@@ -32,8 +32,9 @@ type fakeABS struct {
 	mux *http.ServeMux
 	srv *httptest.Server
 
-	mu   sync.Mutex
-	seen []request
+	mu     sync.Mutex
+	seen   []request
+	bodies map[string]reply // what each json route answers, the latest registration's
 }
 
 type request struct {
@@ -44,7 +45,7 @@ type request struct {
 func newFakeABS(t *testing.T) *fakeABS {
 	t.Helper()
 
-	f := &fakeABS{mux: http.NewServeMux()}
+	f := &fakeABS{mux: http.NewServeMux(), bodies: map[string]reply{}}
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		f.mu.Lock()
@@ -57,15 +58,44 @@ func newFakeABS(t *testing.T) *fakeABS {
 	// every library has a narrator list, empty unless a test serves its
 	// own: audit_all and audit_whitespace read it for every book library
 	f.json("GET /api/libraries/{lib}/narrators", `{"narrators":[]}`)
+	// and the providers a server offers, as a real one lists them: the
+	// match tools check a named store against it
+	f.json("GET /api/search/providers", `{"providers":{"books":[{"value":"google"},{"value":"openlibrary"},{"value":"audible"},{"value":"audible.ca"},{"value":"audible.uk"},{"value":"audible.au"}],"podcasts":[{"value":"itunes"}]}}`)
 
 	return f
 }
 
-// json registers a route ("GET /api/libraries") that answers with a body.
-func (f *fakeABS) json(route, body string) {
+// reply is what a registered route answers.
+type reply struct {
+	status int
+	body   string
+}
+
+// json registers a route ("GET /api/libraries") that answers with a body; a
+// route registered again answers with the new body.
+func (f *fakeABS) json(route, body string) { f.answer(route, reply{http.StatusOK, body}) }
+
+// fails registers a route that answers 500, in place of any it had.
+func (f *fakeABS) fails(route string) { f.answer(route, reply{http.StatusInternalServerError, "boom"}) }
+
+func (f *fakeABS) answer(route string, r reply) {
+	f.mu.Lock()
+	_, known := f.bodies[route]
+	f.bodies[route] = r
+	f.mu.Unlock()
+	if known {
+		return
+	}
 	f.mux.HandleFunc(route, func(w http.ResponseWriter, _ *http.Request) {
+		f.mu.Lock()
+		r := f.bodies[route]
+		f.mu.Unlock()
+		if r.status != http.StatusOK {
+			http.Error(w, r.body, r.status)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, body)
+		_, _ = io.WriteString(w, r.body)
 	})
 }
 
@@ -854,6 +884,7 @@ func TestItemMatchApplyNeedsACandidate(t *testing.T) {
 	f := newFakeABS(t)
 	f.json("GET /api/items/"+itemID, item(itemID, "Dune", `"authorName":"Frank Herbert"`, ""))
 	f.json("POST /api/items/"+itemID+"/match", `{"updated":true,"libraryItem":`+item(itemID, "Dune", `"authorName":"Frank Herbert","asin":"B9"`, "")+`}`)
+	f.json("GET /api/libraries/"+libID, `{"id":"`+libID+`","name":"Books","mediaType":"book","provider":"audible"}`) // a row naming no provider takes the library's
 	call := toolCaller(t, f)
 
 	if _, err := call("item_match_apply", map[string]any{"item": itemID, "override_details": true}); err == nil {
@@ -921,6 +952,7 @@ func TestPodcastEpisodesOffsetBelowZero(t *testing.T) {
 	const podID = "33333333-3333-4333-8333-333333333333"
 	f := newFakeABS(t)
 	f.json("GET /api/items/"+podID, `{"id":"`+podID+`","libraryId":"`+libID+`","mediaType":"podcast","media":{"metadata":{"title":"Pod"},"episodes":[{"id":"e1","title":"One"},{"id":"e2","title":"Two"}]}}`)
+	f.json("GET /api/me", `{"id":"u1","username":"kt","type":"root","mediaProgress":[]}`)
 	call := toolCaller(t, f)
 
 	out, err := call("podcast_episodes", map[string]any{"item": podID, "offset": -1})

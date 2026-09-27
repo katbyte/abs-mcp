@@ -41,21 +41,31 @@ type userRef struct {
 func resolveUser(ctx context.Context, client *abs.Client, nameOrID string) (*abs.User, bool, error) {
 	nameOrID = strings.TrimSpace(nameOrID)
 	me, meErr := client.Me(ctx)
-	if nameOrID == "" {
+	// "me" and the like mean the caller, as the argument says, whatever
+	// the accounts are named
+	if nameOrID == "" || slices.Contains(selfTokens, strings.ToLower(nameOrID)) {
 		return me, true, meErr
 	}
-	// a key whose own account cannot be read can still look others up
+	// a key whose own account cannot be read can still look others up; if
+	// that fails as well, both are said
 	isMe := func(id string) bool { return meErr == nil && id == me.ID }
+	withMe := func(err error) error {
+		if err != nil && meErr != nil {
+			return fmt.Errorf("%w; reading the key's own account failed too: %w", err, meErr)
+		}
+		return err
+	}
 	if looksLikeID(nameOrID) {
 		if isMe(nameOrID) {
 			return me, true, nil
 		}
 		other, err := client.User(ctx, nameOrID)
-		return other, false, err
+		return other, false, withMe(err)
 	}
 
 	users, lookupErr := client.Users(ctx, false)
-	if lookupErr == nil {
+	switch {
+	case lookupErr == nil:
 		names := make([]string, 0, len(users))
 		for i := range users {
 			if strings.EqualFold(users[i].Username, nameOrID) {
@@ -63,21 +73,24 @@ func resolveUser(ctx context.Context, client *abs.Client, nameOrID string) (*abs
 					return me, true, nil
 				}
 				other, err := client.User(ctx, users[i].ID)
-				return other, false, err
+				return other, false, withMe(err)
 			}
 			names = append(names, users[i].Username)
 		}
 		lookupErr = fmt.Errorf("no user named %q (have: %s)", nameOrID, strings.Join(names, ", "))
+	// a key that may not list the accounts, answered as refused or as a
+	// route that is not there: it can still name its own
+	case abs.IsForbidden(lookupErr) || abs.IsNotFound(lookupErr):
+	default:
+		return nil, false, withMe(fmt.Errorf("looking up the user %q: %w", nameOrID, lookupErr))
 	}
 
-	// no account by that name, or no permission to look: the name may be a
-	// stand-in for the caller, and a non-admin key cannot list anyone but
-	// themselves. Both end up at the caller's own account.
-	if meErr == nil && (slices.Contains(selfTokens, strings.ToLower(nameOrID)) || strings.EqualFold(me.Username, nameOrID)) {
+	// the caller's own username, which a non-admin key cannot look up
+	if meErr == nil && strings.EqualFold(me.Username, nameOrID) {
 		return me, true, nil
 	}
 
-	return nil, false, lookupErr
+	return nil, false, withMe(lookupErr)
 }
 
 func registerUserTools(r *registry) {
@@ -471,7 +484,12 @@ func registerUserTools(r *registry) {
 		if err := client.RemoveProgress(ctx, p.ID); err != nil {
 			return nil, progressRemoveOut{}, err
 		}
-		if left, err := client.Progress(ctx, it.ID, in.Episode); err == nil && left != nil {
+		// read back: the server has answered a removal it did not make
+		left, err := client.Progress(ctx, it.ID, in.Episode)
+		if err != nil {
+			return nil, progressRemoveOut{}, fmt.Errorf("the server accepted the removal of %q's progress, but reading it back to check failed: %w", it.Title(), err)
+		}
+		if left != nil {
 			return nil, progressRemoveOut{}, fmt.Errorf("the server accepted the removal but %q still has progress", it.Title())
 		}
 
@@ -531,17 +549,25 @@ func registerUserTools(r *registry) {
 		}
 		deleted := map[string]bool{}
 		if len(ids) > 0 {
-			if items, err := client.ItemsBatch(ctx, ids); err == nil {
-				for i := range items {
-					titles[items[i].ID] = items[i].Title()
+			items, err := client.ItemsBatch(ctx, ids)
+			if err != nil {
+				return nil, bookmarksOut{}, fmt.Errorf("reading the bookmarked items: %w", err)
+			}
+			for i := range items {
+				titles[items[i].ID] = items[i].Title()
+			}
+			// the batch leaves out what is gone without a word; asked one
+			// at a time, a deleted item is a 404
+			for _, id := range ids {
+				if titles[id] != "" {
+					continue
 				}
-				// the batch leaves out what is gone without a word; asked one
-				// at a time, a deleted item is a 404
-				for _, id := range ids {
-					if titles[id] == "" {
-						_, gerr := client.Item(ctx, id)
-						deleted[id] = abs.IsNotFound(gerr)
-					}
+				_, gerr := client.Item(ctx, id)
+				switch {
+				case abs.IsNotFound(gerr):
+					deleted[id] = true
+				case gerr != nil:
+					return nil, bookmarksOut{}, fmt.Errorf("reading bookmarked item %s, which the batch left out: %w", id, gerr)
 				}
 			}
 		}
@@ -592,7 +618,11 @@ func registerUserTools(r *registry) {
 
 		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
 		if err != nil && abs.IsNotFound(err) && action == "remove" && looksLikeID(in.Item) {
-			if me, merr := client.Me(ctx); merr == nil && slices.ContainsFunc(me.Bookmarks, func(b abs.Bookmark) bool { return b.LibraryItemID == strings.TrimSpace(in.Item) }) {
+			me, merr := client.Me(ctx)
+			if merr != nil {
+				return nil, bookmarkEditOut{}, fmt.Errorf("%w; reading the account's bookmarks to say whether one is left on it also failed: %w", err, merr)
+			}
+			if slices.ContainsFunc(me.Bookmarks, func(b abs.Bookmark) bool { return b.LibraryItemID == strings.TrimSpace(in.Item) }) {
 				return nil, bookmarkEditOut{}, fmt.Errorf("the item %s has been deleted, and Audiobookshelf will not remove a bookmark on an item it no longer has: the bookmark stays in the account", in.Item)
 			}
 		}
@@ -644,9 +674,13 @@ func registerUserTools(r *registry) {
 			out.Result, out.WasTitled = "renamed", held.Title
 			b, err = client.UpdateBookmark(ctx, it.ID, in.Seconds, in.Title)
 		} else if b, err = client.CreateBookmark(ctx, it.ID, in.Seconds, in.Title); err != nil {
-			// made meanwhile by another client: renamed rather than duplicated
+			// made meanwhile by another client: renamed rather than
+			// duplicated. When that fails too, both say what went wrong
 			out.Result = "renamed"
-			b, err = client.UpdateBookmark(ctx, it.ID, in.Seconds, in.Title)
+			addErr := err
+			if b, err = client.UpdateBookmark(ctx, it.ID, in.Seconds, in.Title); err != nil {
+				err = fmt.Errorf("adding the bookmark failed: %w; renaming one made meanwhile at that time failed too: %w", addErr, err)
+			}
 		}
 		if err != nil {
 			return nil, bookmarkEditOut{}, err
@@ -809,7 +843,7 @@ func registerUserTools(r *registry) {
 		for day, secs := range st.Days {
 			d, err := time.Parse("2006-01-02", day)
 			if err != nil {
-				continue
+				return nil, statsOut{}, fmt.Errorf("the server's listening stats name a day %q that is not a date, so the totals by week and month cannot be counted: %w", day, err)
 			}
 			if age := now.Sub(d); age <= 7*24*time.Hour {
 				week += secs
@@ -834,7 +868,13 @@ func registerUserTools(r *registry) {
 				AuthorName string `json:"authorName"`
 				Author     string `json:"author"`
 			}
-			_ = json.Unmarshal(it.MediaMetadata, &meta)
+			// an item the server sends no metadata for has no title to give
+			if len(it.MediaMetadata) == 0 {
+				it.MediaMetadata = json.RawMessage("null")
+			}
+			if err := json.Unmarshal(it.MediaMetadata, &meta); err != nil {
+				return nil, statsOut{}, fmt.Errorf("reading the title of item %s from the server's listening stats: %w", it.ID, err)
+			}
 			author := meta.AuthorName
 			if author == "" {
 				author = meta.Author

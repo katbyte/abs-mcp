@@ -77,13 +77,13 @@ func (p providerConfig) checkProviders(ctx context.Context, client *abs.Client, 
 	if len(names) == 0 {
 		return nil
 	}
-	// the list is only what the names are checked against: a server that
-	// cannot give it is not refused for that, and the search that follows
-	// says what is wrong
 	known, _, err := client.Providers(ctx)
+	if err != nil {
+		return fmt.Errorf("reading the server's providers to check %s against: %w", strings.Join(names, ", "), err)
+	}
 	for _, name := range names {
 		switch {
-		case err == nil && !slices.Contains(known, name):
+		case !slices.Contains(known, name):
 			return fmt.Errorf("the server has no provider %q; it has %s", name, strings.Join(known, ", "))
 		case lookup && !isAudible(name):
 			return fmt.Errorf("%s cannot look up an asin; only an Audible store can: %s", name, audibleStores(known))
@@ -262,13 +262,14 @@ func registerMatchTagTool(r *registry) {
 		ASIN     string `json:"asin,omitempty"`
 		ISBN     string `json:"isbn,omitempty"`
 		Provider string `json:"provider,omitempty" jsonschema:"the store recorded; empty when none had it"`
-		Error    string `json:"error,omitempty"`
+		Error    string `json:"error,omitempty"    jsonschema:"the lookup or the tagging failed: the book is neither tagged nor known to be missing from the stores"`
 	}
 	type tagOut struct {
 		Checked    int      `json:"checked"               jsonschema:"matched books looked at: this call's window"`
 		Tagged     int      `json:"tagged"`
 		Already    int      `json:"already_tagged"        jsonschema:"left alone; overwrite re-tags them"`
 		NotFound   int      `json:"not_found"             jsonschema:"no store in providers has the asin; these are listed with no provider"`
+		Failed     int      `json:"failed"                jsonschema:"rows with an error: a store's search failed, or the tag could not be written"`
 		Rows       []tagRow `json:"rows"                  jsonschema:"the books tagged or not found; already-tagged books are only counted"`
 		NextOffset int      `json:"next_offset,omitempty" jsonschema:"pass back as offset for the next matched books; absent when this call reached the last"`
 	}
@@ -276,7 +277,7 @@ func registerMatchTagTool(r *registry) {
 		Name: "item_match_tag",
 		Description: "Record which store each matched book's asin comes from, as the provider tag (zz-provider:audible.ca by default), for books matched before the tag existed. " +
 			"Each asin is looked up at the providers in order and the first store that has it is recorded, so [audible.ca, audible] tags a book sold in both stores as Canadian. " +
-			"Books that already carry the tag are left alone unless overwrite is set; a book no store has is listed with no provider so it can be looked at. One provider request per untagged book, so it works through limit matched books per call, in the order they were added: pass next_offset back as offset for the next. Changes server state.",
+			"Books that already carry the tag are left alone unless overwrite is set; a book no store has is listed with no provider so it can be looked at, and one whose lookup failed is listed with the error and counted in failed, not not_found. One provider request per untagged book, so it works through limit matched books per call, in the order they were added: pass next_offset back as offset for the next. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in tagIn) (*mcp.CallToolResult, tagOut, error) {
 		if !prov.providerTagging() {
 			return nil, tagOut{}, errors.New("the provider tag is off (--provider-tag off); nothing to write")
@@ -321,18 +322,31 @@ func registerMatchTagTool(r *registry) {
 				continue
 			}
 			row := tagRow{ID: it.ID, Title: it.Title(), ASIN: asin, ISBN: isbn}
+			// the first store with a record; a search that fails says nothing
+			// about the store, so the book is not looked for at the next one
 			for _, provider := range providers {
-				if _, err := providerRecord(ctx, client, it, provider, asin, isbn); err == nil {
+				_, err := providerRecord(ctx, client, it, provider, asin, isbn)
+				if err == nil {
 					row.Provider = provider
 					break
 				}
+				if _, none := errors.AsType[*noRecordError](err); !none {
+					row.Error = fmt.Sprintf("looking the book up at %s: %v", provider, err)
+					break
+				}
 			}
-			if row.Provider == "" {
+			switch {
+			case row.Error != "":
+				out.Failed++
+			case row.Provider == "":
 				out.NotFound++
-			} else if err := r.tagOne(ctx, it.ID, row.Provider); err != nil {
-				row.Error = err.Error()
-			} else {
-				out.Tagged++
+			default:
+				if err := r.tagOne(ctx, it.ID, row.Provider); err != nil {
+					row.Error = err.Error()
+					out.Failed++
+				} else {
+					out.Tagged++
+				}
 			}
 			out.Rows = append(out.Rows, row)
 		}

@@ -183,12 +183,14 @@ func registerPodcastTools(r *registry) {
 			return nil, episodesOut{}, err
 		}
 		progress := map[string]*abs.MediaProgress{}
-		if me, err := client.Me(ctx); err == nil {
-			for i := range me.MediaProgress {
-				p := &me.MediaProgress[i]
-				if p.LibraryItemID == it.ID && p.EpisodeID != "" {
-					progress[p.EpisodeID] = p
-				}
+		me, err := client.Me(ctx)
+		if err != nil {
+			return nil, episodesOut{}, fmt.Errorf("reading the episodes' progress: %w", err)
+		}
+		for i := range me.MediaProgress {
+			p := &me.MediaProgress[i]
+			if p.LibraryItemID == it.ID && p.EpisodeID != "" {
+				progress[p.EpisodeID] = p
 			}
 		}
 
@@ -238,7 +240,9 @@ func registerPodcastTools(r *registry) {
 		if err != nil {
 			return nil, episodeGetOut{}, err
 		}
-		e.Progress, _ = client.Progress(ctx, it.ID, e.ID)
+		if e.Progress, err = client.Progress(ctx, it.ID, e.ID); err != nil {
+			return nil, episodeGetOut{}, fmt.Errorf("reading the episode's progress: %w", err)
+		}
 
 		summary := summarizeEpisode(e, it.Title(), true)
 		summary.Description = clip(plain(e.Description), 1500)

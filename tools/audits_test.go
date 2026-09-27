@@ -356,6 +356,16 @@ func storeFixture(t *testing.T) *fakeABS {
 	})
 	onDisk := map[string]image.Image{"li_1": artwork(300, 0), "li_2": artwork(500, 0.5)}
 	f.mux.HandleFunc("GET /api/items/{id}/cover", func(w http.ResponseWriter, r *http.Request) {
+		// its size read fails, and the picture comes through: the store's
+		// copy is the same picture, a little bigger
+		if r.PathValue("id") == coverFails {
+			if r.URL.Query().Get("raw") == "1" {
+				http.Error(w, "boom", http.StatusInternalServerError)
+				return
+			}
+			_, _ = io.WriteString(w, encodeJPEG(t, artwork(300, 0), 85))
+			return
+		}
 		img, ok := onDisk[r.PathValue("id")]
 		if !ok {
 			http.NotFound(w, r)
@@ -383,11 +393,13 @@ func TestAuditCoversStoreCarriesOnPastABook(t *testing.T) {
 	for _, row := range list(t, out["findings"]) {
 		rows[str(t, row["id"])] = append(rows[str(t, row["id"])], str(t, row["problem"]))
 	}
-	if !slices.Contains(rows["li_1"], "upgrade") || !slices.Equal(rows["li_2"], []string{"skipped"}) || !slices.Equal(rows["li_3"], []string{"upgrade"}) {
-		t.Errorf("rows = %v, want an upgrade, a skipped store, and an upgrade over the gone file", rows)
+	// the gone file is missing, as a book with no cover is, and the store's
+	// copy an upgrade over it
+	if !slices.Contains(rows["li_1"], "upgrade") || !slices.Equal(rows["li_2"], []string{"skipped"}) || !slices.Equal(rows["li_3"], []string{"missing", "upgrade"}) {
+		t.Errorf("rows = %v, want an upgrade, a skipped store, and the gone file missing with an upgrade over it", rows)
 	}
-	if num(t, out["items_scanned"]) != 3 || num(t, out["total_findings"]) != 3 {
-		t.Errorf("items_scanned %v total_findings %v, want 3 books and small + two upgrades", out["items_scanned"], out["total_findings"])
+	if num(t, out["items_scanned"]) != 3 || num(t, out["total_findings"]) != 4 {
+		t.Errorf("items_scanned %v total_findings %v, want 3 books and small, missing and two upgrades", out["items_scanned"], out["total_findings"])
 	}
 
 	// a book at a time: the library-wide rows come with the first only

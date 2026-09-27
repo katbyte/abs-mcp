@@ -142,6 +142,24 @@ func IsNotFound(err error) bool {
 	return errors.As(err, &he) && he.Status == http.StatusNotFound
 }
 
+// IsForbidden reports whether err is the server refusing the key: a 401 or a
+// 403, as an admin-only route answers any other key.
+func IsForbidden(err error) bool {
+	var he *HTTPError
+	return errors.As(err, &he) && (he.Status == http.StatusForbidden || he.Status == http.StatusUnauthorized)
+}
+
+// errorBody is what a failed request's body says, for its error, or why it
+// could not be read: a body cut off is part of what went wrong.
+func errorBody(r io.Reader) string {
+	body, err := io.ReadAll(io.LimitReader(r, errBodyPreview))
+	text := truncate(strings.TrimSpace(string(body)), errBodyPreview)
+	if err != nil {
+		return strings.TrimSpace(text + " (reading the rest of the reply failed: " + err.Error() + ")")
+	}
+	return text
+}
+
 // do performs a request. body (when non-nil) is sent as JSON; out (when
 // non-nil) receives the decoded JSON response.
 func (c *Client) do(ctx context.Context, method, path string, query url.Values, body, out any) error {
@@ -206,13 +224,17 @@ func (c *Client) doRaw(ctx context.Context, method, path string, query url.Value
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
-	if err != nil {
-		return nil, err
-	}
-
+	// a refusal keeps its status whether or not its body can be read: a 404
+	// read as a network error would not be "none"
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, &HTTPError{Method: method, Path: path, Status: resp.StatusCode, Body: truncate(strings.TrimSpace(string(raw)), errBodyPreview)}
+		return nil, &HTTPError{Method: method, Path: path, Status: resp.StatusCode, Body: errorBody(resp.Body)}
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("%s %s: reading the reply: %w", method, path, err)
+	}
+	if len(raw) > maxResponseBytes {
+		return nil, fmt.Errorf("%s %s: the reply is over %d MiB, more than abs-mcp reads: ask for less at a time", method, path, maxResponseBytes>>20)
 	}
 	// the API answers JSON or a word of text; a web page is something in
 	// front of it (a login wall, a proxy's own page) answering 200 for a
@@ -261,9 +283,9 @@ func (c *Client) open(ctx context.Context, path string, query url.Values, rng st
 		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, errBodyPreview))
+		body := errorBody(resp.Body)
 		_ = resp.Body.Close()
-		return nil, &HTTPError{Method: http.MethodGet, Path: path, Status: resp.StatusCode, Body: truncate(strings.TrimSpace(string(body)), errBodyPreview)}
+		return nil, &HTTPError{Method: http.MethodGet, Path: path, Status: resp.StatusCode, Body: body}
 	}
 
 	return resp, nil
@@ -296,8 +318,7 @@ func (c *Client) uploadMultipart(ctx context.Context, path, field, filename stri
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, errBodyPreview))
-		return &HTTPError{Method: http.MethodPost, Path: path, Status: resp.StatusCode, Body: truncate(strings.TrimSpace(string(body)), errBodyPreview)}
+		return &HTTPError{Method: http.MethodPost, Path: path, Status: resp.StatusCode, Body: errorBody(resp.Body)}
 	}
 
 	return nil

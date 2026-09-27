@@ -399,12 +399,17 @@ func registerMatchBatchTools(r *registry) {
 				if provider == "" {
 					provider = in.Provider
 				}
+				var err error
 				if provider == "" {
-					provider, _, _ = prov.matchQuery(ctx, client, it, "", "", "")
+					provider, _, _, err = prov.matchQuery(ctx, client, it, "", "", "")
 				}
-				r.applyRow(ctx, it.ID, provider, how, &res)
-				if in.Smart {
-					out.Counts = addCounts(out.Counts, smartCounts(res.Fields))
+				if err != nil {
+					res.Error = err.Error()
+				} else {
+					r.applyRow(ctx, it.ID, provider, how, &res)
+					if in.Smart {
+						out.Counts = addCounts(out.Counts, smartCounts(res.Fields))
+					}
 				}
 			}
 			// what the server did, not what was asked: a preview and a match

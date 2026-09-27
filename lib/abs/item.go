@@ -187,13 +187,17 @@ func (c *Client) CoverSize(ctx context.Context, itemID string) (width, height in
 	}
 	defer func() { _ = body.Close() }()
 
-	r := bufio.NewReader(body)
+	read := &readFailure{r: body}
+	r := bufio.NewReader(read)
 	if _, err := r.Peek(1); errors.Is(err, io.EOF) {
 		return 0, 0, ErrNoCover // an empty body: nothing to measure
 	}
 	cfg, _, err := image.DecodeConfig(r)
-	if err != nil {
-		return 0, 0, fmt.Errorf("decoding cover for %s: %w", itemID, err)
+	switch {
+	case read.err != nil:
+		return 0, 0, fmt.Errorf("reading cover for %s: %w", itemID, read.err)
+	case err != nil:
+		return 0, 0, fmt.Errorf("decoding cover for %s: %w: %w", itemID, ErrCoverUnreadable, err)
 	}
 
 	return cfg.Width, cfg.Height, nil
@@ -201,6 +205,27 @@ func (c *Client) CoverSize(ctx context.Context, itemID string) (width, height in
 
 // ErrNoCover reports that an item has no cover image at all.
 var ErrNoCover = errors.New("item has no cover")
+
+// ErrCoverUnreadable is a cover the server sent whole that cannot be
+// decoded: a format the standard library does not read (webp, avif), or a
+// damaged file. The file's problem, not the server's.
+var ErrCoverUnreadable = errors.New("the cover image cannot be decoded")
+
+// readFailure is a reader that keeps the error a read of it failed with,
+// other than its end: what a decoder reports as a bad image may be a body
+// that broke off.
+type readFailure struct {
+	r   io.Reader
+	err error
+}
+
+func (f *readFailure) Read(p []byte) (int, error) {
+	n, err := f.r.Read(p)
+	if err != nil && !errors.Is(err, io.EOF) {
+		f.err = err
+	}
+	return n, err
+}
 
 // SetCoverFromURL downloads an image and sets it as the item's cover.
 func (c *Client) SetCoverFromURL(ctx context.Context, id, imageURL string) error {
@@ -305,8 +330,10 @@ func (c *Client) SearchChapters(ctx context.Context, asin, region string) ([]Cha
 	if err := c.get(ctx, "/api/search/chapters", q, &resp); err != nil {
 		return nil, err
 	}
+	// the server's own word for what went wrong at Audible, which may be
+	// no chapters or a failed lookup: not dressed as a status it did not send
 	if resp.Error != "" {
-		return nil, &HTTPError{Method: "GET", Path: "/api/search/chapters", Status: 404, Body: resp.Error}
+		return nil, fmt.Errorf("GET /api/search/chapters: %s", resp.Error)
 	}
 	out := make([]Chapter, 0, len(resp.Chapters))
 	for i, ch := range resp.Chapters {

@@ -246,25 +246,25 @@ func registerLibraryTools(r *registry) {
 		}
 		settings(&out)
 
-		if st, err := client.LibraryStats(ctx, lib.ID); err == nil {
-			out.Items = st.TotalItems
-			out.Duration = wholeSec(st.TotalDuration)
-			out.Size = st.TotalSize
-			out.AudioFiles = st.NumAudioTracks
-			for _, a := range st.AuthorsWithCount {
-				out.TopAuthors = append(out.TopAuthors, countRow{Name: a.Name, ID: a.ID, Count: a.Count})
-			}
-			for _, g := range st.GenresWithCount {
-				out.TopGenres = append(out.TopGenres, countRow{Name: g.Genre, Count: g.Count})
-			}
-			for _, it := range st.LongestItems {
-				out.Longest = append(out.Longest, statRow{ID: it.ID, Title: it.Title, Duration: wholeSec(it.Duration)})
-			}
-			for _, it := range st.LargestItems {
-				out.Largest = append(out.Largest, statRow{ID: it.ID, Title: it.Title, Size: it.Size})
-			}
-		} else {
-			out.Items = fd.BookCount + fd.PodcastCount
+		st, err := client.LibraryStats(ctx, lib.ID)
+		if err != nil {
+			return nil, getOut{}, fmt.Errorf("reading the library's stats: %w", err)
+		}
+		out.Items = st.TotalItems
+		out.Duration = wholeSec(st.TotalDuration)
+		out.Size = st.TotalSize
+		out.AudioFiles = st.NumAudioTracks
+		for _, a := range st.AuthorsWithCount {
+			out.TopAuthors = append(out.TopAuthors, countRow{Name: a.Name, ID: a.ID, Count: a.Count})
+		}
+		for _, g := range st.GenresWithCount {
+			out.TopGenres = append(out.TopGenres, countRow{Name: g.Genre, Count: g.Count})
+		}
+		for _, it := range st.LongestItems {
+			out.Longest = append(out.Longest, statRow{ID: it.ID, Title: it.Title, Duration: wholeSec(it.Duration)})
+		}
+		for _, it := range st.LargestItems {
+			out.Largest = append(out.Largest, statRow{ID: it.ID, Title: it.Title, Size: it.Size})
 		}
 
 		return nil, out, nil

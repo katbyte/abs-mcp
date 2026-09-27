@@ -9,6 +9,7 @@
 - `item_embed_metadata` waits for the embed (up to two minutes), rescans the item and checks its tags: `embedded`, `rescan`, `differs`, or `running` when it stopped waiting, instead of `started`
 - `podcast_episode_download` `queued` lists only what was sent: `already_held` and `already_queued` list the rest
 - `lib/abs`: `NewPodcast.EpisodesToDownload` is gone, as the server ignores it
+- `lib/abs`: `FlexString.Int` is gone: it turned a value that was not a number into 0, and nothing used it
 - `item_delete`, `podcast_episode_delete`, `library_issues_remove` and `metadata_rename remove` change nothing without `confirm`: they answer what they would remove (the record, the files, the bookmarks, the titles and paths)
 - `collection_delete` and `playlist_delete` are delete tools, registered only with `--enable-delete`; removing a playlist's last entry is refused without it, as the server deletes an empty playlist
 - a tool that changes an item needs its whole title or its id: a title that was only part of one book's changed that book, so `item_delete item=Foundation` could delete Foundation and Empire
@@ -62,6 +63,18 @@
 - `library_issues_remove` items carry `full_path` beside `path`, which is inside the library as the audits give it
 
 ### Fixed
+
+- a server request a tool relies on that failed was treated as coming back empty; it is now an error that says what failed, and after a write, that the write was made:
+  - `user_progress_remove` read back no progress, `user_bookmarks` blank titles, and a book deleted or not by guesswork; `user_stats` skipped days and titles it could not read; `podcast_episodes` and `podcast_episode_get` showed no progress
+  - `server_info` left out the providers and, on any error, the totals (only a key refused them now gets the note); `server_sessions` blank user names; `library_get` fell back to rough counts
+  - `author_edit`, `author_image_set`, `author_match_apply` and `item_match_apply` reported the record from before their write when reading it back failed; `item_match` and the batch apply searched with no provider when the library could not be read
+  - `item_match_tag` counted a store whose search failed as not having the book, and could tag the next store: the row now says what failed, counted in `failed`; a provider list that cannot be read is an error rather than a check skipped
+  - `series_merge` listed every book as moved when the server moved fewer, and `series_get`, `series_merge` and `item_batch_edit` used what was known of a book the server left out of a read
+  - a user named while the account list failed was taken for the caller; `me` now always means the caller
+  - `user_bookmark_edit` add hid why the add failed behind the rename it tried next
+- a cover the server failed to send was skipped without a word, and with `deep` `audit_all` counted covers clean through an outage: `audit_covers` lists each with why, `audit_all` says how many under `partial`, and a cover file that is gone is `missing`. `item_cover_upgrade` could replace a cover whose size read failed; only a format Go cannot read (webp) is judged without its size
+- `item_compare_audio` read a file that broke off or ended early as a short stretch, lowering its scores: both are errors
+- a refusal whose reply broke off lost its status (a 404 no longer meant "none"), a reply over 64 MiB came back as a decode error, and a failed chapter lookup at Audible read as a 404
 
 - every tool that finds an author or series by name (`author_get`, `author_edit`, `author_image_set`, `author_match`, `author_match_apply`, `author_delete`, `series_get`, `series_edit`, `series_merge`) and `metadata_rename` for authors and narrators finds a name given with a space at an end as written, and that record alone (tags, genres, languages and publishers still trim the value given): "Mistborn " was taken for "Mistborn", and `series_edit` advised merging the tidy series into the spaced one (it now advises by id, from the spaced into the tidy). A stored name is never trimmed to answer a tidy one, so a delete by "Brandon Sanderson" cannot reach "Brandon Sanderson "; a name nothing answers names the records that differ from it only by spaces or case, with their ids, and says when a library hides one-book series, which only an id reaches. Several authors or series matching list each name with its id. A narrator is renamed or removed in every library that has it spelled exactly as asked, and only there. `series_merge` matches a book's series by id, so merging "Mistborn " into "Mistborn" no longer writes the tidy series onto a book twice. A name that only a series with no books left has exactly, where a case variant has books, is refused, naming both. A rename to the name a record already has, and one whose from and to are the same, write nothing and answer `unchanged`, where the first was reported as done and the last renamed the tidy record to its own name; so does an author rename run again whose from still finds the record, case aside; a narrator no library has is "no narrator named", naming any spelling that differs only by spaces or case
 - a playlist entry naming an episode for a book, or another podcast's episode, took the server down; one with no episode for a podcast stored a broken entry; another library's book was accepted. Entries are checked before anything is sent

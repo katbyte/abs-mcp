@@ -111,11 +111,14 @@ type Sampler struct {
 	secret string
 	base   string // the proxy's address and secret path, what ffmpeg is given
 	srv    *http.Server
+	served chan error // what Serve returned, once the proxy has stopped
 	read   atomic.Int64
+	reads  atomic.Int64 // numbers each decode, so the proxy can say which one a failure hit
 
 	mu      sync.Mutex
 	items   map[string]bool  // the items Read and Stream have been asked for
-	refused map[string]error // the server's answer when it would not serve a file, by item/file
+	failed  map[string]error // what went wrong fetching a file from the server, by decode
+	stopped error            // why the proxy stopped serving, when it did before Close
 }
 
 // New starts a sampler reading through client. It fails with ErrNoFFmpeg when
@@ -135,15 +138,24 @@ func New(ctx context.Context, client *abs.Client) (*Sampler, error) {
 	}
 
 	s := &Sampler{
-		client:  client,
-		ffmpeg:  bin,
-		secret:  hex.EncodeToString(key[:]),
-		items:   map[string]bool{},
-		refused: map[string]error{},
+		client: client,
+		ffmpeg: bin,
+		secret: hex.EncodeToString(key[:]),
+		items:  map[string]bool{},
+		failed: map[string]error{},
+		served: make(chan error, 1),
 	}
 	s.base = "http://" + ln.Addr().String() + "/" + s.secret
 	s.srv = &http.Server{Handler: http.HandlerFunc(s.serve), ReadHeaderTimeout: 30 * time.Second}
-	go func() { _ = s.srv.Serve(smallBuffers{ln}) }()
+	go func() {
+		err := s.srv.Serve(smallBuffers{ln})
+		if !errors.Is(err, http.ErrServerClosed) {
+			s.mu.Lock()
+			s.stopped = err
+			s.mu.Unlock()
+		}
+		s.served <- err
+	}()
 
 	return s, nil
 }
@@ -163,8 +175,14 @@ func (l smallBuffers) Accept() (net.Conn, error) {
 	return c, err
 }
 
-// Close stops the proxy.
-func (s *Sampler) Close() error { return s.srv.Close() }
+// Close stops the proxy, and says why it had stopped if it stopped early.
+func (s *Sampler) Close() error {
+	err := s.srv.Close()
+	if serr := <-s.served; !errors.Is(serr, http.ErrServerClosed) {
+		err = errors.Join(err, fmt.Errorf("the local proxy ffmpeg reads through had stopped: %w", serr))
+	}
+	return err
+}
 
 // BytesRead is how many bytes of audio files the server has sent so far.
 func (s *Sampler) BytesRead() int64 { return s.read.Load() }
@@ -216,10 +234,17 @@ func (s *Sampler) Stream(ctx context.Context, b *Book, start, length float64, ra
 	return nil
 }
 
+// decodeShortBy is how many seconds a file's stretch may come back short of
+// what was asked before it is an error.
+const decodeShortBy = 2
+
 // decode runs ffmpeg over one file of the book, from off seconds in for n
 // seconds, handing the samples to fn.
 func (s *Sampler) decode(ctx context.Context, itemID, fileID string, off, n float64, rate int, fn func([]int16) error) error {
-	src := s.base + "/" + itemID + "/" + fileID
+	// the decode's number rides along, so what the proxy meets fetching the
+	// file is this decode's to report
+	read := strconv.FormatInt(s.reads.Add(1), 10)
+	src := s.base + "/" + itemID + "/" + fileID + "?read=" + read
 	// -nostdin: ffmpeg otherwise reads the caller's stdin for keystrokes,
 	// which in stdio mode is the MCP session itself. fastseek: without it
 	// ffmpeg reaches a point in an mp3 by reading the file up to it, the whole
@@ -252,7 +277,8 @@ func (s *Sampler) decode(ctx context.Context, itemID, fileID string, off, n floa
 	raw := make([]byte, 64<<10)
 	pcm := make([]int16, len(raw)/2)
 	var failed error
-	for got := 0; got < want && failed == nil; {
+	got := 0
+	for got < want && failed == nil {
 		k, err := io.ReadFull(stdout, raw[:2*min(len(pcm), want-got)])
 		for i := range k / 2 {
 			pcm[i] = int16(binary.LittleEndian.Uint16(raw[2*i:])) //nolint:gosec // s16le: the bits are the sample
@@ -266,26 +292,76 @@ func (s *Sampler) decode(ctx context.Context, itemID, fileID string, off, n floa
 		}
 	}
 	if failed != nil {
+		// ffmpeg is killed here, so Wait can only say it was
 		cancel()
 		_ = cmd.Wait()
+		s.forget(read)
 		return failed
 	}
-	_, _ = io.Copy(io.Discard, stdout) // the quarter second over
-	if err := cmd.Wait(); err != nil {
-		if ctx.Err() != nil {
-			return context.Cause(ctx)
-		}
-		s.mu.Lock()
-		refused := s.refused[itemID+"/"+fileID]
-		s.mu.Unlock()
-		if refused != nil {
-			return fmt.Errorf("reading file %s of item %s: %w", fileID, itemID, refused)
-		}
+	_, drainErr := io.Copy(io.Discard, stdout) // the quarter second over
+	waitErr := cmd.Wait()
+	s.mu.Lock()
+	fetch, stopped := s.failed[read], s.stopped
+	delete(s.failed, read)
+	s.mu.Unlock()
+	switch {
+	case waitErr != nil && ctx.Err() != nil:
+		return context.Cause(ctx)
+	// a file the server refused or broke off is the reason, whether ffmpeg
+	// failed on it or decoded what it got and came back short
+	case fetch != nil:
+		return fmt.Errorf("reading file %s of item %s: %w", fileID, itemID, fetch)
+	case waitErr != nil && stopped != nil:
+		return fmt.Errorf("reading file %s of item %s: the local proxy ffmpeg reads through stopped: %w", fileID, itemID, stopped)
+	case waitErr != nil:
 		msg := strings.TrimSpace(strings.ReplaceAll(stderr.String(), s.base, ""))
-		return fmt.Errorf("ffmpeg could not decode file %s of item %s: %w: %s", fileID, itemID, err, msg[:min(len(msg), 300)])
+		return fmt.Errorf("ffmpeg could not decode file %s of item %s: %w: %s", fileID, itemID, waitErr, msg[:min(len(msg), 300)])
+	case drainErr != nil:
+		return fmt.Errorf("reading what ffmpeg decoded from file %s of item %s: %w", fileID, itemID, drainErr)
+	// the stretch was cut to the file's length as the server gives it, so
+	// coming back short is the file ending early: a stretch of silence
+	// taken for audio would lower a comparison without a word. A second or
+	// two is a seek landing late, or an encoder's padding
+	case want-got > decodeShortBy*rate:
+		return fmt.Errorf("file %s of item %s ended %.1fs into a %.1fs stretch starting %.1fs in, short of the length the server gives it", fileID, itemID, float64(got)/float64(rate), n, off)
 	}
 
 	return nil
+}
+
+// forget drops what the proxy recorded for a decode that is over.
+func (s *Sampler) forget(read string) {
+	s.mu.Lock()
+	delete(s.failed, read)
+	s.mu.Unlock()
+}
+
+// fail records what went wrong fetching a file for a decode, the first
+// thing only.
+func (s *Sampler) fail(read string, err error) {
+	if read == "" {
+		return // not one of ours: ffmpeg always sends the number
+	}
+	s.mu.Lock()
+	if s.failed[read] == nil {
+		s.failed[read] = err
+	}
+	s.mu.Unlock()
+}
+
+// readErr is a response body that keeps the error a read of it ended with,
+// other than its end.
+type readErr struct {
+	r   io.Reader
+	err error
+}
+
+func (e *readErr) Read(p []byte) (int, error) {
+	n, err := e.r.Read(p)
+	if err != nil && !errors.Is(err, io.EOF) {
+		e.err = err
+	}
+	return n, err
 }
 
 // serve is the proxy: GET /<secret>/<item>/<file> is the server's file route
@@ -310,17 +386,17 @@ func (s *Sampler) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	read := r.URL.Query().Get("read")
 	resp, err := s.client.ItemFileRange(r.Context(), item, file, r.Header.Get("Range"))
 	if err != nil {
 		status := http.StatusBadGateway
 		if he, ok := errors.AsType[*abs.HTTPError](err); ok {
 			status = he.Status
 		}
-		// a range past the end is ffmpeg probing, not the server refusing
-		if status != http.StatusRequestedRangeNotSatisfiable {
-			s.mu.Lock()
-			s.refused[item+"/"+file] = err
-			s.mu.Unlock()
+		// a range past the end is ffmpeg probing, not the server refusing;
+		// and a request ffmpeg gave up on is not the server failing
+		if status != http.StatusRequestedRangeNotSatisfiable && r.Context().Err() == nil {
+			s.fail(read, err)
 		}
 		http.Error(w, http.StatusText(status), status)
 		return
@@ -333,7 +409,14 @@ func (s *Sampler) serve(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.WriteHeader(resp.StatusCode)
-	// ffmpeg hangs up once it has its stretch, which ends the copy
-	n, _ := io.Copy(w, resp.Body)
+	// ffmpeg hangs up once it has its stretch, which ends the copy with a
+	// write that fails or a read cancelled with the request: neither is the
+	// server's doing. A read failing while ffmpeg still waits is, and the
+	// audio it was reading comes back short
+	body := &readErr{r: resp.Body}
+	n, _ := io.Copy(w, body) // a failed write is ffmpeg hanging up; a failed read is kept in body.err
 	s.read.Add(n)
+	if body.err != nil && r.Context().Err() == nil {
+		s.fail(read, fmt.Errorf("the server's reply broke off after %d bytes: %w", n, body.err))
+	}
 }

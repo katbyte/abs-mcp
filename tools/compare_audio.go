@@ -102,10 +102,10 @@ func registerCompareAudio(r *registry) {
 			}
 			return nil, compareOut{}, err
 		}
-		defer func() { _ = sampler.Close() }()
-
 		scores, read, err := compareBooks(ctx, sampler, bookA, bookB)
-		if err != nil {
+		bytesRead := sampler.BytesRead()
+		// the proxy stopping early is said beside whatever the read found
+		if err := errors.Join(err, sampler.Close()); err != nil {
 			return nil, compareOut{}, err
 		}
 		out := compareOut{
@@ -114,7 +114,7 @@ func registerCompareAudio(r *registry) {
 			Item:      compareSide{ID: a.ID, Title: a.Title(), Author: a.Media.Metadata.AuthorDisplay(), Path: a.RelPath, Duration: wholeSec(bookA.Duration())},
 			Other:     compareSide{ID: b.ID, Title: b.Title(), Author: b.Media.Metadata.AuthorDisplay(), Path: b.RelPath, Duration: wholeSec(bookB.Duration())},
 			AudioRead: wholeSec(read),
-			BytesRead: sampler.BytesRead(),
+			BytesRead: bytesRead,
 		}
 		for i, s := range scores {
 			out.Scores[i] = roundScore(s)

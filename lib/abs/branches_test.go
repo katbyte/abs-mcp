@@ -272,8 +272,14 @@ func TestCoverSizeNoCover(t *testing.T) {
 		t.Errorf("an empty cover gave %v, want ErrNoCover", err)
 	}
 
+	// the file's own problem, which an audit skips, apart from a server
+	// that failed to send it, which it must not
 	status, body = http.StatusOK, []byte("not an image at all")
-	if _, _, err := c.CoverSize(t.Context(), "i1"); err == nil || errors.Is(err, ErrNoCover) {
-		t.Errorf("an undecodable cover gave %v, want a decode error", err)
+	if _, _, err := c.CoverSize(t.Context(), "i1"); !errors.Is(err, ErrCoverUnreadable) || errors.Is(err, ErrNoCover) {
+		t.Errorf("an undecodable cover gave %v, want ErrCoverUnreadable", err)
+	}
+	status, body = http.StatusInternalServerError, []byte("boom")
+	if _, _, err := c.CoverSize(t.Context(), "i1"); err == nil || errors.Is(err, ErrCoverUnreadable) {
+		t.Errorf("a server failing to send the cover gave %v, want an error that is not ErrCoverUnreadable", err)
 	}
 }

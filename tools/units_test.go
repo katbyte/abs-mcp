@@ -181,6 +181,8 @@ func TestServerSizesInBytes(t *testing.T) {
 	f.json("GET /api/libraries", `{"libraries":[]}`)
 	f.json("GET /api/stats/server", `{"books":{"totalSize":1610612736,"numItems":2},"podcasts":{"totalSize":52428800,"numItems":1},"total":{"totalSize":1663041536,"numItems":3,"numAudioFiles":4}}`)
 	f.json("GET /api/backups", `{"backups":[{"id":"b1","filename":"b1.audiobookshelf","fileSize":5242880,"createdAt":1700000000000}],"backupLocation":"/metadata/backups"}`)
+	f.json("GET /api/users", `{"users":[{"id":"u1","username":"root","type":"root"}]}`)
+	f.json("GET /api/sessions/open", `{"sessions":[]}`)
 	call := toolCaller(t, f)
 
 	out, err := call("server_info", nil)
@@ -207,6 +209,7 @@ func TestListeningTimesInSeconds(t *testing.T) {
 	f.json("GET /api/items/"+bookB1, item(bookB1, "First", "", `"duration":3600.6`))
 	f.json("GET /api/me/progress/"+bookB1, `{"id":"mp1","libraryItemId":"`+bookB1+`","currentTime":1799.5,"duration":3600.6,"progress":0.5}`)
 	f.json("GET /api/me/bookmarks", `{"bookmarks":[{"libraryItemId":"`+bookB1+`","title":"Mark","time":12.345}]}`)
+	f.json("POST /api/items/batch/get", `{"libraryItems":[`+item(bookB1, "First", "", `"duration":3600.6`)+`]}`)
 	today := time.Now().UTC().Format("2006-01-02")
 	f.json("GET /api/me/listening-stats", `{"totalTime":7200.4,"today":600.4,"days":{"`+today+`":600.4},`+
 		`"items":{"`+bookB1+`":{"id":"`+bookB1+`","timeListening":7200.4,"mediaMetadata":{"title":"First"}}}}`)

@@ -371,7 +371,10 @@ func registerItemTools(r *registry) {
 		if err := prov.checkNamed(ctx, client, in.Provider); err != nil {
 			return nil, matchOut{}, err
 		}
-		provider, title, author := prov.matchQuery(ctx, client, it, in.Provider, in.Title, in.Author)
+		provider, title, author, err := prov.matchQuery(ctx, client, it, in.Provider, in.Title, in.Author)
+		if err != nil {
+			return nil, matchOut{}, err
+		}
 		results, err := client.SearchBooks(ctx, provider, title, author, it.ID)
 		if err != nil {
 			return nil, matchOut{}, err
@@ -482,7 +485,10 @@ func registerItemTools(r *registry) {
 		if err := prov.checkNamed(ctx, client, in.Provider); err != nil {
 			return nil, applyOut{}, err
 		}
-		provider, title, author := prov.matchQuery(ctx, client, it, in.Provider, in.Title, in.Author)
+		provider, title, author, err := prov.matchQuery(ctx, client, it, in.Provider, in.Title, in.Author)
+		if err != nil {
+			return nil, applyOut{}, err
+		}
 		opts := abs.MatchOptions{Provider: provider, ASIN: in.ASIN, ISBN: in.ISBN, OverrideCover: in.OverrideCover, OverrideDetails: in.OverrideDetails}
 		var applied appliedRef
 
@@ -525,10 +531,12 @@ func registerItemTools(r *registry) {
 					out.Warning = joinWarnings(out.Warning, "recording the provider tag failed: "+err.Error())
 				}
 			}
-			if after, aerr := client.Item(ctx, it.ID); aerr == nil {
-				s := summarize(after)
-				out.Item = &s
+			after, aerr := client.Item(ctx, it.ID)
+			if aerr != nil {
+				return nil, applyOut{}, fmt.Errorf("matched, but reading the item back failed: %w", aerr)
 			}
+			s := summarize(after)
+			out.Item = &s
 			return nil, out, nil
 		}
 
@@ -554,9 +562,11 @@ func registerItemTools(r *registry) {
 		}
 		// the match result predates the restored fields and the provider
 		// tag; the item as it is now is one more read
-		if after, aerr := client.Item(ctx, it.ID); aerr == nil {
-			res.LibraryItem = after
+		after, err := client.Item(ctx, it.ID)
+		if err != nil {
+			return nil, applyOut{}, fmt.Errorf("matched, but reading the item back failed: %w", err)
 		}
+		res.LibraryItem = after
 		s := summarize(res.LibraryItem)
 		out.Item = &s
 		// say when the id asked for is not the one the item ended up with:
@@ -647,11 +657,13 @@ func registerItemTools(r *registry) {
 				return nil, batchEditOut{}, err
 			}
 			for i := range items {
-				for j := range fresh {
-					if fresh[j].ID == items[i].ID {
-						items[i] = &fresh[j]
-					}
+				j := slices.IndexFunc(fresh, func(f abs.Item) bool { return f.ID == items[i].ID })
+				if j < 0 {
+					// the batch leaves out what is gone: its tags and series
+					// from before the hold are not the ones to edit
+					return nil, batchEditOut{}, fmt.Errorf("%q (%s) was not in the server's reply when read again to edit: deleted meanwhile? nothing was changed", items[i].Title(), items[i].ID)
 				}
+				items[i] = &fresh[j]
 			}
 		}
 
@@ -738,7 +750,10 @@ func registerItemTools(r *registry) {
 		if err := prov.checkNamed(ctx, client, in.Provider); err != nil {
 			return nil, coverSearchOut{}, err
 		}
-		provider, title, author := prov.matchQuery(ctx, client, it, in.Provider, in.Title, in.Author)
+		provider, title, author, err := prov.matchQuery(ctx, client, it, in.Provider, in.Title, in.Author)
+		if err != nil {
+			return nil, coverSearchOut{}, err
+		}
 		if it.IsPodcast() {
 			author = ""
 		}
@@ -1081,7 +1096,7 @@ func (p providerConfig) checkNamed(ctx context.Context, client *abs.Client, prov
 
 // matchQuery fills in the provider, title and author for a provider search
 // from the item, the configured default and its library when not overridden.
-func (p providerConfig) matchQuery(ctx context.Context, client *abs.Client, it *abs.Item, provider, title, author string) (resolvedProvider, resolvedTitle, resolvedAuthor string) {
+func (p providerConfig) matchQuery(ctx context.Context, client *abs.Client, it *abs.Item, provider, title, author string) (resolvedProvider, resolvedTitle, resolvedAuthor string, err error) {
 	if title == "" {
 		title = it.Title()
 	}
@@ -1092,11 +1107,13 @@ func (p providerConfig) matchQuery(ctx context.Context, client *abs.Client, it *
 		provider = p.providers[0]
 	}
 	if provider == "" {
-		if lib, err := client.Library(ctx, it.LibraryID); err == nil {
-			provider = lib.Provider
+		lib, err := client.Library(ctx, it.LibraryID)
+		if err != nil {
+			return "", "", "", fmt.Errorf("reading the library's provider, as none was named: %w", err)
 		}
+		provider = lib.Provider
 	}
-	return provider, title, author
+	return provider, title, author, nil
 }
 
 // joinWarnings adds a warning to whatever the server already said.

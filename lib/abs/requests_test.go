@@ -296,7 +296,9 @@ func TestSearchChaptersConverts(t *testing.T) {
 		t.Errorf("chapters = %+v, want %+v", chapters, want)
 	}
 
-	if _, err := c.SearchChapters(t.Context(), "MISSING", ""); err == nil || !strings.Contains(err.Error(), "Chapters not found") {
+	// the server's word, not a 404 it did not send: a failed lookup at
+	// Audible must not read as "no chapters"
+	if _, err := c.SearchChapters(t.Context(), "MISSING", ""); err == nil || !strings.Contains(err.Error(), "Chapters not found") || IsNotFound(err) {
 		t.Errorf("a miss gave %v", err)
 	}
 }

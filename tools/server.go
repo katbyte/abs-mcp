@@ -76,14 +76,15 @@ func registerServerTools(r *registry) {
 		for i := range libs {
 			out.Libraries = append(out.Libraries, libraryRowOf(&libs[i]))
 		}
-		// providers are informational; a failure here should not hide the rest
-		if book, podcast, err := client.Providers(ctx); err == nil {
-			out.BookProviders, out.PodcastProviders = book, podcast
+		if out.BookProviders, out.PodcastProviders, err = client.Providers(ctx); err != nil {
+			return nil, infoOut{}, fmt.Errorf("reading the server's metadata providers: %w", err)
 		}
 		// the totals are admin-only, and this is the one tool that has to answer
-		// for any key, so they are best-effort - but a key that may not ask must
-		// be told that, or it reads the silence as an empty server
-		if st, err := client.ServerStats(ctx); err == nil {
+		// for any key: a key the server refuses them is told so, as it would
+		// read the silence as an empty server; any other failure is an error
+		st, err := client.ServerStats(ctx)
+		switch {
+		case err == nil:
 			t := totalsOut{
 				Books:        st.Books.NumItems,
 				Podcasts:     st.Podcasts.NumItems,
@@ -92,18 +93,23 @@ func registerServerTools(r *registry) {
 				BooksSize:    st.Books.TotalSize,
 				PodcastsSize: st.Podcasts.TotalSize,
 			}
-			if users, err := client.Users(ctx, false); err == nil {
-				t.Users = len(users)
+			users, uerr := client.Users(ctx, false)
+			if uerr != nil {
+				return nil, infoOut{}, fmt.Errorf("counting the server's users: %w", uerr)
 			}
-			if sessions, err := client.OpenSessions(ctx); err == nil {
-				t.OpenSessions = len(sessions)
+			sessions, serr := client.OpenSessions(ctx)
+			if serr != nil {
+				return nil, infoOut{}, fmt.Errorf("counting the open sessions: %w", serr)
 			}
+			t.Users, t.OpenSessions = len(users), len(sessions)
 			out.Totals = &t
-		} else {
+		case abs.IsForbidden(err):
 			out.Note = fmt.Sprintf("server-wide totals need an admin key and are not included: this key acts as %s (%s). "+
 				"The libraries and permissions above are complete. Treat the totals as unknown rather than zero, "+
 				"and expect the other admin-only tools (server_sessions, server_tasks, server_backups, server_tags, user_list) to be refused as well.",
 				me.Username, me.Type)
+		default:
+			return nil, infoOut{}, fmt.Errorf("reading the server-wide totals: %w", err)
 		}
 
 		return nil, out, nil
@@ -176,10 +182,12 @@ func registerServerTools(r *registry) {
 			if row.User == "" && row.UserID != "" {
 				if names == nil {
 					names = map[string]string{}
-					if users, uerr := client.Users(ctx, false); uerr == nil {
-						for j := range users {
-							names[users[j].ID] = users[j].Username
-						}
+					users, err := client.Users(ctx, false)
+					if err != nil {
+						return nil, sessionsOut{}, fmt.Errorf("reading the users, to name each session's: %w", err)
+					}
+					for j := range users {
+						names[users[j].ID] = users[j].Username
 					}
 				}
 				row.User = names[row.UserID]

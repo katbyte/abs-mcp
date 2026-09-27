@@ -283,12 +283,14 @@ type authorRow struct {
 
 // withBooks reads an author back with their books after a write: the update,
 // image and match routes answer with the record alone, so a row built from
-// that reply says the author has no books.
-func withBooks(ctx context.Context, client *abs.Client, a *abs.Author) *abs.Author {
-	if full, err := client.Author(ctx, a.ID, true); err == nil {
-		return full
+// that reply says the author has no books. A failed read says the write was
+// made.
+func withBooks(ctx context.Context, client *abs.Client, a *abs.Author) (*abs.Author, error) {
+	full, err := client.Author(ctx, a.ID, true)
+	if err != nil {
+		return nil, fmt.Errorf("the change to author %q (%s) was made, but reading it back failed: %w", a.Name, a.ID, err)
 	}
-	return a
+	return full, nil
 }
 
 func authorRowOf(a *abs.Author, withDescription bool) authorRow {
@@ -445,7 +447,11 @@ func registerAuthorTools(r *registry) {
 			}
 		}
 
-		return nil, editOut{Merged: merged, Author: authorRowOf(withBooks(ctx, client, updated), true)}, nil
+		full, err := withBooks(ctx, client, updated)
+		if err != nil {
+			return nil, editOut{}, err
+		}
+		return nil, editOut{Merged: merged, Author: authorRowOf(full, true)}, nil
 	})
 
 	type imageIn struct {
@@ -471,7 +477,11 @@ func registerAuthorTools(r *registry) {
 			return nil, imageOut{}, err
 		}
 
-		return nil, imageOut{Author: authorRowOf(withBooks(ctx, client, updated), true)}, nil
+		full, err := withBooks(ctx, client, updated)
+		if err != nil {
+			return nil, imageOut{}, err
+		}
+		return nil, imageOut{Author: authorRowOf(full, true)}, nil
 	})
 
 	type matchIn struct {
@@ -547,7 +557,11 @@ func registerAuthorTools(r *registry) {
 			return nil, applyOut{}, err
 		}
 
-		return nil, applyOut{Updated: changed, Author: authorRowOf(withBooks(ctx, client, updated), true)}, nil
+		full, err := withBooks(ctx, client, updated)
+		if err != nil {
+			return nil, applyOut{}, err
+		}
+		return nil, applyOut{Updated: changed, Author: authorRowOf(full, true)}, nil
 	})
 
 	type deleteOut struct {
@@ -666,7 +680,13 @@ func fullSeriesLists(ctx context.Context, client *abs.Client, items []abs.Item) 
 	}
 	for i := range items {
 		it := &items[i]
-		if all, ok := refs[it.ID]; ok && len(all) > 0 {
+		all, ok := refs[it.ID]
+		if !ok {
+			// the batch leaves out what is gone: its one-series list is not
+			// a list to write back
+			return fmt.Errorf("%q (%s) was not in the server's reply for its full series list: deleted meanwhile?", it.Title(), it.ID)
+		}
+		if len(all) > 0 {
 			it.Media.Metadata.Series = all
 			it.Media.Metadata.SeriesName = ""
 		}
@@ -983,13 +1003,17 @@ func registerSeriesTools(r *registry) {
 				return nil, mergeOut{}, fmt.Errorf("%d of the %d books of %q were moved into %q before this, and stay there; the rest were not: %w", out.Moved, len(books), from.Name, into.Name, berr)
 			}
 			out.Moved += n
+			// the server counts the books it changed: fewer than sent is
+			// books left behind, whatever the list below would say
+			if n != len(chunk) {
+				return nil, mergeOut{}, fmt.Errorf("the server moved %d of the %d books it was sent from %q into %q (%d moved in all), without saying why the rest were not: read the series with series_get", n, len(chunk), from.Name, into.Name, out.Moved)
+			}
 		}
 
 		// read back rather than promised: a series can outlive its books
 		left, err := allSeries(ctx, client, from.LibraryID)
 		if err != nil {
-			out.Note = fmt.Sprintf("the books moved, but the series could not be read back to see whether %q is gone: %v", from.Name, err)
-			return nil, out, nil
+			return nil, mergeOut{}, fmt.Errorf("all %d books moved into %q, but the series could not be read back to see whether %q is gone: %w", out.Moved, into.Name, from.Name, err)
 		}
 		out.FromRemoved = !slices.ContainsFunc(left, func(s abs.Series) bool { return s.ID == from.ID })
 		if !out.FromRemoved {

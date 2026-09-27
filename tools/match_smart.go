@@ -234,7 +234,15 @@ func providerRecord(ctx context.Context, client *abs.Client, it *abs.Item, provi
 			return r, nil
 		}
 	}
-	return nil, fmt.Errorf("%s has no record for %s", provider, query)
+	return nil, &noRecordError{provider: provider, query: query}
+}
+
+// noRecordError is a store answering that it has no record for an asin or
+// isbn, as against the search failing, which says nothing about the store.
+type noRecordError struct{ provider, query string }
+
+func (e *noRecordError) Error() string {
+	return fmt.Sprintf("%s has no record for %s", e.provider, e.query)
 }
 
 // smartApply decides the fields, and unless preview is set applies the

@@ -146,6 +146,7 @@ func TestItemMatchBatch(t *testing.T) {
 	f.json("POST /api/items/11111111-1111-4111-8111-000000000001/match", `{"updated":true,"libraryItem":`+item("11111111-1111-4111-8111-000000000001", "Killingly", `"asin":"B0BZGB56RL"`, "")+`}`)
 	f.json("GET /api/items/11111111-1111-4111-8111-000000000002", item("11111111-1111-4111-8111-000000000002", "Something Else Entirely", "", ""))
 	f.json("POST /api/items/11111111-1111-4111-8111-000000000002/match", `{"updated":false,"libraryItem":`+item("11111111-1111-4111-8111-000000000002", "Something Else Entirely", `"asin":"OLD"`, "")+`}`)
+	f.json("GET /api/libraries/"+libID, `{"id":"`+libID+`","name":"Books","mediaType":"book","provider":"audible"}`) // a row naming no provider takes the library's
 	out, err = call("item_match_apply_batch", map[string]any{"matches": []any{
 		map[string]any{"item": "11111111-1111-4111-8111-000000000001", "asin": "B0BZGB56RL", "provider": "audible.ca"},
 		map[string]any{"item": "11111111-1111-4111-8111-000000000002", "asin": "B0X"},

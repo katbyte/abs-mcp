@@ -395,6 +395,11 @@ func registerAuditTools(r *registry) {
 		for _, tool := range []string{"audit_chapters", "audit_duplicates", "audit_spelling", "audit_authors", "audit_narrators", "audit_series", "audit_genres", "audit_whitespace"} {
 			report(tool, "")
 		}
+		// a cover that could not be read is no clean cover: say how many,
+		// or an outage reads as a library with nothing wrong
+		if in.Deep && covers.Skipped > 0 {
+			out.Partial = append(out.Partial, allNotRun{Audit: "audit_covers", Reason: fmt.Sprintf("%d covers could not be read or judged, and are not counted: run audit_covers for each one and why", covers.Skipped)})
+		}
 		if !in.Deep && hasBooks {
 			out.Partial = append(out.Partial,
 				allNotRun{Audit: "audit_chapters", Reason: "counted one chapter over a long book only: chapters past the end, out of order or short need every chaptered book read whole, fifty to a request: pass deep, or run audit_chapters"},

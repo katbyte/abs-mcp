@@ -3,7 +3,6 @@ package abs
 import (
 	"bytes"
 	"encoding/json"
-	"strconv"
 	"strings"
 )
 
@@ -35,12 +34,6 @@ func (f *FlexString) UnmarshalJSON(b []byte) error {
 }
 
 func (f FlexString) String() string { return string(f) }
-
-// Int parses the value as an integer, 0 when empty or not numeric.
-func (f FlexString) Int() int {
-	n, _ := strconv.Atoi(strings.TrimSpace(string(f)))
-	return n
-}
 
 // NameRef is the {id, name} pair used for authors and series references.
 type NameRef struct {

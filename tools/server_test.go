@@ -49,6 +49,9 @@ func TestServerInfoListsNoLibrariesAsEmpty(t *testing.T) {
 	f.json("GET /status", `{"serverVersion":"2.30.0"}`)
 	f.json("GET /api/me", `{"id":"u1","username":"root","type":"root"}`)
 	f.json("GET /api/libraries", `{"libraries":[]}`)
+	f.json("GET /api/stats/server", `{"books":{"numItems":0},"podcasts":{"numItems":0},"total":{"numItems":0}}`)
+	f.json("GET /api/users", `{"users":[{"id":"u1","username":"root","type":"root"}]}`)
+	f.json("GET /api/sessions/open", `{"sessions":[]}`)
 	call := toolCaller(t, f)
 
 	out, err := call("server_info", nil)

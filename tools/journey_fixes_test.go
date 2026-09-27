@@ -638,6 +638,7 @@ func TestPodcastEpisodesAreNewestByPublication(t *testing.T) {
 		`{"id":"e1","title":"Oldest","publishedAt":1000}`,
 		`{"id":"e2","title":"Middle","publishedAt":2000}`,
 	))
+	f.json("GET /api/me", `{"id":"u1","username":"kt","type":"root","mediaProgress":[]}`)
 	call := toolCaller(t, f)
 
 	want := []string{"Newest", "Middle", "Oldest"}
