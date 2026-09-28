@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"net/http"
-	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -114,9 +113,7 @@ func audioBook(f *fakeABS, id, title string, files ...[]byte) {
 // they read to decide.
 func TestCompareAudioTellsARecordingFromAnother(t *testing.T) {
 	t.Parallel()
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		t.Skip("ffmpeg is not installed")
-	}
+	needFFmpeg(t)
 
 	const seconds = 240
 	one := reading(1, seconds, wavRate)

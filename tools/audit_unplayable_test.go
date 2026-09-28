@@ -231,9 +231,7 @@ func TestAuditUnplayableServerFails(t *testing.T) {
 // not played at all.
 func TestAuditUnplayableDecode(t *testing.T) {
 	t.Parallel()
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		t.Skip("ffmpeg is not installed")
-	}
+	needFFmpeg(t)
 
 	good := ffmpegSine(t, "good.m4b", 60)
 	damaged := bytes.Clone(good)

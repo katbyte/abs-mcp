@@ -8,6 +8,7 @@
 package acceptance
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"slices"
@@ -68,7 +69,7 @@ func TestJourneyPlaybackReachesEveryListeningTool(t *testing.T) {
 		if open["user"] != listener.Name || open["user_id"] != listener.ID || open["title"] != book || open["item_id"] != bookID {
 			t.Errorf("open session = %v, want %s playing %s", open, listener.Name, book)
 		}
-		if device, _ := open["device"].(string); !strings.Contains(device, "Zzyzx Client") {
+		if device := text(open["device"]); !strings.Contains(device, "Zzyzx Client") {
 			t.Errorf("device = %q", device)
 		}
 		if msg := listener.callErr(t, "server_sessions", nil); !strings.Contains(msg, "admin only") {
@@ -171,7 +172,7 @@ func TestJourneyPlaybackReachesEveryListeningTool(t *testing.T) {
 func sameJSON(a, b any) bool {
 	ja, _ := json.Marshal(a)
 	jb, _ := json.Marshal(b)
-	return string(ja) == string(jb)
+	return bytes.Equal(ja, jb)
 }
 
 // An account limited to one library, and an account limited to books
@@ -196,7 +197,7 @@ func TestJourneyRestrictedAccounts(t *testing.T) {
 		})
 
 		for who, u := range map[string]map[string]any{"self": shelf.call(t, "user_get", nil), "admin": call(t, "user_get", map[string]any{"user": shelf.Name})} {
-			if all, _ := u["all_libraries"].(bool); all {
+			if all := truth(u["all_libraries"]); all {
 				t.Errorf("%s: all_libraries = true for an account limited to Fiction", who)
 			}
 			if libs := strs(t, u["libraries"], "libraries"); !slices.Equal(libs, []string{fiction}) {
@@ -250,17 +251,14 @@ func TestJourneyRestrictedAccounts(t *testing.T) {
 		visible := []string{"City of Golden Shadow", "Sea of Silver Light"}
 
 		u := tagged.call(t, "user_get", nil)
-		if all, _ := u["all_tags"].(bool); all {
+		if all := truth(u["all_tags"]); all {
 			t.Error("all_tags = true for an account limited to one tag")
 		}
 		if tags := strs(t, u["tags"], "tags"); !slices.Equal(tags, []string{"cyberpunk"}) {
 			t.Errorf("tags = %v, want [cyberpunk]", tags)
 		}
 
-		var titles []string
-		for _, it := range rows(t, tagged.call(t, "library_items", map[string]any{"library": "Fiction", "limit": 50})["items"], "items") {
-			titles = append(titles, text(it["title"]))
-		}
+		titles := valuesIn(t, tagged.call(t, "library_items", map[string]any{"library": "Fiction", "limit": 50})["items"], "items", "title")
 		slices.Sort(titles)
 		if !slices.Equal(titles, visible) {
 			t.Errorf("Fiction for the account = %v, want %v", titles, visible)
@@ -434,11 +432,11 @@ func TestJourneyWritesAnAccountMayNotMake(t *testing.T) {
 		if got := account.call(t, "playlist_get", map[string]any{"playlist": "Zzyzx Own Queue"}); len(rows(t, got["entries"], "entries")) != 2 || got["description"] != "Zzyzx: the account's own" {
 			t.Errorf("the account's playlist = %v", got)
 		}
-		if p, _ := account.call(t, "user_progress_get", map[string]any{"library": "Fiction", "item": "Foundation"})["progress"].(map[string]any); p == nil || num(t, p["percent"], "percent") != 50 {
+		if p := object(account.call(t, "user_progress_get", map[string]any{"library": "Fiction", "item": "Foundation"})["progress"]); p == nil || num(t, p["percent"], "percent") != 50 {
 			t.Errorf("the account's progress = %v", p)
 		}
 		account.call(t, "playlist_delete", map[string]any{"playlist": "Zzyzx Own Queue"})
-		if done, _ := account.call(t, "user_progress_remove", map[string]any{"library": "Fiction", "item": "Foundation"})["removed"].(bool); !done {
+		if done := truth(account.call(t, "user_progress_remove", map[string]any{"library": "Fiction", "item": "Foundation"})["removed"]); !done {
 			t.Error("the account's progress was not removed")
 		}
 		account.call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Foundation", "action": "remove", "time_s": 0.5})

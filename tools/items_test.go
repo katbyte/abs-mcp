@@ -3,11 +3,17 @@ package tools
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"slices"
+	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/katbyte/abs-mcp/lib/abs"
 )
 
 // deleteRoutes is a book in its own folder with two of the key user's
@@ -22,21 +28,6 @@ func deleteRoutes(f *fakeABS, isFile bool) {
 		`{"libraryItemId":"`+itemID+`","title":"Arrakis","time":5},`+
 		`{"libraryItemId":"`+itemID+`","title":"Spice","time":7},`+
 		`{"libraryItemId":"`+bookB1+`","title":"Other","time":1}]}`)
-}
-
-// methodsSeen lists the requests that were not reads.
-func methodsSeen(f *fakeABS) []string {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	var out []string
-	for _, r := range f.seen {
-		if r.Method != http.MethodGet {
-			out = append(out, r.Method+" "+r.Path)
-		}
-	}
-
-	return out
 }
 
 // Without confirm, item_delete changes nothing and says what a confirmed
@@ -62,7 +53,7 @@ func TestItemDeleteSaysWhatItWouldRemove(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := methodsSeen(f); len(got) != 0 {
+		if got := f.changes(); len(got) != 0 {
 			t.Errorf("a delete without confirm sent %v", got)
 		}
 		if str(t, out["would_delete"]) != "Dune" || out["deleted"] != nil || boolOf(t, out["files_removed"]) {
@@ -144,14 +135,14 @@ func TestItemDeleteHoldsTheBookmarks(t *testing.T) {
 		done <- err
 	}()
 	time.Sleep(200 * time.Millisecond)
-	if got := methodsSeen(f); len(got) != 0 {
+	if got := f.changes(); len(got) != 0 {
 		t.Errorf("sent %v while the bookmarks were held", got)
 	}
 	release()
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
-	if got := methodsSeen(f); len(got) != 3 {
+	if got := f.changes(); len(got) != 3 {
 		t.Errorf("sent %v, want both bookmarks then the item", got)
 	}
 }
@@ -305,7 +296,7 @@ func TestContradictoryEditsAreRefused(t *testing.T) {
 			t.Errorf("%s %v was not refused", tc.tool, tc.args)
 		}
 	}
-	if got := methodsSeen(f); len(got) != 0 {
+	if got := f.changes(); len(got) != 0 {
 		t.Errorf("a refused edit sent %v", got)
 	}
 }
@@ -345,4 +336,471 @@ func TestItemCoverEditReadsTheCoverBack(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "has none afterwards") {
 		t.Errorf("a cover that never arrived: %v", err)
 	}
+}
+
+func TestAMatchWhoseLibraryCannotBeReadIsAnError(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/items/"+itemID, item(itemID, "Dune", `"authorName":"Frank Herbert"`, ""))
+	f.fails("GET /api/libraries/" + libID)
+	f.json("GET /api/search/books", `[]`)
+	call := toolCaller(t, f)
+
+	_, err := call("item_match", map[string]any{"item": itemID})
+	wantErr(t, "item_match with no provider and the library unreadable", err, "library's provider", "500")
+	if got := f.requests("/api/search/books"); len(got) != 0 {
+		t.Errorf("searched anyway, with no provider: %v", got)
+	}
+
+	out, err := call("item_match_apply_batch", map[string]any{"matches": []any{map[string]any{"item": itemID, "asin": "B0X"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := list(t, out["results"])
+	if num(t, out["failed"]) != 1 || len(rows) != 1 || !strings.Contains(str(t, rows[0]["error"]), "library's provider") {
+		t.Errorf("batch = %v, want the row failed, saying why", out)
+	}
+	if got := f.requests("/api/items/" + itemID + "/match"); len(got) != 0 {
+		t.Errorf("matched anyway, with no provider: %v", got)
+	}
+}
+
+func TestAMatchThatCannotBeReadBackIsAnError(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	var matched atomic.Bool
+	f.mux.HandleFunc("GET /api/items/"+itemID, func(w http.ResponseWriter, _ *http.Request) {
+		if matched.Load() {
+			http.Error(w, "boom", http.StatusInternalServerError)
+			return
+		}
+		_, _ = io.WriteString(w, item(itemID, "Dune", `"authorName":"Frank Herbert"`, ""))
+	})
+	f.mux.HandleFunc("POST /api/items/"+itemID+"/match", func(w http.ResponseWriter, _ *http.Request) {
+		matched.Store(true)
+		_, _ = io.WriteString(w, `{"updated":true,"libraryItem":`+item(itemID, "Dune", `"authorName":"Frank Herbert","asin":"B0"`, "")+`}`)
+	})
+	f.json("POST /api/items/batch/update", `{"updates":1}`)
+	f.json("PATCH /api/items/"+itemID+"/media", `{"updated":true,"libraryItem":`+item(itemID, "Dune", `"asin":"B0"`, "")+`}`)
+	call := toolCaller(t, f)
+
+	_, err := call("item_match_apply", map[string]any{"item": itemID, "asin": "B0", "provider": "audible"})
+	wantErr(t, "a match whose read-back failed", err, "matched", "reading the item back", "500")
+}
+
+// A book the server leaves out of a batch read, deleted meanwhile, is not
+// edited from what was known of it before.
+func TestABookLeftOutOfABatchReadIsNotEdited(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/items/"+bookB1, item(bookB1, "First", "", ""))
+	f.json("POST /api/items/batch/get", `{"libraryItems":[]}`)
+	f.json("POST /api/items/batch/update", `{"updates":1}`)
+	call := toolCaller(t, f)
+
+	_, err := call("item_batch_edit", map[string]any{"items": []any{bookB1}, "add_tags": []any{"x"}})
+	wantErr(t, "a book left out of the read before the edit", err, "not in the server's reply", "nothing was changed")
+	if got := f.requests("/api/items/batch/update"); len(got) != 0 {
+		t.Errorf("edited anyway: %v", got)
+	}
+}
+
+// clear has to reach the server as an empty list for each field, or the
+// server sees nothing to change and the field keeps its value.
+func TestItemEditClearSendsEmptyLists(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/items/"+itemID, item(itemID, "Dune", `"narratorName":"Scott Brick"`, ""))
+	f.json("PATCH /api/items/"+itemID+"/media", `{"updated":true}`)
+	call := toolCaller(t, f)
+
+	out, err := call("item_edit", map[string]any{"item": itemID, "clear": []any{"narrators", "series", "genres", "tags"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated, ok := out["updated"].(bool); !ok || !updated {
+		t.Errorf("updated = %v", out["updated"])
+	}
+
+	sent := f.requests("/api/items/" + itemID + "/media")
+	if len(sent) != 1 {
+		t.Fatalf("PATCH sent %d times", len(sent))
+	}
+	var body struct {
+		Metadata map[string]json.RawMessage `json:"metadata"`
+		Tags     json.RawMessage            `json:"tags"`
+	}
+	if err := json.Unmarshal([]byte(sent[0].Body), &body); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"narrators", "series", "genres"} {
+		if string(body.Metadata[field]) != "[]" {
+			t.Errorf("%s sent as %s, want [] (body %s)", field, body.Metadata[field], sent[0].Body)
+		}
+	}
+	if string(body.Tags) != "[]" {
+		t.Errorf("tags sent as %s, want []", body.Tags)
+	}
+	if _, present := body.Metadata["title"]; present {
+		t.Errorf("an untouched field was sent: %s", sent[0].Body)
+	}
+}
+
+// Removing a cover is asked for with remove; a call that forgot its url is an
+// error, not a deletion.
+func TestItemCoverEditNeedsIntent(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	var covered atomic.Bool
+	covered.Store(true)
+	f.mux.HandleFunc("GET /api/items/"+itemID, func(w http.ResponseWriter, _ *http.Request) {
+		if covered.Load() {
+			_, _ = io.WriteString(w, item(itemID, "Dune", "", `"coverPath":"/c.jpg"`))
+			return
+		}
+		_, _ = io.WriteString(w, item(itemID, "Dune", "", ""))
+	})
+	f.mux.HandleFunc("DELETE /api/items/"+itemID+"/cover", func(w http.ResponseWriter, _ *http.Request) {
+		covered.Store(false)
+		_, _ = io.WriteString(w, `{}`)
+	})
+	f.mux.HandleFunc("POST /api/items/"+itemID+"/cover", func(w http.ResponseWriter, _ *http.Request) {
+		covered.Store(true)
+		_, _ = io.WriteString(w, `{}`)
+	})
+	call := toolCaller(t, f)
+
+	if _, err := call("item_cover_edit", map[string]any{"item": itemID}); err == nil {
+		t.Error("a call with nothing to set was not refused")
+	}
+	if got := f.requests("/api/items/" + itemID + "/cover"); len(got) != 0 {
+		t.Errorf("the cover was touched: %v", got)
+	}
+
+	out, err := call("item_cover_edit", map[string]any{"item": itemID, "remove": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := f.requests("/api/items/" + itemID + "/cover"); len(got) != 1 || got[0].Method != http.MethodDelete {
+		t.Errorf("remove sent %v, want one DELETE", got)
+	}
+	if out["cover"] != "" {
+		t.Errorf("after the removal cover = %v, want none, read back", out["cover"])
+	}
+
+	if out, err = call("item_cover_edit", map[string]any{"item": itemID, "url": "http://img/c.jpg"}); err != nil {
+		t.Fatal(err)
+	}
+	if out["cover"] != "/c.jpg" {
+		t.Errorf("after setting cover = %v, want the one read back", out["cover"])
+	}
+	if got := f.requests("/api/items/" + itemID + "/cover"); len(got) != 2 || got[1].Method != http.MethodPost || !strings.Contains(got[1].Body, "http://img/c.jpg") {
+		t.Errorf("url sent %v, want a POST carrying the url", got)
+	}
+}
+
+// A match with nothing to name the book would take the provider's first hit
+// unseen; the omitted argument is an error, not a quick match.
+func TestItemMatchApplyNeedsACandidate(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/items/"+itemID, item(itemID, "Dune", `"authorName":"Frank Herbert"`, ""))
+	f.json("POST /api/items/"+itemID+"/match", `{"updated":true,"libraryItem":`+item(itemID, "Dune", `"authorName":"Frank Herbert","asin":"B9"`, "")+`}`)
+	f.json("GET /api/libraries/"+libID, `{"id":"`+libID+`","name":"Books","mediaType":"book","provider":"audible"}`) // a row naming no provider takes the library's
+	call := toolCaller(t, f)
+
+	if _, err := call("item_match_apply", map[string]any{"item": itemID, "override_details": true}); err == nil {
+		t.Error("a match naming no candidate, asin or isbn was not refused")
+	}
+	if got := f.requests("/api/items/" + itemID + "/match"); len(got) != 0 {
+		t.Errorf("the match was sent anyway: %v", got)
+	}
+
+	out, err := call("item_match_apply", map[string]any{"item": itemID, "asin": "B0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := f.requests("/api/items/" + itemID + "/match"); len(got) != 1 || !strings.Contains(got[0].Body, `"asin":"B0"`) {
+		t.Errorf("asin sent %v, want one POST carrying it", got)
+	}
+	// what was applied is echoed, and an id the item did not take is called out
+	applied, ok := out["applied"].(map[string]any)
+	if !ok || str(t, applied["asin"]) != "B0" {
+		t.Errorf("applied = %v, want the asin sent", out["applied"])
+	}
+	if !strings.Contains(str(t, out["warning"]), "B0") {
+		t.Errorf("warning = %q, want one saying the item kept its asin", out["warning"])
+	}
+}
+
+// item_edit edits the tag list the way item_batch_edit does.
+func TestItemEditAddsAndRemovesTags(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/items/"+itemID, item(itemID, "Dune", "", `"tags":["sf","Classic"]`))
+	f.json("PATCH /api/items/"+itemID+"/media", `{"updated":true}`)
+	call := toolCaller(t, f)
+
+	if _, err := call("item_edit", map[string]any{"item": itemID, "add_tags": []any{"desert", "classic"}, "remove_tags": []any{"SF"}}); err != nil {
+		t.Fatal(err)
+	}
+	sent := f.requests("/api/items/" + itemID + "/media")
+	if len(sent) != 1 {
+		t.Fatalf("media requests = %v", sent)
+	}
+	var body struct {
+		Tags []string `json:"tags"`
+	}
+	if err := json.Unmarshal([]byte(sent[0].Body), &body); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(body.Tags, []string{"Classic", "desert"}) {
+		t.Errorf("tags sent = %v, want [Classic desert]", body.Tags)
+	}
+	if _, err := call("item_edit", map[string]any{"item": itemID, "tags": []any{"a"}, "add_tags": []any{"b"}}); err == nil {
+		t.Error("tags with add_tags was not refused")
+	}
+}
+
+// The server tags the files in the background and never reads them back, so
+// item_embed_metadata waits for its task, rescans, and judges the tags the
+// rescan found.
+func TestItemEmbedMetadataWaitsAndReadsTheTagsBack(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	var polls, scanned atomic.Int32
+	f.mux.HandleFunc("GET /api/items/"+itemID, func(w http.ResponseWriter, _ *http.Request) {
+		tags := `{}`
+		if scanned.Load() > 0 {
+			tags = `{"tagTitle":"Dune"}`
+		}
+		_, _ = io.WriteString(w, item(itemID, "Dune", "", `"audioFiles":[{"index":1,"metadata":{"filename":"01.mp3"},"metaTags":`+tags+`}]`))
+	})
+	f.json("POST /api/tools/item/"+itemID+"/embed-metadata", `OK`)
+	f.mux.HandleFunc("GET /api/tasks", func(w http.ResponseWriter, _ *http.Request) {
+		if polls.Add(1) == 1 {
+			_, _ = io.WriteString(w, `{"tasks":[],"queuedTaskData":{"embedMetadata":[{"libraryItemId":"`+itemID+`"}]}}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"tasks":[]}`)
+	})
+	f.mux.HandleFunc("POST /api/items/"+itemID+"/scan", func(w http.ResponseWriter, _ *http.Request) {
+		if polls.Load() < 2 {
+			t.Error("rescanned while the embed was still queued")
+		}
+		scanned.Add(1)
+		_, _ = io.WriteString(w, `{"result":"UPDATED"}`)
+	})
+	call := toolCaller(t, f)
+
+	out, err := call("item_embed_metadata", map[string]any{"item": itemID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !boolOf(t, out["embedded"]) || out["rescan"] != "UPDATED" || out["running"] != nil || out["differs"] != nil {
+		t.Errorf("item_embed_metadata = %v, want embedded after the rescan", out)
+	}
+}
+
+// Calls of one turn run at once. Each edit of a book's tags reads the book
+// and sends its tags back whole, so without holding the book eight adds kept
+// one tag; held, and read again once held, every tag lands.
+func TestItemEditsAtOnceKeepEveryTag(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	var mu sync.Mutex
+	tags := []string{"sf"}
+	f.mux.HandleFunc("GET /api/items/"+itemID, func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		have, _ := json.Marshal(tags)
+		mu.Unlock()
+		// a read that takes a while, so the calls overlap
+		time.Sleep(20 * time.Millisecond)
+		_, _ = io.WriteString(w, item(itemID, "Dune", "", `"tags":`+string(have)))
+	})
+	f.mux.HandleFunc("PATCH /api/items/"+itemID+"/media", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Tags []string `json:"tags"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		mu.Lock()
+		tags = body.Tags
+		mu.Unlock()
+		_, _ = io.WriteString(w, `{"updated":true}`)
+	})
+	call := toolCaller(t, f)
+
+	var wg sync.WaitGroup
+	for i := range 8 {
+		wg.Go(func() {
+			if _, err := call("item_edit", map[string]any{"item": itemID, "add_tags": []any{strconv.Itoa(i)}}); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+	mu.Lock()
+	defer mu.Unlock()
+	if len(tags) != 9 {
+		t.Errorf("tags = %v, want sf and all eight added", tags)
+	}
+}
+
+func TestItemEditAddsAndRemovesSeries(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/items/"+itemID, item(itemID, "Words of Radiance", `"series":[{"id":"s","name":"The Stormlight Archive","sequence":"2"},{"id":"c","name":"Cosmere"}]`, ""))
+	f.json("PATCH /api/items/"+itemID+"/media", `{"updated":true}`)
+	call := toolCaller(t, f)
+
+	sentSeries := func() []abs.SeriesRef {
+		t.Helper()
+		sent := f.requests("/api/items/" + itemID + "/media")
+		var body struct {
+			Metadata struct {
+				Series []abs.SeriesRef `json:"series"`
+			} `json:"metadata"`
+		}
+		if err := json.Unmarshal([]byte(sent[len(sent)-1].Body), &body); err != nil {
+			t.Fatal(err)
+		}
+		return body.Metadata.Series
+	}
+
+	if _, err := call("item_edit", map[string]any{"item": itemID, "add_series": []any{"Stormlight Archive #2"}}); err != nil {
+		t.Fatal(err)
+	}
+	if want := []abs.SeriesRef{{ID: "s", Name: "The Stormlight Archive", Sequence: "2"}, {ID: "c", Name: "Cosmere"}, {Name: "Stormlight Archive", Sequence: "2"}}; !sameRefs(sentSeries(), want) {
+		t.Errorf("add_series sent %v, want the two it had and the new one", sentSeries())
+	}
+
+	if _, err := call("item_edit", map[string]any{"item": itemID, "add_series": []any{"cosmere #1"}, "remove_series": []any{"The Stormlight Archive"}}); err != nil {
+		t.Fatal(err)
+	}
+	if want := []abs.SeriesRef{{ID: "c", Name: "Cosmere", Sequence: "1"}}; !sameRefs(sentSeries(), want) {
+		t.Errorf("add a number to one it is in and remove another: sent %v, want %v", sentSeries(), want)
+	}
+
+	for name, args := range map[string]map[string]any{
+		"with series":         {"item": itemID, "series": []any{"X"}, "add_series": []any{"Y"}},
+		"with clear":          {"item": itemID, "clear": []any{"series"}, "remove_series": []any{"Cosmere"}},
+		"remove one not in":   {"item": itemID, "remove_series": []any{"Mistborn"}},
+		"add an empty name":   {"item": itemID, "add_series": []any{" #3"}},
+		"remove an empty one": {"item": itemID, "remove_series": []any{""}},
+	} {
+		if _, err := call("item_edit", args); err == nil {
+			t.Errorf("%s: no error", name)
+		}
+	}
+}
+
+func TestItemBatchEditAddsSeries(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	oneLibrary(f)
+	elantris := item(itemID, "Elantris", `"series":[{"id":"e","name":"Elantris","sequence":"1"}]`, "")
+	f.json("GET /api/items/"+itemID, elantris)
+	// read again, all at once, once the items are held
+	f.json("POST /api/items/batch/get", `{"libraryItems":[`+elantris+`]}`)
+	f.json("POST /api/items/batch/update", `{"updates":1}`)
+	call := toolCaller(t, f)
+
+	out, err := call("item_batch_edit", map[string]any{"items": []any{itemID}, "add_series": []any{"Cosmere"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if num(t, out["items_updated"]) != 1 {
+		t.Errorf("out = %v", out)
+	}
+	sent := f.requests("/api/items/batch/update")
+	if len(sent) != 1 || !strings.Contains(sent[0].Body, `"name":"Elantris","sequence":"1"`) || !strings.Contains(sent[0].Body, `"name":"Cosmere"`) {
+		t.Errorf("batch sent %v, want Elantris kept and Cosmere added", sent)
+	}
+	if !strings.Contains(sent[0].Body, `"metadata":{`) || strings.Contains(sent[0].Body, `"genres"`) {
+		t.Errorf("batch sent %v, want only the series in the metadata", sent[0].Body)
+	}
+}
+
+func TestEditSeriesList(t *testing.T) {
+	t.Parallel()
+
+	have := []abs.SeriesRef{{Name: "Discworld", Sequence: "36"}, {Name: "Discworld: Moist von Lipwig", Sequence: "2"}}
+	got, err := editSeriesList(have, []string{"Discworld: Industrial Revolution #5", "discworld #36"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := append(slices.Clone(have), abs.SeriesRef{Name: "Discworld: Industrial Revolution", Sequence: "5"}); !sameRefs(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	if len(have) != 2 {
+		t.Error("the caller's list was changed")
+	}
+	got, err = editSeriesList(have, nil, []string{"Discworld: Moist von Lipwig #2", "Discworld"})
+	if err != nil || len(got) != 0 || got == nil {
+		t.Errorf("removing everything = %v, %v; want an empty list that clears the field", got, err)
+	}
+	if _, err := editSeriesList(nil, nil, []string{"Discworld"}); err == nil || !strings.Contains(err.Error(), "no series") {
+		t.Errorf("removing from nothing: %v", err)
+	}
+}
+
+func TestItemGetInSecondsAndBytes(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/items/"+itemID, `{"id":"`+itemID+`","libraryId":"`+libID+`","mediaType":"book","size":734003200,`+
+		`"libraryFiles":[{"metadata":{"filename":"cover.jpg","size":20480},"fileType":"image"}],`+
+		`"userMediaProgress":{"id":"p1","libraryItemId":"`+itemID+`","currentTime":1800.6,"progress":0.25},`+
+		`"media":{"metadata":{"title":"Dune"},"duration":7200.4,`+
+		`"audioFiles":[{"index":1,"duration":7200.4,"metadata":{"filename":"01.m4b","size":734003200}}],`+
+		`"chapters":[{"id":0,"start":0,"end":1234.567,"title":"One"},{"id":1,"start":1234.567,"end":7200.4,"title":"Two"}]}}`)
+	call := toolCaller(t, f)
+
+	out, err := call("item_get", map[string]any{"item": itemID, "chapters": true, "files": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantNumbers(t, "item_get", out, map[string]float64{
+		"duration_s":              7200,
+		"size":                    734003200,
+		"progress.current_time_s": 1801,
+		"chapter_list.0.start_s":  0,
+		"chapter_list.0.end_s":    1234.567,
+		"chapter_list.1.start_s":  1234.567,
+		"chapter_list.1.end_s":    7200.4,
+		"track_list.0.duration_s": 7200,
+		"track_list.0.size":       734003200,
+		"other_files.0.size":      20480,
+	})
+	wantAbsent(t, "item_get", out, "duration", "size_mb", "progress.current_time", "progress.current_seconds", "chapter_list.0.start_seconds", "track_list.0.size_mb")
+}
+
+func TestItemMatchInSeconds(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	oneLibrary(f)
+	f.json("GET /api/search/providers", `{"providers":{"books":[{"value":"audible"}],"podcasts":[]}}`)
+	f.json("GET /api/items/"+itemID, item(itemID, "Dune", "", `"duration":75600.4`))
+	// a provider gives the length in minutes
+	f.json("GET /api/search/books", `[{"title":"Dune","author":"Frank Herbert","asin":"B0DUNE","duration":1260}]`)
+	call := toolCaller(t, f)
+
+	out, err := call("item_match", map[string]any{"item": itemID, "provider": "audible"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantNumbers(t, "item_match", out, map[string]float64{"item_duration_s": 75600, "candidates.0.duration_s": 75600})
+	wantAbsent(t, "item_match", out, "item_duration", "candidates.0.duration")
 }

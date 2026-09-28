@@ -15,7 +15,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 )
 
 // requireProviders skips when the proxy is not up, so these fail for a real
@@ -62,7 +61,7 @@ func restoreBook(t *testing.T, title string) {
 		case fiction && got["no_cover"] == nil:
 			call(t, "item_cover_edit", map[string]any{"item": title, "remove": true})
 		case !fiction:
-			if folder, _ := got["full_path"].(string); folder != "" {
+			if folder := text(got["full_path"]); folder != "" {
 				call(t, "item_cover_edit", map[string]any{"item": title, "file": folder + "/cover.jpg"})
 			}
 		}
@@ -94,14 +93,14 @@ func TestItemMatchAndApply(t *testing.T) {
 		}
 		// a real catalogue entry, not just a well-formed empty shell
 		first := candidates[0]
-		title, _ := first["title"].(string)
+		title := text(first["title"])
 		if !strings.Contains(strings.ToLower(title), "foundation") {
 			t.Errorf("first candidate title = %q, want it to mention Foundation", title)
 		}
 		if idx := num(t, first["index"], "index"); idx != 0 {
 			t.Errorf("first candidate index = %d, want 0", idx)
 		}
-		asin, _ = first["asin"].(string)
+		asin = text(first["asin"])
 		if asin == "" {
 			t.Error("no asin on the first candidate; item_match_apply has nothing to match on")
 		}
@@ -128,12 +127,12 @@ func TestItemMatchAndApply(t *testing.T) {
 		out := call(t, "item_match_apply", map[string]any{
 			"item": book, "provider": "audible", "asin": asin, "override_details": true,
 		})
-		if updated, _ := out["updated"].(bool); !updated {
+		if updated := truth(out["updated"]); !updated {
 			t.Errorf("item_match_apply reported no update: %v", out)
 		}
 
 		item := call(t, "item_get", map[string]any{"item": book})
-		if got, _ := item["asin"].(string); got != asin {
+		if got := text(item["asin"]); got != asin {
 			t.Errorf("asin = %q, want the matched %q", got, asin)
 		}
 	})
@@ -160,15 +159,15 @@ func TestItemMatchAndApply(t *testing.T) {
 		if len(results) != 1 {
 			t.Fatalf("results = %v, want one row", results)
 		}
-		if updated, _ := results[0]["updated"].(bool); !updated {
+		if updated := truth(results[0]["updated"]); !updated {
 			t.Errorf("the row reports no update: %v", results[0])
 		}
-		if msg, _ := results[0]["error"].(string); msg != "" {
+		if msg := text(results[0]["error"]); msg != "" {
 			t.Errorf("the row failed: %s", msg)
 		}
 
 		item := call(t, "item_get", map[string]any{"item": book})
-		if got, _ := item["asin"].(string); got != asin {
+		if got := text(item["asin"]); got != asin {
 			t.Errorf("asin = %q, want %q", got, asin)
 		}
 		if tags := strs(t, item["tags"], "tags"); !slices.Contains(tags, "zz-provider:audible") {
@@ -194,7 +193,7 @@ func TestItemMatchAndApply(t *testing.T) {
 			if len(tagRows) != 1 {
 				t.Fatalf("rows = %v, want the one book", tagRows)
 			}
-			if provider, _ := tagRows[0]["provider"].(string); provider != "audible" {
+			if provider := text(tagRows[0]["provider"]); provider != "audible" {
 				t.Errorf("provider = %q, want audible, the store that has the asin", provider)
 			}
 		})
@@ -234,7 +233,7 @@ func TestItemCoverSearchAndSet(t *testing.T) {
 		t.Cleanup(func() { call(t, "item_cover_edit", map[string]any{"item": book, "remove": true}) })
 
 		out := call(t, "item_cover_edit", map[string]any{"item": book, "url": coverURL})
-		if cover, _ := out["cover"].(string); cover == "" {
+		if cover := text(out["cover"]); cover == "" {
 			t.Errorf("item_cover_edit cover = %v, want the one it set, read back", out["cover"])
 		}
 
@@ -262,7 +261,7 @@ func TestItemChaptersSetFromASIN(t *testing.T) {
 	if len(candidates) == 0 {
 		t.Skip("no audible candidate to take an asin from")
 	}
-	asin, _ := candidates[0]["asin"].(string)
+	asin := text(candidates[0]["asin"])
 	if asin == "" {
 		t.Skip("no asin on the candidate")
 	}
@@ -295,13 +294,13 @@ func TestAuthorMatchAndApply(t *testing.T) {
 	if !ok {
 		t.Fatalf("candidate = %T, want who Audible has for Isaac Asimov", out["candidate"])
 	}
-	if name, _ := cand["name"].(string); name != "Isaac Asimov" {
+	if name := text(cand["name"]); name != "Isaac Asimov" {
 		t.Errorf("candidate name = %q", name)
 	}
-	if matches, _ := cand["name_matches"].(bool); !matches {
+	if matches := truth(cand["name_matches"]); !matches {
 		t.Errorf("the author's own name was not flagged as matching: %v", cand)
 	}
-	asin, _ := cand["asin"].(string)
+	asin := text(cand["asin"])
 	if asin == "" {
 		t.Fatal("candidate has no asin")
 	}
@@ -313,17 +312,17 @@ func TestAuthorMatchAndApply(t *testing.T) {
 	out = call(t, "author_match_apply", map[string]any{
 		"library": "Fiction", "author": "Isaac Asimov", "asin": asin, "region": "us",
 	})
-	if updated, _ := out["updated"].(bool); !updated {
+	if updated := truth(out["updated"]); !updated {
 		t.Errorf("author_match_apply reported no update: %v", out)
 	}
 	author, ok := out["author"].(map[string]any)
 	if !ok {
 		t.Fatalf("author = %T", out["author"])
 	}
-	if got, _ := author["asin"].(string); got != asin {
+	if got := text(author["asin"]); got != asin {
 		t.Errorf("asin = %q, want %s", got, asin)
 	}
-	if desc, _ := author["description"].(string); desc == "" {
+	if desc := text(author["description"]); desc == "" {
 		t.Error("author_match_apply set no description")
 	}
 }
@@ -347,13 +346,13 @@ func TestAuthorMatchFlagsADifferentName(t *testing.T) {
 	if !ok {
 		t.Fatalf("candidate = %T, want the author Audible found", out["candidate"])
 	}
-	if name, _ := cand["name"].(string); name != "Isaac Asimov" {
+	if name := text(cand["name"]); name != "Isaac Asimov" {
 		t.Errorf("candidate name = %q", name)
 	}
-	if matches, _ := cand["name_matches"].(bool); matches {
+	if matches := truth(cand["name_matches"]); matches {
 		t.Errorf("Isaac Asimov was flagged as Tad Williams's own name: %v", cand)
 	}
-	asin, _ := cand["asin"].(string)
+	asin := text(cand["asin"])
 	if asin == "" {
 		t.Fatal("candidate has no asin to apply")
 	}
@@ -362,11 +361,11 @@ func TestAuthorMatchFlagsADifferentName(t *testing.T) {
 	out = call(t, "author_match_apply", map[string]any{
 		"library": "Fiction", "author": "Tad Williams", "asin": asin,
 	})
-	if updated, _ := out["updated"].(bool); !updated {
+	if updated := truth(out["updated"]); !updated {
 		t.Errorf("applying by asin reported no update: %v", out)
 	}
-	author, _ := out["author"].(map[string]any)
-	if got, _ := author["asin"].(string); got != asin {
+	author := object(out["author"])
+	if got := text(author["asin"]); got != asin {
 		t.Errorf("asin after apply = %q, want %s", got, asin)
 	}
 }
@@ -396,14 +395,14 @@ func TestAuthorImageSet(t *testing.T) {
 	if !ok {
 		t.Fatalf("author = %T", out["author"])
 	}
-	if name, _ := author["name"].(string); name != "James S. A. Corey" {
+	if name := text(author["name"]); name != "James S. A. Corey" {
 		t.Errorf("name = %q", name)
 	}
-	if img, _ := author["has_image"].(bool); !img {
+	if img := truth(author["has_image"]); !img {
 		t.Errorf("has_image = %v, want the downloaded image to be reported: %v", author["has_image"], author)
 	}
 	// and read back, not only the answer's word for it
-	if got := call(t, "author_get", map[string]any{"library": "Fiction", "author": "James S. A. Corey"}); got["has_image"] != true {
+	if got := call(t, "author_get", map[string]any{"library": "Fiction", "author": "James S. A. Corey"}); !truth(got["has_image"]) {
 		t.Errorf("author_get has_image = %v after the photo was set", got["has_image"])
 	}
 }
@@ -439,7 +438,7 @@ func TestPodcastProviderFlow(t *testing.T) {
 			t.Fatalf("iTunes returned nothing for %q", show)
 		}
 		for _, r := range results {
-			if u, _ := r["feed_url"].(string); strings.HasPrefix(u, "http") {
+			if u := text(r["feed_url"]); strings.HasPrefix(u, "http") {
 				feedURL = u
 				break
 			}
@@ -458,14 +457,14 @@ func TestPodcastProviderFlow(t *testing.T) {
 			"feed_url": feedURL, "library": "Podcasts", "folder": "Provider Test Podcast",
 			"auto_download": false,
 		})
-		podcastID, _ = out["id"].(string)
+		podcastID = text(out["id"])
 		if podcastID == "" {
 			t.Fatalf("podcast_add returned no id: %v", out)
 		}
 		if episodes := num(t, out["feed_episodes"], "feed_episodes"); episodes == 0 {
 			t.Error("the feed reported no episodes")
 		}
-		if title, _ := out["title"].(string); title == "" {
+		if title := text(out["title"]); title == "" {
 			t.Error("the new podcast has no title")
 		}
 	})
@@ -488,7 +487,7 @@ func TestPodcastProviderFlow(t *testing.T) {
 		if len(episodes) == 0 {
 			t.Fatal("the feed listed no episodes")
 		}
-		if title, _ := episodes[0]["title"].(string); title == "" {
+		if title := text(episodes[0]["title"]); title == "" {
 			t.Error("the first feed episode has no title")
 		}
 		if total := num(t, out["total"], "total"); total == 0 {
@@ -505,7 +504,7 @@ func TestPodcastProviderFlow(t *testing.T) {
 			"schedule": "0 * * * *", "keep_episodes": 3, "new_per_check": 1,
 		})
 		// the settings as the server now has them, not as they were asked
-		if out["auto_download"] != true || out["schedule"] != "0 * * * *" || num(t, out["keep_episodes"], "keep_episodes") != 3 || num(t, out["new_per_check"], "new_per_check") != 1 {
+		if !truth(out["auto_download"]) || out["schedule"] != "0 * * * *" || num(t, out["keep_episodes"], "keep_episodes") != 3 || num(t, out["new_per_check"], "new_per_check") != 1 {
 			t.Errorf("podcast_settings = %v, want the settings read back", out)
 		}
 	})
@@ -535,29 +534,4 @@ func TestPodcastProviderFlow(t *testing.T) {
 		// queued may legitimately be empty when the episode is already held
 		rows(t, out["queued"], "queued")
 	})
-}
-
-// waitForTasks polls until nothing is running, so a background job's provider
-// traffic has all been made before the run ends.
-func waitForTasks(t *testing.T) bool {
-	t.Helper()
-
-	for range 30 {
-		var running int
-		for _, task := range rows(t, call(t, "server_tasks", nil)["tasks"], "tasks") {
-			if status, _ := task["status"].(string); status == "running" {
-				running++
-			}
-		}
-		if running == 0 {
-			// the match issues its lookups as it goes; give the last ones a
-			// moment to land before the proxy stops accepting them
-			time.Sleep(2 * time.Second)
-
-			return true
-		}
-		time.Sleep(time.Second)
-	}
-
-	return false
 }

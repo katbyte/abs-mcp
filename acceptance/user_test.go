@@ -34,11 +34,11 @@ func TestUserGetSelf(t *testing.T) {
 	if out["type"] != "root" {
 		t.Errorf("type = %v, want root", out["type"])
 	}
-	if self, _ := out["self"].(bool); !self {
+	if self := truth(out["self"]); !self {
 		t.Error("user_get with no user should report self")
 	}
 	for _, perm := range []string{"can_update", "can_delete", "can_upload"} {
-		if ok, _ := out[perm].(bool); !ok {
+		if ok := truth(out[perm]); !ok {
 			t.Errorf("root should have %s", perm)
 		}
 	}
@@ -48,15 +48,15 @@ func TestUserGetSelf(t *testing.T) {
 func TestUserGetByName(t *testing.T) {
 	out := call(t, "user_get", map[string]any{"user": "root"})
 
-	if self, _ := out["self"].(bool); !self {
+	if self := truth(out["self"]); !self {
 		t.Error("naming the API key's own account should report self")
 	}
 	for _, perm := range []string{"can_update", "can_delete", "can_upload"} {
-		if ok, _ := out[perm].(bool); !ok {
+		if ok := truth(out[perm]); !ok {
 			t.Errorf("root should have %s", perm)
 		}
 	}
-	if created, _ := out["created"].(string); created == "" {
+	if created := text(out["created"]); created == "" {
 		t.Error("no created timestamp")
 	}
 }
@@ -68,7 +68,7 @@ func TestUserGetSelfToken(t *testing.T) {
 		if out["username"] != "root" {
 			t.Errorf("user=%q gave username %v, want root", token, out["username"])
 		}
-		if self, _ := out["self"].(bool); !self {
+		if self := truth(out["self"]); !self {
 			t.Errorf("user=%q should report self", token)
 		}
 	}
@@ -120,7 +120,7 @@ func TestUserProgress(t *testing.T) {
 	call(t, "user_progress_set", map[string]any{"item": "Foundation", "finished": true})
 	fin := call(t, "user_progress_get", map[string]any{"item": "Foundation"})
 	if p, ok := fin["progress"].(map[string]any); ok {
-		if finished, _ := p["finished"].(bool); !finished {
+		if finished := truth(p["finished"]); !finished {
 			t.Errorf("finished = %v, want true", p["finished"])
 		}
 	}
@@ -130,7 +130,7 @@ func TestUserProgressRemove(t *testing.T) {
 	call(t, "user_progress_set", map[string]any{"item": "Second Foundation", "percent": 10})
 	out := call(t, "user_progress_remove", map[string]any{"item": "Second Foundation"})
 
-	if removed, _ := out["removed"].(bool); !removed {
+	if removed := truth(out["removed"]); !removed {
 		t.Errorf("user_progress_remove removed = %v", out["removed"])
 	}
 	got := call(t, "user_progress_get", map[string]any{"item": "Second Foundation"})

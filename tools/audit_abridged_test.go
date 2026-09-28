@@ -14,19 +14,6 @@ import (
 	"github.com/katbyte/abs-mcp/lib/abs"
 )
 
-// shelved is a minified book as the listing returns it, at a folder of its
-// own, with extra metadata and media fields spliced in as raw JSON.
-func shelved(id, path, title, author string, seconds float64, meta, media string) string {
-	if meta != "" {
-		meta = "," + meta
-	}
-	if media != "" {
-		media = "," + media
-	}
-	return fmt.Sprintf(`{"id":%q,"libraryId":%q,"mediaType":"book","relPath":%q,"media":{"metadata":{"title":%q,"authorName":%q%s},"duration":%g%s}}`,
-		id, libID, path, title, author, meta, seconds, media)
-}
-
 // readingOf is a book fetched whole, its chapters laid end to end from the
 // titles and lengths given; the listing's copy carries only the count.
 func readingOf(id, path, title, author string, titles []string, lengths []float64, meta string) (listed, whole string) {
@@ -38,23 +25,6 @@ func readingOf(id, path, title, author string, titles []string, lengths []float6
 	}
 	return shelved(id, path, title, author, start, meta, fmt.Sprintf(`"numChapters":%d`, len(lengths))),
 		shelved(id, path, title, author, start, meta, `"chapters":[`+strings.Join(chapters, ",")+`]`)
-}
-
-// serveWhole answers the batch fetch with the books asked for, from whole.
-func serveWhole(f *fakeABS, whole map[string]string) {
-	f.mux.HandleFunc("POST /api/items/batch/get", func(w http.ResponseWriter, r *http.Request) {
-		var asked struct {
-			IDs []string `json:"libraryItemIds"`
-		}
-		_ = json.NewDecoder(r.Body).Decode(&asked)
-		var out []string
-		for _, id := range asked.IDs {
-			if b, ok := whole[id]; ok {
-				out = append(out, b)
-			}
-		}
-		_, _ = fmt.Fprintf(w, `{"libraryItems":[%s]}`, strings.Join(out, ","))
-	})
 }
 
 // searched is the titles a store was searched for, each with the store, in
@@ -129,7 +99,7 @@ func TestAuditAbridgedAgainstTheStore(t *testing.T) {
 		t.Errorf("scanned %v, searched %v, found %v, next %v; want 11, 7, 4 and no more", out["items_scanned"], out["store_checked"], out["total_findings"], out["next_offset"])
 	}
 	findings := list(t, out["findings"])
-	if got := idsOf(t, out["findings"]); !slices.Equal(got, []string{"heartfire", "enchantment", "shock", "zombies"}) {
+	if got := column(t, "id", out["findings"]); !slices.Equal(got, []string{"heartfire", "enchantment", "shock", "zombies"}) {
 		t.Fatalf("findings = %v, want Heartfire and Enchantment by length, then The Shock Doctrine, then the story", findings)
 	}
 	wantNumbers(t, "audit_abridged", out, map[string]float64{
@@ -199,7 +169,7 @@ func TestAuditAbridgedAgainstTheStore(t *testing.T) {
 		if werr != nil {
 			t.Fatal(werr)
 		}
-		paged = append(paged, idsOf(t, window["findings"])...)
+		paged = append(paged, column(t, "id", window["findings"])...)
 		if window["next_offset"] == nil {
 			if n := num(t, window["items_scanned"]); n != 3 {
 				t.Errorf("the last window scanned %d, want 3", n)
@@ -549,7 +519,7 @@ func TestAuditAbridgedReadingsThatDoNotLineUp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := idsOf(t, out["findings"]); !slices.Equal(got, []string{"morgan"}) {
+	if got := column(t, "id", out["findings"]); !slices.Equal(got, []string{"morgan"}) {
 		t.Errorf("findings = %v, want Morgan's cut alone", got)
 	}
 }

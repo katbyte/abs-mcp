@@ -28,9 +28,7 @@ func lock(data []byte) []byte {
 // its m4b puts the header last, and with faststart first.
 func TestFFmpegFiles(t *testing.T) {
 	t.Parallel()
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		t.Skip("ffmpeg is not installed")
-	}
+	needFFmpeg(t)
 
 	dir := t.TempDir()
 	gen := func(name string, args ...string) []byte {
@@ -84,5 +82,18 @@ func TestFFmpegFiles(t *testing.T) {
 		if err != nil || !strings.Contains(string(out), "drms") {
 			t.Errorf("ffprobe of the locked m4b = %q, %v; want the drms tag", out, err)
 		}
+	}
+}
+
+// needFFmpeg skips a test that plays audio where ffmpeg is not installed, and
+// fails it in CI, where it is: a test CI skipped would look like one it ran.
+func needFFmpeg(t *testing.T) {
+	t.Helper()
+
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		if os.Getenv("CI") != "" {
+			t.Fatal("ffmpeg is not installed, and CI has to run this test: install it in the job")
+		}
+		t.Skip("ffmpeg is not installed")
 	}
 }

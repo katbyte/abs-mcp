@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -30,11 +31,11 @@ import (
 
 // rawJSON calls the server directly with a token, for the reads a journey
 // uses to check the server's own state rather than a tool's account of it.
-func rawJSON(method, path, token string, body any) (int, any, error) {
+func rawJSON(method, path, token string, body any) (status int, out any, err error) {
 	var in io.Reader
 	if body != nil {
-		b, err := json.Marshal(body)
-		if err != nil {
+		var b []byte
+		if b, err = json.Marshal(body); err != nil {
 			return 0, nil, err
 		}
 		in = bytes.NewReader(b)
@@ -56,18 +57,11 @@ func rawJSON(method, path, token string, body any) (int, any, error) {
 	if err != nil {
 		return res.StatusCode, nil, err
 	}
-	var out any
 	if len(raw) > 0 && json.Unmarshal(raw, &out) != nil {
 		out = string(raw)
 	}
 
 	return res.StatusCode, out, nil
-}
-
-// text reads a decoded JSON string, empty when it is anything else.
-func text(v any) string {
-	s, _ := v.(string)
-	return s
 }
 
 // adminGet reads a server route as the suite's admin key, failing the test
@@ -105,8 +99,7 @@ func libraryID(t *testing.T, name string) string {
 
 	for _, l := range rows(t, call(t, "library_list", nil)["libraries"], "libraries") {
 		if l["name"] == name {
-			id, _ := l["id"].(string)
-			return id
+			return text(l["id"])
 		}
 	}
 	t.Fatalf("no library named %s", name)
@@ -118,7 +111,7 @@ func libraryID(t *testing.T, name string) string {
 func itemID(t *testing.T, library, title string) string {
 	t.Helper()
 
-	id, _ := call(t, "item_get", map[string]any{"library": library, "item": title})["id"].(string)
+	id := text(call(t, "item_get", map[string]any{"library": library, "item": title})["id"])
 	if id == "" {
 		t.Fatalf("no id for %s in %s", title, library)
 	}
@@ -210,7 +203,7 @@ func (u *userSession) invoke(name string, args map[string]any) (map[string]any, 
 		}
 		return nil, fmt.Errorf("%s: %s", name, strings.Join(msgs, "; "))
 	}
-	out, _ := res.StructuredContent.(map[string]any)
+	out := object(res.StructuredContent)
 
 	return out, nil
 }
@@ -238,8 +231,7 @@ func newUserWith(t *testing.T, username string, create abs.UserCreate, opts tool
 			_ = admin.DeleteUser(ctx, u.ID)
 		}
 	}
-	active := true
-	create.Username, create.Password, create.IsActive = username, username+"-password", &active
+	create.Username, create.Password, create.IsActive = username, username+"-password", new(true)
 	if create.Type == "" {
 		create.Type = "user"
 	}
@@ -291,20 +283,18 @@ func snapshot(t *testing.T) map[string]any {
 	t.Helper()
 
 	snap := map[string]any{}
-	libs, _ := adminGet(t, "/api/libraries").(map[string]any)["libraries"].([]any)
+	libs := items(object(adminGet(t, "/api/libraries"))["libraries"])
 	snap["libraries"] = libs
 	for _, l := range libs {
-		lib, _ := l.(map[string]any)
-		id, _ := lib["id"].(string)
-		name, _ := lib["name"].(string)
+		lib := object(l)
+		id := text(lib["id"])
+		name := text(lib["name"])
 
-		listing, _ := adminGet(t, "/api/libraries/"+id+"/items?limit=500").(map[string]any)
-		results, _ := listing["results"].([]any)
+		listing := object(adminGet(t, "/api/libraries/"+id+"/items?limit=500"))
+		results := items(listing["results"])
 		ids := make([]string, 0, len(results))
 		for _, r := range results {
-			row, _ := r.(map[string]any)
-			id, _ := row["id"].(string)
-			ids = append(ids, id)
+			ids = append(ids, text(object(r)["id"]))
 		}
 		slices.Sort(ids)
 		var expanded any = []any{}
@@ -323,10 +313,10 @@ func snapshot(t *testing.T) map[string]any {
 		snap[name+"/playlists"] = adminGet(t, "/api/libraries/"+id+"/playlists")
 		snap[name+"/narrators"] = adminGet(t, "/api/libraries/"+id+"/narrators")
 	}
-	users, _ := adminGet(t, "/api/users").(map[string]any)["users"].([]any)
+	users := items(object(adminGet(t, "/api/users"))["users"])
 	for _, u := range users {
-		id, _ := u.(map[string]any)["id"].(string)
-		full, _ := adminGet(t, "/api/users/"+id).(map[string]any)
+		id := text(object(u)["id"])
+		full := object(adminGet(t, "/api/users/"+id))
 		delete(full, "lastSeen")
 		snap["user/"+id] = full
 	}
@@ -409,7 +399,7 @@ func TestJourneyLookupsChangeNothing(t *testing.T) {
 	if len(episodes) == 0 {
 		t.Fatal("no podcast episode to look at")
 	}
-	episode, _ := episodes[0]["id"].(string)
+	episode := text(episodes[0]["id"])
 	waitIdle(t)
 
 	calls := []readCall{
@@ -506,9 +496,8 @@ func TestJourneyLookupsChangeNothing(t *testing.T) {
 		}
 	}
 	waitIdle(t)
-	after := snapshot(t)
 
-	if changed := diff("", before, after); len(changed) > 0 {
+	if changed := diff("", before, snapshot(t)); len(changed) > 0 {
 		t.Errorf("the lookups changed the server:\n  %s", strings.Join(changed, "\n  "))
 	}
 }
@@ -539,8 +528,7 @@ func TestJourneyEditsDuringAScan(t *testing.T) {
 
 	ids := map[string]string{}
 	for _, it := range rows(t, call(t, "library_items", map[string]any{"library": "Messy", "limit": 100})["items"], "items") {
-		path, _ := it["path"].(string)
-		ids[path], _ = it["id"].(string)
+		ids[text(it["path"])] = text(it["id"])
 	}
 	id := func(relPath string) string {
 		if ids[relPath] == "" {
@@ -583,8 +571,9 @@ func TestJourneyEditsDuringAScan(t *testing.T) {
 
 	// and afterwards, everything is as it was left
 	col := call(t, "collection_get", map[string]any{"collection": "Zzyzx Scan Shelf"})
-	var colIDs, colTitles []string
-	for _, b := range rows(t, col["items"], "items") {
+	held := rows(t, col["items"], "items")
+	colIDs, colTitles := make([]string, 0, len(held)), make([]string, 0, len(held))
+	for _, b := range held {
 		colIDs = append(colIDs, text(b["id"]))
 		colTitles = append(colTitles, text(b["title"]))
 	}
@@ -594,10 +583,10 @@ func TestJourneyEditsDuringAScan(t *testing.T) {
 		t.Errorf("collection = %v, want Mort, then Eric and Reaper Man", colTitles)
 	}
 	pl := call(t, "playlist_get", map[string]any{"playlist": "Zzyzx Scan Queue"})
-	var plIDs []string
-	for _, e := range rows(t, pl["entries"], "entries") {
-		it, _ := e["item"].(map[string]any)
-		plIDs = append(plIDs, text(it["id"]))
+	entries := rows(t, pl["entries"], "entries")
+	plIDs := make([]string, 0, len(entries))
+	for _, e := range entries {
+		plIDs = append(plIDs, text(object(e["item"])["id"]))
 	}
 	if !slices.Equal(plIDs, []string{witches, rites}) {
 		t.Errorf("playlist = %v, want Witches Abroad then Equal Rites", plIDs)
@@ -609,7 +598,7 @@ func TestJourneyEditsDuringAScan(t *testing.T) {
 	if series := strs(t, book["series"], "series"); !slices.Contains(series, "Zzyzx Scan Saga #1") || !slices.Contains(series, "Discworld #01") {
 		t.Errorf("series = %v, want the added series beside Discworld #01", series)
 	}
-	if d, _ := call(t, "series_get", map[string]any{"library": "Messy", "series": "Discworld"})["description"].(string); d != "Zzyzx: edited mid-scan" {
+	if d := text(call(t, "series_get", map[string]any{"library": "Messy", "series": "Discworld"})["description"]); d != "Zzyzx: edited mid-scan" {
 		t.Errorf("series description = %q", d)
 	}
 	// the scan re-read every book without re-titling any from its folder
@@ -636,9 +625,7 @@ func TestJourneyAuditAllIsEachAudit(t *testing.T) {
 				if library != "" {
 					out["library"] = library
 				}
-				for k, v := range extra {
-					out[k] = v
-				}
+				maps.Copy(out, extra)
 				return out
 			}
 			all := call(t, "audit_all", args(map[string]any{"deep": true}))
@@ -655,8 +642,8 @@ func TestJourneyAuditAllIsEachAudit(t *testing.T) {
 
 			total := 0
 			for _, row := range rows(t, all["audits"], "audits") {
-				name, _ := row["audit"].(string)
-				field, _ := row["field"].(string)
+				name := text(row["audit"])
+				field := text(row["field"])
 				found := num(t, row["found"], "found")
 				total += found
 				extra := map[string]any{}
@@ -711,15 +698,15 @@ func TestJourneyWritesDoneTwice(t *testing.T) {
 		})
 		first := call(t, "user_progress_set", map[string]any{"library": "Fiction", "item": "City of Golden Shadow", "finished": true})
 		second := call(t, "user_progress_set", map[string]any{"library": "Fiction", "item": "City of Golden Shadow", "finished": true})
-		p1, _ := first["progress"].(map[string]any)
-		p2, _ := second["progress"].(map[string]any)
+		p1 := object(first["progress"])
+		p2 := object(second["progress"])
 		if p1["progress_id"] != p2["progress_id"] || p1["finished_at"] != p2["finished_at"] {
 			t.Errorf("finishing a finished book changed its record: %v then %v", p1, p2)
 		}
-		if done, _ := call(t, "user_progress_remove", map[string]any{"library": "Fiction", "item": "City of Golden Shadow"})["removed"].(bool); !done {
+		if done := truth(call(t, "user_progress_remove", map[string]any{"library": "Fiction", "item": "City of Golden Shadow"})["removed"]); !done {
 			t.Error("the first removal removed nothing")
 		}
-		if done, _ := call(t, "user_progress_remove", map[string]any{"library": "Fiction", "item": "City of Golden Shadow"})["removed"].(bool); done {
+		if done := truth(call(t, "user_progress_remove", map[string]any{"library": "Fiction", "item": "City of Golden Shadow"})["removed"]); done {
 			t.Error("the second removal said it removed something")
 		}
 	})
@@ -770,7 +757,7 @@ func TestJourneyWritesDoneTwice(t *testing.T) {
 		})
 		for i, want := range []bool{true, false} {
 			out := call(t, "item_edit", map[string]any{"library": "Fiction", "item": "Foundation", "add_tags": []any{"zzyzx-twice"}, "add_series": []any{"Zzyzx Twice Saga #1"}})
-			if updated, _ := out["updated"].(bool); updated != want {
+			if updated := truth(out["updated"]); updated != want {
 				t.Errorf("call %d: updated = %v, want %v", i+1, updated, want)
 			}
 		}
@@ -953,7 +940,7 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 
 	t.Run("collections sharing a name", func(t *testing.T) {
 		made := call(t, "collection_create", map[string]any{"library": "Fiction", "name": "Zzyzx Shared", "items": []any{"Foundation"}})
-		madeID, _ := made["id"].(string)
+		madeID := text(made["id"])
 		t.Cleanup(func() {
 			eventually(t, "deleting a collection", func() error { return admin.DeleteCollection(context.WithoutCancel(ctx), madeID) })
 		})
@@ -1008,7 +995,7 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 
 	t.Run("playlists sharing a name", func(t *testing.T) {
 		made := call(t, "playlist_create", map[string]any{"library": "Fiction", "name": "Zzyzx Shared List", "entries": []any{map[string]any{"item": "Foundation"}}})
-		madeID, _ := made["id"].(string)
+		madeID := text(made["id"])
 		t.Cleanup(func() {
 			eventually(t, "deleting a playlist", func() error { return admin.DeletePlaylist(context.WithoutCancel(ctx), madeID) })
 		})

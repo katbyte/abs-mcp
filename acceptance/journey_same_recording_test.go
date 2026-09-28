@@ -47,7 +47,7 @@ func voice(t *testing.T, seed uint64, seconds int) string {
 	pcm := make([]byte, 2*seconds*voiceRate) // s16le
 	for i := range len(pcm) / 2 {
 		v := int16(max(-32767, min(32767, r.NormFloat64()*6000*track[i*1000/voiceRate])))
-		pcm[2*i], pcm[2*i+1] = byte(v), byte(v>>8) //nolint:gosec // the two bytes of a sample
+		pcm[2*i], pcm[2*i+1] = byte(v), byte(v>>8)
 	}
 	raw := filepath.Join(t.TempDir(), "voice.raw")
 	if err := os.WriteFile(raw, pcm, 0o600); err != nil {

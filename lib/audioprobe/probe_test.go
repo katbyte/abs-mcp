@@ -315,11 +315,12 @@ func TestMP3NamedM4B(t *testing.T) {
 	}
 }
 
-// What an independent review found the walk got wrong: bytes stuck on the
-// end of a whole file read as a cut, a fragmented file run out of reads,
-// a box too big to add up, a tag in front of an MP4 passed over, and a
-// Windows Media header too short to hold its own fields read as clean.
-func TestReviewedEdges(t *testing.T) {
+// Files at the edges of what the walk reads: bytes stuck on the end of a
+// whole file are not a cut, a fragmented file does not run out of reads, a
+// box too big to add up is broken, a tag in front of an MP4 is not passed
+// over, and a Windows Media header too short to hold its own fields is not
+// clean.
+func TestProbeReadsFilesAtTheEdges(t *testing.T) {
 	t.Parallel()
 
 	whole := bytes.Join([][]byte{ftyp, moov(audioEntry("drms", 0)), bx("mdat", make([]byte, 5000))}, nil)

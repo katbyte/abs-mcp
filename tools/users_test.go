@@ -127,6 +127,11 @@ func TestUserHistoryForAnotherOnOneItem(t *testing.T) {
 		if got := list(t, out["sessions"]); len(got) != 1 || str(t, got[0]["id"]) != "s120" {
 			t.Errorf("limit 1: %v, want s120", got)
 		}
+		// the count is the book's sessions whatever the limit: it answered
+		// with every session they have, on anything
+		if n := num(t, out["total_sessions"]); n != 3 {
+			t.Errorf("limit 1: total_sessions = %d, want the book's 3, not all 1000", n)
+		}
 	})
 
 	t.Run("bounded, and says so", func(t *testing.T) {
@@ -309,5 +314,333 @@ func TestUserProgressRemoveSaysWhatItRemoved(t *testing.T) {
 	}
 	if got := f.requests("/api/me/progress/mp1"); len(got) != 1 {
 		t.Errorf("deletes sent %v, want one", got)
+	}
+}
+
+// A book the caller hid from continue listening is off their shelf, as it is
+// when an admin reads the shelf for them: the server's own shelf route keeps
+// it, and it took the one place a limit of one had.
+func TestUserInProgressLeavesOutWhatWasHidden(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/me", `{"id":"u1","username":"reader","type":"user","mediaProgress":[`+
+		`{"id":"mp1","libraryItemId":"`+bookB1+`","currentTime":30,"duration":60,"progress":0.5,"hideFromContinueListening":true,"lastUpdate":2000},`+
+		`{"id":"mp2","libraryItemId":"`+bookB2+`","currentTime":15,"duration":60,"progress":0.25,"lastUpdate":1000}]}`)
+	// newest first, hidden or not, as many as the limit asks
+	f.mux.HandleFunc("GET /api/me/items-in-progress", func(w http.ResponseWriter, r *http.Request) {
+		n, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		shelf := []string{item(bookB1, "First", "", `"duration":60`), item(bookB2, "Second", "", `"duration":60`)}
+		_, _ = fmt.Fprintf(w, `{"libraryItems":[%s]}`, strings.Join(shelf[:min(n, len(shelf))], ","))
+	})
+	call := toolCaller(t, f)
+
+	for _, limit := range []int{0, 1} {
+		args := map[string]any{}
+		if limit > 0 {
+			args["limit"] = limit
+		}
+		out, err := call("user_in_progress", args)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows := list(t, out["items"])
+		if len(rows) != 1 || str(t, rows[0]["id"]) != bookB2 {
+			t.Errorf("limit %d: items = %v, want Second alone", limit, out["items"])
+			continue
+		}
+		if p, ok := rows[0]["progress"].(map[string]any); !ok || num(t, p["percent"]) != 25 {
+			t.Errorf("limit %d: progress = %v, want 25 percent", limit, rows[0]["progress"])
+		}
+	}
+}
+
+func TestProgressRemovalThatCannotBeReadBackIsAnError(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/items/"+bookB1, item(bookB1, "First", "", `"duration":3600`))
+	f.failsAfter("GET /api/me/progress/"+bookB1, 1, `{"id":"mp1","libraryItemId":"`+bookB1+`","currentTime":60,"duration":3600,"progress":0.02}`)
+	f.json("DELETE /api/me/progress/mp1", `{}`)
+	call := toolCaller(t, f)
+
+	_, err := call("user_progress_remove", map[string]any{"item": bookB1})
+	wantErr(t, "a removal whose read-back failed", err, "accepted the removal", "reading it back", "500")
+}
+
+func TestBookmarksWhoseItemsCannotBeReadAreAnError(t *testing.T) {
+	t.Parallel()
+
+	marks := `{"bookmarks":[{"libraryItemId":"` + bookB1 + `","title":"Mark","time":5}]}`
+
+	f := newFakeABS(t)
+	f.json("GET /api/me", `{"id":"u1","username":"kt","type":"root"}`)
+	f.json("GET /api/me/bookmarks", marks)
+	f.fails("POST /api/items/batch/get")
+	call := toolCaller(t, f)
+	_, err := call("user_bookmarks", nil)
+	wantErr(t, "the batch of bookmarked items failing", err, "reading the bookmarked items", "500")
+
+	// the batch leaves the item out, and reading it alone fails with
+	// something other than not found: not a deleted item
+	f = newFakeABS(t)
+	f.json("GET /api/me", `{"id":"u1","username":"kt","type":"root"}`)
+	f.json("GET /api/me/bookmarks", marks)
+	f.json("POST /api/items/batch/get", `{"libraryItems":[]}`)
+	f.fails("GET /api/items/" + bookB1)
+	call = toolCaller(t, f)
+	_, err = call("user_bookmarks", nil)
+	wantErr(t, "a left-out item failing to read", err, bookB1, "500")
+}
+
+func TestBookmarkRemovalOnAGoneItemSaysTheAccountReadFailed(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.fails("GET /api/me")
+	call := toolCaller(t, f)
+
+	_, err := call("user_bookmark_edit", map[string]any{"item": itemID, "action": "remove", "time_s": 5})
+	wantErr(t, "the account read failing beside a gone item", err, "404", "reading the account's bookmarks", "500")
+}
+
+func TestListeningStatsTheServerGarbledAreAnError(t *testing.T) {
+	t.Parallel()
+
+	for name, stats := range map[string]string{
+		"a day that is not a date": `{"totalTime":60,"today":0,"days":{"yesterday":60},"items":{}}`,
+		"a title that is not read": `{"totalTime":60,"today":0,"days":{},"items":{"x":{"id":"x","timeListening":60,"mediaMetadata":"not an object"}}}`,
+	} {
+		f := newFakeABS(t)
+		accounts(f)
+		f.json("GET /api/me/listening-stats", stats)
+		call := toolCaller(t, f)
+
+		_, err := call("user_stats", nil)
+		wantErr(t, name, err, "listening stats")
+	}
+}
+
+// An add that fails, and the rename tried in case another client made it
+// meanwhile failing too, says both.
+func TestABookmarkAddThatFailsSaysWhy(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/items/"+bookB1, item(bookB1, "First", "", `"duration":3600`))
+	f.json("GET /api/me", `{"id":"u1","username":"kt","type":"root","bookmarks":[]}`)
+	f.json("GET /api/me/bookmarks", `{"bookmarks":[]}`)
+	f.mux.HandleFunc("POST /api/me/item/"+bookB1+"/bookmark", func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "the add failed", http.StatusForbidden)
+	})
+	f.mux.HandleFunc("PATCH /api/me/item/"+bookB1+"/bookmark", func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "no such bookmark", http.StatusNotFound)
+	})
+	call := toolCaller(t, f)
+
+	_, err := call("user_bookmark_edit", map[string]any{"item": bookB1, "action": "add", "time_s": 5, "title": "Mark"})
+	wantErr(t, "an add and a rename both failing", err, "adding the bookmark failed", "the add failed", "no such bookmark")
+}
+
+// A name looked up while the account list fails is an error, not a quiet
+// turn to the caller's own account; "me" is the caller whatever the list.
+func TestAUserLookupThatFailsIsAnError(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/me", `{"id":"`+meID+`","username":"kt","type":"root"}`)
+	f.fails("GET /api/users")
+	f.json("GET /api/me/listening-stats", `{"totalTime":60,"today":0,"days":{},"items":{"x":{"id":"x","timeListening":60}}}`)
+	call := toolCaller(t, f)
+
+	_, err := call("user_stats", map[string]any{"user": "kt"})
+	wantErr(t, "a name looked up with the account list failing", err, "looking up the user", "500")
+	// a key refused the account list may still name itself
+	f.answer("GET /api/users", reply{http.StatusForbidden, "Forbidden"})
+	if _, err := call("user_stats", map[string]any{"user": "kt"}); err != nil {
+		t.Errorf("its own name, with the account list refused: %v", err)
+	}
+	// and an item the stats name with no metadata has no title, not an error
+	if _, err := call("user_stats", map[string]any{"user": "me"}); err != nil {
+		t.Errorf("me, with the account list failing: %v", err)
+	}
+}
+
+// The continue-listening route for the API key's own account carries no
+// position or percent, so they come from the account's own progress.
+func TestUserInProgressHasTheCallersPosition(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/me", `{"id":"u1","username":"reader","type":"user","mediaProgress":[{"id":"mp1","libraryItemId":"`+bookB1+`","currentTime":30,"duration":60,"progress":0.5}]}`)
+	f.json("GET /api/me/items-in-progress", `{"libraryItems":[`+item(bookB1, "First", "", `"duration":60`)+`]}`)
+	call := toolCaller(t, f)
+
+	out, err := call("user_in_progress", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := list(t, out["items"])
+	if len(rows) != 1 {
+		t.Fatalf("items = %v", out["items"])
+	}
+	progress, ok := rows[0]["progress"].(map[string]any)
+	if !ok || num(t, progress["percent"]) != 50 {
+		t.Errorf("progress = %v, want 50 percent", rows[0]["progress"])
+	}
+}
+
+// user_get says what an account is kept from: libraries, tags and explicit
+// books. An account limited to no libraries is not reported as seeing all.
+func TestUserGetReportsRestrictions(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/me", `{"id":"u1","username":"kid","type":"user","librariesAccessible":["`+libID+`"],"itemTagsSelected":["grown-up"],`+
+		`"permissions":{"accessAllLibraries":false,"accessAllTags":false,"selectedTagsNotAccessible":true,"accessExplicitContent":false}}`)
+	call := toolCaller(t, f)
+
+	out, err := call("user_get", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if boolOf(t, out["all_libraries"]) || boolOf(t, out["all_tags"]) || boolOf(t, out["explicit"]) {
+		t.Errorf("all_libraries/all_tags/explicit = %v/%v/%v, want all false", out["all_libraries"], out["all_tags"], out["explicit"])
+	}
+	if !slices.Equal(strs(t, out["libraries"]), []string{libID}) || !slices.Equal(strs(t, out["denied_tags"]), []string{"grown-up"}) || out["tags"] != nil {
+		t.Errorf("libraries = %v, denied_tags = %v, tags = %v", out["libraries"], out["denied_tags"], out["tags"])
+	}
+}
+
+// The server keeps a bookmark on a deleted item and will not remove it: it
+// reads as such, a removal says why it fails, and item_delete removes the
+// caller's own first, once it knows the delete is allowed.
+func TestBookmarksOnADeletedItem(t *testing.T) {
+	t.Parallel()
+
+	t.Run("seen, and not removable", func(t *testing.T) {
+		t.Parallel()
+
+		f := newFakeABS(t)
+		marks := `[{"libraryItemId":"` + itemID + `","title":"Mark","time":5},{"libraryItemId":"` + bookB1 + `","title":"Kept","time":1}]`
+		f.json("GET /api/me", `{"id":"u1","username":"kt","type":"root","bookmarks":`+marks+`}`)
+		f.json("GET /api/me/bookmarks", `{"bookmarks":`+marks+`}`)
+		f.json("POST /api/items/batch/get", `{"libraryItems":[`+item(bookB1, "First", "", "")+`]}`)
+		f.json("GET /api/items/"+bookB1, item(bookB1, "First", "", ""))
+		call := toolCaller(t, f)
+
+		out, err := call("user_bookmarks", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, b := range list(t, out["bookmarks"]) {
+			if deleted := b["item_deleted"] != nil && boolOf(t, b["item_deleted"]); deleted != (b["item_id"] == itemID) {
+				t.Errorf("bookmark %v: item_deleted = %v", b, deleted)
+			}
+		}
+		if _, err := call("user_bookmark_edit", map[string]any{"item": itemID, "action": "remove", "time_s": 5}); err == nil || !strings.Contains(err.Error(), "will not remove") {
+			t.Errorf("removing a bookmark on a deleted item: %v", err)
+		}
+	})
+
+	t.Run("item_delete removes the caller's first", func(t *testing.T) {
+		t.Parallel()
+
+		f := newFakeABS(t)
+		f.json("GET /api/items/"+bookB1, item(bookB1, "First", "", ""))
+		f.json("GET /api/me", `{"id":"u1","username":"kt","type":"root","bookmarks":[{"libraryItemId":"`+bookB1+`","title":"Mark","time":5},{"libraryItemId":"`+bookB2+`","title":"Other","time":7}]}`)
+		f.json("DELETE /api/me/item/"+bookB1+"/bookmark/5", `OK`)
+		f.json("DELETE /api/items/"+bookB1, `OK`)
+		call := toolCaller(t, f)
+
+		out, err := call("item_delete", map[string]any{"item": bookB1, "confirm": true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if num(t, out["bookmarks_removed"]) != 1 {
+			t.Errorf("bookmarks_removed = %v, want 1", out["bookmarks_removed"])
+		}
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		var deletes []string
+		for _, r := range f.seen {
+			if r.Method == http.MethodDelete {
+				deletes = append(deletes, r.Path)
+			}
+		}
+		if !slices.Equal(deletes, []string{"/api/me/item/" + bookB1 + "/bookmark/5", "/api/items/" + bookB1}) {
+			t.Errorf("deletes = %v, want the bookmark, then the item", deletes)
+		}
+	})
+
+	t.Run("a refused delete costs no bookmark", func(t *testing.T) {
+		t.Parallel()
+
+		f := newFakeABS(t)
+		f.json("GET /api/items/"+bookB1, item(bookB1, "First", "", ""))
+		f.json("GET /api/me", `{"id":"u2","username":"guest","type":"user","permissions":{"delete":false},"bookmarks":[{"libraryItemId":"`+bookB1+`","title":"Mark","time":5}]}`)
+		call := toolCaller(t, f)
+
+		if _, err := call("item_delete", map[string]any{"item": bookB1}); err == nil || !strings.Contains(err.Error(), "delete permission") {
+			t.Errorf("item_delete without the permission: %v", err)
+		}
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		for _, r := range f.seen {
+			if r.Method == http.MethodDelete {
+				t.Errorf("sent %s %s", r.Method, r.Path)
+			}
+		}
+	})
+}
+
+func TestListeningTimesInSeconds(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	accounts(f)
+	f.json("GET /api/items/"+bookB1, item(bookB1, "First", "", `"duration":3600.6`))
+	f.json("GET /api/me/progress/"+bookB1, `{"id":"mp1","libraryItemId":"`+bookB1+`","currentTime":1799.5,"duration":3600.6,"progress":0.5}`)
+	f.json("GET /api/me/bookmarks", `{"bookmarks":[{"libraryItemId":"`+bookB1+`","title":"Mark","time":12.345}]}`)
+	f.json("POST /api/items/batch/get", `{"libraryItems":[`+item(bookB1, "First", "", `"duration":3600.6`)+`]}`)
+	today := time.Now().UTC().Format("2006-01-02")
+	f.json("GET /api/me/listening-stats", `{"totalTime":7200.4,"today":600.4,"days":{"`+today+`":600.4},`+
+		`"items":{"`+bookB1+`":{"id":"`+bookB1+`","timeListening":7200.4,"mediaMetadata":{"title":"First"}}}}`)
+	f.json("GET /api/me/stats/year/2025", `{"totalListeningTime":7200.4,"topAuthors":[{"name":"A","time":3600.4}],"topNarrators":[{"name":"N","time":1800.4}],`+
+		`"topGenres":[{"genre":"G","time":900.4}],"booksFinished":[{"id":"`+bookB1+`","title":"First","duration":3600.6}]}`)
+	now := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	f.mux.HandleFunc("GET /api/me/listening-sessions", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"total":2,"sessions":[{"id":"s1","userId":"` + meID + `","libraryItemId":"` + bookB1 + `","displayTitle":"First",` +
+			`"duration":3600.6,"timeListening":300.4,"currentTime":1799.5,"updatedAt":` + now + `},` +
+			// a session barely begun has a time and a position all the same
+			`{"id":"s0","userId":"` + meID + `","libraryItemId":"` + bookB1 + `","displayTitle":"First","duration":3600.6,"timeListening":0.1,"updatedAt":` + now + `}]}`))
+	})
+	call := toolCaller(t, f)
+
+	for _, tc := range []struct {
+		tool   string
+		args   map[string]any
+		want   map[string]float64
+		absent []string
+	}{
+		{"user_progress_get", map[string]any{"item": bookB1}, map[string]float64{"duration_s": 3601, "progress.current_time_s": 1800}, []string{"duration", "progress.current_time"}},
+		// a bookmark is removed by its exact time, so the fraction stays
+		{"user_bookmarks", nil, map[string]float64{"bookmarks.0.time_s": 12.345}, []string{"bookmarks.0.time", "bookmarks.0.seconds"}},
+		{"user_stats", nil, map[string]float64{
+			"total_listened_s": 7200, "today_s": 600, "last_7_days_s": 600, "last_30_days_s": 600, "top_items.0.time_s": 7200,
+		}, []string{"total_listened", "today", "top_items.0.time"}},
+		{"user_stats", map[string]any{"year": 2025}, map[string]float64{
+			"total_listened_s": 7200, "top_authors.0.time_s": 3600, "top_narrators.0.time_s": 1800, "top_genres.0.time_s": 900, "finished.0.time_s": 3601,
+		}, []string{"total_listened", "top_authors.0.time", "finished.0.time"}},
+		{"user_history", nil, map[string]float64{
+			"sessions.0.listened_s": 300, "sessions.0.position_s": 1800, "sessions.1.listened_s": 0, "sessions.1.position_s": 0,
+		}, []string{"sessions.0.listened", "sessions.0.position"}},
+	} {
+		out, err := call(tc.tool, tc.args)
+		if err != nil {
+			t.Fatalf("%s %v: %v", tc.tool, tc.args, err)
+		}
+		wantNumbers(t, tc.tool, out, tc.want)
+		wantAbsent(t, tc.tool, out, tc.absent...)
 	}
 }

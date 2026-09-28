@@ -302,7 +302,7 @@ func TestAuditWhitespaceTakenDiscsAndGone(t *testing.T) {
 			files[str(t, row["id"])+"|"+str(t, row["problem"])] = row
 		}
 	}
-	taken := func(row map[string]any) []string { return anyStrings(row["taken"]) }
+	taken := func(row map[string]any) []string { return strs(t, row["taken"]) }
 
 	if row := folders["Brandon  Sanderson|double_space"]; row == nil || len(taken(row)) != 1 || !strings.Contains(taken(row)[0], "already there") || !strings.Contains(str(t, row["fix"]), "merge the two by hand") {
 		t.Errorf("Brandon  Sanderson beside Brandon Sanderson = %v, want its suggestion taken", row)
@@ -340,7 +340,7 @@ func TestAuditWhitespaceTakenDiscsAndGone(t *testing.T) {
 	if ext == nil || num(t, ext["files"]) != 7 {
 		t.Fatalf("space before the extension = %v, want all 7 files, the four in disc folders among them", ext)
 	}
-	if examples := anyStrings(ext["examples"]); !slices.Equal(examples, []string{"␣.m4b", "01 - Intro␣.mp3", "Chapter 1␣.mp3␣"}) {
+	if examples := strs(t, ext["examples"]); !slices.Equal(examples, []string{"␣.m4b", "01 - Intro␣.mp3", "Chapter 1␣.mp3␣"}) {
 		t.Errorf("examples = %v, want the first three by their path in the book", examples)
 	}
 	// six files in three disc folders, two names each: six files, shown
@@ -352,7 +352,7 @@ func TestAuditWhitespaceTakenDiscsAndGone(t *testing.T) {
 		t.Errorf("taken = %v, want 01 - Intro .mp3 onto the 01 - Intro.mp3 beside it", got)
 	}
 	edge := files["discs|edge_space"]
-	if edge == nil || !strings.Contains(strings.Join(anyStrings(edge["examples"]), "|")+str(t, edge["text"]), "Chapter 1␣.mp3␣") {
+	if edge == nil || !strings.Contains(strings.Join(strs(t, edge["examples"]), "|")+str(t, edge["text"]), "Chapter 1␣.mp3␣") {
 		t.Errorf("a space after the extension = %v, want the one before it marked too", edge)
 	}
 	for _, row := range list(t, out["findings"]) {
@@ -583,10 +583,7 @@ func TestAuditWhitespaceReadsOnlySpacedHiddenSeries(t *testing.T) {
 	serveWhole(f, map[string]string{
 		"s1": `{"id":"s1","libraryId":"` + libID + `","relPath":"Brandon Sanderson/Warbreaker","mediaType":"book","media":{"metadata":{"title":"Warbreaker","series":[{"id":"s-w","name":"Warbreaker ","sequence":"1"}]}}}`,
 	})
-	client, err := abs.New(f.srv.URL, "test")
-	if err != nil {
-		t.Fatal(err)
-	}
+	client := f.client(t)
 	libs, err := client.Libraries(t.Context())
 	if err != nil {
 		t.Fatal(err)

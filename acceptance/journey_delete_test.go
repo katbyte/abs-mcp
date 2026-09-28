@@ -41,7 +41,7 @@ func TestJourneyADeletedBookLeavesNothingBehind(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	libID := text(call(t, "library_create", map[string]any{"name": library, "folders": []any{"/scratch/zzyzx-gone"}})["library"].(map[string]any)["id"])
+	libID := text(object(call(t, "library_create", map[string]any{"name": library, "folders": []any{"/scratch/zzyzx-gone"}})["library"])["id"])
 	t.Cleanup(func() {
 		for _, c := range []string{"Zzyzx Gone Shelf", "Zzyzx Gone Alone"} {
 			_, _ = invoke("collection_delete", map[string]any{"collection": c})
@@ -186,7 +186,7 @@ func TestJourneyADeletedBookLeavesNothingBehind(t *testing.T) {
 		// from both sides, and a removal says why it cannot be done
 		for who, marks := range map[string]map[string]any{"self": listener.call(t, "user_bookmarks", nil), "admin": call(t, "user_bookmarks", named)} {
 			got := rows(t, marks["bookmarks"], "bookmarks")
-			if len(got) != 1 || got[0]["item_id"] != one || got[0]["item_deleted"] != true {
+			if len(got) != 1 || got[0]["item_id"] != one || !truth(got[0]["item_deleted"]) {
 				t.Errorf("%s: the listener's bookmarks = %v, want the one, marked item_deleted", who, got)
 			}
 		}
@@ -264,8 +264,9 @@ func TestJourneyADeletedBookLeavesNothingBehind(t *testing.T) {
 			t.Fatal(err)
 		}
 		waitIdle(t)
-		var back []string
-		for _, it := range rows(t, call(t, "library_items", map[string]any{"library": library})["items"], "items") {
+		listed := rows(t, call(t, "library_items", map[string]any{"library": library})["items"], "items")
+		back := make([]string, 0, len(listed))
+		for _, it := range listed {
 			back = append(back, text(it["title"]))
 			if slices.Contains([]string{one, two, three}, text(it["id"])) {
 				t.Errorf("%v came back under its deleted id", it["title"])

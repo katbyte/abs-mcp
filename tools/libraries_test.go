@@ -1,56 +1,17 @@
 package tools
 
 import (
+	"context"
 	"encoding/base64"
-	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/katbyte/abs-mcp/lib/abs"
 )
-
-// servePages answers a library's item listing from n books titled "Book 000"
-// on, paged by the limit and page asked for, the way the server pages.
-func servePages(f *fakeABS, library string, n int) {
-	f.mux.HandleFunc("GET /api/libraries/"+library+"/items", func(w http.ResponseWriter, r *http.Request) {
-		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-		pg, _ := strconv.Atoi(r.URL.Query().Get("page"))
-		if limit <= 0 {
-			limit = n
-		}
-		var rows []string
-		for i := pg * limit; i < min((pg+1)*limit, n); i++ {
-			rows = append(rows, item(fmt.Sprintf("i%03d", i), fmt.Sprintf("Book %03d", i), "", ""))
-		}
-		_, _ = fmt.Fprintf(w, `{"results":[%s],"total":%d}`, strings.Join(rows, ","), n)
-	})
-}
-
-func parseQuery(t *testing.T, raw string) url.Values {
-	t.Helper()
-
-	q, err := url.ParseQuery(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return q
-}
-
-// titlesOf reads the titles off a listing's rows.
-func titlesOf(t *testing.T, v any) []string {
-	t.Helper()
-
-	rows := list(t, v)
-	out := make([]string, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, str(t, row["title"]))
-	}
-	return out
-}
 
 // A share not mounted during a scan marks every book on it missing, and one
 // call used to drop all their records and everyone's progress unseen. Without
@@ -91,7 +52,7 @@ func TestLibraryIssuesRemoveNeedsConfirm(t *testing.T) {
 	if num(t, out["found"]) != 3 || num(t, out["removed"]) != 0 || num(t, out["remaining"]) != 3 {
 		t.Errorf("preview = %v, want 3 found, none removed", out)
 	}
-	if got := titlesOf(t, out["items"]); !slices.Equal(got, []string{"Gone One", "Gone Two", "Stuck"}) {
+	if got := column(t, "title", out["items"]); !slices.Equal(got, []string{"Gone One", "Gone Two", "Stuck"}) {
 		t.Errorf("items = %v, want the titles", got)
 	}
 	if first := list(t, out["items"])[0]; str(t, first["id"]) != "i1" {
@@ -233,7 +194,7 @@ func TestLibraryItemsPagesFromTheOffsetAsked(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got := titlesOf(t, out["items"])
+		got := column(t, "title", out["items"])
 		if len(got) != tc.count || got[0] != tc.first || got[len(got)-1] != tc.last {
 			t.Errorf("limit %d offset %d: %d items %v..%v, want %d from %s to %s", tc.limit, tc.offset, len(got), got[0], got[len(got)-1], tc.count, tc.first, tc.last)
 		}
@@ -344,4 +305,158 @@ func TestLibraryEditAndCreateRefuseABlankNameAndAnUnknownProvider(t *testing.T) 
 	if len(sent) != 1 || !strings.Contains(sent[0].Body, `"provider":"audible.ca"`) || !strings.Contains(sent[0].Body, `"name":"Audiobooks"`) {
 		t.Errorf("edit sent %v", sent)
 	}
+}
+
+// library_search is how a title someone typed becomes an item id, and the
+// first row is the one taken. The server lists its hits in an order of its
+// own - a live server answers "Foundation" with Second Foundation, then
+// Foundation and Empire, then Foundation - so the book whose title is the
+// query goes first, and the rest keep the server's order.
+func TestLibrarySearchPutsTheTitleAskedForFirst(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	oneLibrary(f)
+	f.json("GET /api/me", `{"id":"u1","username":"kt","type":"root","permissions":{"accessAllLibraries":true,"accessAllTags":true,"accessExplicitContent":true}}`)
+	f.json("GET /api/libraries/"+libID+"/search", `{"book":[`+
+		`{"libraryItem":`+item("i1", "Second Foundation", "", "")+`},`+
+		`{"libraryItem":`+item("i2", "Foundation and Empire", "", "")+`},`+
+		`{"libraryItem":`+item("i3", "Foundation", "", "")+`}]}`)
+	call := toolCaller(t, f)
+
+	out, err := call("library_search", map[string]any{"query": " foundation "})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := list(t, out["items"])
+	titles := make([]string, 0, len(items))
+	for _, row := range items {
+		titles = append(titles, str(t, row["title"]))
+	}
+	if want := []string{"Foundation", "Second Foundation", "Foundation and Empire"}; !slices.Equal(titles, want) {
+		t.Errorf("items = %v, want %v", titles, want)
+	}
+}
+
+func TestLibraryStatsThatFailAreAnError(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	oneLibrary(f)
+	f.json("GET /api/me", `{"id":"u1","username":"kt","type":"root","permissions":{"accessAllTags":true,"accessExplicitContent":true}}`)
+	f.json("GET /api/libraries/"+libID, `{"library":{"id":"`+libID+`","name":"Books","mediaType":"book"},"filterdata":{},"issues":0}`)
+	f.fails("GET /api/libraries/" + libID + "/stats")
+	call := toolCaller(t, f)
+
+	_, err := call("library_get", map[string]any{"library": "Books"})
+	wantErr(t, "library_get with its stats failing", err, "library's stats", "500")
+}
+
+func TestSortKey(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		in, want string
+		podcast  bool
+	}{
+		{"", "media.metadata.title", false},
+		{"Title", "media.metadata.title", false},
+		{"author", "media.metadata.authorName", false},
+		{"author", "media.metadata.author", true},
+		{"added", "addedAt", false},
+		{"duration", "media.duration", false},
+		{"random", "random", false},
+		{"sequence", "sequence", false},
+	} {
+		if got := sortKey(tc.in, tc.podcast); got != tc.want {
+			t.Errorf("sortKey(%q, %v) = %q want %q", tc.in, tc.podcast, got, tc.want)
+		}
+	}
+}
+
+func TestBuildFilter(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/libraries/lib/authors", `{"results":[{"id":"a1","name":"Frank Herbert"}],"total":1}`)
+	f.json("GET /api/libraries/lib/series", `{"results":[{"id":"s1","name":"Dune"}],"total":1}`)
+	client := f.client(t)
+	lib := &abs.Library{ID: "lib", Name: "Books"}
+	b64 := func(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) }
+
+	for _, tc := range []struct{ in, want string }{
+		{"", ""},
+		{"issues", "issues"},
+		{"genre:Fantasy", "genres." + b64("Fantasy")},
+		{"tag: Read ", "tags." + b64("Read")},
+		{"progress:in-progress", "progress." + b64("in-progress")},
+		{"missing:asin", "missing." + b64("asin")},
+		{"author:frank herbert", "authors." + b64("a1")},
+		{"authors:a1", "authors." + b64("a1")},
+		{"series:Dune", "series." + b64("s1")},
+		{"abridged", "abridged"},
+	} {
+		got, err := buildFilter(context.Background(), client, lib, tc.in)
+		if err != nil {
+			t.Errorf("buildFilter(%q): %v", tc.in, err)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("buildFilter(%q) = %q want %q", tc.in, got, tc.want)
+		}
+	}
+
+	for _, bad := range []string{"genres", "author:Nobody", "series:Unknown"} {
+		if _, err := buildFilter(context.Background(), client, lib, bad); err == nil {
+			t.Errorf("buildFilter(%q) accepted", bad)
+		}
+	}
+}
+
+func TestLibraryGetInSecondsAndBytes(t *testing.T) {
+	t.Parallel()
+
+	t.Run("from the server's stats", func(t *testing.T) {
+		t.Parallel()
+
+		f := newFakeABS(t)
+		oneLibrary(f)
+		f.json("GET /api/me", `{"id":"u1","username":"kt","type":"root","permissions":{"accessAllTags":true,"accessExplicitContent":true}}`)
+		f.json("GET /api/libraries/"+libID, `{"library":{"id":"`+libID+`","name":"Books","mediaType":"book"},"filterdata":{},"issues":0}`)
+		f.json("GET /api/libraries/"+libID+"/stats", `{"totalItems":2,"totalDuration":90000.6,"totalSize":1610612736,"numAudioTracks":2,`+
+			`"longestItems":[{"id":"i1","title":"Long","duration":60000.4}],"largestItems":[{"id":"i1","title":"Long","size":1073741824}]}`)
+		call := toolCaller(t, f)
+
+		out, err := call("library_get", map[string]any{"library": "Books"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		// 1.5 GB, which total_size_gb gave as 1
+		wantNumbers(t, "library_get", out, map[string]float64{
+			"total_duration_s": 90001, "total_size": 1610612736, "longest.0.duration_s": 60000, "largest.0.size": 1073741824,
+		})
+		wantAbsent(t, "library_get", out, "total_duration", "total_size_gb", "longest.0.duration", "largest.0.size_mb")
+	})
+
+	t.Run("from the books a restricted key sees", func(t *testing.T) {
+		t.Parallel()
+
+		f := newFakeABS(t)
+		oneLibrary(f)
+		f.json("GET /api/me", `{"id":"u1","username":"kid","type":"user","permissions":{"accessAllLibraries":true,"accessAllTags":false,"accessExplicitContent":true}}`)
+		// the listing gives the size beside the id, not in the media
+		visible := strings.Replace(item(bookB1, "Visible Book", "", `"duration":600.6,"numAudioFiles":1`), `{"id":`, `{"size":52428800,"id":`, 1)
+		f.json("GET /api/libraries/"+libID+"/items", page(visible))
+		f.json("GET /api/libraries/"+libID+"/authors", `{"results":[],"total":0}`)
+		f.json("GET /api/libraries/"+libID+"/series", `{"results":[],"total":0}`)
+		call := toolCaller(t, f)
+
+		out, err := call("library_get", map[string]any{"library": "Books"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantNumbers(t, "library_get", out, map[string]float64{
+			"total_duration_s": 601, "total_size": 52428800, "longest.0.duration_s": 601, "largest.0.size": 52428800,
+		})
+	})
 }

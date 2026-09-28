@@ -29,7 +29,7 @@ grep -oE "router\.(get|post|patch|delete)\('[^']+'" server/routers/ApiRouter.js 
 
 ## Server behaviour the tools work around
 
-Found by the acceptance journeys against Audiobookshelf 2.36; each has a unit test in `tools/journey_fixes_test.go`.
+Found by the acceptance journeys against Audiobookshelf 2.36; each has a unit test in `tools/`, in the test file of the tool it belongs to.
 
 - `POST /api/playlists/:id/batch/add` checks nothing: a book sent with an `episodeId`, or a podcast with an episode that is not its own, throws an unhandled rejection that exits the server; a podcast with no `episodeId` is stored as a broken book entry; an item from another library is accepted. `POST /api/playlists` does check. The tools check every entry first.
 - Removing a playlist's last entry deletes the playlist, by either remove route.

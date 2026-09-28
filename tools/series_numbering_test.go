@@ -2,16 +2,7 @@ package tools
 
 import (
 	"testing"
-
-	"github.com/katbyte/abs-mcp/lib/abs"
 )
-
-func numbered(id, path, series, seq string) *abs.Item {
-	it := &abs.Item{ID: id, MediaType: "book", RelPath: path}
-	it.Media.Metadata.Title = path
-	it.Media.Metadata.Series = abs.SeriesRefs{{Name: series, Sequence: seq}}
-	return it
-}
 
 func TestNumberingPadding(t *testing.T) {
 	t.Parallel()
@@ -57,5 +48,40 @@ func TestNumberingPadding(t *testing.T) {
 	}
 	if s := c.styleNumber(seriesKey("The Wheel of Time"), "0.5"); s != "00.5" {
 		t.Errorf("styleNumber(0.5) = %q, want 00.5", s)
+	}
+}
+
+// "Author/Series/01 - Title" is the other common layout: the folder the book
+// sits in is the series, not the whole path above it.
+func TestNumberingReadsANestedSeriesFolder(t *testing.T) {
+	t.Parallel()
+
+	c := newNumberingCollector()
+	c.add(numbered("a", "Brandon Sanderson/Mistborn/01 - The Final Empire", "Mistborn", "3"))
+	got := c.findings()
+	if len(got) != 1 || got[0].Problem != "folder_disagrees" || got[0].Suggest != "Mistborn #1" {
+		t.Errorf("findings = %+v, want the folder's #1 against the series' #3", got)
+	}
+	for in, want := range map[string]string{
+		"Brandon Sanderson/Mistborn/01 - The Final Empire": "Mistborn",
+		"Mistborn/01 - The Final Empire":                   "Mistborn",
+		"Discworld - 09 - Eric.m4b":                        "",
+	} {
+		if got := parentFolder(in); got != want {
+			t.Errorf("parentFolder(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestSeriesKeySetsAsideArticleAndWord(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{"The Belgariad", "Belgariad", "The Belgariad Series", "belgariad series", "Belgariad  Series"} {
+		if got := seriesKey(name); got != "belgariad" {
+			t.Errorf("seriesKey(%q) = %q", name, got)
+		}
+	}
+	if seriesKey("Series") == "" || seriesKey("The Series") != seriesKey("Series") {
+		t.Errorf("a series called Series is still something: %q %q", seriesKey("Series"), seriesKey("The Series"))
 	}
 }

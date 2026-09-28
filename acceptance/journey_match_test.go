@@ -8,6 +8,7 @@ package acceptance
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -69,13 +70,13 @@ func listOrNone(t *testing.T, v any, field string) []string {
 func putBackBook(t *testing.T, id string, before map[string]any) {
 	t.Helper()
 
-	args := map[string]any{"item": id, "title": before["title"], "abridged": before["abridged"] == true, "explicit": before["explicit"] == true}
-	var clear []any
+	args := map[string]any{"item": id, "title": before["title"], "abridged": truth(before["abridged"]), "explicit": truth(before["explicit"])}
+	var emptied []any
 	for _, k := range []string{"subtitle", "year", "publisher", "description", "isbn", "asin", "language"} {
 		if s := text(before[k]); s != "" {
 			args[k] = s
 		} else {
-			clear = append(clear, k)
+			emptied = append(emptied, k)
 		}
 	}
 	lists := map[string][]string{
@@ -89,17 +90,18 @@ func putBackBook(t *testing.T, id string, before map[string]any) {
 		if len(lists[k]) > 0 {
 			args[k] = toAny(lists[k])
 		} else {
-			clear = append(clear, k)
+			emptied = append(emptied, k)
 		}
 	}
-	var authors []any
-	for _, a := range rows(t, before["authors"], "authors") {
+	wrote := rows(t, before["authors"], "authors")
+	authors := make([]any, 0, len(wrote))
+	for _, a := range wrote {
 		authors = append(authors, a["name"])
 	}
 	args["authors"] = authors
-	args["clear"] = clear
+	args["clear"] = emptied
 	call(t, "item_edit", args)
-	if before["no_cover"] == true && bookNow(t, id)["no_cover"] != true {
+	if truth(before["no_cover"]) && !truth(bookNow(t, id)["no_cover"]) {
 		call(t, "item_cover_edit", map[string]any{"item": id, "remove": true})
 	}
 	if changed := bookChanges(before, bookNow(t, id)); len(changed) > 0 {
@@ -151,7 +153,7 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 
 	id := messyID(t, "Isaac Asimov/Foundation")
 	before := bookNow(t, id)
-	if before["asin"] != foundationASIN || before["tags"] != nil || before["no_cover"] != true {
+	if before["asin"] != foundationASIN || before["tags"] != nil || !truth(before["no_cover"]) {
 		t.Fatalf("the Messy Foundation is not as seeded: %v", before)
 	}
 	t.Cleanup(func() {
@@ -205,7 +207,7 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 	if msg := callErr(t, "item_match_batch", withMessy(map[string]any{"filter": "authors:Isaac Asimov", "tolerance": 0.5})); !strings.Contains(msg, "tolerance 0.5") {
 		t.Errorf("a tolerance past a tenth: %s", msg)
 	}
-	if msg := callErr(t, "item_match_apply", map[string]any{"item": id, "provider": "audibel", "asin": foundationASIN, "smart": true, "preview": true}); !strings.Contains(msg, `no provider "audibel"`) {
+	if msg := callErr(t, "item_match_apply", map[string]any{"item": id, "provider": "audibel", "asin": foundationASIN, "smart": true, "preview": true}); !strings.Contains(msg, `no provider "audibel"`) { //nolint:misspell // a store misspelt on purpose
 		t.Errorf("a misspelt store on the apply: %s", msg)
 	}
 
@@ -248,7 +250,7 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 	// applied for real: the decisions are the preview's, and the book holds
 	// what each one said
 	applied := call(t, "item_match_apply", smart)
-	if updated, _ := applied["updated"].(bool); !updated {
+	if updated := truth(applied["updated"]); !updated {
 		t.Errorf("updated = %v, want the match to have changed the book: %v", applied["updated"], applied)
 	}
 	if fmt.Sprint(applied["fields"]) != fmt.Sprint(preview["fields"]) {
@@ -276,7 +278,7 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 	if countOf(tags, storeTag) != 1 || len(tags) < 2 {
 		t.Errorf("tags = %v, want the store's tags with %s once beside them", tags, storeTag)
 	}
-	if after["no_cover"] == true {
+	if truth(after["no_cover"]) {
 		t.Error("the match fetched no cover for a book that had none")
 	}
 
@@ -349,7 +351,7 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 			t.Errorf("%s = %q, want it left for review as %q", field, got, decidedValue(t, fromFiles, field))
 		}
 	}
-	if updated, _ := overTags["updated"].(bool); !updated {
+	if updated := truth(overTags["updated"]); !updated {
 		t.Errorf("updated = %v after writing seven fields", overTags["updated"])
 	}
 
@@ -381,8 +383,8 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 	if desc := text(overridden["description"]); desc == text(curated["description"]) || !strings.Contains(desc, "Foundation") {
 		t.Errorf("description = %q, want the store's in place of the one that was there", desc)
 	}
-	if tags := listOrNone(t, overridden["tags"], "tags"); countOf(tags, storeTag) != 1 {
-		t.Errorf("tags after the override = %v, want %s once", tags, storeTag)
+	if kept := listOrNone(t, overridden["tags"], "tags"); countOf(kept, storeTag) != 1 {
+		t.Errorf("tags after the override = %v, want %s once", kept, storeTag)
 	}
 	// everything curated and everything kept: the override then changes none
 	// of it, the empty subtitle included
@@ -451,11 +453,11 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 	if a, u, f := num(t, nothing["applied"], "applied"), num(t, nothing["unchanged"], "unchanged"), num(t, nothing["failed"], "failed"); a != 0 || u != 1 || f != 0 {
 		t.Errorf("a match that found nothing: applied %d, unchanged %d, failed %d, want 0, 1, 0", a, u, f)
 	}
-	if res := rows(t, nothing["results"], "results")[0]; res["updated"] == true || !strings.Contains(text(res["warning"]), "No audible match found") || strings.Contains(text(res["warning"]), "asin") {
+	if res := rows(t, nothing["results"], "results")[0]; truth(res["updated"]) || !strings.Contains(text(res["warning"]), "No audible match found") || strings.Contains(text(res["warning"]), "asin") {
 		t.Errorf("the row = %v, want no update and only the server's warning", res)
 	}
 	single := call(t, "item_match_apply", map[string]any{"item": nowhere, "provider": "audible", "asin": "B000000000"})
-	if single["updated"] == true || !strings.Contains(text(single["warning"]), "No audible match found") || strings.Contains(text(single["warning"]), "asin") {
+	if truth(single["updated"]) || !strings.Contains(text(single["warning"]), "No audible match found") || strings.Contains(text(single["warning"]), "asin") {
 		t.Errorf("item_match_apply = %v, want no update and only the server's warning", single)
 	}
 	if changed := bookChanges(unmatchable, bookNow(t, nowhere)); len(changed) > 0 {
@@ -466,12 +468,8 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 // withArgs is a copy of base with extra laid over it.
 func withArgs(base, extra map[string]any) map[string]any {
 	out := make(map[string]any, len(base)+len(extra))
-	for k, v := range base {
-		out[k] = v
-	}
-	for k, v := range extra {
-		out[k] = v
-	}
+	maps.Copy(out, base)
+	maps.Copy(out, extra)
 	return out
 }
 
@@ -486,10 +484,7 @@ func TestJourneyMatchBatchAskAgainAfterApplying(t *testing.T) {
 	requireProviders(t)
 
 	// the order the batch pages in: the unmatched books by title
-	var order []string
-	for _, it := range rows(t, call(t, "library_items", map[string]any{"library": "Non-Fiction", "filter": "missing:asin", "sort": "title"})["items"], "items") {
-		order = append(order, text(it["title"]))
-	}
+	order := valuesIn(t, call(t, "library_items", map[string]any{"library": "Non-Fiction", "filter": "missing:asin", "sort": "title"})["items"], "items", "title")
 	if len(order) != 3 {
 		t.Fatalf("Non-Fiction has %d unmatched books, want all 3: %v", len(order), order)
 	}
@@ -513,7 +508,7 @@ func TestJourneyMatchBatchAskAgainAfterApplying(t *testing.T) {
 		t.Fatalf("A Brief History of Vice is not in the first window: %v", order)
 	}
 	row := window[i]
-	best, _ := row["best"].(map[string]any)
+	best := object(row["best"])
 	asin := text(best["asin"])
 	if asin == "" {
 		t.Fatalf("no candidate to apply: %v", row)
@@ -622,7 +617,7 @@ func TestJourneyOneASINOnTwoBooks(t *testing.T) {
 	if got := problems[foundation]; !slices.Equal(got, []string{"duration_off"}) {
 		t.Errorf("Foundation: %v, want still only duration_off", got)
 	}
-	counts, _ := out["counts"].(map[string]any)
+	counts := object(out["counts"])
 	if num(t, counts["title_differs"], "title_differs") != 1 || num(t, counts["narrator_differs"], "narrator_differs") != 1 || num(t, counts["duration_off"], "duration_off") != 2 {
 		t.Errorf("counts = %v, want one title and one narrator off, two lengths", counts)
 	}
@@ -630,7 +625,7 @@ func TestJourneyOneASINOnTwoBooks(t *testing.T) {
 		if f["id"] != colour {
 			continue
 		}
-		prov, _ := f["provider"].(map[string]any)
+		prov := object(f["provider"])
 		if f["found_in"] != "audible" || prov["title"] != "Foundation" || prov["narrator"] != "Scott Brick" {
 			t.Errorf("the finding names %v in %v, want Foundation read by Scott Brick at audible", prov, f["found_in"])
 		}

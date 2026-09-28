@@ -46,14 +46,14 @@ func writeJPEG(t *testing.T, name string, n int) {
 // suggestCall turns a finding's suggest string ("metadata_rename
 // field=genres from=\"Audiobook - Fantasy\" to=Fantasy") into the tool and
 // arguments it names.
-func suggestCall(t *testing.T, suggest string) (string, map[string]any) {
+func suggestCall(t *testing.T, suggest string) (tool string, args map[string]any) {
 	t.Helper()
 
 	tool, rest, ok := strings.Cut(strings.TrimSpace(suggest), " ")
 	if !ok {
 		t.Fatalf("suggest %q names no arguments", suggest)
 	}
-	args := map[string]any{}
+	args = map[string]any{}
 	for _, m := range regexp.MustCompile(`(\w+)=("(?:[^"\\]|\\.)*"|\S+)`).FindAllStringSubmatch(rest, -1) {
 		value := m[2]
 		if strings.HasPrefix(value, `"`) {
@@ -83,12 +83,7 @@ func titlesIn(t *testing.T, v any, field string) []string {
 	if v == nil {
 		return nil
 	}
-	var out []string
-	for _, row := range rows(t, v, field) {
-		title, _ := row["title"].(string)
-		out = append(out, title)
-	}
-	return out
+	return valuesIn(t, v, field, "title")
 }
 
 // valuesIn lists a key of every row of a findings section.
@@ -98,10 +93,10 @@ func valuesIn(t *testing.T, v any, field, key string) []string {
 	if v == nil {
 		return nil
 	}
-	var out []string
-	for _, row := range rows(t, v, field) {
-		s, _ := row[key].(string)
-		out = append(out, s)
+	found := rows(t, v, field)
+	out := make([]string, 0, len(found))
+	for _, row := range found {
+		out = append(out, text(row[key]))
 	}
 	return out
 }
@@ -162,8 +157,7 @@ func messyID(t *testing.T, relPath string) string {
 
 	for _, it := range rows(t, call(t, "library_items", map[string]any{"library": "Messy", "limit": 100})["items"], "items") {
 		if it["path"] == relPath {
-			id, _ := it["id"].(string)
-			return id
+			return text(it["id"])
 		}
 	}
 	t.Fatalf("no messy book at %s", relPath)
@@ -219,8 +213,8 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 					return true
 				}
 				unlinked := rows(t, gap["unlinked"], "unlinked")
-				greenMars, _ = unlinked[0]["id"].(string)
-				suggest, _ = unlinked[0]["suggest"].(string)
+				greenMars = text(unlinked[0]["id"])
+				suggest = text(unlinked[0]["suggest"])
 				return true
 			}
 			return false
@@ -255,7 +249,7 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 				for _, group := range rows(t, messyAudit("audit_series", nil)["names"], "names") {
 					spellings := valuesIn(t, group["spellings"], "spellings", "value")
 					if slices.Contains(spellings, "The Wheel of Time") && slices.Contains(spellings, "Wheel of Time") {
-						keep, _ = group["keep"].(string)
+						keep = text(group["keep"])
 						other = spellings[0]
 						if other == keep {
 							other = spellings[1]
@@ -293,7 +287,7 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 			audit: func(t *testing.T) bool {
 				for _, row := range rows(t, messyAudit("audit_series", nil)["numbering"], "numbering") {
 					if row["title"] == "The Light Fantastic" && row["problem"] == "padding" {
-						suggest, _ = row["suggest"].(string)
+						suggest = text(row["suggest"])
 						return true
 					}
 				}
@@ -318,7 +312,7 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 			audit: func(t *testing.T) bool {
 				for _, row := range rows(t, messyAudit("audit_series", nil)["titles"], "titles") {
 					if row["id"] == id {
-						suggest, _ = row["suggest"].(string)
+						suggest = text(row["suggest"])
 						return true
 					}
 				}
@@ -358,7 +352,7 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 				for _, group := range rows(t, messyAudit("audit_narrators", nil)["names"], "names") {
 					spellings := valuesIn(t, group["spellings"], "spellings", "value")
 					if slices.Contains(spellings, "Michael Kramer") && slices.Contains(spellings, "Micheal Kramer") {
-						keep, _ = group["keep"].(string)
+						keep = text(group["keep"])
 						other = spellings[0]
 						if other == keep {
 							other = spellings[1]
@@ -391,11 +385,11 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 			},
 			fix: func(t *testing.T) {
 				out := call(t, "author_edit", map[string]any{"library": "Messy", "author": "Sanderson, Brandon", "name": "Brandon Sanderson"})
-				if merged, _ := out["merged"].(bool); !merged {
+				if merged := truth(out["merged"]); !merged {
 					t.Errorf("merged = %v, want the rename to merge into the existing record", out["merged"])
 				}
 				// the row after a merge counts the books the record now has
-				author, _ := out["author"].(map[string]any)
+				author := object(out["author"])
 				if books := num(t, author["books"], "books"); books != 3 {
 					t.Errorf("books = %d after the merge, want 3", books)
 				}
@@ -443,12 +437,12 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 					case string:
 						tool, args := suggestCall(t, suggest)
 						// a suggested remove only previews until confirmed
-						if args["remove"] == true {
+						if truth(args["remove"]) {
 							args["confirm"] = true
 						}
 						call(t, tool, args)
 					case map[string]any:
-						field, _ := finding["field"].(string)
+						field := text(finding["field"])
 						call(t, "metadata_rename", map[string]any{"field": field, "from": value, "split": suggest})
 					default:
 						t.Fatalf("%s %q carries no suggest: %v", section, value, finding)
@@ -514,7 +508,7 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 			for _, group := range rows(t, messyAudit("audit_duplicates", nil)["groups"], "groups") {
 				for _, it := range rows(t, group["items"], "items") {
 					if it["path"] == "Terry Pratchett/Mort" {
-						outside, _ = it["id"].(string)
+						outside = text(it["id"])
 						return true
 					}
 				}
@@ -544,7 +538,7 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 					var id string
 					for _, it := range rows(t, call(t, "library_items", map[string]any{"library": "Messy", "limit": 100})["items"], "items") {
 						if it["path"] == b.Path {
-							id, _ = it["id"].(string)
+							id = text(it["id"])
 						}
 					}
 					if id == "" {
@@ -568,7 +562,7 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 		if len(covers) == 0 {
 			t.Skip("no recorded cover to replace it with")
 		}
-		folder, _ := call(t, "item_get", map[string]any{"library": "Messy", "item": "Moving Pictures"})["full_path"].(string)
+		folder := text(call(t, "item_get", map[string]any{"library": "Messy", "item": "Moving Pictures"})["full_path"])
 		loop{
 			audit: func(t *testing.T) bool {
 				for _, row := range rows(t, messyAudit("audit_covers", map[string]any{"banner": true, "limit": 100})["findings"], "findings") {
@@ -597,8 +591,8 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 		// the book's own folder
 		const book = "War Is a Racket"
 		it := call(t, "item_get", map[string]any{"library": "Non-Fiction", "item": book})
-		folder, _ := it["full_path"].(string)
-		rel, _ := it["path"].(string)
+		folder := text(it["full_path"])
+		rel := text(it["path"])
 		big := filepath.Join(data, "nonfiction", rel, "zzyzx-bigger.jpg")
 		writeJPEG(t, big, 600)
 		t.Cleanup(func() {
@@ -659,8 +653,8 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 				return false
 			},
 			fix: func(t *testing.T) {
-				cand, _ := call(t, "author_match", map[string]any{"library": "Fiction", "author": "Isaac Asimov", "query": "Isaac Asimov"})["candidate"].(map[string]any)
-				asin, _ := cand["asin"].(string)
+				cand := object(call(t, "author_match", map[string]any{"library": "Fiction", "author": "Isaac Asimov", "query": "Isaac Asimov"})["candidate"])
+				asin := text(cand["asin"])
 				if asin == "" {
 					t.Fatal("author_match found no one")
 				}
@@ -688,9 +682,9 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 				if len(candidates) == 0 {
 					t.Fatal("item_match found no candidate")
 				}
-				asin, _ := candidates[0]["asin"].(string)
+				asin := text(candidates[0]["asin"])
 				out := call(t, "item_match_apply", map[string]any{"library": "Non-Fiction", "item": book, "provider": "audible", "asin": asin})
-				if updated, _ := out["updated"].(bool); !updated {
+				if updated := truth(out["updated"]); !updated {
 					t.Errorf("item_match_apply reported no update: %v", out)
 				}
 			},
@@ -702,7 +696,7 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 					"authors": []any{before["author"]}, "title": book,
 				})
 				// the cover.jpg in the folder is still the book's
-				folder, _ := before["full_path"].(string)
+				folder := text(before["full_path"])
 				call(t, "item_cover_edit", map[string]any{"library": "Non-Fiction", "item": book, "file": path.Join(folder, "cover.jpg")})
 			},
 		}.run(t)

@@ -26,8 +26,8 @@ func TestPodcastEpisodeGetAndEdit(t *testing.T) {
 	if len(episodes) == 0 {
 		t.Fatal("no episodes to work with")
 	}
-	id, _ := episodes[0]["id"].(string)
-	original, _ := episodes[0]["title"].(string)
+	id := text(episodes[0]["id"])
+	original := text(episodes[0]["title"])
 
 	got := call(t, "podcast_episode_get", map[string]any{"item": "Behind the Bastards", "episode": id})
 	if got["title"] != original {
@@ -96,10 +96,10 @@ func TestPodcastEpisodeDelete(t *testing.T) {
 	if len(episodes) < 2 {
 		t.Fatal("expected two episodes to start from")
 	}
-	id, _ := episodes[0]["id"].(string)
+	id := text(episodes[0]["id"])
 
 	out := call(t, "podcast_episode_delete", map[string]any{"item": "Well There's Your Problem", "episode": id, "confirm": true})
-	if deleted, _ := out["deleted"].(bool); !deleted {
+	if deleted := truth(out["deleted"]); !deleted {
 		t.Errorf("podcast_episode_delete deleted = %v", out["deleted"])
 	}
 	t.Cleanup(func() {

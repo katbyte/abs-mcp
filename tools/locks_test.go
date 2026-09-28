@@ -6,18 +6,6 @@ import (
 	"time"
 )
 
-// released fails a test whose locks still track a record once every hold
-// has been let go.
-func released(t *testing.T, l *writeLocks) {
-	t.Helper()
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if len(l.records) != 0 {
-		t.Errorf("records left behind: %v", l.records)
-	}
-}
-
 // Holds on one record queue; holds on others do not wait for them; sets
 // taken in opposite orders cannot deadlock; a sweep waits for every hold and
 // every hold waits for a sweep; and nothing is left behind.

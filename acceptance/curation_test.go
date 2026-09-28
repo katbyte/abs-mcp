@@ -34,13 +34,13 @@ func TestAuditGenres(t *testing.T) {
 	narrow := rows(t, out["narrow"], "narrow")
 	if len(narrow) != 1 || narrow[0]["value"] != "History" || num(t, narrow[0]["items"], "items") != 3 {
 		t.Errorf("narrow = %v, want History on 3 books", narrow)
-	} else if suggest, _ := narrow[0]["suggest"].(string); !strings.Contains(suggest, "to_field=tags") {
+	} else if suggest := text(narrow[0]["suggest"]); !strings.Contains(suggest, "to_field=tags") {
 		t.Errorf("narrow suggests %q, want a move to tags", suggest)
 	}
 	redundant := rows(t, out["redundant"], "redundant")
 	if len(redundant) != 1 || redundant[0]["value"] != "history" || num(t, redundant[0]["items"], "items") != 2 {
 		t.Errorf("redundant = %v, want the history tag on 2 books", redundant)
-	} else if suggest, _ := redundant[0]["suggest"].(string); !strings.Contains(suggest, "remove=true") {
+	} else if suggest := text(redundant[0]["suggest"]); !strings.Contains(suggest, "remove=true") {
 		t.Errorf("redundant suggests %q, want a removal", suggest)
 	}
 }
@@ -68,7 +68,7 @@ func TestSeriesMerge(t *testing.T) {
 	if books := strs(t, out["books"], "books"); !slices.Contains(books, "Foundation #1") {
 		t.Errorf("books = %v, want Foundation at #1", books)
 	}
-	if removed, _ := out["from_removed"].(bool); !removed {
+	if removed := truth(out["from_removed"]); !removed {
 		t.Errorf("from_removed = %v, note %v: the server drops a series its last book leaves", out["from_removed"], out["note"])
 	}
 
@@ -106,7 +106,7 @@ func TestItemMatchBatch(t *testing.T) {
 	}
 	confidences := []string{"exact", "likely", "edition", "unsure", "none"}
 	for _, row := range found {
-		conf, _ := row["confidence"].(string)
+		conf := text(row["confidence"])
 		if !slices.Contains(confidences, conf) {
 			t.Errorf("%v: confidence = %q", row["title"], conf)
 		}
@@ -118,10 +118,10 @@ func TestItemMatchBatch(t *testing.T) {
 			t.Errorf("%v: no best candidate from the store", row["title"])
 			continue
 		}
-		if asin, _ := best["asin"].(string); asin == "" {
+		if asin := text(best["asin"]); asin == "" {
 			t.Errorf("%v: the best candidate has no asin", row["title"])
 		}
-		if title, _ := best["title"].(string); !strings.Contains(strings.ToLower(title), "foundation") {
+		if title := text(best["title"]); !strings.Contains(strings.ToLower(title), "foundation") {
 			t.Errorf("%v: best candidate is %q", row["title"], title)
 		}
 	}
@@ -132,7 +132,7 @@ func TestItemMatchBatch(t *testing.T) {
 	}
 	var sum int
 	for _, v := range counts {
-		n, _ := v.(float64)
+		n := number(v)
 		sum += int(n)
 	}
 	if sum != 3 {
@@ -171,7 +171,7 @@ func TestItemCoverUpgradeNeedsAnASIN(t *testing.T) {
 		t.Fatalf("items = %v, want a row per book", items)
 	}
 	for _, row := range items {
-		if action, _ := row["action"].(string); action != "no_asin" {
+		if action := text(row["action"]); action != "no_asin" {
 			t.Errorf("%v: action = %q, want no_asin on an unmatched book", row["title"], action)
 		}
 	}

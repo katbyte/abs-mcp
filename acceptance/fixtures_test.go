@@ -21,8 +21,8 @@ func keepAudioFiles(t *testing.T, item string) {
 		t.Skip("ABS_TEST_DATA is not set")
 	}
 	got := call(t, "item_get", map[string]any{"item": item})
-	id, _ := got["id"].(string)
-	folder, _ := got["full_path"].(string)
+	id := text(got["id"])
+	folder := text(got["full_path"])
 	if id == "" || folder == "" {
 		t.Fatalf("item_get %q has no id or folder: %v", item, got)
 	}
@@ -38,7 +38,7 @@ func keepAudioFiles(t *testing.T, item string) {
 		if e.IsDir() {
 			continue
 		}
-		b, err := os.ReadFile(filepath.Join(dir, e.Name())) //nolint:gosec // a fixture folder this suite laid out
+		b, err := os.ReadFile(filepath.Join(dir, e.Name()))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -47,7 +47,7 @@ func keepAudioFiles(t *testing.T, item string) {
 
 	t.Cleanup(func() {
 		for name, b := range saved {
-			if err := os.WriteFile(filepath.Join(dir, name), b, 0o666); err != nil { //nolint:gosec // the fixtures are shared with the container's user
+			if err := os.WriteFile(filepath.Join(dir, name), b, 0o666); err != nil {
 				t.Errorf("putting %s back: %v", name, err)
 			}
 		}

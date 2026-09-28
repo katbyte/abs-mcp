@@ -27,10 +27,7 @@ import (
 func accessTitles(t *testing.T, out map[string]any, field string) []string {
 	t.Helper()
 
-	var titles []string
-	for _, row := range rows(t, out[field], field) {
-		titles = append(titles, text(row["title"]))
-	}
+	titles := valuesIn(t, out[field], field, "title")
 	slices.Sort(titles)
 
 	return titles
@@ -70,7 +67,7 @@ func TestJourneyAnExplicitBookKeptFromAnAccount(t *testing.T) {
 	t.Cleanup(func() { call(t, "item_edit", map[string]any{"item": id, "explicit": false}) })
 
 	call(t, "item_edit", map[string]any{"item": id, "explicit": true})
-	if explicit, _ := call(t, "item_get", map[string]any{"item": id})["explicit"].(bool); !explicit {
+	if explicit := truth(call(t, "item_get", map[string]any{"item": id})["explicit"]); !explicit {
 		t.Fatal("item_get does not read the book back as explicit")
 	}
 
@@ -82,7 +79,7 @@ func TestJourneyAnExplicitBookKeptFromAnAccount(t *testing.T) {
 		if explicit, ok := u["explicit"].(bool); !ok || explicit {
 			t.Errorf("%s: user_get explicit = %v, want false", who, u["explicit"])
 		}
-		if all, _ := u["all_tags"].(bool); !all {
+		if all := truth(u["all_tags"]); !all {
 			t.Errorf("%s: all_tags = %v: only the explicit flag keeps anything from this account", who, u["all_tags"])
 		}
 	}
@@ -157,7 +154,7 @@ func TestJourneyAnExplicitBookKeptFromAnAccount(t *testing.T) {
 
 	t.Run("unmarked, and back", func(t *testing.T) {
 		call(t, "item_edit", map[string]any{"item": id, "explicit": false})
-		if got := listener.call(t, "item_get", map[string]any{"item": id}); got["id"] != id || got["explicit"] == true {
+		if got := listener.call(t, "item_get", map[string]any{"item": id}); got["id"] != id || truth(got["explicit"]) {
 			t.Errorf("item_get once unmarked = %v", got)
 		}
 		if n := num(t, listener.call(t, "library_items", map[string]any{"library": "Fiction", "limit": 1})["total"], "total"); n != 7 {
@@ -197,10 +194,10 @@ func TestJourneyATagLimitedListenersOwnQueue(t *testing.T) {
 	listener.call(t, "playlist_create", map[string]any{"library": "Fiction", "name": queue, "entries": []any{map[string]any{"item": "City of Golden Shadow"}}})
 	entries := func() []string {
 		t.Helper()
-		var out []string
-		for _, e := range rows(t, listener.call(t, "playlist_get", map[string]any{"playlist": queue})["entries"], "entries") {
-			it, _ := e["item"].(map[string]any)
-			out = append(out, text(it["title"]))
+		held := rows(t, listener.call(t, "playlist_get", map[string]any{"playlist": queue})["entries"], "entries")
+		out := make([]string, 0, len(held))
+		for _, e := range held {
+			out = append(out, text(object(e["item"])["title"]))
 		}
 		return out
 	}
@@ -309,7 +306,7 @@ func TestJourneyListsDeletedAndReadBack(t *testing.T) {
 		t.Cleanup(func() { _, _ = invoke("playlist_delete", map[string]any{"playlist": made}) })
 
 		out := call(t, "playlist_entries_edit", map[string]any{"playlist": made, "action": "remove", "entries": []any{map[string]any{"item": "Foundation"}}})
-		if deleted, _ := out["deleted"].(bool); !deleted || num(t, out["entries"], "entries") != 0 {
+		if deleted := truth(out["deleted"]); !deleted || num(t, out["entries"], "entries") != 0 {
 			t.Errorf("removing the last entry = %v, want the playlist reported deleted", out)
 		}
 		for _, p := range rows(t, call(t, "playlist_list", nil)["playlists"], "playlists") {
@@ -358,7 +355,7 @@ func TestJourneyListsDeletedAndReadBack(t *testing.T) {
 		if len(entries) != 1 {
 			t.Fatalf("the playlist after the refusal = %v, want Second Foundation still in it", got)
 		}
-		if it, _ := entries[0]["item"].(map[string]any); text(it["title"]) != "Second Foundation" {
+		if it := object(entries[0]["item"]); text(it["title"]) != "Second Foundation" {
 			t.Errorf("the entry left = %v, want Second Foundation", entries[0])
 		}
 	})
@@ -403,8 +400,8 @@ func accessYear(out map[string]any) map[string]any {
 	for _, key := range []string{"top_authors", "top_narrators", "top_genres", "finished"} {
 		if list, ok := out[key].([]any); ok {
 			slices.SortFunc(list, func(a, b any) int {
-				ra, _ := a.(map[string]any)
-				rb, _ := b.(map[string]any)
+				ra := object(a)
+				rb := object(b)
 				return strings.Compare(text(ra["name"])+text(ra["title"]), text(rb["name"])+text(rb["title"]))
 			})
 		}
@@ -417,12 +414,7 @@ func accessYear(out map[string]any) map[string]any {
 func accessSessionIDs(t *testing.T, out map[string]any) []string {
 	t.Helper()
 
-	var ids []string
-	for _, s := range rows(t, out["sessions"], "sessions") {
-		ids = append(ids, text(s["id"]))
-	}
-
-	return ids
+	return valuesIn(t, out["sessions"], "sessions", "id")
 }
 
 // A listener's own listening, read back through every argument the reads
@@ -552,8 +544,8 @@ func TestJourneyAListenersOwnListeningReadBack(t *testing.T) {
 		// the listener's view and an admin's naming them are one record
 		progress := func() map[string]any {
 			t.Helper()
-			self, _ := listener.call(t, "user_progress_get", map[string]any{"library": library, "item": book})["progress"].(map[string]any)
-			admin, _ := call(t, "user_progress_get", named(map[string]any{"library": library, "item": book}))["progress"].(map[string]any)
+			self := object(listener.call(t, "user_progress_get", map[string]any{"library": library, "item": book})["progress"])
+			admin := object(call(t, "user_progress_get", named(map[string]any{"library": library, "item": book}))["progress"])
 			if !sameJSON(self, admin) {
 				t.Errorf("progress: the listener sees %v, an admin sees %v", self, admin)
 			}
@@ -561,11 +553,11 @@ func TestJourneyAListenersOwnListeningReadBack(t *testing.T) {
 		}
 		at := func(p map[string]any, seconds, pct int, hidden bool) bool {
 			return p != nil && num(t, p["current_time_s"], "current_time_s") == seconds && num(t, p["percent"], "percent") == pct &&
-				p["finished"] != true && (p["hidden_from_continue"] == true) == hidden
+				!truth(p["finished"]) && truth(p["hidden_from_continue"]) == hidden
 		}
 
 		set := listener.call(t, "user_progress_set", map[string]any{"library": library, "item": book, "position_s": 10})
-		if p, _ := set["progress"].(map[string]any); !at(p, 10, 33, false) {
+		if p := object(set["progress"]); !at(p, 10, 33, false) {
 			t.Errorf("user_progress_set position 10 of 30 seconds = %v, want 10 seconds, 33 percent", set)
 		}
 		if p := progress(); !at(p, 10, 33, false) {
@@ -638,7 +630,7 @@ func accessLongBook(t *testing.T) (library, title, id string) {
 		t.Fatalf("ffmpeg: %v: %s", err, out)
 	}
 	admin := adminClient(t)
-	made, _ := call(t, "library_create", map[string]any{"name": library, "folders": []any{"/scratch/zzyzx-long-shelf"}})["library"].(map[string]any)
+	made := object(call(t, "library_create", map[string]any{"name": library, "folders": []any{"/scratch/zzyzx-long-shelf"}})["library"])
 	libID := text(made["id"])
 	t.Cleanup(func() {
 		eventually(t, "deleting the long shelf", func() error {
@@ -675,7 +667,7 @@ func TestJourneyABackupReadBack(t *testing.T) {
 	// the backup made is the one the tool names: the server names a backup by
 	// the minute it was made, so one made in the minute of another replaces
 	// it, and a count of new ids would read that as nothing made
-	created, _ := call(t, "server_backup_create", nil)["created"].(map[string]any)
+	created := object(call(t, "server_backup_create", nil)["created"])
 	id := text(created["id"])
 	if id == "" {
 		t.Fatal("server_backup_create named no backup")

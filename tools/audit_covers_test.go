@@ -1,86 +1,16 @@
 package tools
 
 import (
-	"bytes"
+	"fmt"
 	"image"
 	"image/color"
-	"image/jpeg"
-	"image/png"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 )
-
-// The hashes have to read one picture as one picture at any size and
-// through a JPEG, and two pictures as two. The pictures are drawn from a
-// formula over unit coordinates, so the same picture at 800 and 300 pixels
-// is the same picture and not a resampling of it.
-
-// artwork draws a cover of n pixels: a diagonal wash with a dark disc and a
-// light bar, placed by the seed so that different seeds are different covers.
-func artwork(n int, seed float64) image.Image {
-	img := image.NewRGBA(image.Rect(0, 0, n, n))
-	for y := range n {
-		for x := range n {
-			u, v := float64(x)/float64(n), float64(y)/float64(n)
-			shade := 60 + 120*(u*0.6+v*0.4)
-			dx, dy := u-(0.3+0.4*seed), v-(0.35+0.3*seed)
-			if dx*dx+dy*dy < 0.04 {
-				shade = 20
-			}
-			if v > 0.7+0.15*seed && v < 0.8+0.15*seed && u > 0.1 && u < 0.6+0.3*seed {
-				shade = 230
-			}
-			c := uint8(min(255, max(0, int(shade))))
-			g := uint8(min(255, int(shade)+20*int(seed*3))) //nolint:gosec // clamped
-			img.Set(x, y, color.RGBA{c, g, c, 255})
-		}
-	}
-	return img
-}
-
-func encodePNG(t *testing.T, img image.Image) string {
-	t.Helper()
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
-		t.Fatal(err)
-	}
-	return buf.String()
-}
-
-func encodeJPEG(t *testing.T, img image.Image, quality int) string {
-	t.Helper()
-	var buf bytes.Buffer
-	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality}); err != nil {
-		t.Fatal(err)
-	}
-	return buf.String()
-}
-
-func TestCoverHashSamePictureAcrossSizes(t *testing.T) {
-	t.Parallel()
-
-	big, small := hashImage(artwork(800, 0)), hashImage(artwork(300, 0))
-	if p, d := big.distance(small); !big.samePicture(small) {
-		t.Errorf("the same picture at 800 and 300 pixels is %d/%d bits apart", p, d)
-	}
-	rough, err := jpeg.Decode(strings.NewReader(encodeJPEG(t, artwork(500, 0), 30)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if p, d := big.distance(hashImage(rough)); !big.samePicture(hashImage(rough)) {
-		t.Errorf("the same picture through a rough JPEG is %d/%d bits apart", p, d)
-	}
-	other := hashImage(artwork(600, 0.9))
-	if p, d := big.distance(other); big.samePicture(other) || p < 16 {
-		t.Errorf("a different picture is only %d/%d bits apart", p, d)
-	}
-	if big != hashImage(artwork(800, 0)) {
-		t.Error("hashing is not deterministic")
-	}
-}
 
 func TestFullSizeCoverURL(t *testing.T) {
 	t.Parallel()
@@ -97,78 +27,110 @@ func TestFullSizeCoverURL(t *testing.T) {
 	}
 }
 
-// coverFixture is a library of three matched books against a store: one
-// whose cover is the store's picture at a third of the size, one with no
-// cover, and one whose cover is another picture. The store's image host is
-// a test server whose "_SL500_" renditions have a full-size original.
-func coverFixture(t *testing.T) (*fakeABS, *httptest.Server) {
+// coverBook is a book of a cover fixture: the asin it was matched to, none
+// for a book never matched; the store's picture for that asin, by name; and
+// the cover on disk. listed is whether the book says it has a cover, which it
+// can say of a file that is gone.
+type coverBook struct {
+	id, title, asin, store string
+	listed                 bool
+	disk                   image.Image
+}
+
+// coverLibrary is an Audible library of these books and the store's image
+// host beside it, a test server whose "_SL500_" renditions have a full-size
+// original: a is one picture, b another, r one wearing the ribbon, and any
+// other name a picture the store no longer has. The book coverFails sends
+// its picture but fails the read of its size.
+func coverLibrary(t *testing.T, books []coverBook) (*fakeABS, *httptest.Server) {
 	t.Helper()
 
 	f := newFakeABS(t)
 	oneLibrary(f)
 	f.json("GET /api/libraries/"+libID, `{"id":"`+libID+`","name":"Books","mediaType":"book","provider":"audible"}`)
-	pictures := map[string]image.Image{"a": artwork(1500, 0), "b": artwork(1500, 0.9), "r": ribboned(1500, 0.5)}
-	store := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// /img/a._SL500_.jpg is the rendition, /img/a.jpg the original
-		name := strings.TrimPrefix(r.URL.Path, "/img/")
-		base, _, _ := strings.Cut(name, ".")
-		img, ok := pictures[base]
-		if !ok {
+	store := fakeStore(t, func(name string, n int) image.Image {
+		switch name {
+		case "a":
+			return artwork(n, 0)
+		case "b":
+			return artwork(n, 0.9)
+		case "r":
+			return ribboned(n, 0.5)
+		}
+		return nil
+	})
+
+	listing := make([]string, 0, len(books))
+	sold := map[string]string{}
+	onDisk := map[string]image.Image{}
+	for _, b := range books {
+		meta, media := "", ""
+		if b.asin != "" {
+			meta = `"asin":"` + b.asin + `"`
+			sold[b.asin] = b.store
+		}
+		if b.listed {
+			media = `"coverPath":"/` + b.id + `.jpg"`
+		}
+		listing = append(listing, item(b.id, b.title, meta, media))
+		if b.asin != "" {
+			f.json("GET /api/items/"+b.id, item(b.id, b.title, meta, media))
+		}
+		if b.disk != nil {
+			onDisk[b.id] = b.disk
+		}
+	}
+	f.json("GET /api/libraries/"+libID+"/items", page(listing...))
+	f.mux.HandleFunc("GET /api/search/books", func(w http.ResponseWriter, r *http.Request) {
+		asin := r.URL.Query().Get("title")
+		_, _ = fmt.Fprintf(w, `[{"title":"x","asin":%q,"cover":"%s/img/%s._SL500_.jpg"}]`, asin, store.URL, sold[asin]) //nolint:gosec // a test fixture echoing its own query
+	})
+	f.mux.HandleFunc("GET /api/items/{id}/cover", func(w http.ResponseWriter, r *http.Request) {
+		raw := r.URL.Query().Get("raw") == "1"
+		img, ok := onDisk[r.PathValue("id")]
+		switch {
+		case r.PathValue("id") == coverFails && raw:
+			http.Error(w, "boom", http.StatusInternalServerError)
+			return
+		case r.PathValue("id") == coverFails:
+			// the picture comes through: the store's copy is the same
+			// picture, a little bigger
+			img = artwork(300, 0)
+		case !ok:
 			http.NotFound(w, r)
 			return
 		}
-		if strings.Contains(name, "_SL500_") {
-			img = artwork(500, map[string]float64{"a": 0, "b": 0.9, "r": 0.5}[base])
-			if base == "r" {
-				img = ribboned(500, 0.5)
-			}
+		if raw {
+			_, _ = io.WriteString(w, encodePNG(t, img))
+			return
 		}
 		_, _ = io.WriteString(w, encodeJPEG(t, img, 85))
-	}))
-	t.Cleanup(store.Close)
-
-	book := func(id, title, asin, cover string) string {
-		return item(id, title, `"asin":"`+asin+`"`, cover)
-	}
-	f.json("GET /api/libraries/"+libID+"/items", page(
-		book("li_1", "Small Same", "B001", `"coverPath":"/1.jpg"`),
-		book("li_2", "Bare", "B002", ""),
-		book("li_3", "Other Art", "B003", `"coverPath":"/3.jpg"`),
-		item("li_4", "Unmatched", "", `"coverPath":"/4.jpg"`),
-		book("li_5", "Jacket", "B005", `"coverPath":"/5.jpg"`),
-		book("li_6", "Clean Here", "B006", `"coverPath":"/6.jpg"`),
-	))
-	asins := map[string]string{"li_1": "B001", "li_2": "B002", "li_3": "B003", "li_5": "B005", "li_6": "B006"}
-	covers := map[string]string{"li_1": `"coverPath":"/1.jpg"`, "li_2": "", "li_3": `"coverPath":"/3.jpg"`, "li_5": `"coverPath":"/5.jpg"`, "li_6": `"coverPath":"/6.jpg"`}
-	for id, asin := range asins {
-		f.json("GET /api/items/"+id, book(id, id, asin, covers[id]))
-	}
-	f.mux.HandleFunc("GET /api/search/books", func(w http.ResponseWriter, r *http.Request) {
-		cover := map[string]string{"B001": "a", "B002": "a", "B003": "a", "B005": "a", "B006": "r"}[r.URL.Query().Get("title")]
-		asin := r.URL.Query().Get("title")
-		_, _ = io.WriteString(w, `[{"title":"x","asin":"`+asin+`","cover":"`+store.URL+`/img/`+cover+`._SL500_.jpg"}]`) //nolint:gosec // a test fixture echoing its own query
 	})
+	f.json("POST /api/items/{id}/cover", `{"success":true}`)
+	return f, store
+}
+
+// coverFixture is a library against a store: a book whose cover is the
+// store's picture at a third of the size, one with no cover, one whose cover
+// is another picture, one never matched, one with a jacket scan for a cover,
+// and one whose store copy wears the ribbon.
+func coverFixture(t *testing.T) (*fakeABS, *httptest.Server) {
+	t.Helper()
+
 	jacket := image.NewRGBA(image.Rect(0, 0, 600, 1000)) // a portrait scan, plain grey
 	for y := range 1000 {
 		for x := range 600 {
 			jacket.Set(x, y, color.RGBA{120, 120, 120, 255})
 		}
 	}
-	onDisk := map[string]image.Image{"li_1": artwork(500, 0), "li_3": artwork(900, 0.9), "li_4": artwork(400, 0.5), "li_5": jacket, "li_6": artwork(500, 0.5)}
-	f.mux.HandleFunc("GET /api/items/{id}/cover", func(w http.ResponseWriter, r *http.Request) {
-		img, ok := onDisk[r.PathValue("id")]
-		if !ok {
-			http.NotFound(w, r)
-			return
-		}
-		if r.URL.Query().Get("raw") == "1" {
-			_, _ = io.WriteString(w, encodePNG(t, img))
-			return
-		}
-		_, _ = io.WriteString(w, encodeJPEG(t, img, 80))
+	return coverLibrary(t, []coverBook{
+		{id: "li_1", title: "Small Same", asin: "B001", store: "a", listed: true, disk: artwork(500, 0)},
+		{id: "li_2", title: "Bare", asin: "B002", store: "a"},
+		{id: "li_3", title: "Other Art", asin: "B003", store: "a", listed: true, disk: artwork(900, 0.9)},
+		{id: "li_4", title: "Unmatched", listed: true, disk: artwork(400, 0.5)},
+		{id: "li_5", title: "Jacket", asin: "B005", store: "a", listed: true, disk: jacket},
+		{id: "li_6", title: "Clean Here", asin: "B006", store: "r", listed: true, disk: artwork(500, 0.5)},
 	})
-	f.json("POST /api/items/{id}/cover", `{"success":true}`)
-	return f, store
 }
 
 func TestAuditCoversAgainstTheStore(t *testing.T) {
@@ -299,50 +261,6 @@ func TestItemCoverUpgrade(t *testing.T) {
 	}
 }
 
-// ribboned is a cover with the Audible ribbon drawn across its bottom-right
-// corner: a yellow band at 45 degrees with dark lettering on it.
-func ribboned(n int, seed float64) image.Image {
-	base := artwork(n, seed)
-	img := image.NewRGBA(base.Bounds())
-	for y := range n {
-		for x := range n {
-			c := base.At(x, y)
-			s := float64(x+y) / float64(n)
-			if s > 1.42 && s < 1.62 {
-				c = color.RGBA{250, 230, 40, 255}
-				if (x-y)%11 < 3 && s > 1.47 && s < 1.57 { // the lettering
-					c = color.RGBA{30, 30, 30, 255}
-				}
-			}
-			img.Set(x, y, c)
-		}
-	}
-	return img
-}
-
-func TestFindAudibleBanner(t *testing.T) {
-	t.Parallel()
-
-	if _, found := findAudibleBanner(ribboned(600, 0)); !found {
-		t.Error("the ribbon was not found")
-	}
-	if region, found := findAudibleBanner(ribboned(300, 0.9)); !found || region.Centre < 1.4 || region.Centre > 1.65 {
-		t.Errorf("the ribbon on a small cover: found=%v at %v", found, region)
-	}
-	if region, found := findAudibleBanner(artwork(600, 0)); found {
-		t.Errorf("plain art was read as a ribbon: %v", region)
-	}
-	lemon := image.NewRGBA(image.Rect(0, 0, 400, 400))
-	for y := range 400 {
-		for x := range 400 {
-			lemon.Set(x, y, color.RGBA{250, 230, 40, 255})
-		}
-	}
-	if region, found := findAudibleBanner(lemon); found {
-		t.Errorf("an all-yellow cover was read as a ribbon: %v", region)
-	}
-}
-
 func TestAuditCoversFindsTheBanner(t *testing.T) {
 	t.Parallel()
 
@@ -378,5 +296,287 @@ func TestAuditCoversFindsTheBanner(t *testing.T) {
 	plain, err := call("audit_covers", nil)
 	if err != nil || num(t, plain["total_findings"]) != 0 {
 		t.Errorf("without banner: %v %v", plain, err)
+	}
+}
+
+// storeFixture is a library of three matched books: one whose cover is the
+// store's picture too small, one whose store image is gone, and one whose
+// own cover file is gone.
+func storeFixture(t *testing.T) *fakeABS {
+	t.Helper()
+
+	f, _ := coverLibrary(t, []coverBook{
+		{id: "li_1", title: "Small", asin: "B001", store: "a", listed: true, disk: artwork(300, 0)},
+		{id: "li_2", title: "Store Gone", asin: "B002", store: "gone", listed: true, disk: artwork(500, 0.5)},
+		{id: "li_3", title: "File Gone", asin: "B003", store: "a", listed: true},
+	})
+	return f
+}
+
+// One book's store or cover failing stopped the whole window, and it could
+// never be got past; every later window repeated the library-wide rows.
+func TestAuditCoversStoreCarriesOnPastABook(t *testing.T) {
+	t.Parallel()
+
+	f := storeFixture(t)
+	call := toolCaller(t, f)
+
+	out, err := call("audit_covers", map[string]any{"store": true, "providers": []any{"audible"}, "library": "Books"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := map[string][]string{}
+	for _, row := range list(t, out["findings"]) {
+		rows[str(t, row["id"])] = append(rows[str(t, row["id"])], str(t, row["problem"]))
+	}
+	// the gone file is missing, as a book with no cover is, and the store's
+	// copy an upgrade over it
+	if !slices.Contains(rows["li_1"], "upgrade") || !slices.Equal(rows["li_2"], []string{"skipped"}) || !slices.Equal(rows["li_3"], []string{"missing", "upgrade"}) {
+		t.Errorf("rows = %v, want an upgrade, a skipped store, and the gone file missing with an upgrade over it", rows)
+	}
+	if num(t, out["items_scanned"]) != 3 || num(t, out["total_findings"]) != 4 {
+		t.Errorf("items_scanned %v total_findings %v, want 3 books and small, missing and two upgrades", out["items_scanned"], out["total_findings"])
+	}
+
+	// a book at a time: the library-wide rows come with the first only
+	first, err := call("audit_covers", map[string]any{"store": true, "providers": []any{"audible"}, "library": "Books", "limit": 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := call("audit_covers", map[string]any{"store": true, "providers": []any{"audible"}, "library": "Books", "limit": 1, "offset": 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	problems := func(out map[string]any) []string {
+		rows := list(t, out["findings"])
+		got := make([]string, 0, len(rows))
+		for _, row := range rows {
+			got = append(got, str(t, row["id"])+" "+str(t, row["problem"]))
+		}
+		return got
+	}
+	if got := problems(first); !slices.Equal(got, []string{"li_1 small", "li_1 upgrade"}) || num(t, first["next_offset"]) != 1 {
+		t.Errorf("offset 0 = %v, next_offset %v", got, first["next_offset"])
+	}
+	if got := problems(second); !slices.Equal(got, []string{"li_2 skipped"}) || num(t, second["total_findings"]) != 0 || num(t, second["items_scanned"]) != 1 || num(t, second["next_offset"]) != 2 {
+		t.Errorf("offset 1 = %v %v, want the store row alone", got, second)
+	}
+
+	// the one-library rule is checked before anything is swept
+	two := newFakeABS(t)
+	two.json("GET /api/libraries", `{"libraries":[{"id":"`+libID+`","name":"A","mediaType":"book"},{"id":"`+otherLibID+`","name":"B","mediaType":"book"}]}`)
+	if _, err := toolCaller(t, two)("audit_covers", map[string]any{"store": true}); err == nil || len(two.requests("/api/libraries/"+libID+"/items")) != 0 {
+		t.Errorf("store over two libraries: err %v, requests %v", err, two.requests("/api/libraries/"+libID+"/items"))
+	}
+}
+
+// A batch that fails part way has already set covers: those are reported,
+// with the failure and what was never tried, rather than only an error.
+func TestItemCoverUpgradeReportsWhatItDidBeforeAFailure(t *testing.T) {
+	t.Parallel()
+
+	f := storeFixture(t)
+	call := toolCaller(t, f)
+
+	out, err := call("item_cover_upgrade", map[string]any{"items": []any{"li_1", "li_3", "li_2", "li_1"}, "providers": []any{"audible"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := list(t, out["items"])
+	actions := make([]string, 0, len(rows))
+	for _, row := range rows {
+		actions = append(actions, str(t, row["id"])+" "+str(t, row["action"]))
+	}
+	if !slices.Equal(actions, []string{"li_1 upgraded", "li_3 upgraded", "li_2 failed"}) || num(t, out["upgraded"]) != 2 {
+		t.Errorf("actions = %v, want two upgrades then the failure", actions)
+	}
+	if str(t, rows[2]["error"]) == "" {
+		t.Errorf("the failed row says nothing: %v", rows[2])
+	}
+	if nt, ok := out["not_tried"].([]any); !ok || len(nt) != 1 || nt[0] != "li_1" {
+		t.Errorf("not_tried = %v, want the last li_1", out["not_tried"])
+	}
+}
+
+// coverFails is a book whose cover the fake server fails to send.
+const coverFails = "li_fail"
+
+// A cover the server fails to send is no clean cover, and a cover file that
+// is gone is a missing one: the library sweep says both, book by book, and
+// audit_all says how many covers it could not judge.
+func TestCoversTheServerFailsToSendAreSaid(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	oneLibrary(f)
+	f.json("GET /api/libraries/"+libID+"/items", page(
+		item("li_ok", "Fine", "", `"coverPath":"/ok.jpg"`),
+		item("li_gone", "File Gone", "", `"coverPath":"/gone.jpg"`),
+		item(coverFails, "Fails", "", `"coverPath":"/fail.jpg"`),
+	))
+	f.mux.HandleFunc("GET /api/items/{id}/cover", func(w http.ResponseWriter, r *http.Request) {
+		switch r.PathValue("id") {
+		case "li_ok":
+			_, _ = io.WriteString(w, encodeJPEG(t, artwork(600, 0), 85))
+		case coverFails:
+			http.Error(w, "boom", http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	call := toolCaller(t, f)
+
+	out, err := call("audit_covers", map[string]any{"library": "Books"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := map[string]map[string]any{}
+	for _, row := range list(t, out["findings"]) {
+		rows[str(t, row["id"])] = row
+	}
+	if r := rows["li_gone"]; r == nil || str(t, r["problem"]) != "missing" || !strings.Contains(str(t, r["why"]), "gone") {
+		t.Errorf("the gone file = %v, want missing", r)
+	}
+	if r := rows[coverFails]; r == nil || str(t, r["problem"]) != "skipped" || !strings.Contains(str(t, r["why"]), "500") {
+		t.Errorf("the failed cover = %v, want skipped with the server's 500", r)
+	}
+	if num(t, out["skipped"]) != 1 || num(t, out["covers_checked"]) != 1 {
+		t.Errorf("skipped %v checked %v, want one each", out["skipped"], out["covers_checked"])
+	}
+
+	// audit_all counts findings only, so it says the cover it could not
+	// judge, or an outage would read as clean covers. Its deep audits read
+	// every book's files and ask the store about each
+	f.json("POST /api/items/batch/get", `{"libraryItems":[`+item("li_ok", "Fine", "", "")+`,`+item("li_gone", "File Gone", "", "")+`,`+item(coverFails, "Fails", "", "")+`]}`)
+	f.json("GET /api/libraries/"+libID+"/authors", `{"results":[],"total":0}`)
+	f.json("GET /api/libraries/"+libID+"/series", `{"results":[],"total":0}`)
+	f.json("GET /api/search/books", `[]`)
+	f.json("GET /api/libraries/"+libID, `{"id":"`+libID+`","name":"Books","mediaType":"book","provider":"audible"}`)
+	all, err := call("audit_all", map[string]any{"library": "Books", "deep": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	partial := list(t, all["partial"])
+	if !slices.ContainsFunc(partial, func(row map[string]any) bool {
+		return row["audit"] == "audit_covers" && strings.Contains(str(t, row["reason"]), "1 covers could not be read")
+	}) {
+		t.Errorf("audit_all partial = %v, want audit_covers saying one cover was not judged", partial)
+	}
+}
+
+// A cover whose size the server fails to give is not replaced as if it had
+// none: the store's copy may be smaller.
+func TestACoverUpgradeWithTheSizeUnreadWritesNothing(t *testing.T) {
+	t.Parallel()
+
+	f := storeFixture(t)
+	f.json("GET /api/items/"+coverFails, item(coverFails, "Fails", `"asin":"B001"`, `"coverPath":"/fail.jpg"`))
+	call := toolCaller(t, f)
+
+	_, err := call("item_cover_upgrade", map[string]any{"items": []any{coverFails}, "providers": []any{"audible"}})
+	wantErr(t, "an upgrade over a cover whose size failed", err, "size", "500")
+	if got := f.requests("/api/items/" + coverFails + "/cover"); slices.ContainsFunc(got, func(r request) bool { return r.Method == http.MethodPost }) {
+		t.Errorf("the cover was replaced: %v", got)
+	}
+
+	// and the store comparison lists the book as skipped, saying why,
+	// rather than dropping its size and comparing on
+	f.json("GET /api/libraries/"+libID+"/items", page(item(coverFails, "Fails", `"asin":"B001"`, `"coverPath":"/fail.jpg"`)))
+	out, err := call("audit_covers", map[string]any{"store": true, "providers": []any{"audible"}, "library": "Books"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var skipped bool
+	for _, row := range list(t, out["findings"]) {
+		why := str(t, row["why"])
+		if str(t, row["id"]) == coverFails && str(t, row["problem"]) == "skipped" && strings.Contains(why, "the cover's size") && strings.Contains(why, "500") {
+			skipped = true
+		}
+	}
+	if !skipped {
+		t.Errorf("findings = %v, want the store's row for the book skipped over its size, with the server's 500", out["findings"])
+	}
+}
+
+// A cover in a format Go cannot read is the file's problem: the sweep skips
+// it, saying so, and goes on.
+func TestAnUndecodableCoverIsSkippedNotAnError(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	oneLibrary(f)
+	f.json("GET /api/libraries/"+libID+"/items", page(item("li_webp", "Webp", "", `"coverPath":"/c.webp"`)))
+	f.mux.HandleFunc("GET /api/items/{id}/cover", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, "RIFF....WEBPVP8 not an image Go reads")
+	})
+	call := toolCaller(t, f)
+
+	out, err := call("audit_covers", map[string]any{"library": "Books"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := list(t, out["findings"])
+	if num(t, out["skipped"]) != 1 || len(rows) != 1 || !strings.Contains(str(t, rows[0]["why"]), "cannot be decoded") {
+		t.Errorf("a webp cover = %v, want one skipped row saying it cannot be decoded", out)
+	}
+}
+
+// The cover audit measures the file on disk (raw=1, not the server's 400-wide
+// cache), and does not ask for a cover the listing already says is absent.
+func TestAuditCoversMeasuresTheFile(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	oneLibrary(f)
+	f.json("GET /api/libraries/"+libID+"/items", page(
+		item("i1", "Square", "", `"coverPath":"/1.jpg"`),
+		item("i2", "Tall", "", `"coverPath":"/2.jpg"`),
+		item("i3", "Tiny", "", `"coverPath":"/3.jpg"`),
+		item("i4", "Bare", "", ""),
+	))
+	covers := map[string]string{"i1": pngOf(t, 600, 600), "i2": pngOf(t, 300, 600), "i3": pngOf(t, 200, 200)}
+	f.mux.HandleFunc("GET /api/items/{id}/cover", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("raw") != "1" {
+			http.Error(w, "the cache, not the file", http.StatusBadRequest)
+			return
+		}
+		_, _ = io.WriteString(w, covers[r.PathValue("id")])
+	})
+	call := toolCaller(t, f)
+
+	out, err := call("audit_covers", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := num(t, out["covers_checked"]); got != 3 {
+		t.Errorf("covers_checked = %d, want 3", got)
+	}
+	if _, skipped := out["skipped"]; skipped {
+		t.Errorf("skipped = %v, want none: a missing cover is a finding, not a skip", out["skipped"])
+	}
+	if got := f.requests("/api/items/i4/cover"); len(got) != 0 {
+		t.Errorf("a coverless item was fetched: %v", got)
+	}
+
+	why := map[string]string{}
+	problem := map[string]string{}
+	for _, row := range list(t, out["findings"]) {
+		why[str(t, row["id"])] = str(t, row["why"])
+		problem[str(t, row["id"])] = str(t, row["problem"])
+	}
+	if problem["i4"] != "missing" {
+		t.Errorf("the coverless item: %q %q", problem["i4"], why["i4"])
+	}
+	if problem["i2"] != "ratio" || problem["i3"] != "small" {
+		t.Errorf("problems = %v", problem)
+	}
+	if !strings.HasPrefix(why["i2"], "not square") {
+		t.Errorf("the tall cover: %q", why["i2"])
+	}
+	if !strings.HasPrefix(why["i3"], "only 200px") {
+		t.Errorf("the small cover: %q", why["i3"])
+	}
+	if _, flagged := why["i1"]; flagged {
+		t.Errorf("the square cover was flagged: %q", why["i1"])
 	}
 }

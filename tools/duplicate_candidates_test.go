@@ -10,18 +10,11 @@ import (
 	"testing"
 )
 
-// shelfBook is a book as the listing returns it, at a folder of its own, with
-// the fields the duplicate rules read.
-func shelfBook(id, path, title, author, narrator string, seconds, tracks int, asin string) string {
-	return fmt.Sprintf(`{"id":%q,"libraryId":%q,"mediaType":"book","relPath":%q,"media":{"metadata":{"title":%q,"authorName":%q,"narratorName":%q,"asin":%q},"duration":%d,"numTracks":%d,"numAudioFiles":%d}}`,
-		id, libID, path, title, author, narrator, asin, seconds, tracks, tracks)
-}
-
-// The cases of the zbooks sort, as a library would hold them: the pairs
-// no key joins that are one recording come back as candidates, each saying
-// why; the other readings of one book, and two works with nearly one name,
-// do not; and neither counts as a duplicate group.
-func TestDuplicateCandidatesFromTheZbooksSort(t *testing.T) {
+// Pairs from a large import, as a library would hold them: the pairs no key
+// joins that are one recording come back as candidates, each saying why; the
+// other readings of one book, and two works with nearly one name, do not;
+// and neither counts as a duplicate group.
+func TestDuplicateCandidatesAreOneRecordingNoKeyJoins(t *testing.T) {
 	t.Parallel()
 
 	const osc, niven = "Orson Scott Card", "Larry Niven"
@@ -258,6 +251,48 @@ func TestDifferentBooks(t *testing.T) {
 	} {
 		if got := c.a.sameShelf(&c.b); got != c.want || c.b.sameShelf(&c.a) != c.want {
 			t.Errorf("%s: sameShelf = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// Two copies of one title kept apart only on evidence a listen settles, and
+// near enough in length for one recording, are a candidate as well as a
+// split row: A Planet Called Treason, retitled Treason, 0.7% apart.
+func TestCloseCopiesKeptApartAreACandidate(t *testing.T) {
+	t.Parallel()
+
+	out := dupFixture(t, []string{
+		shelfBook("d1", "Orson Scott Card/A Planet Called Treason", "Treason", "Orson Scott Card", "", 38783, 1, ""),
+		shelfBook("d2", "Orson Scott Card/Treason", "Treason", "Orson Scott Card", "", 39054, 1, ""),
+		// kept apart as surely, and far apart: split alone
+		shelfBook("f1", "Isaac Asimov/Foundation", "Foundation", "Isaac Asimov", "", 31200, 1, ""),
+		shelfBook("f2", "Isaac Asimov/Foundation and Empire", "Foundation", "Isaac Asimov", "", 34000, 1, ""),
+	}, nil)
+	_, _, candidates := dupShape(t, out)
+	if !slices.Equal(candidates, []string{"d1+d2"}) {
+		t.Errorf("candidates %v, want the two Treasons", candidates)
+	}
+	if why := str(t, list(t, out["candidates"])[0]["why"]); !strings.Contains(why, "0.7% apart, though their folders name different books") {
+		t.Errorf("why = %q", why)
+	}
+	if num(t, out["total_split"]) != 2 {
+		t.Errorf("total_split = %v, want both titles", out["total_split"])
+	}
+}
+
+// A close pair kept apart by its folders is no candidate when its own two
+// copies name different readers, whatever a third copy bridging them says.
+func TestClosePairNamingTwoReadersIsNoCandidate(t *testing.T) {
+	t.Parallel()
+
+	_, _, candidates := dupShape(t, dupFixture(t, []string{
+		shelfBook("a", "Frank Herbert/Dune", "Dune", "Frank Herbert", "Scott Brick", 80000, 1, ""),
+		shelfBook("b", "Frank Herbert/Dune - Copy", "Dune", "Frank Herbert", "Scott Brick, Simon Vance", 80000, 1, ""),
+		shelfBook("m", "Frank Herbert/Dune 1965 Edition", "Dune", "Frank Herbert", "Simon Vance", 79000, 1, ""),
+	}, nil))
+	for _, c := range candidates {
+		if c == "a+m" {
+			t.Errorf("candidates %v, want no pair naming Scott Brick beside Simon Vance", candidates)
 		}
 	}
 }

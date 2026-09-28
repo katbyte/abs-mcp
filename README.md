@@ -10,15 +10,15 @@
 
 An [MCP](https://modelcontextprotocol.io) server, CLI and Go SDK that **audits an [Audiobookshelf](https://www.audiobookshelf.org) library for the things that actually go wrong, and fixes what it finds** - from Claude Code, Claude Desktop, or any other MCP client.
 
-There are several Audiobookshelf MCP servers, and they do a useful thing: expose the API as tools, so a model can browse your library and read your progress. This one does that too, but the reason it exists is the layer above: **19 audits**, each a sweep over the whole library for one specific thing that goes wrong in a real collection, returning a worklist rather than a dump, and naming the tool that fixes it.
+There are several Audiobookshelf MCP servers, and they do a useful thing: expose the API as tools, so a model can browse your library and read your progress. This one does that too, but the reason it exists is the layer above: **20 audits**, each a sweep over the whole library for one specific thing that goes wrong in a real collection, returning a worklist rather than a dump, and naming the tool that fixes it.
 
 This is not a demo. It has been battle-tested on a real collection: a large library, collected over years from every source and matched by hand or not at all, was cleaned up with these tools driven from Claude Code. Hundreds of titles were matched to the right store edition and checked against it, wrong matches caught by the folder the collector had named, author and narrator records merged and photographed, genres and tags brought to one vocabulary, and series names, numbering and titles brought to one style across the whole shelf in a sitting - every "The" dropped from a series label, every series past nine books zero-padded, every book linked to the series its folder names, every title that was really a series name replaced with the one the folder carried. Each pass was an audit, a review of the worklist, and a batch of edits. Most of the audits exist because that library had the problem.
 
 ### What else is in the box
 
 - **The whole API, as tools.** 99 tools over all 202 Audiobookshelf routes, so everything an audit finds can be fixed from the same session: matching, covers, chapters, embedding, renaming a genre everywhere it is used, merging duplicate authors.
-- **A Go SDK.** `lib/abs` is a complete Audiobookshelf API client - 205 methods, no dependencies outside the standard library, no knowledge of MCP - useful on its own, whether or not you care about AI.
-- **Tested against a real server.** Every tool and every client method runs against an actual Audiobookshelf in Docker, and the suite fails if a registered tool has no test. Seven response-shape bugs in this client were found that way and could not have been found any other way, because Audiobookshelf publishes no OpenAPI spec and its public API docs say they are unmaintained.
+- **A Go SDK.** `lib/abs` is a complete Audiobookshelf API client - 207 methods, no dependencies outside the standard library, no knowledge of MCP - useful on its own, whether or not you care about AI.
+- **Tested against a real server.** Every tool and every client method runs against an actual Audiobookshelf in Docker, and the suites fail if a registered tool or a client method has no test. Seven response-shape bugs in this client were found that way and could not have been found any other way, because Audiobookshelf publishes no OpenAPI spec and its public API docs say they are unmaintained.
 
 ### The audits
 
@@ -163,7 +163,7 @@ Tools are named resource-first (`library_*`, `item_*`, `user_*`...) so they grou
 | podcasts | `podcast_episodes` (one show, or the newest across the library), `podcast_episode_get`, `podcast_episode_edit`, `podcast_check_new`, `podcast_feed_episodes`, `podcast_episode_download`, `podcast_downloads`, `podcast_search`, `podcast_add`, `podcast_settings` |
 | users | `user_get`, `user_in_progress`, `user_progress_get`, `user_progress_set`, `user_progress_remove`, `user_bookmarks`, `user_bookmark_edit` (add or remove), `user_history`, `user_stats` (all-time or year in review), `user_list` (admin) |
 
-`item_delete`, `podcast_episode_delete`, `author_delete`, `library_issues_remove`, `collection_delete` and `playlist_delete` are only registered when `--enable-delete` / `ABS_ENABLE_DELETE` is set; the ones that erase files or many records at once (`item_delete`, `podcast_episode_delete`, `library_issues_remove`, and `metadata_rename` with `remove`) say what they would remove and change nothing until called again with `confirm`. `--read-only` registers the 58 read tools and nothing else, so a write tool is absent from `tools/list` rather than refused when called.
+`item_delete`, `podcast_episode_delete`, `author_delete`, `library_issues_remove`, `collection_delete` and `playlist_delete` are only registered when `--enable-delete` / `ABS_ENABLE_DELETE` is set; the ones that erase files or many records at once (`item_delete`, `podcast_episode_delete`, `library_issues_remove`, and `metadata_rename` with `remove`) say what they would remove and change nothing until called again with `confirm`. `--read-only` registers the 59 read tools and nothing else, so a write tool is absent from `tools/list` rather than refused when called.
 
 ### Choosing which tools load
 
@@ -245,7 +245,7 @@ make check-all  # build + unit tests + both live suites (needs docker) + every l
 
 ### Tests
 
-`make test` is hermetic and fast. It covers the pure logic - filter encoding, formatting, gap arithmetic, the audit heuristics, tool registration - and two things that need a server but not a real one: every `lib/abs` request shape and response decoding against a canned server (`lib/abs/requests_test.go`), and the tools end to end over an in-memory MCP session against a canned Audiobookshelf (`tools/handlers_test.go`). The second is where the cases the live fixtures cannot reach live: a library with covers, inconsistent spellings, tagged and untagged audio files, more findings than the limit.
+`make test` is hermetic and fast. It covers the pure logic - filter encoding, formatting, gap arithmetic, the audit heuristics, tool registration - and two things that need a server but not a real one: the `lib/abs` requests and answers that have gone wrong before, each pinned against a canned server (`lib/abs/fake_server_test.go`), and the tools end to end over an in-memory MCP session against a canned Audiobookshelf (`tools/fake_abs_test.go`). The first is not every method, about one in six: what proves every method is the live suite below. The second is where the cases the live fixtures cannot reach live: a library with covers, inconsistent spellings, tagged and untagged audio files, more findings than the limit.
 
 Everything else runs against **a real Audiobookshelf in Docker**, because a stub can only confirm what you already believed. Two suites, each in its own container:
 
@@ -266,7 +266,7 @@ Those journeys, like everything else, drive `tools.RegisterAll` in process, whic
 
 Coverage has to span all three or it lies: `go test -cover ./...` reports about 40% for `tools/`, because almost everything real happens in the live suites behind the `integration` tag. `make cover` runs each into its own binary coverage directory and merges them with `go tool covdata` - stdlib tooling, no third-party merger - which is what the badge reports.
 
-**All 99 tools and all 205 client methods are exercised**, 200 of them asserting a result rather than only that the call reached the server. The five that do not - sending an ebook by email, firing a notification, closing a device session, unlinking OpenID, syncing an offline session - need infrastructure a throwaway container has not got, and say so where they are written. Tool coverage is enforced rather than claimed: the acceptance suite records every tool it calls and fails if the server registered one nothing called, so a new tool cannot ship untested. Calls out to Audible, Audnexus and iTunes go through a record/replay proxy (`lib/providerproxy`), so neither suite needs a network:
+**All 99 tools and all 207 client methods are exercised**, 202 of them asserting a result rather than only that the call reached the server. The five that do not - sending an ebook by email, firing a notification, closing a device session, unlinking OpenID, syncing an offline session - need infrastructure a throwaway container has not got, and say so where they are written. Both are enforced rather than claimed: the acceptance suite records every tool it calls and fails if the server registered one nothing called, and a unit test reads the live suite and fails if the client has a method nothing in it calls, so neither a new tool nor a new method can ship untested. Each test file is named for the code it tests (`tools/items_test.go` for `tools/items.go`), and each package makes its canned servers in one file. Calls out to Audible, Audnexus and iTunes go through a record/replay proxy (`lib/providerproxy`), so neither suite needs a network:
 
 ```bash
 make record         # re-record every cassette against the real providers

@@ -29,7 +29,7 @@ func TestItemGet(t *testing.T) {
 		if item["type"] != "book" {
 			t.Errorf("%s type = %v, want book", tc.title, item["type"])
 		}
-		if noCover, _ := item["no_cover"].(bool); !noCover {
+		if noCover := truth(item["no_cover"]); !noCover {
 			t.Errorf("%s should report no_cover", tc.title)
 		}
 	}
@@ -68,11 +68,11 @@ func TestItemGetFiles(t *testing.T) {
 	if len(tracks) != 1 {
 		t.Fatalf("tracks = %d, want the single fixture file", len(tracks))
 	}
-	if name, _ := tracks[0]["filename"].(string); name != "01.mp3" {
+	if name := text(tracks[0]["filename"]); name != "01.mp3" {
 		t.Errorf("filename = %v, want 01.mp3", tracks[0]["filename"])
 	}
 	// ffprobe ran on it, so the codec must have come back
-	if codec, _ := tracks[0]["codec"].(string); codec == "" {
+	if codec := text(tracks[0]["codec"]); codec == "" {
 		t.Errorf("no codec probed: %v", tracks[0])
 	}
 	if num(t, tracks[0]["duration_s"], "duration_s") != 1 || num(t, tracks[0]["size"], "size") <= 0 {
@@ -130,7 +130,7 @@ func TestItemEditRoundTrip(t *testing.T) {
 		"item": "War Is a Racket", "subtitle": "The Antiwar Classic",
 		"tags": []any{"war", "politics", "integration-test"},
 	})
-	if updated, _ := out["updated"].(bool); !updated {
+	if updated := truth(out["updated"]); !updated {
 		t.Errorf("item_edit reported no update: %v", out)
 	}
 	if fields := strs(t, out["fields_sent"], "fields_sent"); !slices.Contains(fields, "subtitle") {
@@ -174,7 +174,7 @@ func TestItemRescan(t *testing.T) {
 	out := call(t, "item_rescan", map[string]any{"item": "Foundation"})
 
 	// NOTHING, ADDED, UPDATED, REMOVED or UPTODATE
-	result, _ := out["result"].(string)
+	result := text(out["result"])
 	if !slices.Contains([]string{"NOTHING", "ADDED", "UPDATED", "REMOVED", "UPTODATE"}, result) {
 		t.Errorf("item_rescan result = %q, want one of the documented values", result)
 	}
@@ -202,7 +202,7 @@ func TestItemEmbedMetadata(t *testing.T) {
 	keepAudioFiles(t, "A Brief History of Vice")
 	out := call(t, "item_embed_metadata", map[string]any{"item": "A Brief History of Vice", "backup": true})
 
-	if embedded, _ := out["embedded"].(bool); !embedded {
+	if embedded := truth(out["embedded"]); !embedded {
 		t.Errorf("item_embed_metadata = %v, want embedded", out)
 	}
 }
@@ -289,7 +289,7 @@ func TestItemGetPodcast(t *testing.T) {
 		t.Errorf("track_list = %d, want one per downloaded episode (%d)", len(tracks), len(episodes))
 	}
 	for _, tr := range tracks {
-		if codec, _ := tr["codec"].(string); codec == "" {
+		if codec := text(tr["codec"]); codec == "" {
 			t.Errorf("no codec probed on %v", tr)
 		}
 	}

@@ -17,7 +17,7 @@ func TestResolveByID(t *testing.T) {
 	var libID string
 	for _, l := range libs {
 		if l["name"] == "Fiction" {
-			libID, _ = l["id"].(string)
+			libID = text(l["id"])
 		}
 	}
 	if libID == "" {
@@ -32,7 +32,7 @@ func TestResolveByID(t *testing.T) {
 	var itemID string
 	for _, it := range items {
 		if it["title"] == "Foundation" {
-			itemID, _ = it["id"].(string)
+			itemID = text(it["id"])
 		}
 	}
 	if itemID == "" {
@@ -53,7 +53,7 @@ func TestResolveByID(t *testing.T) {
 	if len(authors) == 0 {
 		t.Fatal("no authors")
 	}
-	authorID, _ := authors[0]["id"].(string)
+	authorID := text(authors[0]["id"])
 	name := authors[0]["name"]
 	if authorID == "" {
 		t.Fatalf("no id on author %v", authors[0])
@@ -67,7 +67,7 @@ func TestResolveByID(t *testing.T) {
 	if len(series) == 0 {
 		t.Fatal("no series")
 	}
-	seriesID, _ := series[0]["id"].(string)
+	seriesID := text(series[0]["id"])
 	seriesName := series[0]["name"]
 	if seriesID != "" {
 		if got := call(t, "series_get", map[string]any{"series": seriesID}); got["name"] != seriesName {
@@ -80,7 +80,7 @@ func TestResolveByID(t *testing.T) {
 	if len(users) == 0 {
 		t.Fatal("no users")
 	}
-	userID, _ := users[0]["id"].(string)
+	userID := text(users[0]["id"])
 	if got := call(t, "user_get", map[string]any{"user": userID}); got["username"] != "root" {
 		t.Errorf("user by id = %v, want root", got["username"])
 	}
@@ -92,7 +92,7 @@ func TestResolveCollectionAndPlaylistByID(t *testing.T) {
 	created := call(t, "collection_create", map[string]any{
 		"library": "Fiction", "name": "By ID Collection", "items": []any{"Foundation"},
 	})
-	colID, _ := created["id"].(string)
+	colID := text(created["id"])
 	t.Cleanup(func() { call(t, "collection_delete", map[string]any{"collection": colID}) })
 	if colID == "" {
 		t.Fatalf("no collection id: %v", created)
@@ -105,7 +105,7 @@ func TestResolveCollectionAndPlaylistByID(t *testing.T) {
 		"library": "Fiction", "name": "By ID Playlist",
 		"entries": []any{map[string]any{"item": "Foundation"}},
 	})
-	plID, _ := pl["id"].(string)
+	plID := text(pl["id"])
 	t.Cleanup(func() { call(t, "playlist_delete", map[string]any{"playlist": plID}) })
 	if plID == "" {
 		t.Fatalf("no playlist id: %v", pl)
@@ -148,7 +148,7 @@ func TestResolveAmbiguousAcrossLibraries(t *testing.T) {
 	var id string
 	for _, a := range rows(t, one["authors"], "authors") {
 		if a["name"] == shared {
-			id, _ = a["id"].(string)
+			id = text(a["id"])
 		}
 	}
 	if id == "" {
@@ -171,7 +171,7 @@ func TestResolveRejectsNonTitleMatch(t *testing.T) {
 	if !strings.Contains(msg, "another field") {
 		t.Errorf("an asin hit was not refused as a non-title match: %s", msg)
 	}
-	id, _ := call(t, "item_get", map[string]any{"item": book})["id"].(string)
+	id := text(call(t, "item_get", map[string]any{"item": book})["id"])
 	if id == "" || !strings.Contains(msg, id) {
 		t.Errorf("the refusal does not offer the id %q: %s", id, msg)
 	}

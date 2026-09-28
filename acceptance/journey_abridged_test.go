@@ -10,6 +10,7 @@ package acceptance
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"path/filepath"
 	"regexp"
@@ -44,7 +45,7 @@ func (s *abridgedStore) catalog(w http.ResponseWriter, r *http.Request) {
 	s.asked = append(s.asked, title)
 	s.mu.Unlock()
 
-	products := []any{}
+	products := make([]any, 0, len(s.editions[title]))
 	for _, e := range s.editions[title] {
 		products = append(products, map[string]any{"asin": e["asin"]})
 	}
@@ -61,7 +62,7 @@ func (s *abridgedStore) audnex(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, editions := range s.editions {
 		for _, e := range editions {
-			if r.URL.Path == "/books/"+e["asin"].(string) {
+			if r.URL.Path == "/books/"+text(e["asin"]) {
 				_ = json.NewEncoder(w).Encode(e)
 				return
 			}
@@ -112,9 +113,7 @@ func TestJourneyAbridgedNotMarked(t *testing.T) {
 	audit := func(t *testing.T, extra map[string]any) map[string]any {
 		t.Helper()
 		args := map[string]any{"library": s.name, "providers": []any{"audible"}}
-		for k, v := range extra {
-			args[k] = v
-		}
+		maps.Copy(args, extra)
 		return call(t, "audit_abridged", args)
 	}
 
@@ -142,7 +141,7 @@ func TestJourneyAbridgedNotMarked(t *testing.T) {
 	// one reading whole, one read steadily faster, one cut more in some
 	// chapters than others
 	chapters := func(lengths ...float64) []any {
-		var out []any
+		out := make([]any, 0, len(lengths))
 		start := 0.0
 		for i, l := range lengths {
 			out = append(out, map[string]any{"title": "Zzyzx Chapter " + []string{"One", "Two", "Three", "Four", "Five", "Six"}[i], "start_s": start})
@@ -162,7 +161,7 @@ func TestJourneyAbridgedNotMarked(t *testing.T) {
 			t.Errorf("scanned %v, searched %v, compared %v; want 8 books, 6 searched, 3 pairs", out["items_scanned"], out["store_checked"], out["readings_compared"])
 		}
 		found = rows(t, out["findings"], "findings")
-		var got []string
+		got := make([]string, 0, len(found))
 		for _, f := range found {
 			got = append(got, text(f["problem"])+" "+text(f["title"]))
 		}
@@ -175,19 +174,19 @@ func TestJourneyAbridgedNotMarked(t *testing.T) {
 			return ok && n > float64(want-2) && n < float64(want+2)
 		}
 
-		heartfire, _ := found[0]["edition"].(map[string]any)
-		if heartfire["asin"] != "B0ZZYZXA01" || heartfire["abridged"] != true || heartfire["provider"] != "audible" || num(t, heartfire["duration_s"], "duration_s") != 1200 || !near(found[0]["duration_s"], 1200) {
+		heartfire := object(found[0]["edition"])
+		if heartfire["asin"] != "B0ZZYZXA01" || !truth(heartfire["abridged"]) || heartfire["provider"] != "audible" || num(t, heartfire["duration_s"], "duration_s") != 1200 || !near(found[0]["duration_s"], 1200) {
 			t.Errorf("Heartfire = %v, want the abridged edition of its length", found[0])
 		}
 		// the steady reading cut against is Leclercq's: their chapters differ
 		// most, 2.18 by section_ratio.py
-		other, _ := found[1]["other_reading"].(map[string]any)
-		spread, _ := found[1]["spread"].(float64)
+		other := object(found[1]["other_reading"])
+		spread := number(found[1]["spread"])
 		if other["id"] != id("Zzyzx Gods (Leclercq)") || spread < 2.1 || spread > 2.3 || num(t, found[1]["chapters_compared"], "chapters_compared") != 6 || !near(found[1]["duration_s"], 1120) {
 			t.Errorf("Morgan = %v, want against Leclercq, spread about 2.18 over 6 chapters", found[1])
 		}
-		enchantment, _ := found[2]["edition"].(map[string]any)
-		if enchantment["asin"] != "B0ZZYZXU02" || enchantment["abridged"] != false || num(t, enchantment["duration_s"], "duration_s") != 2400 || !regexp.MustCompile(`37\.[45]% of the shortest unabridged edition`).MatchString(text(found[2]["detail"])) {
+		enchantment := object(found[2]["edition"])
+		if enchantment["asin"] != "B0ZZYZXU02" || !isFalse(enchantment["abridged"]) || num(t, enchantment["duration_s"], "duration_s") != 2400 || !regexp.MustCompile(`37\.[45]% of the shortest unabridged edition`).MatchString(text(found[2]["detail"])) {
 			// 900 s of silence against 40 minutes, shown rounded down to a
 			// tenth; the encoded silence can land a hair under 900 s
 			t.Errorf("Enchantment = %v, want 37.5%% of the unabridged edition", found[2])

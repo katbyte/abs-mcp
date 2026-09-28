@@ -98,7 +98,7 @@ func (s *diskShelf) write(t *testing.T, rels ...string) {
 func (s *diskShelf) open(t *testing.T, want int) {
 	t.Helper()
 
-	lib, _ := call(t, "library_create", map[string]any{"name": s.name, "folders": []any{s.folder}})["library"].(map[string]any)
+	lib := object(call(t, "library_create", map[string]any{"name": s.name, "folders": []any{s.folder}})["library"])
 	if s.id = text(lib["id"]); s.id == "" {
 		t.Fatalf("library_create gave no id: %v", lib)
 	}
@@ -308,7 +308,7 @@ func TestJourneyABookDeletedWithItsFiles(t *testing.T) {
 
 	t.Run("previewed, nothing goes", func(t *testing.T) {
 		out := call(t, "item_delete", map[string]any{"item": ids[one], "delete_files": true})
-		if out["would_delete"] != "Zzyzx Book One" || out["deleted"] != nil || out["files_removed"] != false {
+		if out["would_delete"] != "Zzyzx Book One" || out["deleted"] != nil || !isFalse(out["files_removed"]) {
 			t.Errorf("preview = %v, want Book One named and nothing deleted", out)
 		}
 		if want := "the folder " + s.folder + "/" + one + " and everything in it"; out["files"] != want {
@@ -334,7 +334,7 @@ func TestJourneyABookDeletedWithItsFiles(t *testing.T) {
 
 	t.Run("a book's folder", func(t *testing.T) {
 		out := call(t, "item_delete", map[string]any{"item": ids[one], "delete_files": true, "confirm": true})
-		if out["deleted"] != "Zzyzx Book One" || out["files_removed"] != true || num(t, out["bookmarks_removed"], "bookmarks_removed") != 1 {
+		if out["deleted"] != "Zzyzx Book One" || !truth(out["files_removed"]) || num(t, out["bookmarks_removed"], "bookmarks_removed") != 1 {
 			t.Errorf("delete = %v", out)
 		}
 		// the folder, cover and all; the author folder and the book beside it stay
@@ -453,7 +453,7 @@ func TestJourneyAFolderRenamedKeepsItsBook(t *testing.T) {
 		if n := num(t, call(t, "library_items", withMessy(map[string]any{"limit": 1}))["total"], "total"); n != len(messyBooks) {
 			t.Errorf("Messy holds %d books after the rename, want %d: the move made a second record", n, len(messyBooks))
 		}
-		progress, _ := call(t, "user_progress_get", map[string]any{"item": id})["progress"].(map[string]any)
+		progress := object(call(t, "user_progress_get", map[string]any{"item": id})["progress"])
 		if progress == nil || num(t, progress["percent"], "percent") != 50 {
 			t.Errorf("progress = %v, want the 50%% set before the move", progress)
 		}
@@ -463,10 +463,10 @@ func TestJourneyAFolderRenamedKeepsItsBook(t *testing.T) {
 		if held := valuesIn(t, call(t, "collection_get", map[string]any{"collection": "Zzyzx Moved Shelf"})["items"], "items", "id"); !slices.Equal(held, []string{id}) {
 			t.Errorf("the collection holds %v, want the moved book", held)
 		}
-		var queued []string
-		for _, e := range rows(t, call(t, "playlist_get", map[string]any{"playlist": "Zzyzx Moved Queue"})["entries"], "entries") {
-			it, _ := e["item"].(map[string]any)
-			queued = append(queued, text(it["id"]))
+		entries := rows(t, call(t, "playlist_get", map[string]any{"playlist": "Zzyzx Moved Queue"})["entries"], "entries")
+		queued := make([]string, 0, len(entries))
+		for _, e := range entries {
+			queued = append(queued, text(object(e["item"])["id"]))
 		}
 		if !slices.Equal(queued, []string{id}) {
 			t.Errorf("the playlist holds %v, want the moved book", queued)
@@ -564,7 +564,7 @@ func TestJourneyAFolderRenamedKeepsItsBook(t *testing.T) {
 		waitIdle(t)
 		diskUntil(t, "the scan seeing the move", func() (bool, string) {
 			missing := call(t, "item_get", map[string]any{"item": outside})["missing"]
-			return missing == true && tracks(inside) == 2, fmt.Sprintf("the outside copy missing %v, the series copy has %d tracks", missing, tracks(inside))
+			return truth(missing) && tracks(inside) == 2, fmt.Sprintf("the outside copy missing %v, the series copy has %d tracks", missing, tracks(inside))
 		})
 
 		if got := diskFindingIDs(t, call(t, "audit_issues", withMessy(nil))); !slices.Equal(got, []string{outside}) {
@@ -781,7 +781,7 @@ func TestJourneyRemovingIssuesIsScoped(t *testing.T) {
 	missing := func(s *diskShelf) []string {
 		var out []string
 		for p, it := range s.items(t) {
-			if it["missing"] == true {
+			if truth(it["missing"]) {
 				out = append(out, p)
 			}
 		}
@@ -872,7 +872,7 @@ func TestJourneyRemovingIssuesIsScoped(t *testing.T) {
 		if got := one.ids(t); got[keptPath] != kept || got[alsoPath] != oneIDs[alsoPath] || len(got) != 2 {
 			t.Errorf("after the folders came back the records are %v, want the same two", got)
 		}
-		progress, _ := call(t, "user_progress_get", map[string]any{"item": kept})["progress"].(map[string]any)
+		progress := object(call(t, "user_progress_get", map[string]any{"item": kept})["progress"])
 		if progress == nil || num(t, progress["percent"], "percent") != 40 {
 			t.Errorf("progress = %v, want the 40%% it had before the folders went", progress)
 		}

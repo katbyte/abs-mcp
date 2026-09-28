@@ -10,6 +10,44 @@ import (
 	"testing"
 )
 
+// The same for collections, which the server does not delete when emptied,
+// and which refuse a book from another library or a podcast by name.
+func TestCollectionBooksEditReportsWhatChanged(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	shelfRoutes(f)
+	f.json("GET /api/collections/"+colC, `{"id":"`+colC+`","libraryId":"`+libID+`","name":"Shelf","books":[{"id":"`+bookB1+`"}]}`)
+	f.json("POST /api/collections/"+colC+"/batch/add", `{"id":"`+colC+`","libraryId":"`+libID+`","name":"Shelf","books":[{"id":"`+bookB1+`"},{"id":"`+bookB2+`"}]}`)
+	call := toolCaller(t, f)
+
+	out, err := call("collection_books_edit", map[string]any{"collection": colC, "action": "add", "items": []any{bookB1, bookB2, bookB2}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(strs(t, out["added"]), []string{"Second"}) || !slices.Equal(strs(t, out["already_held"]), []string{"First"}) || num(t, out["books"]) != 2 {
+		t.Errorf("out = %v", out)
+	}
+	if adds := f.requests("/api/collections/" + colC + "/batch/add"); len(adds) != 1 || strings.Contains(adds[0].Body, bookB1) {
+		t.Errorf("batch add sent %v, want only the new book, once", adds)
+	}
+	out, err = call("collection_books_edit", map[string]any{"collection": colC, "action": "remove", "items": []any{bookB3}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(strs(t, out["not_held"]), []string{"Third"}) || len(f.requests("/api/collections/"+colC+"/batch/remove")) != 0 {
+		t.Errorf("removing what is not held: %v", out)
+	}
+	// a podcast cannot really sit in a book library; the check is there anyway
+	strayPodcast := "c1c1c1c1-0000-4000-8000-000000000002"
+	f.json("GET /api/items/"+strayPodcast, `{"id":"`+strayPodcast+`","libraryId":"`+libID+`","mediaType":"podcast","media":{"metadata":{"title":"Stray"}}}`)
+	for ref, want := range map[string]string{otherBook: "another library", strayPodcast: "podcast"} {
+		if _, err := call("collection_books_edit", map[string]any{"collection": colC, "action": "add", "items": []any{ref}}); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("adding %s: %v, want %q", ref, err, want)
+		}
+	}
+}
+
 // Deleting a collection, which every account shares, or a playlist is a
 // delete: registered only with --enable-delete and marked destructive, in the
 // organise set with the rest of the grouping tools.
@@ -83,45 +121,6 @@ func TestListDeletesAreReadBack(t *testing.T) {
 	}
 }
 
-// A playlist copied from a collection takes the description asked for, not
-// only when a new name is asked for too; a blank name keeps the collection's.
-func TestPlaylistFromCollectionKeepsTheDescription(t *testing.T) {
-	t.Parallel()
-
-	f := newFakeABS(t)
-	f.json("GET /api/collections/"+colC, `{"id":"`+colC+`","libraryId":"`+libID+`","name":"Shelf","description":"the shelf's"}`)
-	f.json("GET /api/libraries/"+libID+"/playlists", `{"results":[]}`)
-	f.json("POST /api/playlists/collection/"+colC, `{"id":"`+playlistP+`","libraryId":"`+libID+`","name":"Shelf","description":"the shelf's","items":[]}`)
-	f.json("PATCH /api/playlists/"+playlistP, `{"id":"`+playlistP+`","libraryId":"`+libID+`","name":"Shelf","description":"mine","items":[]}`)
-	call := toolCaller(t, f)
-
-	for _, name := range []string{"", "shelf"} {
-		out, err := call("playlist_create", map[string]any{"from_collection": colC, "name": name, "description": "mine"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if str(t, out["description"]) != "mine" {
-			t.Errorf("name %q: description = %v, want mine", name, out["description"])
-		}
-	}
-	sent := f.requests("/api/playlists/" + playlistP)
-	if len(sent) != 2 {
-		t.Fatalf("sent %v, want the description set on each copy", sent)
-	}
-	for _, r := range sent {
-		if r.Body != `{"description":"mine"}` {
-			t.Errorf("sent %s, want the description alone", r.Body)
-		}
-	}
-
-	if _, err := call("playlist_create", map[string]any{"from_collection": colC, "name": "   "}); err != nil {
-		t.Fatal(err)
-	}
-	if got := f.requests("/api/playlists/" + playlistP); len(got) != 2 {
-		t.Errorf("a blank name was sent as a rename: %v", got[len(got)-1])
-	}
-}
-
 // A rename to spaces is refused: it would leave a collection or playlist no
 // name can reach. A name with spaces round it is sent trimmed.
 func TestBlankNamesAreRefused(t *testing.T) {
@@ -164,26 +163,5 @@ func TestBlankNamesAreRefused(t *testing.T) {
 		if last := sent[len(sent)-1]; last.Method != http.MethodPatch || last.Body != `{"name":"New"}` {
 			t.Errorf("%s: sent %s %s, want the name trimmed", path, last.Method, last.Body)
 		}
-	}
-}
-
-// Audiobookshelf deletes a playlist its last entry leaves, so emptying one is
-// a delete and needs the delete tools switched on, as playlist_delete does;
-// otherwise it was a way round --enable-delete.
-func TestEmptyingAPlaylistNeedsDeletesOn(t *testing.T) {
-	t.Parallel()
-
-	f := newFakeABS(t)
-	shelfRoutes(f)
-	f.json("GET /api/playlists/"+playlistP, `{"id":"`+playlistP+`","libraryId":"`+libID+`","name":"Books List","items":[{"libraryItemId":"`+bookB1+`"}]}`)
-	f.json("POST /api/playlists/"+playlistP+"/batch/remove", `{}`)
-	call := callerWith(t, f, Options{})
-
-	_, err := call("playlist_entries_edit", map[string]any{"playlist": playlistP, "action": "remove", "entries": []any{map[string]any{"item": bookB1}}})
-	if err == nil || !strings.Contains(err.Error(), "--enable-delete") {
-		t.Errorf("emptying a playlist with deletes off: %v", err)
-	}
-	if got := f.requests("/api/playlists/" + playlistP + "/batch/remove"); len(got) != 0 {
-		t.Errorf("the removal was sent: %v", got)
 	}
 }

@@ -106,7 +106,7 @@ func ordered(t *testing.T, what string, all []map[string]any, key string, desc b
 		var cmp int
 		switch av := a.(type) {
 		case float64:
-			bv, _ := b.(float64)
+			bv := number(b)
 			cmp = int(av - bv)
 		default:
 			cmp = strings.Compare(strings.ToLower(fmt.Sprint(a)), strings.ToLower(fmt.Sprint(b)))
@@ -144,8 +144,7 @@ func TestJourneyEveryPageReadOnce(t *testing.T) {
 			t.Errorf("descending is not ascending reversed:\n  %v\n  %v", up, down)
 		}
 		everyPageOnce(t, "library_items", "items", withMessy(map[string]any{"sort": "added", "desc": true}), 5)
-		byAuthor := everyPageOnce(t, "library_items", "items", withMessy(map[string]any{"sort": "author"}), 5)
-		ordered(t, "author", byAuthor, "author", false)
+		ordered(t, "author", everyPageOnce(t, "library_items", "items", withMessy(map[string]any{"sort": "author"}), 5), "author", false)
 
 		// the sort and the filter group are read in any case
 		title := valuesIn(t, call(t, "library_items", withMessy(map[string]any{"sort": "title", "limit": 100}))["items"], "items", "id")
@@ -184,8 +183,7 @@ func TestJourneyEveryPageReadOnce(t *testing.T) {
 	})
 
 	t.Run("author_list", func(t *testing.T) {
-		byName := everyPageOnce(t, "author_list", "authors", withMessy(map[string]any{"sort": "name"}), 2)
-		ordered(t, "name", byName, "name", false)
+		ordered(t, "name", everyPageOnce(t, "author_list", "authors", withMessy(map[string]any{"sort": "name"}), 2), "name", false)
 		ordered(t, "name descending", everyPageOnce(t, "author_list", "authors", withMessy(map[string]any{"sort": "name", "desc": true}), 2), "name", true)
 		ordered(t, "books descending", everyPageOnce(t, "author_list", "authors", withMessy(map[string]any{"sort": "Books", "desc": true}), 2), "books", true)
 		if msg := callErr(t, "author_list", withMessy(map[string]any{"sort": "surname"})); !strings.Contains(msg, `unknown sort "surname"`) {
@@ -194,8 +192,7 @@ func TestJourneyEveryPageReadOnce(t *testing.T) {
 	})
 
 	t.Run("series_list", func(t *testing.T) {
-		byName := everyPageOnce(t, "series_list", "series", withMessy(map[string]any{"sort": "name"}), 2)
-		ordered(t, "name", byName, "name", false)
+		ordered(t, "name", everyPageOnce(t, "series_list", "series", withMessy(map[string]any{"sort": "name"}), 2), "name", false)
 		ordered(t, "books descending", everyPageOnce(t, "series_list", "series", withMessy(map[string]any{"sort": "books", "desc": true}), 2), "books", true)
 		everyPageOnce(t, "series_list", "series", withMessy(map[string]any{"sort": "added"}), 2)
 		if msg := callErr(t, "series_list", withMessy(map[string]any{"sort": "length"})); !strings.Contains(msg, `unknown sort "length"`) {
@@ -231,7 +228,7 @@ func TestJourneyMatchedBooksPageInTheOrderAdded(t *testing.T) {
 		"Terry Pratchett/Discworld - 05 - Sourcery",
 		"Terry Pratchett/Discworld - 06 - Wyrd Sisters",
 	}
-	var ids []string
+	ids := make([]string, 0, len(paths))
 	before := map[string]map[string]any{}
 	for _, p := range paths {
 		id := messyID(t, p)
@@ -461,12 +458,12 @@ func TestJourneyAMissingBookJoinsItsSeries(t *testing.T) {
 		t.Fatalf("the unconfirmed delete touched the folder: %v", err)
 	}
 	gone := call(t, "item_delete", map[string]any{"library": "Fiction", "item": "Caliban's War", "delete_files": true, "confirm": true})
-	if gone["deleted"] != "Caliban's War" || gone["files_removed"] != true {
+	if gone["deleted"] != "Caliban's War" || !truth(gone["files_removed"]) {
 		t.Errorf("the delete = %v", gone)
 	}
 	eventually(t, "the folder going", func() error {
 		if _, err := os.Stat(dir); !errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("still there: %v", err)
+			return fmt.Errorf("still there: %w", err)
 		}
 		return nil
 	})
@@ -513,11 +510,11 @@ func TestJourneyReadsAnswerWhatWasAsked(t *testing.T) {
 		// when each was added, from the server's own listing
 		addedAt := map[string]float64{}
 		for _, l := range libraries {
-			listing, _ := adminGet(t, "/api/libraries/"+libraryID(t, l.Name)+"/items?limit=500").(map[string]any)
-			results, _ := listing["results"].([]any)
+			listing := object(adminGet(t, "/api/libraries/"+libraryID(t, l.Name)+"/items?limit=500"))
+			results := items(listing["results"])
 			for _, r := range results {
-				row, _ := r.(map[string]any)
-				addedAt[text(row["id"])], _ = row["addedAt"].(float64)
+				row := object(r)
+				addedAt[text(row["id"])] = number(row["addedAt"])
 			}
 		}
 		recent := valuesIn(t, call(t, "library_recent", map[string]any{"limit": 1000})["items"], "items", "id")
@@ -554,9 +551,9 @@ func TestJourneyReadsAnswerWhatWasAsked(t *testing.T) {
 			out := call(t, "series_get", map[string]any{"library": "Fiction", "series": "Foundation"})
 			books := map[string]bool{}
 			for _, b := range rows(t, out["books"], "books") {
-				books[text(b["title"])] = b["finished"] == true
+				books[text(b["title"])] = truth(b["finished"])
 			}
-			complete, _ := out["complete"].(bool)
+			complete := truth(out["complete"])
 			return books, num(t, out["finished"], "finished"), complete
 		}
 		check := func(t *testing.T, when string, done ...string) {

@@ -20,7 +20,7 @@ import (
 func TestServerInfo(t *testing.T) {
 	info := call(t, "server_info", nil)
 
-	if v, _ := info["version"].(string); v == "" {
+	if v := text(info["version"]); v == "" {
 		t.Errorf("no server version: %v", info)
 	}
 	if info["user"] != "root" {
@@ -30,7 +30,7 @@ func TestServerInfo(t *testing.T) {
 		t.Errorf("user_type = %v, want root", info["user_type"])
 	}
 	for _, perm := range []string{"can_update", "can_delete"} {
-		if ok, _ := info[perm].(bool); !ok {
+		if ok := truth(info[perm]); !ok {
 			t.Errorf("root should have %s", perm)
 		}
 	}
@@ -96,8 +96,8 @@ func TestServerBackups(t *testing.T) {
 	// the backup made, by name: a count of the list cannot say, as a backup
 	// made in the minute of another replaces it and the oldest are pruned
 	after := call(t, "server_backup_create", nil)
-	created, _ := after["created"].(map[string]any)
-	id, _ := created["id"].(string)
+	created := object(after["created"])
+	id := text(created["id"])
 	if id == "" {
 		t.Fatalf("server_backup_create named no backup: %v", after)
 	}
@@ -118,7 +118,7 @@ func TestServerBackups(t *testing.T) {
 	}
 	// the create response carries only the list; the location comes from the
 	// list endpoint
-	if loc, _ := before["location"].(string); loc == "" {
+	if loc := text(before["location"]); loc == "" {
 		t.Error("server_backups reported no location")
 	}
 }
@@ -181,9 +181,8 @@ func TestServerInfoNonAdmin(t *testing.T) {
 	}
 	// isActive has to be set explicitly: an account created without it cannot
 	// log in, and so can never activate an API key either
-	active := true
 	user, err := admin.CreateUser(ctx, abs.UserCreate{
-		Username: "plainuser", Password: "plainuser-password", Type: "user", IsActive: &active,
+		Username: "plainuser", Password: "plainuser-password", Type: "user", IsActive: new(true),
 	})
 	if err != nil {
 		t.Fatalf("creating a non-admin user: %v", err)
@@ -224,7 +223,7 @@ func TestServerInfoNonAdmin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cs.Close()
+	defer func() { _ = cs.Close() }()
 
 	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "server_info"})
 	if err != nil {
@@ -239,7 +238,7 @@ func TestServerInfoNonAdmin(t *testing.T) {
 		}
 		t.Fatalf("server_info errored for a non-admin key: %s", strings.Join(msg, "; "))
 	}
-	out, _ := res.StructuredContent.(map[string]any)
+	out := object(res.StructuredContent)
 
 	// the part that works for any key is still complete
 	if out["user"] != "plainuser" {
@@ -256,7 +255,7 @@ func TestServerInfoNonAdmin(t *testing.T) {
 	if out["totals"] != nil {
 		t.Errorf("totals = %v, want none for a non-admin key", out["totals"])
 	}
-	note, _ := out["note"].(string)
+	note := text(out["note"])
 	if note == "" {
 		t.Fatal("no note: a non-admin key is told nothing about why the totals are missing")
 	}
@@ -283,7 +282,7 @@ func login(username, password string) error {
 	if err != nil {
 		return err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
 		return fmt.Errorf("/login: HTTP %d", res.StatusCode)
 	}
@@ -310,7 +309,7 @@ func TestServerSessionsWithAPlaybackSession(t *testing.T) {
 	// continue-listening shelf
 	const book = "City of Golden Shadow"
 	item := call(t, "item_get", map[string]any{"item": book})
-	id, _ := item["id"].(string)
+	id := text(item["id"])
 	if id == "" {
 		t.Fatalf("no id for %s: %v", book, item)
 	}
@@ -351,14 +350,14 @@ func TestServerSessionsWithAPlaybackSession(t *testing.T) {
 	}
 	// an open session carries userId but not the expanded user object; the
 	// tool looks the name up
-	if uid, _ := found["user_id"].(string); uid == "" {
+	if uid := text(found["user_id"]); uid == "" {
 		t.Errorf("no user_id on the open session: %v", found)
 	}
 	if found["user"] != "root" {
 		t.Errorf("user = %v, want root named on the open session", found["user"])
 	}
 	// DeviceInfo.Describe builds this from clientName and deviceName
-	if device, _ := found["device"].(string); !strings.Contains(device, "abs-mcp tests") {
+	if device := text(found["device"]); !strings.Contains(device, "abs-mcp tests") {
 		t.Errorf("device = %q, want the client name in it", device)
 	}
 
@@ -393,7 +392,7 @@ func TestServerSessionsWithAPlaybackSession(t *testing.T) {
 func rows2(t *testing.T, v any) []map[string]any {
 	t.Helper()
 
-	list, _ := v.([]any)
+	list := items(v)
 	out := make([]map[string]any, 0, len(list))
 	for _, e := range list {
 		if m, ok := e.(map[string]any); ok {

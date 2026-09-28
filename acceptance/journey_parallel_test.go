@@ -136,7 +136,7 @@ func TestJourneyCallsAtOnce(t *testing.T) {
 			return "user_progress_set", map[string]any{"library": "Fiction", "item": books[i], "percent": 20 + 10*i}
 		})
 		for i, b := range books {
-			p, _ := call(t, "user_progress_get", map[string]any{"library": "Fiction", "item": b})["progress"].(map[string]any)
+			p := object(call(t, "user_progress_get", map[string]any{"library": "Fiction", "item": b})["progress"])
 			if p == nil || num(t, p["percent"], "percent") != 20+10*i {
 				t.Errorf("%s progress = %v, want %d percent", b, p, 20+10*i)
 			}

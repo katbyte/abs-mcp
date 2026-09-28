@@ -12,7 +12,7 @@ func TestPlaylistLifecycle(t *testing.T) {
 		"description": "made by the integration suite",
 		"entries":     []any{map[string]any{"item": "Foundation"}},
 	})
-	if id, _ := created["id"].(string); id == "" {
+	if id := text(created["id"]); id == "" {
 		t.Fatalf("no playlist id: %v", created)
 	}
 	t.Cleanup(func() {
@@ -86,7 +86,7 @@ func TestPlaylistWithEpisode(t *testing.T) {
 	if len(episodes) == 0 {
 		t.Skip("no episodes to add")
 	}
-	episodeID, _ := episodes[0]["id"].(string)
+	episodeID := text(episodes[0]["id"])
 
 	created := call(t, "playlist_create", map[string]any{
 		"library": "Podcasts", "name": "Episode Playlist",

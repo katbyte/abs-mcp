@@ -1,10 +1,12 @@
 package tools
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 )
@@ -125,7 +127,7 @@ func TestPodcastEpisodeEditSaysWhatChanged(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(anyStrings(out["changed"])) != 0 || !slices.Equal(anyStrings(out["unchanged"]), []string{"season", "type"}) {
+	if len(strs(t, out["changed"])) != 0 || !slices.Equal(strs(t, out["unchanged"]), []string{"season", "type"}) {
 		t.Errorf("an edit to what is already so: %v", out)
 	}
 	if got := f.requests("/api/podcasts/" + podcastID + "/episode/e1"); len(got) != 0 {
@@ -137,7 +139,7 @@ func TestPodcastEpisodeEditSaysWhatChanged(t *testing.T) {
 		t.Fatal(err)
 	}
 	ep, ok := out["episode"].(map[string]any)
-	if !ok || !slices.Equal(anyStrings(out["changed"]), []string{"title"}) || !slices.Equal(anyStrings(out["unchanged"]), []string{"type"}) || str(t, ep["title"]) != "New" {
+	if !ok || !slices.Equal(strs(t, out["changed"]), []string{"title"}) || !slices.Equal(strs(t, out["unchanged"]), []string{"type"}) || str(t, ep["title"]) != "New" {
 		t.Errorf("a retitle: %v", out)
 	}
 	sent := f.requests("/api/podcasts/" + podcastID + "/episode/e1")
@@ -252,24 +254,9 @@ func TestPodcastFeedEpisodesAreNewestFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := anyStrings(out["queued"]); !slices.Equal(got, []string{"Newest"}) {
+	if got := strs(t, out["queued"]); !slices.Equal(got, []string{"Newest"}) {
 		t.Errorf("index 0 queued %v, want the newest, as listed", got)
 	}
-}
-
-// changes are the requests made so far that were not reads.
-func (f *fakeABS) changes() []request {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	var out []request
-	for _, r := range f.seen {
-		if r.Method != http.MethodGet {
-			out = append(out, r)
-		}
-	}
-
-	return out
 }
 
 // What podcast_check_new queued is downloading already, and its place in that
@@ -328,4 +315,359 @@ func TestPodcastSettingsReadsTheSettingsBack(t *testing.T) {
 	if _, ok := out["done"]; ok {
 		t.Error("still answers done")
 	}
+}
+
+func TestEpisodeProgressThatCannotBeReadIsAnError(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/items/"+podcastID, podcastWith(`{"id":"e1","title":"One","publishedAt":1000}`))
+	f.fails("GET /api/me")
+	f.fails("GET /api/me/progress/" + podcastID + "/e1")
+	call := toolCaller(t, f)
+
+	_, err := call("podcast_episodes", map[string]any{"item": podcastID})
+	wantErr(t, "podcast_episodes with the account unreadable", err, "progress", "500")
+	_, err = call("podcast_episode_get", map[string]any{"item": podcastID, "episode": "e1"})
+	wantErr(t, "podcast_episode_get with its progress unreadable", err, "progress", "500")
+}
+
+// A negative offset used to index past the end of the episode list, and the
+// MCP transport has no recover: one bad argument took the whole server down.
+func TestPodcastEpisodesOffsetBelowZero(t *testing.T) {
+	t.Parallel()
+
+	const podID = "33333333-3333-4333-8333-333333333333"
+	f := newFakeABS(t)
+	f.json("GET /api/items/"+podID, `{"id":"`+podID+`","libraryId":"`+libID+`","mediaType":"podcast","media":{"metadata":{"title":"Pod"},"episodes":[{"id":"e1","title":"One"},{"id":"e2","title":"Two"}]}}`)
+	f.json("GET /api/me", `{"id":"u1","username":"kt","type":"root","mediaProgress":[]}`)
+	call := toolCaller(t, f)
+
+	out, err := call("podcast_episodes", map[string]any{"item": podID, "offset": -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := list(t, out["episodes"]); len(got) != 2 {
+		t.Errorf("episodes = %d, want both from the start", len(got))
+	}
+	if past, err := call("podcast_episodes", map[string]any{"item": podID, "offset": 5}); err != nil || len(list(t, past["episodes"])) != 0 {
+		t.Errorf("offset past the end = %v, %v; want none", past, err)
+	}
+
+	// a page says where the next starts, and the last says nothing
+	out, err = call("podcast_episodes", map[string]any{"item": podID, "limit": 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if num(t, out["offset"]) != 0 || num(t, out["next_offset"]) != 1 {
+		t.Errorf("first page = %v, want offset 0 and next_offset 1", out)
+	}
+	if out, err = call("podcast_episodes", map[string]any{"item": podID, "limit": 1, "offset": 1}); err != nil || out["next_offset"] != nil {
+		t.Errorf("last page = %v, %v; want no next_offset", out, err)
+	}
+}
+
+// showLibrary is a podcast library with one folder.
+func showLibrary(f *fakeABS) {
+	f.json("GET /api/libraries", `{"libraries":[{"id":"`+podLibID+`","name":"Shows","mediaType":"podcast","folders":[{"id":"f1","fullPath":"/podcasts"}]}]}`)
+}
+
+// feedEpisode is one entry of a canned feed.
+func feedEpisode(guid, title string, published int) string {
+	return fmt.Sprintf(`{"title":%q,"guid":%q,"publishedAt":%d,"enclosure":{"url":"http://feed.test/%s.mp3"}}`, title, guid, published, guid)
+}
+
+// The server takes no episodes with a new podcast, and dropped the ones sent
+// there, so download_latest queues the newest by publication once the
+// podcast exists; and a feed the library already has is refused before
+// anything is made.
+func TestPodcastAddQueuesTheNewestAndRefusesAHeldFeed(t *testing.T) {
+	t.Parallel()
+
+	feed := `{"podcast":{"metadata":{"title":"Show","feedUrl":"http://feed.test/show.xml"},"episodes":[` +
+		feedEpisode("g1", "Oldest", 1000) + "," + feedEpisode("g3", "Newest", 3000) + "," + feedEpisode("g2", "Middle", 2000) + `]}}`
+
+	t.Run("queued once it exists", func(t *testing.T) {
+		t.Parallel()
+
+		f := newFakeABS(t)
+		showLibrary(f)
+		f.json("POST /api/podcasts/feed", feed)
+		f.json("GET /api/libraries/"+podLibID+"/items", page())
+		f.json("POST /api/podcasts", `{"id":"`+podcastID+`","libraryId":"`+podLibID+`","mediaType":"podcast","media":{"metadata":{"title":"Show"}}}`)
+		f.json("POST /api/podcasts/"+podcastID+"/download-episodes", `OK`)
+		call := toolCaller(t, f)
+
+		out, err := call("podcast_add", map[string]any{"feed_url": "http://feed.test/show.xml", "download_latest": 2})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := out["queued"]; fmt.Sprint(got) != "[Newest Middle]" {
+			t.Errorf("queued = %v, want [Newest Middle]", got)
+		}
+		if created := f.requests("/api/podcasts"); len(created) != 1 || strings.Contains(created[0].Body, "episodesToDownload") {
+			t.Errorf("create = %v, want no episodes sent with it", created)
+		}
+		queued := f.requests("/api/podcasts/" + podcastID + "/download-episodes")
+		if len(queued) != 1 || !strings.Contains(queued[0].Body, `"Newest"`) || !strings.Contains(queued[0].Body, `"Middle"`) || strings.Contains(queued[0].Body, `"Oldest"`) {
+			t.Errorf("download-episodes = %v, want Newest and Middle", queued)
+		}
+	})
+
+	t.Run("a feed already held", func(t *testing.T) {
+		t.Parallel()
+
+		f := newFakeABS(t)
+		showLibrary(f)
+		f.json("POST /api/podcasts/feed", feed)
+		f.json("GET /api/libraries/"+podLibID+"/items", page(`{"id":"`+podcastID+`","libraryId":"`+podLibID+`","mediaType":"podcast","media":{"metadata":{"title":"Show","feedUrl":"HTTP://feed.test/show.xml"}}}`))
+		call := toolCaller(t, f)
+
+		if _, err := call("podcast_add", map[string]any{"feed_url": "http://feed.test/show.xml", "folder": "Show Again"}); err == nil || !strings.Contains(err.Error(), podcastID) {
+			t.Errorf("a second subscription: %v, want refused naming %s", err, podcastID)
+		}
+		if created := f.requests("/api/podcasts"); len(created) != 0 {
+			t.Errorf("the podcast was created: %v", created)
+		}
+	})
+}
+
+// The server downloads an episode it holds a second time, and drops a
+// request for one it is already fetching without a word: held is matched by
+// guid or audio url, not by a title an edit changed, and neither is sent.
+func TestPodcastEpisodeDownloadSkipsHeldAndQueued(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/items/"+podcastID, podcastWith(`{"id":"e1","title":"Retitled","guid":"g1","enclosure":{"url":"http://feed.test/g1.mp3"}}`))
+	f.json("POST /api/podcasts/feed", `{"podcast":{"metadata":{"title":"Show"},"episodes":[`+
+		feedEpisode("g3", "Three", 3000)+","+feedEpisode("g2", "Two", 2000)+","+feedEpisode("g1", "One", 1000)+`]}}`)
+	f.json("GET /api/libraries/"+podLibID+"/episode-downloads", `{"currentDownload":{"url":"http://feed.test/g2.mp3","libraryItemId":"`+podcastID+`"},"queue":[]}`)
+	f.json("POST /api/podcasts/"+podcastID+"/download-episodes", `OK`)
+	call := toolCaller(t, f)
+
+	out, err := call("podcast_episode_download", map[string]any{"item": podcastID, "indexes": []any{0, 1, 2, 2}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, want := range map[string]string{"queued": "[Three]", "already_queued": "[Two]", "already_held": "[One]"} {
+		if got := fmt.Sprint(out[key]); got != want {
+			t.Errorf("%s = %s, want %s", key, got, want)
+		}
+	}
+	sent := f.requests("/api/podcasts/" + podcastID + "/download-episodes")
+	if len(sent) != 1 || strings.Contains(sent[0].Body, `"One"`) || strings.Contains(sent[0].Body, `"Two"`) {
+		t.Errorf("sent %v, want only Three", sent)
+	}
+
+	// nothing left to send is not a request
+	f2 := newFakeABS(t)
+	f2.json("GET /api/items/"+podcastID, podcastWith(`{"id":"e1","title":"One","guid":"g1"}`))
+	f2.json("POST /api/podcasts/feed", `{"podcast":{"metadata":{"title":"Show"},"episodes":[`+feedEpisode("g1", "One", 1000)+`]}}`)
+	f2.json("GET /api/libraries/"+podLibID+"/episode-downloads", `{"queue":[]}`)
+	if _, err := toolCaller(t, f2)("podcast_episode_download", map[string]any{"item": podcastID, "indexes": []any{0}}); err != nil {
+		t.Fatal(err)
+	}
+	if sent := f2.requests("/api/podcasts/" + podcastID + "/download-episodes"); len(sent) != 0 {
+		t.Errorf("sent %v for an episode already held", sent)
+	}
+}
+
+// The server lists a podcast's episodes in the order they were downloaded;
+// newest first is by publication.
+func TestPodcastEpisodesAreNewestByPublication(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/items/"+podcastID, podcastWith(
+		`{"id":"e3","title":"Newest","publishedAt":3000}`,
+		`{"id":"e1","title":"Oldest","publishedAt":1000}`,
+		`{"id":"e2","title":"Middle","publishedAt":2000}`,
+	))
+	f.json("GET /api/me", `{"id":"u1","username":"kt","type":"root","mediaProgress":[]}`)
+	call := toolCaller(t, f)
+
+	want := []string{"Newest", "Middle", "Oldest"}
+	for tool, key := range map[string]string{"podcast_episodes": "episodes", "item_get": "episodes"} {
+		out, err := call(tool, map[string]any{"item": podcastID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, e := range list(t, out[key]) {
+			got = append(got, str(t, e["title"]))
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("%s = %v, want %v", tool, got, want)
+		}
+	}
+}
+
+// Audiobookshelf caches every read under /api/libraries until the database
+// is next written, and the download queue lives in memory: the queue read
+// before a download started was the answer until the episode arrived, so
+// podcast_downloads showed nothing downloading, and a second request for the
+// same episode was reported queued while the server dropped it. A sort of
+// random is the one request its cache lets through.
+func TestTheDownloadQueueIsReadPastTheServersCache(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	showLibrary(f)
+	f.json("GET /api/items/"+podcastID, podcastWith())
+	f.json("POST /api/podcasts/feed", `{"podcast":{"metadata":{"title":"Show"},"episodes":[`+feedEpisode("g1", "One", 1000)+`]}}`)
+	f.json("POST /api/podcasts/"+podcastID+"/download-episodes", `OK`)
+	var mu sync.Mutex
+	current := ""
+	cache := map[string]string{}
+	f.mux.HandleFunc("GET /api/libraries/"+podLibID+"/episode-downloads", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		body := `{"currentDownload":` + current + `,"queue":[]}`
+		if current == "" {
+			body = `{"queue":[]}`
+		}
+		if r.URL.Query().Get("sort") != "random" {
+			if cached, ok := cache[r.URL.String()]; ok {
+				body = cached
+			} else {
+				cache[r.URL.String()] = body
+			}
+		}
+		_, _ = io.WriteString(w, body)
+	})
+	call := toolCaller(t, f)
+
+	out, err := call("podcast_downloads", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := list(t, out["downloads"]); len(got) != 0 {
+		t.Fatalf("downloads = %v, want none yet", got)
+	}
+
+	mu.Lock()
+	current = `{"url":"http://feed.test/g1.mp3","libraryItemId":"` + podcastID + `","libraryId":"` + podLibID + `","podcastTitle":"Show","episodeDisplayTitle":"One"}`
+	mu.Unlock()
+
+	out, err = call("podcast_downloads", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := list(t, out["downloads"]); len(got) != 1 || str(t, got[0]["episode"]) != "One" || str(t, got[0]["status"]) != "downloading" {
+		t.Errorf("downloads once One started = %v, want it downloading", got)
+	}
+	out, err = call("podcast_episode_download", map[string]any{"item": podcastID, "indexes": []any{0}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out["queued"] != nil || !slices.Equal(strs(t, out["already_queued"]), []string{"One"}) {
+		t.Errorf("asking for One while it downloads = %v, want it already queued", out)
+	}
+	if sent := f.requests("/api/podcasts/" + podcastID + "/download-episodes"); len(sent) != 0 {
+		t.Errorf("sent %v for an episode downloading", sent)
+	}
+}
+
+// The server keeps an episode's publish date twice: the feed's text, and the
+// time its apps sort by, which the tools read as published and order by.
+// Sent the text alone, the date read back unmoved.
+func TestPodcastEpisodeEditMovesThePublishDate(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/items/"+podcastID, podcastWith(`{"id":"e1","title":"One","pubDate":"Mon, 01 Jan 2024 00:00:00 +0000","publishedAt":1704067200000}`))
+	f.json("PATCH /api/podcasts/"+podcastID+"/episode/e1", podcastWith(`{"id":"e1","title":"One","pubDate":"2024-03-01","publishedAt":1709251200000}`))
+	call := toolCaller(t, f)
+
+	if _, err := call("podcast_episode_edit", map[string]any{"item": podcastID, "episode": "e1", "pub_date": "next tuesday"}); err == nil || !strings.Contains(err.Error(), "not a date") {
+		t.Errorf("a pub_date that is no date: %v, want refused", err)
+	}
+	if sent := f.requests("/api/podcasts/" + podcastID + "/episode/e1"); len(sent) != 0 {
+		t.Fatalf("a refused pub_date sent %v", sent)
+	}
+
+	out, err := call("podcast_episode_edit", map[string]any{"item": podcastID, "episode": "e1", "pub_date": "2024-03-01"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ep, ok := out["episode"].(map[string]any)
+	if !ok || !slices.Equal(strs(t, out["changed"]), []string{"pub_date"}) || str(t, ep["published"]) != "2024-03-01" {
+		t.Errorf("podcast_episode_edit pub_date = %v, want it changed and published 2024-03-01", out)
+	}
+	sent := f.requests("/api/podcasts/" + podcastID + "/episode/e1")
+	if len(sent) != 1 || !strings.Contains(sent[0].Body, `"pubDate":"2024-03-01"`) || !strings.Contains(sent[0].Body, `"publishedAt":1709251200000`) {
+		t.Errorf("sent %v, want the text and the time", sent)
+	}
+
+	// the same date written the way the feed writes it is no change
+	out, err = call("podcast_episode_edit", map[string]any{"item": podcastID, "episode": "e1", "pub_date": "Mon, 01 Jan 2024 00:00:00 +0000"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(strs(t, out["changed"])) != 0 || !slices.Equal(strs(t, out["unchanged"]), []string{"pub_date"}) {
+		t.Errorf("the date it has = %v, want unchanged", out)
+	}
+}
+
+// safeFolderName builds the directory a subscribed podcast lands in, so a show
+// with a slash or a colon in its title cannot escape the library folder or
+// produce a path the server refuses.
+func TestSafeFolderName(t *testing.T) {
+	t.Parallel()
+
+	for _, c := range []struct{ in, want string }{
+		{"Behind the Bastards", "Behind the Bastards"},
+		{"Well There's Your Problem", "Well There's Your Problem"},
+		{"AC/DC: The Podcast", "AC DC The Podcast"},
+		{"../../etc/passwd", ".. .. etc passwd"},
+		{`a\b:c*d?e"f<g>h|i`, "a b c d e f g h i"},
+		{"  spaced   out  ", "spaced out"},
+		{"", ""},
+	} {
+		if got := safeFolderName(c.in); got != c.want {
+			t.Errorf("safeFolderName(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestPodcastTimesInSecondsAndSizesInBytes(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/items/"+podcastID, podcastWith(`{"id":"e1","libraryItemId":"`+podcastID+`","title":"Pilot","publishedAt":1000,`+
+		`"audioFile":{"duration":2700.6,"metadata":{"filename":"pilot.mp3","size":43200000}},`+
+		`"chapters":[{"id":0,"start":0,"end":90.5,"title":"Intro"},{"id":1,"start":90.5,"end":2700.6,"title":"Main"}]}`))
+	// a record at the very start is a position all the same
+	f.json("GET /api/me", `{"id":"u1","username":"kt","type":"root","mediaProgress":[{"id":"mp1","libraryItemId":"`+podcastID+`","episodeId":"e1","currentTime":0,"progress":0}]}`)
+	// the server parses the feed's own duration, and leaves an unreadable one
+	// unparsed
+	f.json("POST /api/podcasts/feed", `{"podcast":{"metadata":{"title":"Show"},"episodes":[`+
+		`{"title":"Next","guid":"g2","publishedAt":2000,"duration":"45:00","durationSeconds":2700.4},`+
+		`{"title":"Odd","guid":"g3","publishedAt":1500,"duration":"about an hour"}]}}`)
+	call := toolCaller(t, f)
+
+	out, err := call("podcast_episodes", map[string]any{"item": podcastID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantNumbers(t, "podcast_episodes", out, map[string]float64{"episodes.0.duration_s": 2701, "episodes.0.size": 43200000, "episodes.0.progress.current_time_s": 0})
+	wantAbsent(t, "podcast_episodes", out, "episodes.0.duration", "episodes.0.size_mb")
+
+	out, err = call("podcast_episode_get", map[string]any{"item": podcastID, "episode": "e1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantNumbers(t, "podcast_episode_get", out, map[string]float64{"duration_s": 2701, "chapters.0.start_s": 0, "chapters.1.start_s": 90.5})
+	wantAbsent(t, "podcast_episode_get", out, "chapters.1.start")
+
+	out, err = call("podcast_feed_episodes", map[string]any{"item": podcastID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if str(t, dig(out, "episodes.0.title")) != "Next" || str(t, dig(out, "episodes.1.title")) != "Odd" {
+		t.Fatalf("feed = %v, want Next then Odd", out["episodes"])
+	}
+	wantNumbers(t, "podcast_feed_episodes", out, map[string]float64{"episodes.0.duration_s": 2700})
+	wantAbsent(t, "podcast_feed_episodes", out, "episodes.1.duration_s", "episodes.1.duration")
 }

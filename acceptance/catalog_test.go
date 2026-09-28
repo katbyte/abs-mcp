@@ -15,7 +15,7 @@ func TestAuthorList(t *testing.T) {
 	}
 	names := map[string]int{}
 	for _, row := range rows(t, out["authors"], "authors") {
-		name, _ := row["name"].(string)
+		name := text(row["name"])
 		names[name] = num(t, row["books"], "books")
 	}
 	if names["Isaac Asimov"] != 3 {
@@ -35,7 +35,7 @@ func TestAuthorGet(t *testing.T) {
 	}
 	titles := make([]string, 0, len(books))
 	for _, b := range books {
-		title, _ := b["title"].(string)
+		title := text(b["title"])
 		titles = append(titles, title)
 	}
 	slices.Sort(titles)
@@ -50,7 +50,7 @@ func TestAuthorEditAndMerge(t *testing.T) {
 		"library": "Fiction", "author": "Tad Williams", "description": "Author of Otherland.",
 	})
 	got := call(t, "author_get", map[string]any{"library": "Fiction", "author": "Tad Williams"})
-	if desc, _ := got["description"].(string); desc != "Author of Otherland." {
+	if desc := text(got["description"]); desc != "Author of Otherland." {
 		t.Errorf("description = %q", desc)
 	}
 
@@ -59,7 +59,7 @@ func TestAuthorEditAndMerge(t *testing.T) {
 		"library": "Fiction", "author": "Tad Williams", "clear": []any{"description"},
 	})
 	got = call(t, "author_get", map[string]any{"library": "Fiction", "author": "Tad Williams"})
-	if desc, _ := got["description"].(string); desc != "" {
+	if desc := text(got["description"]); desc != "" {
 		t.Errorf("description after clear = %q", desc)
 	}
 
@@ -67,7 +67,7 @@ func TestAuthorEditAndMerge(t *testing.T) {
 	out := call(t, "author_edit", map[string]any{
 		"library": "Fiction", "author": "Tad Williams", "name": "T. Williams",
 	})
-	if merged, _ := out["merged"].(bool); merged {
+	if merged := truth(out["merged"]); merged {
 		t.Error("renaming to an unused name should not report a merge")
 	}
 	call(t, "author_edit", map[string]any{
@@ -90,7 +90,7 @@ func TestSeriesList(t *testing.T) {
 
 	byName := map[string]int{}
 	for _, row := range rows(t, out["series"], "series") {
-		name, _ := row["name"].(string)
+		name := text(row["name"])
 		byName[name] = num(t, row["books"], "books")
 		// the numbers present are how the gap stands out
 		if name == "The Expanse" && (row["sequence"] == nil || !slices.Equal(strs(t, row["sequence"], "sequence"), []string{"1", "3"})) {
@@ -112,10 +112,10 @@ func TestSeriesGet(t *testing.T) {
 		t.Fatalf("books = %d, want 2", len(books))
 	}
 	// in sequence order, and the sequence must survive the projection
-	if seq, _ := books[0]["sequence"].(string); seq != "1" {
+	if seq := text(books[0]["sequence"]); seq != "1" {
 		t.Errorf("first book sequence = %v, want 1", books[0]["sequence"])
 	}
-	if seq, _ := books[1]["sequence"].(string); seq != "3" {
+	if seq := text(books[1]["sequence"]); seq != "3" {
 		t.Errorf("second book sequence = %v, want 3", books[1]["sequence"])
 	}
 }
@@ -129,7 +129,7 @@ func TestSeriesEdit(t *testing.T) {
 	})
 
 	out := call(t, "series_get", map[string]any{"library": "Fiction", "series": "Otherland"})
-	if desc, _ := out["description"].(string); desc != "Four volumes, two of them here." {
+	if desc := text(out["description"]); desc != "Four volumes, two of them here." {
 		t.Errorf("description = %q", desc)
 	}
 }
@@ -141,7 +141,7 @@ func TestAuthorDelete(t *testing.T) {
 		"library": "Fiction", "author": "Isaac Asimov", "name": "Doomed Author",
 	})
 	out := call(t, "author_delete", map[string]any{"library": "Fiction", "author": "Doomed Author"})
-	if deleted, _ := out["deleted"].(string); deleted != "Doomed Author" {
+	if deleted := text(out["deleted"]); deleted != "Doomed Author" {
 		t.Errorf("deleted = %v", out["deleted"])
 	}
 	t.Cleanup(func() {
@@ -164,7 +164,7 @@ func TestNarratorListAndRename(t *testing.T) {
 
 	byName := map[string]int{}
 	for _, row := range rows(t, out["narrators"], "narrators") {
-		name, _ := row["name"].(string)
+		name := text(row["name"])
 		byName[name] = num(t, row["books"], "books")
 	}
 	if byName["Jefferson Mays"] != 2 {

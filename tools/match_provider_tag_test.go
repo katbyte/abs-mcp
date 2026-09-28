@@ -1,9 +1,8 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
-	"fmt"
+	"net/http"
 	"slices"
 	"strings"
 	"sync"
@@ -13,78 +12,192 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// connected calls srv's tools over an in-memory session, the way toolCaller
-// does, for a test that registers the tools itself.
-func connected(t *testing.T, srv *mcp.Server) func(name string, args map[string]any) (map[string]any, error) {
-	t.Helper()
+// A book whose store is already recorded is not written to again: a match
+// found the provider tag in the middle of the collector's tags and sent the
+// whole list back with the tag moved to the end, a write that changed nothing
+// but the order, on every re-match of a book tagged after it was matched.
+func TestAStoreAlreadyRecordedIsNotWrittenAgain(t *testing.T) {
+	t.Parallel()
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := t.Context()
-	if _, err := srv.Connect(ctx, st, nil); err != nil {
+	f := newFakeABS(t)
+	tagged := `"tags":["zz-provider:audible","mine"]`
+	f.json("GET /api/items/"+itemID, item(itemID, "Dune", `"authorName":"Frank Herbert","asin":"B0DUNE"`, tagged))
+	f.json("POST /api/items/"+itemID+"/match", `{"updated":false,"libraryItem":`+item(itemID, "Dune", `"authorName":"Frank Herbert","asin":"B0DUNE"`, tagged)+`}`)
+	f.json("PATCH /api/items/"+itemID+"/media", `{"updated":true}`)
+	call := toolCaller(t, f)
+
+	if _, err := call("item_match_apply", map[string]any{"item": itemID, "asin": "B0DUNE", "provider": "audible"}); err != nil {
 		t.Fatal(err)
 	}
-	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).Connect(ctx, ct, nil)
+	out, err := call("item_match_apply_batch", map[string]any{"matches": []any{map[string]any{"item": itemID, "asin": "B0DUNE", "provider": "audible"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = session.Close() })
-
-	return func(name string, args map[string]any) (map[string]any, error) {
-		res, err := session.CallTool(context.WithoutCancel(ctx), &mcp.CallToolParams{Name: name, Arguments: args})
-		if err != nil {
-			return nil, err
-		}
-		if res.IsError {
-			var msgs []string
-			for _, c := range res.Content {
-				if tc, ok := c.(*mcp.TextContent); ok {
-					msgs = append(msgs, tc.Text)
-				}
-			}
-			return nil, fmt.Errorf("%s: %s", name, strings.Join(msgs, "; "))
-		}
-		out, ok := res.StructuredContent.(map[string]any)
-		if !ok {
-			return nil, fmt.Errorf("%s: structured content is %T", name, res.StructuredContent)
-		}
-
-		return out, nil
+	if num(t, out["unchanged"]) != 1 {
+		t.Errorf("unchanged = %v, want the book counted as unchanged", out["unchanged"])
+	}
+	if writes := tagWrites(t, f, itemID); len(writes) != 0 {
+		t.Errorf("tags sent %v to a book that already records the store", writes)
 	}
 }
 
-// callerWith is toolCaller for a server registered with opts.
-func callerWith(t *testing.T, f *fakeABS, opts Options) func(name string, args map[string]any) (map[string]any, error) {
-	t.Helper()
+// A store whose search fails says nothing about whether it has the book: the
+// book is not counted as missing from the stores, not tagged with the next
+// store, and the row says what failed.
+func TestAStoreSearchThatFailsIsNotANotFound(t *testing.T) {
+	t.Parallel()
 
-	client, err := abs.New(f.srv.URL, "test")
+	f := newFakeABS(t)
+	audibleLibrary(f)
+	serveListing(f, item("m1", "One", `"asin":"B001"`, ""))
+	f.mux.HandleFunc("GET /api/search/books", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("provider") == "audible.ca" {
+			http.Error(w, "boom", http.StatusInternalServerError)
+			return
+		}
+		_, _ = w.Write([]byte(`[{"title":"One","asin":"B001"}]`))
+	})
+	call := toolCaller(t, f)
+
+	out, err := call("item_match_tag", map[string]any{"library": "Books", "providers": []any{"audible.ca", "audible"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := mcp.NewServer(&mcp.Implementation{Name: "t", Version: "0"}, nil)
-	if _, err := RegisterAll(srv, client, opts); err != nil {
-		t.Fatal(err)
+	rows := list(t, out["rows"])
+	if num(t, out["failed"]) != 1 || num(t, out["not_found"]) != 0 || num(t, out["tagged"]) != 0 || len(rows) != 1 || !strings.Contains(str(t, rows[0]["error"]), "audible.ca") {
+		t.Errorf("tag = %v, want one failed row naming the store, nothing tagged or not found", out)
+	}
+	if got := f.requests("/api/search/books"); len(got) != 1 {
+		t.Errorf("%d searches, want the failed store's only", len(got))
 	}
 
-	return connected(t, srv)
+	// and the provider list the names are checked against failing is an
+	// error, not a check skipped
+	f = newFakeABS(t)
+	audibleLibrary(f)
+	f.fails("GET /api/search/providers")
+	_, err = toolCaller(t, f)("item_match_tag", map[string]any{"library": "Books", "providers": []any{"audible.ca"}})
+	wantErr(t, "the provider list failing", err, "server's providers", "500")
 }
 
-// registryCaller is toolCaller with the registry behind it, for a test that
-// holds its locks.
-func registryCaller(t *testing.T, f *fakeABS) (r *registry, call func(name string, args map[string]any) (map[string]any, error)) {
-	t.Helper()
+// A library left on google (a new library's provider) with no providers
+// named or configured had every asin looked up there, and every matched book
+// came back not_found. The tools that look an asin up refuse it before any
+// work, naming the library and the fix; audit_all deep leaves audit_matched
+// out and says why.
+func TestLookupRefusesALibraryOnGoogle(t *testing.T) {
+	t.Parallel()
 
-	client, err := abs.New(f.srv.URL, "test")
+	f := newFakeABS(t)
+	f.json("GET /api/libraries", `{"libraries":[{"id":"`+libID+`","name":"Books","mediaType":"book","provider":"google"}]}`)
+	f.json("GET /api/libraries/"+libID, `{"id":"`+libID+`","name":"Books","mediaType":"book","provider":"google"}`)
+	book := item("li_1", "Dune", `"asin":"B0DUNE"`, "")
+	f.json("GET /api/libraries/"+libID+"/items", page(book))
+	f.json("GET /api/items/li_1", book)
+	f.json("GET /api/libraries/"+libID+"/series", `{"results":[],"total":0}`)
+	f.json("GET /api/libraries/"+libID+"/authors", `{"results":[],"total":0}`)
+	f.json("GET /api/search/books", `[]`)
+	f.json("POST /api/items/batch/get", `{"libraryItems":[]}`) // audit_all deep reads every book's files
+	call := toolCaller(t, f)
+
+	for _, tc := range []struct {
+		tool string
+		args map[string]any
+	}{
+		{"audit_matched", nil},
+		{"audit_matched", map[string]any{"library": "Books", "filter": "genres:Fiction"}},
+		{"audit_covers", map[string]any{"library": "Books", "store": true}},
+		{"item_match_tag", map[string]any{"library": "Books"}},
+		{"item_cover_upgrade", map[string]any{"library": "Books", "items": []any{"li_1"}}},
+		{"item_cover_upgrade", map[string]any{"items": []any{"li_1"}}}, // the book's own library
+	} {
+		_, err := call(tc.tool, tc.args)
+		if err == nil || !strings.Contains(err.Error(), `library "Books" is on the google provider, which cannot look up an asin`) || !strings.Contains(err.Error(), "--providers (ABS_PROVIDERS), e.g. audible.ca,audible") {
+			t.Errorf("%s %v: %v, want the library, its provider and the fix", tc.tool, tc.args, err)
+		}
+	}
+	// refused before the library was read or a store asked
+	if got := f.requests("/api/libraries/" + libID + "/items"); len(got) != 0 {
+		t.Errorf("a refused call listed the library: %v", got)
+	}
+	if got := f.requests("/api/search/books"); len(got) != 0 {
+		t.Errorf("a refused call asked a store: %v", got)
+	}
+
+	all, err := call("audit_all", map[string]any{"deep": true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := mcp.NewServer(&mcp.Implementation{Name: "t", Version: "0"}, nil)
-	r = &registry{server: srv, client: client, opts: Options{EnableDelete: true}}
-	queueTools(r)
-	for _, p := range r.pending {
-		p.register()
+	if skipped, ok := all["skipped"].([]any); !ok || !slices.Equal(skipped, []any{"audit_matched", "audit_abridged"}) {
+		t.Errorf("audit_all deep skipped %v, want audit_matched and audit_abridged", all["skipped"])
+	}
+	var why string
+	for _, row := range list(t, all["not_run"]) {
+		if str(t, row["audit"]) == "audit_matched" {
+			why = str(t, row["reason"])
+		}
+	}
+	if !strings.Contains(why, `library "Books" is on the google provider`) {
+		t.Errorf("audit_matched not run because %q, want the library and its provider", why)
+	}
+	if got := f.requests("/api/search/books"); len(got) != 0 {
+		t.Errorf("audit_all deep asked google for an asin: %v", got)
 	}
 
-	return r, connected(t, srv)
+	// named providers, or the server's, are asked instead
+	if out, err := call("audit_matched", map[string]any{"providers": []any{"audible"}}); err != nil || num(t, out["items_scanned"]) != 1 {
+		t.Errorf("with providers: %v %v", out, err)
+	}
+	if out, err := callerWith(t, f, Options{Providers: []string{"audible.ca", "audible"}})("audit_matched", nil); err != nil || num(t, out["items_scanned"]) != 1 {
+		t.Errorf("with --providers: %v %v", out, err)
+	}
+	// and a title search takes google as it is
+	if _, err := call("item_match_batch", map[string]any{"filter": "genres:Fiction"}); err != nil {
+		t.Errorf("item_match_batch on google: %v", err)
+	}
+}
+
+func TestProviderTag(t *testing.T) {
+	t.Parallel()
+
+	var prov providerConfig // the default prefix
+	it := &abs.Item{Media: abs.Media{Tags: []string{"Fantasy", defaultProviderTag + "audible.ca"}}}
+	if prov.providerTag(it) != "audible.ca" {
+		t.Errorf("providerTag = %q", prov.providerTag(it))
+	}
+	if got := prov.providerOrder(it, []string{"audible", "audible.ca"}); !slices.Equal(got, []string{"audible.ca", "audible"}) {
+		t.Errorf("providerOrder = %v", got)
+	}
+	if got := prov.withProviderTag(it.Media.Tags, "audible"); !slices.Equal(got, []string{"Fantasy", defaultProviderTag + "audible"}) {
+		t.Errorf("withProviderTag = %v", got)
+	}
+	none := &abs.Item{MediaType: "book", Media: abs.Media{Tags: []string{defaultProviderTag + "none"}}}
+	if !prov.markedUnmatchable(none) {
+		t.Error("provider:none not recognised")
+	}
+	if _, bad := prov.auditCheck("unmatched")(none); bad {
+		t.Error("audit_unmatched reported a book marked provider:none")
+	}
+	if got := prov.providerOrder(none, []string{"audible"}); !slices.Equal(got, []string{"audible"}) {
+		t.Errorf("providerOrder with none = %v", got)
+	}
+}
+
+func TestProviderTagPrefix(t *testing.T) {
+	t.Parallel()
+
+	prov := providerConfig{tag: "provider:"}
+	it := &abs.Item{Media: abs.Media{Tags: []string{"zz-provider:audible", "provider:audible.ca"}}}
+	if got := prov.providerTag(it); got != "audible.ca" {
+		t.Errorf("providerTag with a custom prefix = %q", got)
+	}
+	if got := prov.withProviderTag([]string{"Fantasy"}, "audible"); !slices.Equal(got, []string{"Fantasy", "provider:audible"}) {
+		t.Errorf("withProviderTag = %v", got)
+	}
+	off := providerConfig{tag: "off"}
+	if off.providerTag(it) != "" || !slices.Equal(off.withProviderTag([]string{"Fantasy"}, "audible"), []string{"Fantasy"}) {
+		t.Error("off still tags")
+	}
 }
 
 // tagWrites are the tag lists sent to an item, in order.
@@ -175,101 +288,6 @@ func TestAMatchThatFoundNothingRecordsNothing(t *testing.T) {
 	}
 }
 
-// applied counts the books a batch changed, not the rows it sent: a preview
-// changes nothing, and neither does a match with nothing new or one that
-// found nothing.
-func TestItemMatchApplyBatchCountsWhatChanged(t *testing.T) {
-	t.Parallel()
-
-	const (
-		changed = "33333333-3333-4333-8333-000000000001"
-		same    = "33333333-3333-4333-8333-000000000002"
-		missing = "33333333-3333-4333-8333-000000000003"
-	)
-	f := newFakeABS(t)
-	for _, id := range []string{changed, same, missing} {
-		f.json("GET /api/items/"+id, item(id, "Dune", `"authorName":"Frank Herbert"`, ""))
-		f.json("PATCH /api/items/"+id+"/media", `{"updated":true}`)
-	}
-	f.json("POST /api/items/"+changed+"/match", `{"updated":true,"libraryItem":`+item(changed, "Dune", `"asin":"B0DUNE"`, "")+`}`)
-	f.json("POST /api/items/"+same+"/match", `{"updated":false,"libraryItem":`+item(same, "Dune", `"asin":"B0DUNE"`, "")+`}`)
-	f.json("POST /api/items/"+missing+"/match", `{"warning":"No audible match found"}`)
-	f.json("GET /api/search/books", `[{"title":"Dune","author":"Frank Herbert","asin":"B0DUNE"}]`)
-	call := toolCaller(t, f)
-
-	rows := []any{
-		map[string]any{"item": changed, "asin": "B0DUNE", "provider": "audible"},
-		map[string]any{"item": same, "asin": "B0DUNE", "provider": "audible"},
-		map[string]any{"item": missing, "asin": "B0DUNE", "provider": "audible"},
-		map[string]any{"item": changed},
-	}
-	out, err := call("item_match_apply_batch", map[string]any{"matches": rows})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if num(t, out["applied"]) != 1 || num(t, out["unchanged"]) != 2 || num(t, out["failed"]) != 1 {
-		t.Errorf("applied/unchanged/failed = %v/%v/%v, want 1/2/1", out["applied"], out["unchanged"], out["failed"])
-	}
-
-	out, err = call("item_match_apply_batch", map[string]any{"matches": rows[:1], "smart": true, "preview": true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if num(t, out["applied"]) != 0 || num(t, out["previewed"]) != 1 {
-		t.Errorf("preview: applied/previewed = %v/%v, want 0/1", out["applied"], out["previewed"])
-	}
-}
-
-// Applying a window's rows takes those books out of missing:asin and the
-// listing closes up behind them, so next_offset would skip as many books as
-// were applied: the answer says to ask for the same offset again.
-func TestItemMatchBatchSaysToAskForTheOffsetAgain(t *testing.T) {
-	t.Parallel()
-
-	f := newFakeABS(t)
-	oneLibrary(f)
-	f.json("GET /api/libraries/"+libID+"/items", `{"results":[`+item("i1", "Dune", "", "")+`],"total":3,"limit":1,"page":0}`)
-	f.json("GET /api/search/books", `[]`)
-	call := toolCaller(t, f)
-
-	out, err := call("item_match_batch", map[string]any{"limit": 1})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if num(t, out["next_offset"]) != 1 || !strings.Contains(str(t, out["paging"]), "offset 0 again") {
-		t.Errorf("next_offset/paging = %v/%q, want offset 0 asked for again once rows are applied", out["next_offset"], out["paging"])
-	}
-
-	out, err = call("item_match_batch", map[string]any{"limit": 1, "filter": "genres:Fiction"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if out["paging"] != nil {
-		t.Errorf("paging = %v under a filter a match does not change", out["paging"])
-	}
-}
-
-// A tolerance wide enough takes in the shorter editions it is there to tell
-// apart, so every row comes back exact.
-func TestItemMatchBatchBoundsTheTolerance(t *testing.T) {
-	t.Parallel()
-
-	f := newFakeABS(t)
-	oneLibrary(f)
-	call := toolCaller(t, f)
-
-	for _, tolerance := range []float64{0.5, 5, -0.1} {
-		if _, err := call("item_match_batch", map[string]any{"tolerance": tolerance}); err == nil || !strings.Contains(err.Error(), "tolerance") {
-			t.Errorf("tolerance %v: %v, want it refused", tolerance, err)
-		}
-	}
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if len(f.seen) != 0 {
-		t.Errorf("a refused call reached the server: %v", f.seen)
-	}
-}
-
 // Two servers in one process each keep their own provider tag and default
 // stores: registering the second one changed the first one's, and a server
 // asking for the default tag kept whatever the one before had set.
@@ -311,33 +329,6 @@ func TestServersKeepTheirOwnProviderSettings(t *testing.T) {
 				t.Errorf("%s tagged %v, want %v", id, got, want)
 			}
 		}
-	}
-}
-
-// A row's hold on its book is let go however the row ends: one left behind
-// by a panic, which the server now survives, stalled every later edit of the
-// book for good.
-func TestARowThatPanicsLetsGoOfItsBook(t *testing.T) {
-	t.Parallel()
-
-	for name, row := range map[string]func(r *registry){
-		"item_match_apply_batch": func(r *registry) {
-			r.applyRow(t.Context(), itemID, "audible", rowMatch{}, &applyResult{})
-		},
-		"item_match_tag": func(r *registry) {
-			_ = r.tagOne(t.Context(), itemID, "audible")
-		},
-	} {
-		r := &registry{} // no client: the read after the hold panics
-		func() {
-			defer func() {
-				if recover() == nil {
-					t.Errorf("%s: the row did not panic", name)
-				}
-			}()
-			row(r)
-		}()
-		released(t, &r.locks)
 	}
 }
 
@@ -392,10 +383,7 @@ func TestProviderTagTextSaysItIsTheDefault(t *testing.T) {
 	t.Parallel()
 
 	f := newFakeABS(t)
-	client, err := abs.New(f.srv.URL, "test")
-	if err != nil {
-		t.Fatal(err)
-	}
+	client := f.client(t)
 	srv := mcp.NewServer(&mcp.Implementation{Name: "t", Version: "0"}, nil)
 	if _, err := RegisterAll(srv, client, Options{}); err != nil {
 		t.Fatal(err)

@@ -109,7 +109,7 @@ func TestJourneyBooksThatWillNotPlay(t *testing.T) {
 		if !strings.Contains(text(r["detail"]), words) {
 			t.Errorf("%s says %q, want %q in it", key, r["detail"], words)
 		}
-		if plays := r["plays"] == true; plays != strings.HasSuffix(key, "wrong_extension") {
+		if plays := truth(r["plays"]); plays != strings.HasSuffix(key, "wrong_extension") {
 			t.Errorf("%s says plays=%v", key, r["plays"])
 		}
 	}

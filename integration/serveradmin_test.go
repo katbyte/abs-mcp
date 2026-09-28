@@ -50,8 +50,7 @@ func TestNotifications(t *testing.T) {
 	}
 	// firing one notification, as opposed to all of them
 	if err := client.TestOneNotification(ctx, id); err != nil {
-		var he *abs.HTTPError
-		if !errors.As(err, &he) {
+		if _, reached := errors.AsType[*abs.HTTPError](err); !reached {
 			t.Errorf("TestOneNotification did not reach the server: %v", err)
 		}
 	}
@@ -181,8 +180,7 @@ func TestSettingsAndMaintenance(t *testing.T) {
 	// the watcher payload is inferred rather than read out of the server
 	// source, so this asserts it reaches the server, not that it applied
 	if err := client.UpdateWatcher(ctx, library(t), true); err != nil {
-		var he *abs.HTTPError
-		if !errors.As(err, &he) {
+		if _, reached := errors.AsType[*abs.HTTPError](err); !reached {
 			t.Errorf("UpdateWatcher did not reach the server: %v", err)
 		}
 	}
@@ -253,8 +251,7 @@ func TestSessionsAndAuth(t *testing.T) {
 		t.Errorf("SyncSession: %v", err)
 	}
 	if err := client.CloseSession(ctx, session.ID, nil); err != nil {
-		var he *abs.HTTPError
-		if !errors.As(err, &he) {
+		if _, reached := errors.AsType[*abs.HTTPError](err); !reached {
 			t.Errorf("CloseSession did not reach the server: %v", err)
 		}
 	}
@@ -290,8 +287,8 @@ func TestSharing(t *testing.T) {
 	}
 
 	// expiresAt is epoch milliseconds, not a duration
-	expires := time.Now().Add(time.Hour).UnixMilli()
-	share, err := client.ShareMediaItem(ctx, full.Media.ID, "book", "sdk-share", expires, false)
+	expiresMs := time.Now().Add(time.Hour).UnixMilli()
+	share, err := client.ShareMediaItem(ctx, full.Media.ID, "book", "sdk-share", expiresMs, false)
 	if err != nil {
 		t.Fatalf("ShareMediaItem: %v", err)
 	}
@@ -378,9 +375,8 @@ func TestOPMLAndUpload(t *testing.T) {
 	if len(lib.Folders) == 0 {
 		t.Skip("no folder to upload into")
 	}
-	err = client.Upload(ctx, lib.ID, lib.Folders[0].ID, "SDK Uploaded", "SDK Author", "",
-		"01.mp3", strings.NewReader("not really an mp3"))
-	if err != nil {
+	if err := client.Upload(ctx, lib.ID, lib.Folders[0].ID, "SDK Uploaded", "SDK Author", "",
+		"01.mp3", strings.NewReader("not really an mp3")); err != nil {
 		t.Logf("Upload rejected the payload, which a non-audio file may well be: %v", err)
 	}
 }
@@ -401,8 +397,7 @@ func TestRemainingAdminSurface(t *testing.T) {
 		if err == nil {
 			return
 		}
-		var he *abs.HTTPError
-		if !errors.As(err, &he) {
+		if _, reached := errors.AsType[*abs.HTTPError](err); !reached {
 			t.Errorf("%s did not reach the server: %v", name, err)
 		}
 	}

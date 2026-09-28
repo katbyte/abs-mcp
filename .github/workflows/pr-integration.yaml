@@ -34,6 +34,15 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: ./.go-version
+
+      # the tests that play audio need ffmpeg, which is not on the runner
+      # image: without it they would skip, and in CI a skip is a failure
+      - name: Install prerequisites
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          command -v ffmpeg
+
       - run: make test
 
   # the two live suites are separate jobs so a failure names which layer

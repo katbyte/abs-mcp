@@ -184,3 +184,43 @@ func TestStatsAndSessionMethods(t *testing.T) {
 		t.Errorf("Personalized: %v", err)
 	}
 }
+
+// EmbedPending reads the task list with the queue beside it, which the
+// server sends only when asked: an embed waiting its turn is in the queue and
+// not among the tasks. An embed of a one-second file is over too soon to be
+// sure of seeing it pending, so what is asserted is that the answer decodes,
+// and that an embed that was started comes to an end.
+func TestEmbedPending(t *testing.T) {
+	ctx := skipUnlessLive(t)
+	id := library(t)
+
+	item := must(client.Items(ctx, id, abs.ItemsOptions{Limit: 1})).Results[0]
+	settled := func(what string) {
+		t.Helper()
+
+		deadline := time.Now().Add(30 * time.Second)
+		for {
+			pending, err := client.EmbedPending(ctx, item.ID)
+			if err != nil {
+				t.Fatalf("EmbedPending %s: %v", what, err)
+			}
+			if !pending {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("EmbedPending %s: still pending after 30s", what)
+			}
+			time.Sleep(200 * time.Millisecond)
+		}
+	}
+
+	settled("before an embed")
+	if err := client.EmbedMetadata(ctx, item.ID, true, false); err != nil {
+		t.Fatalf("EmbedMetadata: %v", err)
+	}
+	settled("after an embed")
+
+	if pending, err := client.EmbedPending(ctx, "no-such-item"); err != nil || pending {
+		t.Errorf("an item that does not exist = %v, %v; want not pending", pending, err)
+	}
+}

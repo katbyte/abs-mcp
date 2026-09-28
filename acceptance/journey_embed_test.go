@@ -32,7 +32,7 @@ func embed(t *testing.T, library, id string, args map[string]any) {
 	t.Helper()
 
 	out := call(t, "item_embed_metadata", args)
-	if embedded, _ := out["embedded"].(bool); !embedded || out["running"] != nil || out["rescan"] == nil {
+	if embedded := truth(out["embedded"]); !embedded || out["running"] != nil || out["rescan"] == nil {
 		t.Fatalf("item_embed_metadata = %v, want it embedded and read back", out)
 	}
 	if detail, listed := unembedded(t, library, id); listed {
@@ -62,7 +62,7 @@ func TestJourneyEmbeddedIsWhatAScanReads(t *testing.T) {
 	}
 
 	lib := call(t, "library_create", map[string]any{"name": library, "folders": []any{"/scratch/zzyzx-embed"}})
-	libID := text(lib["library"].(map[string]any)["id"])
+	libID := text(object(lib["library"])["id"])
 	t.Cleanup(func() {
 		eventually(t, "deleting the embed library", func() error {
 			if err := admin.DeleteLibrary(ctx, libID); err != nil && !isNotFound(err) {

@@ -71,7 +71,7 @@ func TestMetadataRenameAuthor(t *testing.T) {
 	if n := num(t, out["items_updated"], "items_updated"); n != 1 {
 		t.Errorf("items_updated = %d, want 1", n)
 	}
-	if merged, _ := out["merged"].(bool); merged {
+	if merged := truth(out["merged"]); merged {
 		t.Error("a rename onto a new name reported a merge")
 	}
 	t.Cleanup(func() {
@@ -94,7 +94,7 @@ func TestMetadataRemoveGenre(t *testing.T) {
 
 	// without confirm it names what it would drop the genre from and drops nothing
 	out := call(t, "metadata_rename", map[string]any{"field": "genres", "from": "Temporary Genre", "remove": true})
-	preview, _ := out["preview"].(map[string]any)
+	preview := object(out["preview"])
 	if found := num(t, preview["found"], "preview.found"); found != 1 || num(t, out["items_updated"], "items_updated") != 0 {
 		t.Errorf("preview = %v, want the one book and nothing changed", out)
 	}

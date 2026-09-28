@@ -16,9 +16,7 @@ func TestLibraryCreateAndList(t *testing.T) {
 
 	seen := map[string]string{}
 	for _, row := range rows(t, out["libraries"], "libraries") {
-		name, _ := row["name"].(string)
-		mediaType, _ := row["media_type"].(string)
-		seen[name] = mediaType
+		seen[text(row["name"])] = text(row["media_type"])
 	}
 	for _, want := range libraries {
 		if seen[want.Name] != want.MediaType {
@@ -219,7 +217,7 @@ func TestLibraryScanPicksUpANewBook(t *testing.T) {
 func TestLibraryEdit(t *testing.T) {
 	// put back what it was, not a guess: a later test that matches in this
 	// library would otherwise depend on the order the tests ran in
-	was, _ := call(t, "library_get", map[string]any{"library": "Non-Fiction"})["provider"].(string)
+	was := text(call(t, "library_get", map[string]any{"library": "Non-Fiction"})["provider"])
 	out := call(t, "library_edit", map[string]any{"library": "Non-Fiction", "provider": "audible"})
 	lib, ok := out["library"].(map[string]any)
 	if !ok {

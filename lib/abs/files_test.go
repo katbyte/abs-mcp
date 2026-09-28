@@ -2,9 +2,11 @@ package abs
 
 import (
 	"bytes"
+	"errors"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -16,7 +18,7 @@ import (
 func TestADownloadOutlastsTheCallLimit(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	c := newClient(t, newRawServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("first half "))
@@ -26,12 +28,6 @@ func TestADownloadOutlastsTheCallLimit(t *testing.T) {
 		time.Sleep(300 * time.Millisecond)
 		_, _ = w.Write([]byte("second half"))
 	}))
-	defer srv.Close()
-
-	c, err := New(srv.URL, "k")
-	if err != nil {
-		t.Fatal(err)
-	}
 	c.http.Timeout = 100 * time.Millisecond
 
 	body, err := c.DownloadItem(t.Context(), "li_1")
@@ -54,9 +50,9 @@ func TestAnUploadArrivesWhole(t *testing.T) {
 	var gotFields map[string]string
 	var gotFile []byte
 	var gotName string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newClient(t, newRawServer(t, func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 4<<20)
-		if err := r.ParseMultipartForm(1 << 20); err != nil { //nolint:gosec // a test server reading one bounded upload
+		if err := r.ParseMultipartForm(1 << 20); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -73,12 +69,6 @@ func TestAnUploadArrivesWhole(t *testing.T) {
 		gotName = h.Filename
 		gotFile, _ = io.ReadAll(f)
 	}))
-	defer srv.Close()
-
-	c, err := New(srv.URL, "k")
-	if err != nil {
-		t.Fatal(err)
-	}
 	if err := c.Upload(t.Context(), "lib1", "fol1", "Dune", "Frank Herbert", "", "dune.m4b", bytes.NewReader(content)); err != nil {
 		t.Fatal(err)
 	}
@@ -97,27 +87,21 @@ func TestARangedReadPassesTheRangeThrough(t *testing.T) {
 	t.Parallel()
 
 	file := []byte("0123456789abcdef")
-	var gotAuth string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s := newRawServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/items/li_1/file/42" {
 			http.NotFound(w, r)
 			return
 		}
-		gotAuth = r.Header.Get("Authorization")
 		http.ServeContent(w, r, "a.mp3", time.Time{}, bytes.NewReader(file))
-	}))
-	defer srv.Close()
-
-	c, err := New(srv.URL, "k")
-	if err != nil {
-		t.Fatal(err)
-	}
+	})
+	c := newClient(t, s)
 	resp, err := c.ItemFileRange(t.Context(), "li_1", "42", "bytes=10-")
 	if err != nil {
 		t.Fatal(err)
 	}
 	got, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
+	gotAuth := s.header.Get("Authorization")
 	if resp.StatusCode != http.StatusPartialContent || string(got) != "abcdef" || resp.Header.Get("Content-Range") != "bytes 10-15/16" || gotAuth != "Bearer k" {
 		t.Errorf("ranged read = %d %q %q with %q; want 206 \"abcdef\" \"bytes 10-15/16\" with the key", resp.StatusCode, got, resp.Header.Get("Content-Range"), gotAuth)
 	}
@@ -136,24 +120,7 @@ func TestARangedReadPassesTheRangeThrough(t *testing.T) {
 func TestARefusalCutShortSaysSo(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Length", "200")
-		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte("Forbidden: this"))
-		if fl, ok := w.(http.Flusher); ok {
-			fl.Flush()
-		}
-		if hj, ok := w.(http.Hijacker); ok {
-			if conn, _, err := hj.Hijack(); err == nil {
-				_ = conn.Close()
-			}
-		}
-	}))
-	t.Cleanup(srv.Close)
-	c, err := New(srv.URL, "key")
-	if err != nil {
-		t.Fatal(err)
-	}
+	c := newClient(t, newRawServer(t, cutShort(http.StatusForbidden, "Forbidden: this")))
 
 	resp, err := c.ItemFileRange(t.Context(), "li_1", "9", "")
 	if resp != nil {
@@ -164,56 +131,96 @@ func TestARefusalCutShortSaysSo(t *testing.T) {
 	}
 }
 
-// A refusal keeps its status when its body cannot be read: a 404 cut short
-// is still no progress, not a failed request.
-func TestANotFoundCutShortIsStillNotFound(t *testing.T) {
+// The server wraps the author in an author key on this route, like it does for
+// the image upload and the match; the record used to come back empty.
+func TestDeleteAuthorImageDecodesTheAuthor(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Length", "200")
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte("Not"))
-		if fl, ok := w.(http.Flusher); ok {
-			fl.Flush()
-		}
-		if hj, ok := w.(http.Hijacker); ok {
-			if conn, _, err := hj.Hijack(); err == nil {
-				_ = conn.Close()
-			}
-		}
-	}))
-	t.Cleanup(srv.Close)
-	c, err := New(srv.URL, "key")
+	s := newJSONServer(t, func(*http.Request) (int, string) {
+		return http.StatusOK, `{"author":{"id":"a1","name":"Frank Herbert","imagePath":null}}`
+	})
+	c := newClient(t, s)
+
+	a, err := c.DeleteAuthorImage(t.Context(), "a1")
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	if p, err := c.Progress(t.Context(), "li_1", ""); err != nil || p != nil {
-		t.Errorf("a 404 cut short = %v, %v; want no progress and no error", p, err)
+	if s.method != http.MethodDelete || s.path != "/api/authors/a1/image" {
+		t.Errorf("sent %s %s", s.method, s.path)
+	}
+	if a.ID != "a1" || a.Name != "Frank Herbert" || a.ImagePath != "" {
+		t.Errorf("author = %+v", a)
 	}
 }
 
-// A reply over the limit is refused as too big, not cut to the limit and
-// handed on as a reply that will not decode.
-func TestAReplyOverTheLimitIsRefused(t *testing.T) {
+// A streamed endpoint reports a refusal as an HTTPError like everything else,
+// rather than handing back a body that is an error message.
+func TestStreamErrorsCarryTheStatus(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"results":[`))
-		chunk := bytes.Repeat([]byte(" "), 1<<20)
-		for range maxResponseBytes >> 20 {
-			_, _ = w.Write(chunk)
-		}
-		_, _ = w.Write([]byte(`],"total":0}`))
-	}))
-	t.Cleanup(srv.Close)
-	c, err := New(srv.URL, "key")
+	s := newJSONServer(t, func(*http.Request) (int, string) {
+		return http.StatusForbidden, `{"error":"no download permission"}`
+	})
+	c := newClient(t, s)
+
+	_, err := c.DownloadItem(t.Context(), "i1")
+	var he *HTTPError
+	if !errors.As(err, &he) || he.Status != http.StatusForbidden {
+		t.Fatalf("DownloadItem error = %v, want HTTP 403", err)
+	}
+	if !strings.Contains(he.Body, "no download permission") {
+		t.Errorf("body not carried: %q", he.Body)
+	}
+
+	s2 := newJSONServer(t, func(*http.Request) (int, string) { return http.StatusOK, "bytes" })
+	body, err := newClient(t, s2).DownloadItem(t.Context(), "i1")
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer func() { _ = body.Close() }()
+	if got, _ := io.ReadAll(body); string(got) != "bytes" {
+		t.Errorf("streamed %q", got)
+	}
+}
 
-	if _, err := c.Libraries(t.Context()); err == nil || !strings.Contains(err.Error(), "over 64 MiB") {
-		t.Errorf("a reply over the limit = %v, want it refused as too big", err)
+// The upload is a multipart form with the fields first and the file as its own
+// part named the way the server reads it.
+func TestUploadIsMultipart(t *testing.T) {
+	t.Parallel()
+
+	s := newJSONServer(t, always(http.StatusOK, ""))
+	c := newClient(t, s)
+
+	if err := c.Upload(t.Context(), "lib1", "f1", "Dune", "Frank Herbert", "", "01.mp3", strings.NewReader("audio")); err != nil {
+		t.Fatal(err)
+	}
+	if s.method != http.MethodPost || s.path != "/api/upload" {
+		t.Errorf("sent %s %s", s.method, s.path)
+	}
+	contentType := s.header.Get("Content-Type")
+	mt, params, err := mime.ParseMediaType(contentType)
+	if err != nil || mt != "multipart/form-data" {
+		t.Fatalf("content type %q: %v", contentType, err)
+	}
+	form, err := multipart.NewReader(bytes.NewReader(s.body), params["boundary"]).ReadForm(1 << 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for k, want := range map[string]string{"library": "lib1", "folder": "f1", "title": "Dune", "author": "Frank Herbert"} {
+		if got := form.Value[k]; len(got) != 1 || got[0] != want {
+			t.Errorf("field %s = %v, want %s", k, got, want)
+		}
+	}
+	files := form.File["0"]
+	if len(files) != 1 || files[0].Filename != "01.mp3" {
+		t.Fatalf("file part = %+v, want one file named 01.mp3 under key 0", files)
+	}
+	f, err := files[0].Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	if got, _ := io.ReadAll(f); string(got) != "audio" {
+		t.Errorf("file content %q", got)
 	}
 }

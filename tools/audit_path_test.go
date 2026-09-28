@@ -149,3 +149,19 @@ func TestCheckFiles(t *testing.T) {
 		}
 	}
 }
+
+// A book wrongly matched to "It" passed in a folder called "The Institute":
+// the letters are there, the word is not.
+func TestPathAgreesWordForWord(t *testing.T) {
+	t.Parallel()
+
+	it := &abs.Item{MediaType: "book", RelPath: "Stephen King/The Institute"}
+	it.Media.Metadata.Title, it.Media.Metadata.AuthorName = "It", "Stephen King"
+	if _, suspect := checkPath(it); !suspect {
+		t.Error("It in The Institute passed")
+	}
+	it.RelPath = "Stephen King/It (Unabridged)"
+	if detail, suspect := checkPath(it); suspect {
+		t.Errorf("It in its own folder: %s", detail)
+	}
+}

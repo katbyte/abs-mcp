@@ -6,6 +6,10 @@ version: "2"
 run:
   timeout: 60m
   modules-download-mode: vendor
+  # the two live suites (acceptance/, integration/) are behind this tag; without
+  # it they are never compiled, so never linted
+  build-tags:
+    - integration
 
 issues:
   max-issues-per-linter: 0
@@ -81,9 +85,30 @@ linters:
           - goconst
       # tool schemas, filter groups, audit check names and API query keys repeat the same short
       # words (title, series, genres, include...) by design; constants would only add indirection
-      - path: '(tools|lib/abs)/.*\.go'
+      - path: '(tools|lib/abs|acceptance|integration)/.*\.go'
         linters:
           - goconst
+      # the live suites share one server and its seeded libraries, so their tests run one after another
+      - path: '(acceptance|integration)/.*_test\.go'
+        linters:
+          - paralleltest
+          - tparallel
+      # the live suites write the audio a container reads, run ffmpeg over it and call the test server:
+      # world-readable files, and paths and commands built from test values, are what they are for
+      - path: '(acceptance|integration)/.*_test\.go'
+        linters:
+          - gosec
+      # the steps of the fix journey take t and are not helpers: marked as helpers, a failure would
+      # name the line that ran the step rather than the line in it that failed
+      - path: 'acceptance/journey_fix_test\.go'
+        linters:
+          - thelper
+      # runSuite is the acceptance suite's TestMain, kept beside the rest of the harness: it cleans up
+      # and then exits with the suite's code, as redundant-test-main-exit below allows a TestMain
+      - path: 'acceptance/harness_test\.go'
+        text: 'deep-exit'
+        linters:
+          - revive
       # the idiomatic `if err := f(); err != nil` scoping shadows err on purpose; still flag other variables
       # and err shadows outside the if-statement form (source scopes the rule to the if idiom only)
       - text: 'shadow: declaration of "err"'
@@ -97,6 +122,10 @@ linters:
         type: module
         settings:
           enable: [AZG] # general Go style rules only; AZR/AZD/AZS are azure-provider specific
+    dupword:
+      ignore:
+        - "Guards!" # Guards! Guards!, a book
+        - "R."      # George R. R. Martin
     errcheck:
       check-type-assertions: true # unchecked x.(T) assertions panic on mismatch
       exclude-functions:

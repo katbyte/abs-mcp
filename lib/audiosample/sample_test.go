@@ -107,6 +107,9 @@ func needFFmpeg(t *testing.T) {
 	t.Helper()
 
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		if os.Getenv("CI") != "" {
+			t.Fatal("ffmpeg is not installed, and CI has to run this test: install it in the job")
+		}
 		t.Skip("ffmpeg is not installed")
 	}
 }

@@ -7,6 +7,7 @@
 package acceptance
 
 import (
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -18,9 +19,7 @@ var messy = map[string]any{"library": "Messy"}
 // withMessy adds arguments to the library.
 func withMessy(extra map[string]any) map[string]any {
 	args := map[string]any{"library": "Messy"}
-	for k, v := range extra {
-		args[k] = v
-	}
+	maps.Copy(args, extra)
 	return args
 }
 
@@ -32,7 +31,7 @@ func TestMessyItems(t *testing.T) {
 	}
 
 	eric := call(t, "item_get", withMessy(map[string]any{"item": "Eric"}))
-	if path, _ := eric["path"].(string); !strings.HasSuffix(path, "Eric.m4b") {
+	if path := text(eric["path"]); !strings.HasSuffix(path, "Eric.m4b") {
 		t.Errorf("Eric path = %q, want the m4b file itself", path)
 	}
 	if tracks := num(t, eric["audio_tracks"], "audio_tracks"); tracks != 1 {
@@ -74,10 +73,10 @@ func TestMessySeries(t *testing.T) {
 		if len(unlinked) != 1 {
 			t.Fatalf("unlinked = %v, want Green Mars", unlinked)
 		}
-		if path, _ := unlinked[0]["path"].(string); !strings.Contains(path, "Green Mars") {
+		if path := text(unlinked[0]["path"]); !strings.Contains(path, "Green Mars") {
 			t.Errorf("unlinked path = %q, want the Green Mars folder", path)
 		}
-		if suggest, _ := unlinked[0]["suggest"].(string); !strings.Contains(suggest, "Mars Trilogy") {
+		if suggest := text(unlinked[0]["suggest"]); !strings.Contains(suggest, "Mars Trilogy") {
 			t.Errorf("unlinked suggest = %q, want a link into Mars Trilogy", suggest)
 		}
 	})
@@ -87,7 +86,7 @@ func TestMessySeries(t *testing.T) {
 		for _, group := range rows(t, out["names"], "names") {
 			var values []string
 			for _, sp := range rows(t, group["spellings"], "spellings") {
-				v, _ := sp["value"].(string)
+				v := text(sp["value"])
 				values = append(values, v)
 			}
 			if slices.Contains(values, "The Wheel of Time") && slices.Contains(values, "Wheel of Time") {
@@ -104,14 +103,14 @@ func TestMessySeries(t *testing.T) {
 		folders := map[string]string{}
 		var unlinked []string
 		for _, row := range rows(t, out["numbering"], "numbering") {
-			title, _ := row["title"].(string)
+			title := text(row["title"])
 			switch row["problem"] {
 			case "padding":
-				padding[title], _ = row["suggest"].(string)
+				padding[title] = text(row["suggest"])
 			case "unlinked":
 				unlinked = append(unlinked, title)
 			case "folder_style":
-				folders[title], _ = row["suggest"].(string)
+				folders[title] = text(row["suggest"])
 			}
 		}
 		// the Wheel of Time folders spell the series two ways, two and two:
@@ -144,9 +143,9 @@ func TestMessySeries(t *testing.T) {
 		problems := map[string]string{}
 		suggests := map[string]string{}
 		for _, row := range rows(t, out["titles"], "titles") {
-			title, _ := row["title"].(string)
-			problems[title], _ = row["problem"].(string)
-			suggests[title], _ = row["suggest"].(string)
+			title := text(row["title"])
+			problems[title] = text(row["problem"])
+			suggests[title] = text(row["suggest"])
 		}
 		if problems["A Song of Ice and Fire"] != "series_as_title" || suggests["A Song of Ice and Fire"] != "A Game of Thrones" {
 			t.Errorf("the title that is the series: problem %q, suggest %q", problems["A Song of Ice and Fire"], suggests["A Song of Ice and Fire"])
@@ -161,11 +160,7 @@ func TestMessySeries(t *testing.T) {
 	})
 
 	t.Run("articles", func(t *testing.T) {
-		var names []string
-		for _, row := range rows(t, out["articles"], "articles") {
-			name, _ := row["name"].(string)
-			names = append(names, name)
-		}
+		names := valuesIn(t, out["articles"], "articles", "name")
 		if !slices.Contains(names, "The Wheel of Time") {
 			t.Errorf("articles = %v, want The Wheel of Time", names)
 		}
@@ -184,7 +179,7 @@ func TestMessySpelling(t *testing.T) {
 	for _, group := range rows(t, out["names"], "names") {
 		var values []string
 		for _, sp := range rows(t, group["spellings"], "spellings") {
-			v, _ := sp["value"].(string)
+			v := text(sp["value"])
 			values = append(values, v)
 		}
 		if slices.Contains(values, "Michael Kramer") && slices.Contains(values, "Micheal Kramer") {
@@ -207,7 +202,7 @@ func TestMessyAuthors(t *testing.T) {
 	for _, group := range rows(t, out["names"], "names") {
 		var values []string
 		for _, sp := range rows(t, group["spellings"], "spellings") {
-			v, _ := sp["value"].(string)
+			v := text(sp["value"])
 			values = append(values, v)
 		}
 		if slices.Contains(values, "Brandon Sanderson") && slices.Contains(values, "Sanderson, Brandon") {
@@ -235,8 +230,8 @@ func TestMessyDescriptions(t *testing.T) {
 
 	details := map[string]string{}
 	for _, row := range rows(t, out["findings"], "findings") {
-		title, _ := row["title"].(string)
-		details[title], _ = row["detail"].(string)
+		title := text(row["title"])
+		details[title] = text(row["detail"])
 	}
 	for title, want := range map[string]string{
 		"The Martian": "credit line", "Artemis": "only a url", "Project Hail Mary": "stub", "The Egg": "no description",
@@ -256,12 +251,7 @@ func TestMessyGenres(t *testing.T) {
 	out := call(t, "audit_genres", messy)
 
 	values := func(section string) []string {
-		var vs []string
-		for _, row := range rows(t, out[section], section) {
-			v, _ := row["value"].(string)
-			vs = append(vs, v)
-		}
-		return vs
+		return valuesIn(t, out[section], section, "value")
 	}
 	if got := values("placeholders"); !slices.Contains(got, "Audiobook") || !slices.Contains(got, "Audiobook - Fantasy") {
 		t.Errorf("placeholders = %v, want Audiobook and Audiobook - Fantasy", got)
@@ -285,12 +275,7 @@ func TestMessyGenres(t *testing.T) {
 // whose tracks are named after another.
 func TestMessyPath(t *testing.T) {
 	titles := func(out map[string]any) []string {
-		var ts []string
-		for _, row := range rows(t, out["findings"], "findings") {
-			title, _ := row["title"].(string)
-			ts = append(ts, title)
-		}
-		return ts
+		return valuesIn(t, out["findings"], "findings", "title")
 	}
 
 	folders := titles(call(t, "audit_path", messy))
@@ -331,8 +316,8 @@ func TestMessyCovers(t *testing.T) {
 	findings := rows(t, out["findings"], "findings")
 	problems := map[string]string{}
 	for _, row := range findings {
-		title, _ := row["title"].(string)
-		problems[title], _ = row["problem"].(string)
+		title := text(row["title"])
+		problems[title] = text(row["problem"])
 	}
 	if problems["Moving Pictures"] != "banner" {
 		t.Errorf("Moving Pictures is %q, want banner", problems["Moving Pictures"])
@@ -355,7 +340,7 @@ func TestMessyMatched(t *testing.T) {
 		t.Errorf("items_scanned = %d, want the one book with an asin", scanned)
 	}
 	findings := rows(t, out["findings"], "findings")
-	if len(findings) != 1 || !strings.HasPrefix(findings[0]["title"].(string), "Foundation") {
+	if len(findings) != 1 || !strings.HasPrefix(text(findings[0]["title"]), "Foundation") {
 		t.Fatalf("findings = %v, want Foundation", findings)
 	}
 	if problems := strs(t, findings[0]["problems"], "problems"); !slices.Contains(problems, "duration_off") {
@@ -392,21 +377,5 @@ func TestMessyWhitespace(t *testing.T) {
 	}
 	if read := num(t, out["files_read"], "files_read"); read != len(messyBooks) {
 		t.Errorf("files_read = %d, want every book, %d", read, len(messyBooks))
-	}
-}
-
-// audit_all on the messy library runs every audit and counts what each found.
-func TestMessyAuditAll(t *testing.T) {
-	out := call(t, "audit_all", withMessy(map[string]any{"deep": true}))
-
-	counts := map[string]int{}
-	for _, row := range rows(t, out["audits"], "audits") {
-		name, _ := row["audit"].(string)
-		counts[name] = num(t, row["found"], "found")
-	}
-	for _, name := range []string{"audit_series", "audit_narrators", "audit_authors", "audit_genres", "audit_path", "audit_duplicates", "audit_covers", "audit_matched", "audit_missing", "audit_unmatched"} {
-		if counts[name] == 0 {
-			t.Errorf("%s found nothing in the messy library: %v", name, counts)
-		}
 	}
 }

@@ -13,7 +13,7 @@ func TestCollectionLifecycle(t *testing.T) {
 		"description": "made by the integration suite",
 		"items":       []any{"Foundation", "Leviathan Wakes"},
 	})
-	id, _ := created["id"].(string)
+	id := text(created["id"])
 	if id == "" {
 		t.Fatalf("no collection id: %v", created)
 	}

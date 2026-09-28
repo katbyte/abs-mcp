@@ -1,6 +1,8 @@
 package tools
 
 import (
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/katbyte/abs-mcp/lib/abs"
@@ -50,5 +52,26 @@ func TestGenresCollector(t *testing.T) {
 	}
 	if out.Found != 2+1+1+1+1 {
 		t.Errorf("total_findings = %d", out.Found)
+	}
+}
+
+// metadata_rename remove only previews without confirm, so a suggestion
+// without it fixed nothing.
+func TestGenreSuggestionsConfirmTheirRemoves(t *testing.T) {
+	t.Parallel()
+
+	c := newGenresCollector()
+	it := &abs.Item{ID: "i1", MediaType: "book"}
+	it.Media.Metadata.Genres = []string{"Audiobook", "Fantasy"}
+	it.Media.Tags = []string{"Fantasy"}
+	c.add(it)
+	out := c.findings(1, 50)
+	for _, v := range slices.Concat(out.Placeholders, out.Redundant) {
+		if !strings.Contains(v.Suggest, "remove=true confirm=true") {
+			t.Errorf("%s: suggest %q, want the remove confirmed", v.Value, v.Suggest)
+		}
+	}
+	if len(out.Placeholders) != 1 || len(out.Redundant) != 1 {
+		t.Errorf("placeholders %v redundant %v", out.Placeholders, out.Redundant)
 	}
 }

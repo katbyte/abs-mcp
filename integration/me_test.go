@@ -104,8 +104,8 @@ func TestProgressAndBookmarkExtras(t *testing.T) {
 	// several items in one call, rather than one call per book
 	finished := true
 	if err := client.BatchSetProgress(ctx, []abs.BatchProgressUpdate{
-		{LibraryItemID: items[0].ID, ProgressUpdate: abs.ProgressUpdate{IsFinished: &finished}},
-		{LibraryItemID: items[1].ID, ProgressUpdate: abs.ProgressUpdate{IsFinished: &finished}},
+		{LibraryItemID: items[0].ID, IsFinished: &finished},
+		{LibraryItemID: items[1].ID, IsFinished: &finished},
 	}); err != nil {
 		t.Fatal(err)
 	}

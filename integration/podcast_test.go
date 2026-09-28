@@ -38,8 +38,7 @@ func TestEpisodeMethods(t *testing.T) {
 		t.Errorf("after update title = %q, want %q", after.Title, title)
 	}
 	t.Cleanup(func() {
-		original := episode.Title
-		_, _ = client.UpdateEpisode(t.Context(), show.ID, episode.ID, abs.EpisodeUpdate{Title: &original})
+		_, _ = client.UpdateEpisode(t.Context(), show.ID, episode.ID, abs.EpisodeUpdate{Title: new(episode.Title)})
 	})
 }
 

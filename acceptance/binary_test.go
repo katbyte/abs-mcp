@@ -34,10 +34,10 @@ import (
 )
 
 var (
-	binOnce sync.Once
-	binPath string
-	binDir  string
-	binErr  error
+	binOnce   sync.Once
+	binPath   string
+	binDir    string
+	errBinary error
 )
 
 // removeBinary deletes the binary the smoke test built, at the end of the
@@ -57,8 +57,9 @@ func binary(t *testing.T) string {
 		t.Skip("ABS_SERVER and ABS_TOKEN are not set")
 	}
 	binOnce.Do(func() {
-		binDir, binErr = os.MkdirTemp("", "abs-mcp-binary")
-		if binErr != nil {
+		// not t.TempDir: the binary is built once and outlives the test that built it
+		binDir, errBinary = os.MkdirTemp("", "abs-mcp-binary") //nolint:usetesting // removed by removeBinary at the end of the run
+		if errBinary != nil {
 			return
 		}
 		binPath = filepath.Join(binDir, "abs-mcp")
@@ -68,15 +69,15 @@ func binary(t *testing.T) string {
 			// hook and writes no counters at all
 			args = append(args, "-cover", "-coverpkg=.,./tools/...,./lib/...,./cli/...")
 		}
-		build := exec.CommandContext(ctx, "go", append(args, ".")...) //nolint:gosec // go build of this checkout
+		build := exec.CommandContext(ctx, "go", append(args, ".")...)
 		build.Dir = ".."
 		out, err := build.CombinedOutput()
 		if err != nil {
-			binErr = fmt.Errorf("building abs-mcp: %v\n%s", err, out)
+			errBinary = fmt.Errorf("building abs-mcp: %w\n%s", err, out)
 		}
 	})
-	if binErr != nil {
-		t.Fatal(binErr)
+	if errBinary != nil {
+		t.Fatal(errBinary)
 	}
 
 	return binPath
@@ -89,12 +90,13 @@ func binary(t *testing.T) string {
 func serverEnv(t *testing.T, extra ...string) []string {
 	t.Helper()
 
-	env := []string{
-		"PATH=" + os.Getenv("PATH"),
-		"HOME=" + t.TempDir(),
-		"ABS_SERVER=" + os.Getenv("ABS_SERVER"),
-		"ABS_TOKEN=" + os.Getenv("ABS_TOKEN"),
-	}
+	env := make([]string, 0, 4+len(extra))
+	env = append(env,
+		"PATH="+os.Getenv("PATH"),
+		"HOME="+t.TempDir(),
+		"ABS_SERVER="+os.Getenv("ABS_SERVER"),
+		"ABS_TOKEN="+os.Getenv("ABS_TOKEN"),
+	)
 
 	return append(env, extra...)
 }
@@ -129,7 +131,7 @@ type teeReadCloser struct {
 // its stdin and stdout, and keeps everything the process wrote to each stream
 // so a test can assert on them. dir is the working directory, for the config
 // file lookup.
-func stdio(t *testing.T, dir string, env []string, args ...string) (*mcp.ClientSession, *syncBuffer, *syncBuffer) {
+func stdio(t *testing.T, dir string, env []string, args ...string) (session *mcp.ClientSession, wrote, wroteErr *syncBuffer) {
 	t.Helper()
 
 	cmd := exec.CommandContext(context.WithoutCancel(ctx), binary(t), append([]string{"serve"}, args...)...)
@@ -149,7 +151,7 @@ func stdio(t *testing.T, dir string, env []string, args ...string) (*mcp.ClientS
 		t.Fatal(err)
 	}
 
-	session, err := mcp.NewClient(&mcp.Implementation{Name: "binary-test", Version: "0"}, nil).Connect(ctx, &mcp.IOTransport{
+	session, err = mcp.NewClient(&mcp.Implementation{Name: "binary-test", Version: "0"}, nil).Connect(ctx, &mcp.IOTransport{
 		Reader: teeReadCloser{Reader: io.TeeReader(stdout, out), Closer: stdout},
 		Writer: stdin,
 	}, nil)
@@ -196,9 +198,10 @@ func librariesThrough(t *testing.T, session *mcp.ClientSession) []string {
 	if res.IsError {
 		t.Fatalf("library_list through the binary: %v", res.Content)
 	}
-	out, _ := res.StructuredContent.(map[string]any)
-	var names []string
-	for _, l := range rows(t, out["libraries"], "libraries") {
+	out := object(res.StructuredContent)
+	libs := rows(t, out["libraries"], "libraries")
+	names := make([]string, 0, len(libs))
+	for _, l := range libs {
 		names = append(names, text(l["name"]))
 	}
 	slices.Sort(names)
@@ -329,7 +332,7 @@ func TestBinaryReadsTheConfigFileInTheWorkingDirectory(t *testing.T) {
 // --listen has to serve the protocol at /mcp behind the bearer check, answer
 // the health probe a container watches, stay up, and shut down when asked.
 func TestBinaryServesHTTP(t *testing.T) {
-	const token = "zzyzx-binary-token" //nolint:gosec // a test token for a throwaway server
+	const token = "zzyzx-binary-token"
 
 	addr := freePort(t)
 	cmd := exec.CommandContext(context.WithoutCancel(ctx), binary(t), "serve", "--listen", addr, "--auth-token", token, "--toolsets", "all")
@@ -346,7 +349,8 @@ func TestBinaryServesHTTP(t *testing.T) {
 	base := "http://" + addr
 	waitHealthy(t, base, exited, errOut)
 
-	get := func(path, auth string) *http.Response {
+	// get answers the status and the challenge, if any
+	get := func(path, auth string) (status int, challenge string) {
 		t.Helper()
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+path, http.NoBody)
 		if err != nil {
@@ -359,22 +363,24 @@ func TestBinaryServesHTTP(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _ = res.Body.Close() })
+		if err := res.Body.Close(); err != nil {
+			t.Fatal(err)
+		}
 
-		return res
+		return res.StatusCode, res.Header.Get("WWW-Authenticate")
 	}
 
 	t.Run("the endpoint is behind the bearer check", func(t *testing.T) {
-		if res := get("/mcp", ""); res.StatusCode != http.StatusUnauthorized {
-			t.Errorf("GET /mcp with no token = %d, want 401", res.StatusCode)
-		} else if !strings.Contains(res.Header.Get("WWW-Authenticate"), "Bearer") {
-			t.Errorf("no Bearer challenge: %q", res.Header.Get("WWW-Authenticate"))
+		if status, challenge := get("/mcp", ""); status != http.StatusUnauthorized {
+			t.Errorf("GET /mcp with no token = %d, want 401", status)
+		} else if !strings.Contains(challenge, "Bearer") {
+			t.Errorf("no Bearer challenge: %q", challenge)
 		}
-		if res := get("/mcp", "Bearer nope"); res.StatusCode != http.StatusUnauthorized {
-			t.Errorf("GET /mcp with the wrong token = %d, want 401", res.StatusCode)
+		if status, _ := get("/mcp", "Bearer nope"); status != http.StatusUnauthorized {
+			t.Errorf("GET /mcp with the wrong token = %d, want 401", status)
 		}
-		if res := get("/nope", "Bearer "+token); res.StatusCode != http.StatusNotFound {
-			t.Errorf("GET /nope = %d, want 404", res.StatusCode)
+		if status, _ := get("/nope", "Bearer "+token); status != http.StatusNotFound {
+			t.Errorf("GET /nope = %d, want 404", status)
 		}
 	})
 
@@ -464,16 +470,15 @@ func (f roundTripper) RoundTrip(r *http.Request) (*http.Response, error) { retur
 func freePort(t *testing.T) string {
 	t.Helper()
 
-	l, err := net.Listen("tcp", "127.0.0.1:0")
+	l, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	addr := l.Addr().String()
 	if err := l.Close(); err != nil {
 		t.Fatal(err)
 	}
 
-	return addr
+	return l.Addr().String()
 }
 
 // waitHealthy polls the health probe until the server answers it, failing

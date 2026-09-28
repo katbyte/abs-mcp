@@ -170,8 +170,9 @@ func configured() bool {
 // from, so a test can add or remove files and rescan.
 func dataDir() string { return os.Getenv("ABS_TEST_DATA") }
 
-// testMain connects, starts the provider proxy, seeds the fixtures, and runs.
-func testMain(m *testing.M) {
+// runSuite is the suite's TestMain: it connects, starts the provider proxy,
+// seeds the fixtures, and runs.
+func runSuite(m *testing.M) {
 	if !configured() {
 		os.Exit(m.Run()) // every test skips
 	}
@@ -417,15 +418,15 @@ func seedMessy() error {
 		if err != nil {
 			return err
 		}
-		items, _ := out["items"].([]any)
+		items := items(out["items"])
 		for _, r := range items {
-			row, _ := r.(map[string]any)
-			id, _ := row["id"].(string)
+			row := object(r)
+			id := text(row["id"])
 			got, err := invoke("item_get", map[string]any{"item": id})
 			if err != nil {
 				return err
 			}
-			path, _ := got["path"].(string)
+			path := text(got["path"])
 			ids[path] = id
 		}
 		if len(items) < 50 {
@@ -624,4 +625,57 @@ func num(t *testing.T, v any, field string) int {
 	}
 
 	return int(f)
+}
+
+// text reads a decoded JSON string, empty when it is anything else. Like
+// truth, object, items and number it is for a value a test goes on to
+// compare, where a value of the wrong kind fails the comparison.
+func text(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+
+	return ""
+}
+
+// truth reads a decoded JSON boolean, false when it is anything else.
+func truth(v any) bool {
+	b, ok := v.(bool)
+
+	return ok && b
+}
+
+// isFalse reports whether a decoded JSON value is the boolean false, which an
+// absent one is not.
+func isFalse(v any) bool {
+	b, ok := v.(bool)
+
+	return ok && !b
+}
+
+// number reads a decoded JSON number, zero when it is anything else.
+func number(v any) float64 {
+	if f, ok := v.(float64); ok {
+		return f
+	}
+
+	return 0
+}
+
+// object reads a decoded JSON object, nil when it is anything else.
+func object(v any) map[string]any {
+	if m, ok := v.(map[string]any); ok {
+		return m
+	}
+
+	return nil
+}
+
+// items reads a decoded JSON list, nil when it is anything else.
+func items(v any) []any {
+	if l, ok := v.([]any); ok {
+		return l
+	}
+
+	return nil
 }

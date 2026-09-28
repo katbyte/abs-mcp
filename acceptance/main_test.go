@@ -1,6 +1,6 @@
 //go:build integration
 
-// Package integration covers every tool against a real Audiobookshelf running
+// Package acceptance covers every tool against a real Audiobookshelf running
 // in Docker - the API wrappers and the audits alike - so response shapes,
 // filter encoding and permissions are checked against the thing abs-mcp
 // actually talks to rather than a stub.
@@ -11,10 +11,10 @@
 //	make testacc                       # start a container, run these, tear it down
 //
 //	eval "$(scripts/abs-testenv.sh up)"  # or drive it by hand
-//	go test -tags integration ./integration/...
+//	go test -tags integration ./acceptance/...
 //	scripts/abs-testenv.sh down
 package acceptance
 
 import "testing"
 
-func TestMain(m *testing.M) { testMain(m) }
+func TestMain(m *testing.M) { runSuite(m) }

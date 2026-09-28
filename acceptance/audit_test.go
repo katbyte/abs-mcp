@@ -102,7 +102,7 @@ func TestAuditUnmatched(t *testing.T) {
 		t.Errorf("total_findings = %d, want 3", found)
 	}
 	for _, f := range rows(t, out["findings"], "findings") {
-		if detail, _ := f["detail"].(string); detail == "" {
+		if detail := text(f["detail"]); detail == "" {
 			t.Errorf("finding has no detail saying why: %v", f)
 		}
 	}
@@ -168,7 +168,7 @@ func TestAuditAll(t *testing.T) {
 	counts := map[string]int{}
 	fields := map[string]int{}
 	for _, row := range rows(t, all["audits"], "audits") {
-		name, _ := row["audit"].(string)
+		name := text(row["audit"])
 		if field, ok := row["field"].(string); ok && field != "" {
 			fields[field] = num(t, row["found"], "found")
 			continue
@@ -240,7 +240,7 @@ func TestAuditAll(t *testing.T) {
 	}
 	deepCounts := map[string]int{}
 	for _, row := range rows(t, deep["audits"], "audits") {
-		if name, _ := row["audit"].(string); slices.Contains(perItem, name) {
+		if name := text(row["audit"]); slices.Contains(perItem, name) {
 			deepCounts[name] = num(t, row["found"], "found")
 		}
 	}
@@ -273,7 +273,7 @@ func TestAuditSeriesGaps(t *testing.T) {
 
 	got := map[string][]string{}
 	for _, row := range rows(t, out["gaps"], "gaps") {
-		name, _ := row["name"].(string)
+		name := text(row["name"])
 		got[name] = strs(t, row["missing"], "missing")
 	}
 
@@ -377,9 +377,8 @@ func TestAuditCovers(t *testing.T) {
 	}
 	problems := map[string]string{}
 	for _, row := range rows(t, out["findings"], "findings") {
-		title, _ := row["title"].(string)
-		problem, _ := row["problem"].(string)
-		problems[title] = problem
+		title := text(row["title"])
+		problems[title] = text(row["problem"])
 		if num(t, row["width"], "width") == 0 {
 			t.Errorf("%s: no width measured", title)
 		}
@@ -415,7 +414,7 @@ func TestAuditUnembedded(t *testing.T) {
 		t.Fatalf("total_findings = %d, want all 3 untagged fixtures: %v", found, out["findings"])
 	}
 	for _, f := range rows(t, out["findings"], "findings") {
-		if detail, _ := f["detail"].(string); !strings.Contains(detail, "no tags") {
+		if detail := text(f["detail"]); !strings.Contains(detail, "no tags") {
 			t.Errorf("finding should say the files carry no tags: %v", f)
 		}
 	}
@@ -426,7 +425,7 @@ func TestAuditUnembedded(t *testing.T) {
 	}
 
 	keepAudioFiles(t, item)
-	if embedded, _ := call(t, "item_embed_metadata", map[string]any{"item": item})["embedded"].(bool); !embedded {
+	if embedded := truth(call(t, "item_embed_metadata", map[string]any{"item": item})["embedded"]); !embedded {
 		t.Fatalf("item_embed_metadata did not embed %s", item)
 	}
 	after := call(t, "audit_unembedded", map[string]any{"library": "Non-Fiction"})

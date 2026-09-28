@@ -44,8 +44,7 @@ func TestLibraryLifecycle(t *testing.T) {
 	if updated.Name != name {
 		t.Errorf("after update name = %q", updated.Name)
 	}
-	original := "SDK Fiction"
-	must(client.UpdateLibrary(ctx, id, abs.LibraryUpdate{Name: &original}))
+	must(client.UpdateLibrary(ctx, id, abs.LibraryUpdate{Name: new("SDK Fiction")}))
 
 	libs := must(client.Libraries(ctx))
 	if len(libs) < 2 {

@@ -40,9 +40,9 @@ func TestJourneyLibraryLife(t *testing.T) {
 	}
 	titles := func(library string) (all, missing []string) {
 		for _, it := range rows(t, call(t, "library_items", map[string]any{"library": library, "limit": 50})["items"], "items") {
-			title, _ := it["title"].(string)
+			title := text(it["title"])
 			all = append(all, title)
-			if m, _ := it["missing"].(bool); m {
+			if m := truth(it["missing"]); m {
 				missing = append(missing, title)
 			}
 		}
@@ -68,8 +68,8 @@ func TestJourneyLibraryLife(t *testing.T) {
 
 	t.Run("create", func(t *testing.T) {
 		out := call(t, "library_create", map[string]any{"name": name, "folders": []any{"/scratch/zzyzx-life"}, "media_type": "book"})
-		lib, _ := out["library"].(map[string]any)
-		libID, _ = lib["id"].(string)
+		lib := object(out["library"])
+		libID = text(lib["id"])
 		if libID == "" {
 			t.Fatalf("no id: %v", out)
 		}

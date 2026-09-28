@@ -1,10 +1,15 @@
 package abs
 
 import (
+	"bytes"
 	"encoding/base64"
-	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"net/http"
-	"net/http/httptest"
+	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -44,157 +49,232 @@ func TestEncodeFilter(t *testing.T) {
 	}
 }
 
-func TestFlexStringAndSeriesRefs(t *testing.T) {
-	t.Parallel()
-
-	var m Metadata
-	raw := `{"title":"Dune","publishedYear":1965,"series":{"id":"s1","name":"Dune","sequence":"1"},"itunesId":null}`
-	if err := json.Unmarshal([]byte(raw), &m); err != nil {
-		t.Fatal(err)
-	}
-	if m.PublishedYear != "1965" {
-		t.Errorf("publishedYear = %q", m.PublishedYear)
-	}
-	if len(m.Series) != 1 || m.Series[0].Sequence != "1" {
-		t.Errorf("single-object series not decoded: %+v", m.Series)
-	}
-	if got := m.SeriesDisplay(); len(got) != 1 || got[0] != "Dune #1" {
-		t.Errorf("SeriesDisplay = %v", got)
-	}
-
-	raw = `{"publishedYear":"1965","series":[{"name":"A","sequence":"2"},{"name":"B"}],"narrators":["X","Y"],"authors":[{"id":"a","name":"Frank Herbert"}]}`
-	if err := json.Unmarshal([]byte(raw), &m); err != nil {
-		t.Fatal(err)
-	}
-	if len(m.Series) != 2 || m.AuthorDisplay() != "Frank Herbert" || m.NarratorDisplay() != "X, Y" {
-		t.Errorf("array shapes: %+v", m)
-	}
-}
-
-func TestItemsQueryAndAuth(t *testing.T) {
-	t.Parallel()
-
-	var gotAuth, gotQuery string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotAuth = r.Header.Get("Authorization")
-		gotQuery = r.URL.RawQuery
-		if r.URL.Path != "/api/libraries/lib1/items" {
-			http.NotFound(w, r)
-			return
-		}
-		_, _ = w.Write([]byte(`{"results":[{"id":"i1","mediaType":"book","media":{"metadata":{"title":"T"}}}],"total":1,"limit":25,"page":0}`))
-	}))
-	defer srv.Close()
-
-	c, err := New(srv.URL, "key123")
-	if err != nil {
-		t.Fatal(err)
-	}
-	page, err := c.Items(t.Context(), "lib1", ItemsOptions{Limit: 25, Sort: "addedAt", Desc: true, Filter: EncodeFilter("missing", "asin"), Minified: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if gotAuth != "Bearer key123" {
-		t.Errorf("auth header = %q", gotAuth)
-	}
-	q, _ := parseQuery(gotQuery)
-	for k, want := range map[string]string{"limit": "25", "page": "0", "sort": "addedAt", "desc": "1", "minified": "1", "filter": "missing.YXNpbg=="} {
-		if q.Get(k) != want {
-			t.Errorf("query %s = %q want %q (raw %s)", k, q.Get(k), want, gotQuery)
-		}
-	}
-	if page.Total != 1 || len(page.Results) != 1 || page.Results[0].Title() != "T" {
-		t.Errorf("page = %+v", page)
-	}
-
-	if _, err := c.Item(t.Context(), "missing"); !IsNotFound(err) {
-		t.Errorf("expected not-found, got %v", err)
-	}
-}
-
-func TestProgressNotFoundIsNil(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	}))
-	defer srv.Close()
-
-	c, _ := New(srv.URL, "k")
-	p, err := c.Progress(t.Context(), "i1", "")
-	if err != nil || p != nil {
-		t.Errorf("got %v, %v", p, err)
-	}
-}
-
 func TestHTTPErrorMessage(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte("nope"))
-	}))
-	defer srv.Close()
-
-	c, _ := New(srv.URL, "k")
+	c := newClient(t, newJSONServer(t, always(http.StatusForbidden, "nope")))
 	err := c.ScanLibrary(t.Context(), "lib", false)
 	if err == nil {
 		t.Fatal("expected error")
 	}
 	for _, want := range []string{"HTTP 403", "nope", "permission"} {
-		if !contains(err.Error(), want) {
+		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q lacks %q", err, want)
 		}
 	}
 }
 
-// SplitCSV parses the comma-separated fields the API returns for genres, tags
-// and narrators, where blanks and stray spacing are common.
-func TestSplitCSV(t *testing.T) {
+// intQuery omits a zero rather than sending it, because the server treats an
+// explicit 0 as a real limit.
+func TestIntQueryOmitsZero(t *testing.T) {
 	t.Parallel()
 
-	for _, c := range []struct {
-		in   string
-		want []string
-	}{
-		{"", nil},
-		{"   ", nil},
-		{",,,", nil},
-		{"Science Fiction", []string{"Science Fiction"}},
-		{"sf, classic", []string{"sf", "classic"}},
-		{" sf ,, classic ,", []string{"sf", "classic"}},
-	} {
-		got := SplitCSV(c.in)
-		if len(got) != len(c.want) {
-			t.Errorf("SplitCSV(%q) = %v, want %v", c.in, got, c.want)
-			continue
-		}
-		for i := range got {
-			if got[i] != c.want[i] {
-				t.Errorf("SplitCSV(%q) = %v, want %v", c.in, got, c.want)
-				break
-			}
-		}
+	q := map[string][]string{}
+	intQuery(q, "limit", 0)
+	if _, present := q["limit"]; present {
+		t.Error("intQuery sent a zero")
+	}
+	intQuery(q, "limit", 5)
+	if q["limit"][0] != "5" {
+		t.Errorf("intQuery = %v", q["limit"])
 	}
 }
 
-// DeviceInfo.Describe names the client and device in a playback session, and
-// has to survive a nil receiver and every field being empty.
-func TestDeviceInfoDescribe(t *testing.T) {
+func TestTruncateAndBoolQuery(t *testing.T) {
 	t.Parallel()
 
-	var nilDevice *DeviceInfo
-	if got := nilDevice.Describe(); got != "" {
-		t.Errorf("nil DeviceInfo described as %q, want empty", got)
+	if got := truncate("short", 10); got != "short" {
+		t.Errorf("truncate under the limit = %q", got)
 	}
-	if got := (&DeviceInfo{}).Describe(); got != "" {
-		t.Errorf("empty DeviceInfo described as %q, want empty", got)
+	if got := truncate("exactly-10", 10); got != "exactly-10" {
+		t.Errorf("truncate at the limit = %q", got)
 	}
-	if got := (&DeviceInfo{ClientName: "abs-mcp"}).Describe(); !contains(got, "abs-mcp") {
-		t.Errorf("Describe() = %q, want the client name", got)
+	if got := truncate("far too long to keep", 5); got != "far t..." {
+		t.Errorf("truncate over the limit = %q", got)
 	}
-	// browser name stands in when there is no client name
-	if got := (&DeviceInfo{BrowserName: "Firefox"}).Describe(); !contains(got, "Firefox") {
-		t.Errorf("Describe() = %q, want the browser name", got)
+	if boolQuery(true) != "1" || boolQuery(false) != "0" {
+		t.Errorf("boolQuery = %q/%q, want 1/0", boolQuery(true), boolQuery(false))
+	}
+}
+
+// A refusal keeps its status when its body cannot be read: a 404 cut short
+// is still no progress, not a failed request.
+func TestANotFoundCutShortIsStillNotFound(t *testing.T) {
+	t.Parallel()
+
+	c := newClient(t, newRawServer(t, cutShort(http.StatusNotFound, "Not")))
+
+	if p, err := c.Progress(t.Context(), "li_1", ""); err != nil || p != nil {
+		t.Errorf("a 404 cut short = %v, %v; want no progress and no error", p, err)
+	}
+}
+
+// A reply over the limit is refused as too big, not cut to the limit and
+// handed on as a reply that will not decode.
+func TestAReplyOverTheLimitIsRefused(t *testing.T) {
+	t.Parallel()
+
+	c := newClient(t, newRawServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"results":[`))
+		chunk := bytes.Repeat([]byte(" "), 1<<20)
+		for range maxResponseBytes >> 20 {
+			_, _ = w.Write(chunk)
+		}
+		_, _ = w.Write([]byte(`],"total":0}`))
+	}))
+
+	if _, err := c.Libraries(t.Context()); err == nil || !strings.Contains(err.Error(), "over 64 MiB") {
+		t.Errorf("a reply over the limit = %v, want it refused as too big", err)
+	}
+}
+
+// Nothing at all where a record is expected is something in front of the
+// server answering, not the server: decoding it would hand back a blank item
+// that reads as a real one with every field empty. A write that expects no
+// record still takes an empty answer.
+func TestAnEmptyAnswerIsNotABlankRecord(t *testing.T) {
+	t.Parallel()
+
+	c := newClient(t, newJSONServer(t, always(http.StatusOK, "")))
+	if it, err := c.Item(t.Context(), "li_1"); err == nil || !strings.Contains(err.Error(), "answered with nothing") {
+		t.Errorf("an empty answer to a read = %+v, %v; want it refused", it, err)
+	}
+	if err := c.DeleteItem(t.Context(), "li_1", false); err != nil {
+		t.Errorf("an empty answer to a delete, which expects nothing: %v", err)
+	}
+}
+
+// A session closed with no final position sends no body. A nil map
+// marshalled is the JSON null, which the server's parser refuses, so the
+// session stayed open: a later run of the live suite found it still playing.
+func TestANilBodyIsNoBody(t *testing.T) {
+	t.Parallel()
+
+	s := newJSONServer(t, always(http.StatusOK, "OK"))
+	c := newClient(t, s)
+	if err := c.CloseSession(t.Context(), "ps_1", nil); err != nil {
+		t.Fatal(err)
+	}
+	if contentType := s.header.Get("Content-Type"); len(s.body) != 0 || contentType != "" {
+		t.Errorf("closing with no final position sent %q as %q, want no body", s.body, contentType)
+	}
+}
+
+// A server url that is redirected - http moved to https by a proxy, or a
+// login wall - fails the call rather than following it: Go would turn the
+// DELETE into a GET, the GET would answer 200, and the delete would report
+// success having done nothing. A page of HTML answered in the API's place is
+// refused the same way.
+func TestRedirectsAndWebPagesAreRefused(t *testing.T) {
+	t.Parallel()
+
+	srv := newRawServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/moved/"):
+			http.Redirect(w, r, "/"+strings.TrimPrefix(r.URL.Path, "/moved/"), http.StatusMovedPermanently) //nolint:gosec // a test server moving its own paths
+
+		case r.URL.Path == "/login/api/items/li_1":
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte("<!DOCTYPE html>\n<html><body>Sign in</body></html>"))
+		case r.URL.Path == "/api/backups/path":
+			// the server's own bare reply, which Express labels text/html
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte("OK"))
+		default:
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{}`))
+		}
+	})
+
+	moved, err := New(srv.URL+"/moved", "k")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = moved.DeleteItem(t.Context(), "li_1", false)
+	if err == nil || !strings.Contains(err.Error(), "redirected") {
+		t.Errorf("a redirected delete = %v, want it refused", err)
+	}
+	for _, s := range srv.requests() {
+		if strings.HasPrefix(s, "GET ") {
+			t.Errorf("the redirect was followed: %v", srv.requests())
+		}
+	}
+
+	login, err := New(srv.URL+"/login", "k")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := login.Item(t.Context(), "li_1"); err == nil || !strings.Contains(err.Error(), "web page") {
+		t.Errorf("a web page in the API's place = %v, want it refused", err)
+	}
+
+	direct, err := New(srv.URL, "k")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := direct.SetBackupPath(t.Context(), "/backups"); err != nil {
+		t.Errorf("the server's own OK, labelled text/html, was refused: %v", err)
+	}
+	if err := direct.DeleteItem(t.Context(), "li_1", false); err != nil {
+		t.Errorf("a delete answered where it was asked failed: %v", err)
+	}
+}
+
+// A rejected key says so, which is the first thing a misconfigured
+// deployment hits.
+func TestHTTPErrorNamesTheKeyOn401(t *testing.T) {
+	t.Parallel()
+
+	s := newJSONServer(t, func(*http.Request) (int, string) { return http.StatusUnauthorized, "Unauthorized" })
+	c := newClient(t, s)
+
+	_, err := c.Me(t.Context())
+	if err == nil || !strings.Contains(err.Error(), "ABS_TOKEN") {
+		t.Errorf("401 error = %v", err)
+	}
+	if IsNotFound(err) {
+		t.Error("a 401 is not a 404")
+	}
+}
+
+// Every method of the client is called by the live suite, which runs it
+// against a real Audiobookshelf: the server publishes no schema, so that is
+// the only proof a method's request and the shape it decodes are right. A
+// method added without a live test fails here, in the unit tests, rather
+// than going unnoticed until someone counts.
+func TestEveryMethodHasALiveTest(t *testing.T) {
+	t.Parallel()
+
+	const suite = "../../integration"
+	files, err := filepath.Glob(filepath.Join(suite, "*_test.go"))
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no live tests found in %s: %v", suite, err)
+	}
+	called := map[string]bool{}
+	fset := token.NewFileSet()
+	for _, path := range files {
+		f, err := parser.ParseFile(fset, path, nil, parser.SkipObjectResolution)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			if call, ok := n.(*ast.CallExpr); ok {
+				if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
+					called[sel.Sel.Name] = true
+				}
+			}
+			return true
+		})
+	}
+
+	client := reflect.TypeFor[*Client]()
+	if client.NumMethod() < 200 {
+		t.Fatalf("the client has %d methods, which is too few to be all of them", client.NumMethod())
+	}
+	for method := range client.Methods() {
+		if !called[method.Name] {
+			t.Errorf("%s has no live test: nothing in %s calls it", method.Name, suite)
+		}
 	}
 }

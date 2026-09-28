@@ -246,7 +246,7 @@ func TestJourneyPodcastLife(t *testing.T) {
 	t.Run("download settings, read back", func(t *testing.T) {
 		call(t, "podcast_settings", map[string]any{"item": id, "auto_download": true, "schedule": "0 3 * * *", "keep_episodes": 10, "new_per_check": 2})
 		want := map[string]any{"auto_download": true, "schedule": "0 3 * * *", "keep_episodes": float64(10), "new_per_check": float64(2)}
-		got, _ := call(t, "item_get", map[string]any{"item": id})["downloads"].(map[string]any)
+		got := object(call(t, "item_get", map[string]any{"item": id})["downloads"])
 		for k, v := range want {
 			if got[k] != v {
 				t.Errorf("downloads.%s = %v, want %v (%v)", k, got[k], v, got)
@@ -256,7 +256,7 @@ func TestJourneyPodcastLife(t *testing.T) {
 			t.Errorf("downloads.last_check is unset after two checks: %v", got)
 		}
 		call(t, "podcast_settings", map[string]any{"item": id, "auto_download": false})
-		if got, _ := call(t, "item_get", map[string]any{"item": id})["downloads"].(map[string]any); got["auto_download"] == true {
+		if got := object(call(t, "item_get", map[string]any{"item": id})["downloads"]); truth(got["auto_download"]) {
 			t.Errorf("auto_download still on: %v", got)
 		}
 	})
@@ -280,7 +280,7 @@ func TestJourneyPodcastLife(t *testing.T) {
 
 		// unconfirmed, it says what it would erase and erases nothing
 		preview := call(t, "podcast_episode_delete", map[string]any{"item": id, "episode": one, "delete_file": true})
-		if deleted, _ := preview["deleted"].(bool); deleted || !strings.HasSuffix(text(preview["file"]), "/"+file) || !strings.Contains(text(preview["note"]), file) {
+		if deleted := truth(preview["deleted"]); deleted || !strings.HasSuffix(text(preview["file"]), "/"+file) || !strings.Contains(text(preview["note"]), file) {
 			t.Errorf("podcast_episode_delete without confirm = %v, want nothing deleted and the file named", preview)
 		}
 		if _, err := os.Stat(filepath.Join(folder, file)); err != nil {
@@ -303,7 +303,7 @@ func TestJourneyPodcastLife(t *testing.T) {
 			t.Errorf("playlist entries = %v, want only Two", entries)
 		}
 		for _, it := range rows(t, call(t, "user_in_progress", nil)["items"], "items") {
-			if ep, _ := it["episode"].(map[string]any); ep != nil && ep["id"] == one {
+			if ep := object(it["episode"]); ep != nil && ep["id"] == one {
 				t.Errorf("the deleted episode is still being listened to: %v", it)
 			}
 		}

@@ -25,10 +25,10 @@ import (
 func longBookChapters(t *testing.T, id string) []string {
 	t.Helper()
 
-	var out []string
-	for _, ch := range rows(t, call(t, "item_get", map[string]any{"item": id, "chapters": true})["chapter_list"], "chapter_list") {
-		sec, _ := ch["start_s"].(float64)
-		out = append(out, text(ch["title"])+"@"+time.Duration(sec*float64(time.Second)).String())
+	chapters := rows(t, call(t, "item_get", map[string]any{"item": id, "chapters": true})["chapter_list"], "chapter_list")
+	out := make([]string, 0, len(chapters))
+	for _, ch := range chapters {
+		out = append(out, text(ch["title"])+"@"+time.Duration(number(ch["start_s"])*float64(time.Second)).String())
 	}
 	return out
 }
@@ -143,7 +143,7 @@ func TestJourneyALongBookChaptered(t *testing.T) {
 
 	t.Run("one over the whole book: audit_chapters finds it single", func(t *testing.T) {
 		out := call(t, "item_chapters_set", map[string]any{"item": id, "chapters": []any{map[string]any{"title": "Zzyzx Whole Book", "start_s": 0}}})
-		if num(t, out["chapters"], "chapters") != 1 || out["updated"] != true {
+		if num(t, out["chapters"], "chapters") != 1 || !truth(out["updated"]) {
 			t.Errorf("item_chapters_set = %v", out)
 		}
 		chapters := rows(t, call(t, "item_get", map[string]any{"item": id, "chapters": true})["chapter_list"], "chapter_list")
@@ -320,7 +320,7 @@ func TestJourneyALongBookChaptered(t *testing.T) {
 		}
 
 		out := call(t, "item_chapters_set", map[string]any{"item": two, "fit": true})
-		if num(t, out["chapters"], "chapters") != 2 || num(t, out["dropped"], "dropped") != 2 || out["updated"] != true {
+		if num(t, out["chapters"], "chapters") != 2 || num(t, out["dropped"], "dropped") != 2 || !truth(out["updated"]) {
 			t.Errorf("fit = %v, want two kept and two dropped", out)
 		}
 		got := twoChapters(t)
@@ -348,7 +348,7 @@ func TestJourneyALongBookChaptered(t *testing.T) {
 		}
 
 		out := call(t, "item_chapters_set", map[string]any{"item": two, "fit": true})
-		if num(t, out["chapters"], "chapters") != 2 || out["dropped"] != nil || out["updated"] != true {
+		if num(t, out["chapters"], "chapters") != 2 || out["dropped"] != nil || !truth(out["updated"]) {
 			t.Errorf("fit = %v, want both kept and nothing dropped", out)
 		}
 		if got := twoChapters(t); len(got) != 2 || !endsAt(got[1], 2*half) {

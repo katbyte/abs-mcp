@@ -182,8 +182,9 @@ func TestJourneyPodcastAuditsGivenSomethingToFind(t *testing.T) {
 		}
 		queue := func() []string {
 			t.Helper()
-			var out []string
-			for _, d := range rows(t, call(t, "podcast_downloads", map[string]any{"library": "Podcasts"})["downloads"], "downloads") {
+			downloads := rows(t, call(t, "podcast_downloads", map[string]any{"library": "Podcasts"})["downloads"], "downloads")
+			out := make([]string, 0, len(downloads))
+			for _, d := range downloads {
 				out = append(out, fmt.Sprintf("%s: %s %s", d["podcast"], d["episode"], d["status"]))
 			}
 			return out
@@ -193,7 +194,8 @@ func TestJourneyPodcastAuditsGivenSomethingToFind(t *testing.T) {
 		if got := strs(t, call(t, "podcast_episode_download", map[string]any{"item": freshID, "indexes": []any{0}})["queued"], "queued"); !slices.Equal(got, []string{"Zzyzx Fresh Two"}) {
 			t.Fatalf("queued = %v, want Zzyzx Fresh Two", got)
 		}
-		downloading := []string{"Zzyzx Fresh Show: Zzyzx Fresh Two downloading"}
+		inQueue := []string{"Zzyzx Fresh Show: Zzyzx Fresh Two downloading", "Zzyzx Fresh Show: Zzyzx Fresh One queued"}
+		downloading := inQueue[:1]
 		var got []string
 		for range 50 {
 			if got = queue(); slices.Equal(got, downloading) {
@@ -208,7 +210,7 @@ func TestJourneyPodcastAuditsGivenSomethingToFind(t *testing.T) {
 		if got := strs(t, call(t, "podcast_episode_download", map[string]any{"item": freshID, "indexes": []any{1}})["queued"], "queued"); !slices.Equal(got, []string{"Zzyzx Fresh One"}) {
 			t.Fatalf("queued = %v, want Zzyzx Fresh One", got)
 		}
-		if got := queue(); !slices.Equal(got, append(downloading, "Zzyzx Fresh Show: Zzyzx Fresh One queued")) {
+		if got := queue(); !slices.Equal(got, inQueue) {
 			t.Errorf("podcast_downloads with one waiting = %v", got)
 		}
 		again := call(t, "podcast_episode_download", map[string]any{"item": freshID, "indexes": []any{0, 1}})
@@ -239,7 +241,7 @@ func TestJourneyPodcastAuditsGivenSomethingToFind(t *testing.T) {
 		if queued := rows(t, checked["queued"], "queued"); len(queued) != 0 {
 			t.Errorf("podcast_check_new queued %v from a quiet feed", queued)
 		}
-		downloads, _ := call(t, "item_get", map[string]any{"item": quietID})["downloads"].(map[string]any)
+		downloads := object(call(t, "item_get", map[string]any{"item": quietID})["downloads"])
 		if last, err := time.Parse(time.RFC3339, text(downloads["last_check"])); err != nil || time.Since(last) > time.Minute {
 			t.Fatalf("last_check = %v (%v), want just now", downloads["last_check"], err)
 		}
@@ -343,8 +345,9 @@ type showEpisode struct{ id, title, published, file string }
 func showEpisodes(t *testing.T, podcast string) []showEpisode {
 	t.Helper()
 
-	var out []showEpisode
-	for _, e := range rows(t, call(t, "podcast_episodes", map[string]any{"item": podcast})["episodes"], "episodes") {
+	episodes := rows(t, call(t, "podcast_episodes", map[string]any{"item": podcast})["episodes"], "episodes")
+	out := make([]showEpisode, 0, len(episodes))
+	for _, e := range episodes {
 		got := call(t, "podcast_episode_get", map[string]any{"item": podcast, "episode": e["id"]})
 		out = append(out, showEpisode{id: text(e["id"]), title: text(e["title"]), published: text(e["published"]), file: text(got["file"])})
 	}
@@ -442,7 +445,7 @@ func TestJourneyAnEpisodeHeldTwice(t *testing.T) {
 
 	t.Run("the older copy deleted by id, previewed first", func(t *testing.T) {
 		preview := call(t, "podcast_episode_delete", map[string]any{"item": id, "episode": older.id, "delete_file": true})
-		if deleted, _ := preview["deleted"].(bool); deleted || preview["episode_id"] != older.id || !strings.HasSuffix(text(preview["file"]), "/"+older.file) || !strings.Contains(text(preview["note"]), "not confirmed") {
+		if deleted := truth(preview["deleted"]); deleted || preview["episode_id"] != older.id || !strings.HasSuffix(text(preview["file"]), "/"+older.file) || !strings.Contains(text(preview["note"]), "not confirmed") {
 			t.Errorf("the preview = %v, want nothing deleted and the older copy's file named", preview)
 		}
 		if after := showEpisodes(t, id); !slices.Equal(after, held) || !onDisk(older.file) {
@@ -450,7 +453,7 @@ func TestJourneyAnEpisodeHeldTwice(t *testing.T) {
 		}
 
 		done := call(t, "podcast_episode_delete", map[string]any{"item": id, "episode": older.id, "delete_file": true, "confirm": true})
-		if deleted, _ := done["deleted"].(bool); !deleted || done["file_erased"] != true || done["episode_id"] != older.id {
+		if deleted := truth(done["deleted"]); !deleted || !truth(done["file_erased"]) || done["episode_id"] != older.id {
 			t.Errorf("podcast_episode_delete = %v, want the older copy and its file", done)
 		}
 		if after := showEpisodes(t, id); !slices.Equal(after, []showEpisode{held[0], newer}) {
