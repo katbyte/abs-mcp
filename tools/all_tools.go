@@ -81,7 +81,7 @@ var Toolsets = map[string][]string{
 		"audit_all", "audit_missing", "audit_unmatched", "audit_issues", "audit_no_audio",
 		"audit_podcast_no_episodes", "audit_chapters", "audit_authors",
 		"audit_path", "audit_covers", "audit_podcast_stale_feed",
-		"audit_duplicates", "audit_series", "audit_spelling", "audit_narrators", "audit_genres", "audit_unembedded", "audit_matched", "audit_abridged", "audit_whitespace", "metadata_rename",
+		"audit_duplicates", "audit_series", "audit_spelling", "audit_narrators", "audit_genres", "audit_unembedded", "audit_matched", "audit_abridged", "audit_whitespace", "audit_unplayable", "metadata_rename",
 		"item_edit", "item_batch_edit", "item_match", "item_match_apply", "item_match_batch", "item_match_apply_batch", "item_match_tag", "item_compare_audio",
 		"item_cover_search", "item_cover_edit", "item_cover_upgrade", "item_chapters_set",
 		"author_list", "author_get", "author_edit", "author_match", "author_match_apply", "author_image_set",
@@ -300,6 +300,7 @@ func queueTools(r *registry) {
 	registerMatchedAudit(r)
 	registerAbridgedAudit(r)
 	registerWhitespaceAudit(r)
+	registerUnplayableAudit(r)
 	registerGenresAudit(r)
 	registerMatchBatchTools(r)
 	registerMatchTagTool(r)

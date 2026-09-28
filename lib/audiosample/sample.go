@@ -226,7 +226,7 @@ func (s *Sampler) Stream(ctx context.Context, b *Book, start, length float64, ra
 		}
 		off := max(start-t.Start, 0)
 		n := min(end, t.Start+t.Duration) - t.Start - off
-		if err := s.decode(ctx, b.ItemID, t.FileID, off, n, rate, fn); err != nil {
+		if err := s.decode(ctx, b.ItemID, t.FileID, off, n, rate, fn, nil); err != nil {
 			return err
 		}
 	}
@@ -238,9 +238,46 @@ func (s *Sampler) Stream(ctx context.Context, b *Book, start, length float64, ra
 // what was asked before it is an error.
 const decodeShortBy = 2
 
+// Health is how a stretch of one file decoded: how much audio came back, and
+// what ffmpeg complained of on the way.
+type Health struct {
+	Seconds    float64  // audio decoded
+	Complaints int      // lines ffmpeg wrote at its error level
+	First      []string // the first few of them
+	Failed     string   // why ffmpeg gave up on the file, when it did
+}
+
+// checkRate is the rate a check decodes at: enough to decode every frame,
+// little enough to cost nothing to hold.
+const checkRate = 8000
+
+// Check decodes length seconds of one file of an item from off seconds in
+// and says how it went. What is wrong with the file - ffmpeg failing on it,
+// complaining of it, or running out of it early - is in the Health; an
+// error is the server or the proxy failing, which says nothing of the file.
+func (s *Sampler) Check(ctx context.Context, itemID, fileID string, off, length float64) (Health, error) {
+	if length <= 0 {
+		return Health{}, fmt.Errorf("a check needs a positive length, not %gs", length)
+	}
+	s.mu.Lock()
+	s.items[itemID] = true
+	s.mu.Unlock()
+
+	h := Health{}
+	got := 0
+	err := s.decode(ctx, itemID, fileID, max(off, 0), length, checkRate, func(pcm []int16) error {
+		got += len(pcm)
+		return nil
+	}, &h)
+	h.Seconds = float64(got) / checkRate
+	return h, err
+}
+
 // decode runs ffmpeg over one file of the book, from off seconds in for n
-// seconds, handing the samples to fn.
-func (s *Sampler) decode(ctx context.Context, itemID, fileID string, off, n float64, rate int, fn func([]int16) error) error {
+// seconds, handing the samples to fn. With h, it is a check: what ffmpeg
+// says of the file goes in h rather than coming back as an error, and only
+// the server, the proxy or the context failing is one.
+func (s *Sampler) decode(ctx context.Context, itemID, fileID string, off, n float64, rate int, fn func([]int16) error, h *Health) error {
 	// the decode's number rides along, so what the proxy meets fetching the
 	// file is this decode's to report
 	read := strconv.FormatInt(s.reads.Add(1), 10)
@@ -304,6 +341,31 @@ func (s *Sampler) decode(ctx context.Context, itemID, fileID string, off, n floa
 	fetch, stopped := s.failed[read], s.stopped
 	delete(s.failed, read)
 	s.mu.Unlock()
+	msg := strings.TrimSpace(strings.ReplaceAll(stderr.String(), s.base, ""))
+	if h != nil {
+		switch {
+		case waitErr != nil && ctx.Err() != nil:
+			return context.Cause(ctx)
+		case fetch != nil:
+			return fmt.Errorf("reading file %s of item %s: %w", fileID, itemID, fetch)
+		case waitErr != nil && stopped != nil:
+			return fmt.Errorf("reading file %s of item %s: the local proxy ffmpeg reads through stopped: %w", fileID, itemID, stopped)
+		case drainErr != nil:
+			return fmt.Errorf("reading what ffmpeg decoded from file %s of item %s: %w", fileID, itemID, drainErr)
+		}
+		for line := range strings.SplitSeq(msg, "\n") {
+			if line = strings.TrimSpace(line); line != "" {
+				h.Complaints++
+				if len(h.First) < 3 {
+					h.First = append(h.First, line[:min(len(line), 200)])
+				}
+			}
+		}
+		if waitErr != nil {
+			h.Failed = waitErr.Error()
+		}
+		return nil
+	}
 	switch {
 	case waitErr != nil && ctx.Err() != nil:
 		return context.Cause(ctx)
@@ -314,7 +376,6 @@ func (s *Sampler) decode(ctx context.Context, itemID, fileID string, off, n floa
 	case waitErr != nil && stopped != nil:
 		return fmt.Errorf("reading file %s of item %s: the local proxy ffmpeg reads through stopped: %w", fileID, itemID, stopped)
 	case waitErr != nil:
-		msg := strings.TrimSpace(strings.ReplaceAll(stderr.String(), s.base, ""))
 		return fmt.Errorf("ffmpeg could not decode file %s of item %s: %w: %s", fileID, itemID, waitErr, msg[:min(len(msg), 300)])
 	case drainErr != nil:
 		return fmt.Errorf("reading what ffmpeg decoded from file %s of item %s: %w", fileID, itemID, drainErr)

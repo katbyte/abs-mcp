@@ -739,10 +739,10 @@ func TestAuditAllSaysWhatDoesNotApply(t *testing.T) {
 	if na := strs(t, out["not_applicable"]); !slices.Equal(na, []string{"audit_podcast_stale_feed", "audit_podcast_no_episodes"}) {
 		t.Errorf("not_applicable over books = %v", na)
 	}
-	if skipped := strs(t, out["skipped"]); !slices.Equal(skipped, []string{"audit_covers", "audit_unembedded", "audit_matched", "audit_abridged"}) {
+	if skipped := strs(t, out["skipped"]); !slices.Equal(skipped, []string{"audit_covers", "audit_unembedded", "audit_matched", "audit_abridged", "audit_unplayable"}) {
 		t.Errorf("skipped = %v", skipped)
 	}
-	reasons(t, out, 6)
+	reasons(t, out, 7)
 }
 
 // reasons checks audit_all gave every audit it left out a reason.

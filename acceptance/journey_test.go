@@ -452,6 +452,8 @@ func TestJourneyLookupsChangeNothing(t *testing.T) {
 		{tool: "audit_spelling", args: map[string]any{"library": "Messy"}},
 		{tool: "audit_unembedded", args: map[string]any{"library": "Messy"}},
 		{tool: "audit_unmatched", args: map[string]any{"library": "Messy"}},
+		// playing the files as well as reading their containers
+		{tool: "audit_unplayable", args: map[string]any{"library": "Messy", "decode": true}},
 		// the seeded books are a second long, too short to search a store for
 		{tool: "audit_abridged", args: map[string]any{"library": "Messy"}},
 		{tool: "audit_whitespace", args: map[string]any{"library": "Messy"}},

@@ -74,6 +74,7 @@ func TestEveryAuditRuns(t *testing.T) {
 			"audit_spelling", "audit_unembedded",
 			"audit_covers", "audit_authors", "audit_narrators", "audit_matched", "audit_genres",
 			"audit_abridged",   // journey_abridged_test.go
+			"audit_unplayable", // journey_unplayable_test.go
 			"audit_whitespace": // messy_test.go
 			continue // asserted individually below
 		}
@@ -199,7 +200,7 @@ func TestAuditAll(t *testing.T) {
 			t.Errorf("%s is in %d of found, clean and not applicable, want 1", name, lists)
 		}
 	}
-	perItem := []string{"audit_covers", "audit_unembedded", "audit_matched", "audit_abridged"}
+	perItem := []string{"audit_covers", "audit_unembedded", "audit_matched", "audit_abridged", "audit_unplayable"}
 	if skipped := strs(t, all["skipped"], "skipped"); !slices.Equal(skipped, perItem) {
 		t.Errorf("skipped = %v, want %v", skipped, perItem)
 	}

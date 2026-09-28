@@ -1,3 +1,13 @@
+## Unreleased
+
+### Added
+
+- `audit_unplayable`: books whose audio is locked to a store, cut short, unreadable or misnamed; `decode` also finds damaged files
+
+### Fixed
+
+- matching no longer calls a book exact when its folder, a "Read by" note or a full-cast label names a different reading
+
 ## 0.5.0 (2026-09-27)
 
 ### Breaking

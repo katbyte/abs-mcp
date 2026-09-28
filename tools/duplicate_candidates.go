@@ -134,34 +134,56 @@ func candidateFactsOf(s *itemSummary) candidateFacts {
 	if i := strings.LastIndex(folder, "/"); i >= 0 {
 		folder = folder[i+1:]
 	}
+	br := bracketsOf(s.Title, folder, f.author)
+	f.labels = br.labels
+	f.narrators = append(f.narrators, br.readers...)
+	f.bracketed, f.bracketAs = br.readers, br.as
+	return f
+}
+
+// brackets is what the brackets on a title and a book folder say: the
+// readers they name, each as name words and as written, and the editions
+// and formats they name.
+type brackets struct {
+	readers [][]string
+	as      []string
+	labels  []string
+}
+
+// bracketsOf reads the brackets on a title and a book folder. A bracket that
+// is not a year, an edition, a format, a source, a language, a note on the
+// copy or the author is its reader in a collector's library ("(Weiner)",
+// "[John Lee]").
+func bracketsOf(title, folder string, author []string) brackets {
+	var b brackets
 	seen := map[string]bool{}
-	for _, m := range slices.Concat(candidateBrackets.FindAllStringSubmatch(s.Title, -1), candidateBrackets.FindAllStringSubmatch(folder, -1)) {
+	for _, m := range slices.Concat(candidateBrackets.FindAllStringSubmatch(title, -1), candidateBrackets.FindAllStringSubmatch(folder, -1)) {
 		for part := range strings.SplitSeq(m[1], ",") {
 			part = strings.TrimSpace(part)
 			words := candidateWords(part)
 			switch {
 			case len(words) == 0 || seen[part]:
 			case candidateLabel.MatchString(part):
-				f.labels = append(f.labels, part)
+				b.labels = append(b.labels, part)
 			// a year, a book number: neither a reader nor an edition, but a
 			// reader beside one is still a reader, "Scott Brick 2007"
 			case strings.ContainsAny(part, "0123456789") && len(candidateWords(withoutNumbers(part))) == 0:
 			case candidateNoName.MatchString(part):
 			// the author's own name disambiguates the author, "(Baoshu)",
 			// as often as it says the author reads it
-			case candidateSubset(words, f.author):
+			case candidateSubset(words, author):
 			case len(words) <= 4:
 				if strings.ContainsAny(part, "0123456789") {
 					part = withoutNumbers(part)
 					words = candidateWords(part)
 				}
-				f.narrators = append(f.narrators, words)
-				f.bracketed, f.bracketAs = append(f.bracketed, words), append(f.bracketAs, part)
+				b.readers = append(b.readers, words)
+				b.as = append(b.as, part)
 			}
 			seen[part] = true
 		}
 	}
-	return f
+	return b
 }
 
 // candidateTitle is a title as it names the book: brackets, disc and part

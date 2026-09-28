@@ -178,14 +178,14 @@ func registerAuditTools(r *registry) {
 	}
 	type allIn struct {
 		Library string `json:"library,omitempty" jsonschema:"library name or id; default every library"`
-		Deep    bool   `json:"deep,omitempty"    jsonschema:"also run audit_covers, audit_unembedded, audit_matched and audit_abridged, which fetch something for every item and can take minutes on a large library, and count audit_chapters and audit_whitespace whole, reading every book's chapters and file names"`
+		Deep    bool   `json:"deep,omitempty"    jsonschema:"also run audit_covers, audit_unembedded, audit_matched, audit_abridged and audit_unplayable, which fetch something for every item and can take minutes on a large library, and count audit_chapters and audit_whitespace whole, reading every book's chapters and file names"`
 	}
 	type allOut struct {
 		Scanned       int         `json:"items_scanned"`
 		Total         int         `json:"total_findings"`
 		Audits        []allRow    `json:"audits"                   jsonschema:"every audit with something to report, worst first; call that audit for the worklist"`
 		Clean         []string    `json:"clean"                    jsonschema:"audits that ran and found nothing"`
-		Skipped       []string    `json:"skipped,omitempty"        jsonschema:"audits not run: the four that fetch something for every item, unless deep is set; with deep, audit_matched and audit_abridged when a library's provider is not an Audible store and --providers is not set"`
+		Skipped       []string    `json:"skipped,omitempty"        jsonschema:"audits not run: the five that fetch something for every item, unless deep is set; with deep, audit_matched and audit_abridged when a library's provider is not an Audible store and --providers is not set"`
 		NotApplicable []string    `json:"not_applicable,omitempty" jsonschema:"audits that cannot find anything in the libraries asked about: the book audits when every one holds podcasts, the podcast audits when every one holds books. Neither run nor clean"`
 		NotRun        []allNotRun `json:"not_run,omitempty"        jsonschema:"every audit in skipped and not_applicable, with why"`
 		Partial       []allNotRun `json:"partial,omitempty"        jsonschema:"audits run in part, their count covering only some of their problems, with what was left out and why"`
@@ -194,7 +194,7 @@ func registerAuditTools(r *registry) {
 		Name: "audit_all",
 		Description: "Run every audit and return only the counts, so one call says where a library needs work; call the individual audit for the worklist. Start here after a scan. " +
 			"The per-item checks, audit_missing for every field, audit_chapters, audit_duplicates, audit_spelling, audit_authors, audit_narrators, audit_series, audit_genres and audit_whitespace all run. " +
-			"audit_covers, audit_unembedded, audit_matched and audit_abridged fetch something for every item, so they run only with deep and are reported as skipped otherwise; audit_chapters without deep counts only one chapter over a long book, as the rest needs every chaptered book read whole, and audit_whitespace without deep counts titles, names and the folders of each item's path, but not the folders inside a book or its file names, which need every book read whole; both say so under partial. " +
+			"audit_covers, audit_unembedded, audit_matched, audit_abridged and audit_unplayable fetch something for every item, so they run only with deep and are reported as skipped otherwise; audit_chapters without deep counts only one chapter over a long book, as the rest needs every chaptered book read whole, and audit_whitespace without deep counts titles, names and the folders of each item's path, but not the folders inside a book or its file names, which need every book read whole; both say so under partial. " +
 			"An audit that cannot find anything in the libraries asked about, a book audit over podcasts or a podcast audit over books, is listed as not applicable rather than clean; not_run says why each audit left out was left out.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in allIn) (*mcp.CallToolResult, allOut, error) {
 		libs, err := resolveLibraries(ctx, client, in.Library)
@@ -224,6 +224,8 @@ func registerAuditTools(r *registry) {
 		staleFeed := auditChecksByName["stale_feed"]
 		var covers coversOut
 		var embedded auditOut
+		unplayable := newUnplayableOut()
+		var unplayableRows []unplayableFinding
 		var matched matchedOut
 		// audit_matched refuses a library whose asins would all come back not
 		// found, and deep skips it for the same reason rather than count them
@@ -318,6 +320,9 @@ func registerAuditTools(r *registry) {
 				if err := sweepUnembedded(ctx, client, lib, 0, &embedded); err != nil {
 					return nil, allOut{}, err
 				}
+				if err := sweepUnplayable(ctx, client, lib, nil, &unplayable, &unplayableRows); err != nil {
+					return nil, allOut{}, err
+				}
 				if noLookup == nil {
 					if _, err := sweepMatched(ctx, client, prov, lib, matchedScope{}, &matched); err != nil {
 						return nil, allOut{}, err
@@ -354,6 +359,7 @@ func registerAuditTools(r *registry) {
 			found["audit_unembedded"] = embedded.Found
 			found["audit_matched"] = matched.Found
 			found["audit_abridged"] = abridged.Found
+			found["audit_unplayable"] = len(unplayableRows)
 		}
 
 		// an audit that can only fire for a book says nothing about a
@@ -379,10 +385,13 @@ func registerAuditTools(r *registry) {
 			if field != "" {
 				key += "/" + field
 			}
-			if n := found[key]; n > 0 {
+			switch n := found[key]; {
+			case n > 0:
 				out.Audits = append(out.Audits, allRow{Audit: tool, Field: field, Found: n})
 				out.Total += n
-			} else {
+			// files it could not read are no clean library: partial says so
+			case tool == "audit_unplayable" && unplayable.UncheckedCount > 0:
+			default:
 				out.Clean = append(out.Clean, name)
 			}
 		}
@@ -400,6 +409,10 @@ func registerAuditTools(r *registry) {
 		if in.Deep && covers.Skipped > 0 {
 			out.Partial = append(out.Partial, allNotRun{Audit: "audit_covers", Reason: fmt.Sprintf("%d covers could not be read or judged, and are not counted: run audit_covers for each one and why", covers.Skipped)})
 		}
+		// and a file that could not be read is not known to play
+		if in.Deep && unplayable.UncheckedCount > 0 {
+			out.Partial = append(out.Partial, allNotRun{Audit: "audit_unplayable", Reason: fmt.Sprintf("%d audio files could not be read, and whether they play is not known: run audit_unplayable for each one and why", unplayable.UncheckedCount)})
+		}
 		if !in.Deep && hasBooks {
 			out.Partial = append(out.Partial,
 				allNotRun{Audit: "audit_chapters", Reason: "counted one chapter over a long book only: chapters past the end, out of order or short need every chaptered book read whole, fifty to a request: pass deep, or run audit_chapters"},
@@ -410,6 +423,7 @@ func registerAuditTools(r *registry) {
 			{"audit_unembedded", "fetches every audio file's tags: pass deep to run it"},
 			{"audit_matched", "asks the provider about every matched book: pass deep to run it"},
 			{"audit_abridged", "searches the store for every book: pass deep to run it"},
+			{"audit_unplayable", "reads the start of every audio file that can be locked: pass deep to run it"},
 		} {
 			switch {
 			case deep.tool == "audit_matched" && in.Deep && noLookup != nil:
@@ -1205,7 +1219,7 @@ var podcastOnlyChecks = map[string]bool{"stale_feed": true, "no_episodes": true}
 // books alone.
 var bookOnlyAudits = map[string]bool{
 	"audit_authors": true, "audit_narrators": true, "audit_series": true, "audit_genres": true, "audit_chapters": true,
-	"audit_covers": true, "audit_unembedded": true, "audit_matched": true, "audit_abridged": true,
+	"audit_covers": true, "audit_unembedded": true, "audit_matched": true, "audit_abridged": true, "audit_unplayable": true,
 }
 
 // allScope is the kind of library an audit_all row can find anything in:
