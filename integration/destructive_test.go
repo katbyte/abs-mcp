@@ -320,3 +320,86 @@ func TestBatchDelete(t *testing.T) {
 		}
 	}
 }
+
+// DeleteItemFile takes one file off a book and off the disk, and answers a
+// plain OK: the client once decoded that as the item, so every delete that
+// worked came back as an error. PathExists is what tells the file is gone,
+// and a gone file inside an item's folder still answers exists, with the
+// item's title.
+func TestDeleteItemFile(t *testing.T) {
+	ctx := skipUnlessLive(t)
+
+	data := os.Getenv("ABS_TEST_DATA")
+	if data == "" {
+		t.Skip("ABS_TEST_DATA is not set")
+	}
+	audio, err := os.ReadFile(filepath.Join(data, "fiction", "Isaac Asimov", "Foundation", "01.mp3"))
+	if err != nil {
+		t.Fatalf("reading a fixture to copy: %v", err)
+	}
+	root := filepath.Join(data, "scratch", "sdk-file-delete")
+	dir := filepath.Join(root, "SDK Author", "SDK Trimmable")
+	if err := os.MkdirAll(dir, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string][]byte{"01.mp3": audio, "notes.txt": []byte("notes\n")} {
+		if err := os.WriteFile(filepath.Join(dir, name), body, 0o666); err != nil {
+			t.Fatal(err)
+		}
+	}
+	scratch := must(client.CreateLibrary(ctx, abs.LibraryCreate{
+		Name: "SDK File Delete", MediaType: "book", Folders: []abs.Folder{{FullPath: "/scratch/sdk-file-delete"}},
+	}))
+	t.Cleanup(func() {
+		_ = client.DeleteLibrary(t.Context(), scratch.ID)
+		_ = os.RemoveAll(root)
+	})
+	if err := client.ScanLibrary(ctx, scratch.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	var item *abs.Item
+	for deadline := time.Now().Add(2 * time.Minute); item == nil && time.Now().Before(deadline); {
+		if res, err := client.Items(ctx, scratch.ID, abs.ItemsOptions{Limit: 10}); err == nil && len(res.Results) == 1 {
+			item = must(client.Item(ctx, res.Results[0].ID))
+		} else {
+			time.Sleep(2 * time.Second)
+		}
+	}
+	if item == nil {
+		t.Fatal("the scan never found the throwaway book")
+	}
+	var notes string
+	for _, f := range item.LibraryFiles {
+		if f.Metadata.Filename == "notes.txt" {
+			notes = f.Ino
+		}
+	}
+	if notes == "" {
+		t.Fatalf("the scan did not list notes.txt: %+v", item.LibraryFiles)
+	}
+
+	if err := client.DeleteItemFile(ctx, item.ID, "no-such-file"); err == nil {
+		t.Error("DeleteItemFile accepted a nonexistent file id")
+	}
+	if err := client.DeleteItemFile(ctx, item.ID, notes); err != nil {
+		t.Fatalf("DeleteItemFile: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "notes.txt")); !os.IsNotExist(err) {
+		t.Errorf("notes.txt is still on disk: %v", err)
+	}
+	for _, f := range must(client.Item(ctx, item.ID)).LibraryFiles {
+		if f.Ino == notes {
+			t.Error("the item still lists notes.txt")
+		}
+	}
+
+	for file, want := range map[string]string{"01.mp3": "", "notes.txt": "SDK Trimmable"} {
+		exists, holder, err := client.PathExists(ctx, "/scratch/sdk-file-delete", "SDK Author/SDK Trimmable/"+file)
+		if err != nil {
+			t.Fatalf("PathExists: %v", err)
+		}
+		if !exists || holder != want {
+			t.Errorf("PathExists(%s) = %v naming %q; want exists, naming %q", file, exists, holder, want)
+		}
+	}
+}

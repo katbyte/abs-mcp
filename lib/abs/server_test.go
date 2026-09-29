@@ -55,3 +55,24 @@ func TestEmbedPendingReadsTasksAndQueue(t *testing.T) {
 		t.Errorf("EmbedPending asked %s?%s", s.path, s.query)
 	}
 }
+
+// The whole server's year is not an account's: its sessions, books added and
+// totals have names of their own, and were read as zero through YearStats.
+func TestServerYearStatsShape(t *testing.T) {
+	t.Parallel()
+
+	s := newJSONServer(t, always(http.StatusOK, `{"numListeningSessions":40,"totalListeningTime":7200,"numBooksAdded":3,"totalBooksAddedSize":1048576,`+
+		`"totalBooksAddedDuration":36000,"booksAddedWithCovers":["i1"],"numAuthorsAdded":2,"numBooks":120,"totalBooksSize":987654321,"totalBooksDuration":3600000,`+
+		`"topAuthors":[{"name":"Frank Herbert","time":3600}],"topNarrators":[],"topGenres":[{"genre":"Science Fiction","time":7200}]}`))
+	y, err := newClient(t, s).ServerYearStats(t.Context(), 2025)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if y.ListeningSessions != 40 || y.BooksAdded != 3 || y.BooksAddedSize != 1048576 || y.AuthorsAdded != 2 || y.Books != 120 ||
+		y.BooksSize != 987654321 || len(y.BooksAddedWithCovers) != 1 || y.TopAuthors[0].Name != "Frank Herbert" || y.TopGenres[0].Genre != "Science Fiction" {
+		t.Errorf("year = %+v", y)
+	}
+	if got := s.requests(); len(got) != 1 || got[0] != "GET /api/stats/year/2025" {
+		t.Errorf("sent %v", got)
+	}
+}

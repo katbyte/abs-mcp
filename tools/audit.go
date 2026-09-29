@@ -71,7 +71,7 @@ var auditSpecs = []auditSpec{
 	},
 	{
 		"audit_path", "path",
-		"Find items whose folder name disagrees with their title or author: a wrong match, a chapter tag or series placeholder left as the title, a pen name under the real name's folder, or a book filed under another author. Subtitles, series prefixes, disc and edition markers are set aside first, and series, genre and lowercase shelf folders are not taken for author folders. Compare item_get with the path before fixing: the folder is usually right, and item_edit sets the title.",
+		"Find items whose folder name disagrees with their title or author: a wrong match, a chapter tag or series placeholder left as the title, a pen name under the real name's folder, a book filed under another author, or a year earlier than the one the folder carries ('Dune (1965)' holding a book dated 1959: a recording is never older than the book). Subtitles, series prefixes, disc and edition markers are set aside first, and series, genre and lowercase shelf folders are not taken for author folders. Compare item_get with the path before fixing: the folder is usually right, and item_edit sets the title.",
 	},
 	{
 		"audit_podcast_stale_feed", "stale_feed",

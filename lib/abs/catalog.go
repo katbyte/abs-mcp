@@ -1,6 +1,7 @@
 package abs
 
 import (
+	"cmp"
 	"context"
 	"net/http"
 	"net/url"
@@ -251,7 +252,9 @@ func (c *Client) RemoveFromPlaylist(ctx context.Context, id string, items []Play
 }
 
 // Feed is an RSS feed the server is publishing for an item, collection or
-// series.
+// series. EntityType is libraryItem, collection or series. FeedURL is a path,
+// /feed/<slug>: the server builds a feed's links from the address each
+// request comes in on, so the url a listener uses is that address and this.
 type Feed struct {
 	ID         string `json:"id"`
 	Slug       string `json:"slug"`
@@ -264,16 +267,24 @@ type Feed struct {
 		Description string `json:"description"`
 		Author      string `json:"author"`
 		ImageURL    string `json:"imageUrl"`
+		FeedURL     string `json:"feedUrl"`
 	} `json:"meta"`
 }
 
 // Feeds lists the RSS feeds the server is currently publishing (admin only).
+// The list gives each feed's url inside meta, where opening one gives it at
+// the top; both are filled.
 func (c *Client) Feeds(ctx context.Context) ([]Feed, error) {
 	var resp struct {
 		Feeds []Feed `json:"feeds"`
 	}
 	if err := c.get(ctx, "/api/feeds", nil, &resp); err != nil {
 		return nil, err
+	}
+	for i := range resp.Feeds {
+		f := &resp.Feeds[i]
+		f.FeedURL = cmp.Or(f.FeedURL, f.Meta.FeedURL)
+		f.Meta.FeedURL = cmp.Or(f.Meta.FeedURL, f.FeedURL)
 	}
 	return resp.Feeds, nil
 }

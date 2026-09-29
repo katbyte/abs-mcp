@@ -402,3 +402,25 @@ func rows2(t *testing.T, v any) []map[string]any {
 
 	return out
 }
+
+// Today's log, newest first: the server logs every scan, and a match picks
+// lines out of it.
+func TestServerTasksLog(t *testing.T) {
+	out := call(t, "server_tasks", map[string]any{"log": true, "level": "info", "limit": 5})
+	lines := rows(t, out["log"], "log")
+	if len(lines) == 0 || len(lines) > 5 || number(out["log_matched"]) < float64(len(lines)) {
+		t.Fatalf("server_tasks log = %v", out)
+	}
+	if lines[0]["time"] == nil || lines[0]["level"] == nil || lines[0]["message"] == nil || text(lines[0]["time"]) < text(lines[len(lines)-1]["time"]) {
+		t.Errorf("lines = %v, want time, level and message, newest first", lines)
+	}
+	out = call(t, "server_tasks", map[string]any{"log": true, "level": "info", "match": "scan"})
+	for _, l := range rows(t, out["log"], "log") {
+		if !strings.Contains(strings.ToLower(text(l["message"])+" "+text(l["source"])), "scan") {
+			t.Errorf("a line that does not match: %v", l)
+		}
+	}
+	if number(out["log_matched"]) == 0 {
+		t.Error("no line of today's log mentions a scan, though the fixtures were scanned")
+	}
+}

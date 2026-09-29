@@ -323,10 +323,40 @@ func vocabularyID(value string) string {
 	return url.PathEscape(base64.StdEncoding.EncodeToString([]byte(value)))
 }
 
-// ServerYearStats returns the whole server's year in review, as opposed to
-// YearStats which is the API key user's own.
-func (c *Client) ServerYearStats(ctx context.Context, year int) (*YearStats, error) {
-	var s YearStats
+// AdminYearStats is the whole server's year: every account's listening, and
+// what the library gained. Its shape is not YearStats'.
+type AdminYearStats struct {
+	ListeningSessions  int     `json:"numListeningSessions"`
+	ListeningTime      float64 `json:"totalListeningTime"` // seconds
+	BooksAdded         int     `json:"numBooksAdded"`
+	BooksAddedSize     int64   `json:"totalBooksAddedSize"`     // bytes
+	BooksAddedDuration float64 `json:"totalBooksAddedDuration"` // seconds
+	// up to 25 library item ids of books added that year with a cover
+	BooksAddedWithCovers []string `json:"booksAddedWithCovers"`
+	AuthorsAdded         int      `json:"numAuthorsAdded"`
+	// the library at the end of the year: every book added by then
+	Books         int     `json:"numBooks"`
+	BooksSize     int64   `json:"totalBooksSize"`     // bytes
+	BooksDuration float64 `json:"totalBooksDuration"` // seconds
+	TopAuthors    []struct {
+		Name string  `json:"name"`
+		Time float64 `json:"time"`
+	} `json:"topAuthors"`
+	TopNarrators []struct {
+		Name string  `json:"name"`
+		Time float64 `json:"time"`
+	} `json:"topNarrators"`
+	TopGenres []struct {
+		Genre string  `json:"genre"`
+		Time  float64 `json:"time"`
+	} `json:"topGenres"`
+}
+
+// ServerYearStats returns the whole server's year in review (admin only), as
+// opposed to YearStats, which is the API key user's own. The server refuses
+// a year before 2000.
+func (c *Client) ServerYearStats(ctx context.Context, year int) (*AdminYearStats, error) {
+	var s AdminYearStats
 	if err := c.get(ctx, "/api/stats/year/"+strconv.Itoa(year), nil, &s); err != nil {
 		return nil, err
 	}

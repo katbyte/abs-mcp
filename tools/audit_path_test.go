@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/katbyte/abs-mcp/lib/abs"
@@ -80,6 +81,56 @@ func TestCheckPathStyles(t *testing.T) {
 	for _, r := range bad {
 		if _, flagged := checkPath(item(r)); !flagged {
 			t.Errorf("%s: title %q by %q not flagged", r.rel, r.title, r.author)
+		}
+	}
+}
+
+// A folder's year is a first printing's or a recording's, and the book's year
+// is never earlier than either; later is what a first printing's folder
+// looks like.
+func TestCheckPathYear(t *testing.T) {
+	t.Parallel()
+
+	type row struct{ rel, title, author, year string }
+	fine := []row{
+		{"Herbert, Frank/Dune (1965)", "Dune", "Frank Herbert", "2007"},
+		{"Herbert, Frank/Dune (1965)", "Dune", "Frank Herbert", "1965"},
+		{"Herbert, Frank/Dune (1965)", "Dune", "Frank Herbert", "2007-06-19"},
+		{"Herbert, Frank/Dune (1965)", "Dune", "Frank Herbert", ""},
+		{"Kim Stanley Robinson/2312 (2012)", "2312", "Kim Stanley Robinson", "2012"},
+		{"George Orwell/1984 - Original Adaptation", "George Orwell’s 1984", "George Orwell", "1949"},
+		{"Arthur C. Clarke/2001", "2001: A Space Odyssey", "Arthur C. Clarke", "1968"},
+		{"Arthur C. Clarke/2001 - A Space Odyssey (1968)", "2001: A Space Odyssey", "Arthur C. Clarke", "1968"},
+		{"Frank Herbert/Dune (1965) (2007 recording)", "Dune", "Frank Herbert", "1999"},
+		{"Frank Herbert/Dune [Unabridged]", "Dune", "Frank Herbert", "1959"},
+		{"Jussi Adler-Olsen/Department Q - 01 - The Keeper of Lost Causes (Erik Davies) v2", "The Keeper of Lost Causes", "Jussi Adler-Olsen", "2011"},
+		{"Someone Else/The Year 2000 Problem (1999)", "The Year 2000 Problem", "Someone Else", "1999"},
+	}
+	bad := []row{
+		{"Herbert, Frank/Dune (1965)", "Dune", "Frank Herbert", "1959"},
+		{"Frank Herbert/Dune [Unabridged, 2007]", "Dune", "Frank Herbert", "1978"},
+		{"Frank Herbert/2007 - Dune", "Dune", "Frank Herbert", "1978"},
+		{"Frank Herbert/Dune - 2007", "Dune", "Frank Herbert", "1978-01-01"},
+	}
+	item := func(r row) *abs.Item {
+		it := &abs.Item{MediaType: "book", RelPath: r.rel}
+		it.Media.Metadata.Title, it.Media.Metadata.AuthorName = r.title, r.author
+		it.Media.Metadata.PublishedYear = abs.FlexString(r.year)
+		return it
+	}
+	for _, r := range fine {
+		if detail, flagged := checkPath(item(r)); flagged {
+			t.Errorf("%s dated %q: flagged: %s", r.rel, r.year, detail)
+		}
+	}
+	for _, r := range bad {
+		detail, flagged := checkPath(item(r))
+		if !flagged {
+			t.Errorf("%s dated %q: not flagged", r.rel, r.year)
+			continue
+		}
+		if !strings.Contains(detail, "earlier than the folder allows") {
+			t.Errorf("%s dated %q: flagged for something else: %s", r.rel, r.year, detail)
 		}
 	}
 }

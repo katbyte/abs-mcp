@@ -16,9 +16,11 @@ import (
 
 // A client reads a tool's annotations to tell what calling it can do, and MCP
 // reads destructive false as "only ever adds". Reads say so; a write that
-// only creates something new may say it is not destructive; every other
-// write, and every delete, says it is. Each additive tool must exist, so the
-// list cannot rot into names nothing registers.
+// only creates something new, or changes nothing on the server, may say it is
+// not destructive; every other write, and every delete, says it is. Only a
+// tool that reaches past the server, as an email does, says it is open world.
+// Each tool on either list must exist, so the lists cannot rot into names
+// nothing registers.
 func TestAnnotationsSayWhatAToolCanDo(t *testing.T) {
 	t.Parallel()
 
@@ -32,6 +34,11 @@ func TestAnnotationsSayWhatAToolCanDo(t *testing.T) {
 	for name := range additiveTools {
 		if kinds[name] != writeTool {
 			t.Errorf("%s is listed as additive but is not a registered write tool", name)
+		}
+	}
+	for name := range openWorldTools {
+		if _, ok := kinds[name]; !ok {
+			t.Errorf("%s is listed as open world but is not a registered tool", name)
 		}
 	}
 
@@ -53,9 +60,12 @@ func TestAnnotationsSayWhatAToolCanDo(t *testing.T) {
 	}
 	for _, tool := range res.Tools {
 		a := tool.Annotations
-		if a == nil || a.DestructiveHint == nil {
-			t.Errorf("%s has no destructive hint", tool.Name)
+		if a == nil || a.DestructiveHint == nil || a.OpenWorldHint == nil {
+			t.Errorf("%s has no destructive or open world hint", tool.Name)
 			continue
+		}
+		if *a.OpenWorldHint != openWorldTools[tool.Name] {
+			t.Errorf("%s: open world %v", tool.Name, *a.OpenWorldHint)
 		}
 		switch kinds[tool.Name] {
 		case readTool:
@@ -174,7 +184,7 @@ func TestRegisterAllKinds(t *testing.T) {
 	if len(all) <= len(dflt) || len(dflt) <= len(ro) || len(ro) == 0 {
 		t.Fatalf("counts all=%d default=%d read-only=%d", len(all), len(dflt), len(ro))
 	}
-	for _, name := range []string{"item_delete", "podcast_episode_delete", "author_delete", "library_issues_remove"} {
+	for _, name := range []string{"item_delete", "podcast_episode_delete", "author_delete", "library_issues_remove", "user_history_remove"} {
 		if slices.Contains(dflt, name) {
 			t.Errorf("%s registered without --enable-delete", name)
 		}

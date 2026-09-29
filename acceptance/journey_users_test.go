@@ -379,6 +379,14 @@ func TestJourneyWritesAnAccountMayNotMake(t *testing.T) {
 		{tool: "podcast_check_new", args: map[string]any{"item": "Behind the Bastards"}},
 		{tool: "podcast_episode_delete", args: map[string]any{"item": "Behind the Bastards", "episode": episode, "confirm": true}},
 		{tool: "server_backup_create"},
+		{tool: "feed_edit", args: map[string]any{"library": "Fiction", "item": "Foundation"}},
+		{tool: "feed_edit", args: map[string]any{"library": "Fiction", "item": "Foundation", "link": true}},
+		{tool: "user_create", args: map[string]any{"username": "zzyzx-refused"}},
+		// its own account, through the admin route
+		{tool: "user_edit", args: map[string]any{"user": "zzyzx-no-rights", "email": "refused@zzyzx.test"}},
+		// no e-reader is set up for it to send to
+		{tool: "item_send_ebook", args: map[string]any{"library": "Fiction", "item": "Foundation", "device": "Zzyzx Reader"}},
+		{tool: "user_history_remove", args: map[string]any{"sessions": []any{"a1a1a1a1-0000-4000-8000-000000000001"}, "confirm": true}},
 		// its own things, but on a book in a library it cannot open
 		{tool: "user_progress_set", args: map[string]any{"item": racket, "percent": 50}},
 		{tool: "user_progress_remove", args: map[string]any{"item": racket}},

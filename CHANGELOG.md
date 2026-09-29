@@ -1,12 +1,32 @@
 ## Unreleased
 
+### Breaking
+
+- `lib/abs`: `LoggerData` returns log lines, `ServerYearStats` returns `AdminYearStats`, and `DeleteItemFile` returns only an error
+
 ### Added
 
 - `audit_unplayable`: books whose audio is locked to a store, cut short, unreadable or misnamed; `decode` also finds damaged files
+- `audit_path` finds books dated earlier than the year their folder carries
+- `feed_list` and `feed_edit`: RSS feeds of a book, series or collection, and public links to a book
+- `user_create` and `user_edit`
+- `user_history_remove`: take listening sessions out of an account's history (needs `--enable-delete`)
+- `item_send_ebook`: email a book's ebook to an e-reader
+- `item_edit` sets a book's track order, moving its chapters with the files, and its main ebook
+- `item_delete` `file` deletes one file of a book and keeps the book
+- `item_embed_metadata` `m4b` merges a book into one m4b
+- `server_tasks` `log`: today's server log
+- `user_stats` `server`: the whole server's year in review
+- `user_progress_set` `series` hides a series from Continue Series
+- `item_get` shows which ebook is the main one, and where a file sits in a disc folder
 
 ### Fixed
 
 - matching no longer calls a book exact when its folder, a "Read by" note or a full-cast label names a different reading
+- `user_get` and `server_info` no longer say an account can delete, update, download or upload without that permission
+- `item_delete` no longer removes an admin's bookmarks before the server refuses the delete
+- `server_tasks` no longer promises recently finished tasks, which the server never lists
+- `lib/abs`: deleting one file of a book no longer reports a failure when it worked; listed feeds have their urls; the whole server's year keeps its fields
 
 ## 0.5.0 (2026-09-27)
 

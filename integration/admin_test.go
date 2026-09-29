@@ -164,6 +164,12 @@ func TestFeeds(t *testing.T) {
 	if len(open) < 2 {
 		t.Errorf("Feeds returned %d, want at least the two just opened", len(open))
 	}
+	// the list gives the url inside meta, where opening one gives it at the top
+	for _, f := range open {
+		if f.ID == feed.ID && (f.FeedURL != feed.FeedURL || f.FeedURL == "" || f.Slug != "sdk-item-feed") {
+			t.Errorf("listed as %+v, opened as %+v", f, feed)
+		}
+	}
 
 	if err := client.CloseFeed(ctx, feed.ID); err != nil {
 		t.Errorf("CloseFeed: %v", err)

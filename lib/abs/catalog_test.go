@@ -82,3 +82,18 @@ func TestSearchAuthorDecodesOneRecordOrNull(t *testing.T) {
 		t.Errorf("a null answer decoded as %+v", none)
 	}
 }
+
+// The feed list gives each url inside meta, where opening a feed gives it at
+// the top: both are filled either way.
+func TestFeedsFillTheURL(t *testing.T) {
+	t.Parallel()
+
+	s := newJSONServer(t, always(http.StatusOK, `{"feeds":[{"id":"f1","slug":"dune","meta":{"title":"Dune","feedUrl":"https://abs.test/feed/dune"}}],"minified":[]}`))
+	feeds, err := newClient(t, s).Feeds(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(feeds) != 1 || feeds[0].FeedURL != "https://abs.test/feed/dune" || feeds[0].Meta.FeedURL != feeds[0].FeedURL {
+		t.Errorf("feeds = %+v", feeds)
+	}
+}

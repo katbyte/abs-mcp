@@ -47,5 +47,17 @@ Found by the acceptance journeys against Audiobookshelf 2.36; each has a unit te
 - Bookmarks live on the user record. Deleting an item leaves them there, and `DELETE /api/me/item/:id/bookmark/:time` answers 404 once the item is gone, so nothing can remove them.
 - A series whose last book is deleted is not always removed: it stays in `/api/libraries/:id/series` with no books, and `GET /api/series/:id` answers 404.
 - Media updates replace the tag list, and diff the series list against the book as the request loaded it, so two edits of one book at once keep only one of them. `POST /api/me/item/:id/bookmark` saves the account's whole bookmark list.
+- `PATCH /api/items/:id/tracks` rebuilds the book's audio from the files it is sent, so a file left out falls out of the book, and leaves the chapters where they were. The order holds through a scan until the audio files change on disk; the scan that finds that sorts them by track number again.
+- `PATCH /api/items/:id/ebook/:fileid/status` reads no body: it flips the file between main and supplementary, so flipping the main ebook leaves the book with none.
+- `DELETE /api/items/:id/file/:fileid` answers a plain `OK`, and takes the file off the book even when removing it from disk fails. Taking out an audio file leaves the book's duration as it was, and no scan corrects it: a scan rebuilds the audio only when the files on disk and on the record differ in number. Taking out the cover leaves the book pointing at it.
+- `POST /api/filesystem/pathexists` answers `exists` for a path not on disk that sits one or two levels inside an item's folder, naming the item; only `exists` with no item named is a path really there.
+- `POST /api/tools/item/:id/encode-m4b` always re-encodes, at 128k stereo AAC unless told otherwise; names the m4b after the book's folder, or for a book that is one file after that file; and moves the files merged into `metadata/cache/items/<id>`. The task leaves `/api/tasks` when it ends, failed or finished alike: only the book and the log say which.
+- `GET /api/items/:id` honours `include` (`progress`, `rssfeed`, `share`, `downloads`) only with `expanded=1`.
+- `GET /api/feeds` gives each feed's url inside `meta`, where opening a feed gives it at the top.
+- `POST /api/users` makes an inactive account unless `isActive` is sent, and drops a permission it does not know, or one that is not true or false, with only a log line. `PATCH /api/users/:id` takes a library list only beside a `permissions` object, and leaves the root account's type as it was whatever is asked.
+- A permission is granted by the permission alone and only while the account is active, not by the account's type: an admin without `delete` may not delete.
+- `GET /api/stats/year/:year` (the whole server) answers a shape of its own, not `/api/me/stats/year/:year`'s, and refuses a year before 2000.
+- `GET /api/logger-data` answers today's log, its last 5,000 lines, and an empty string rather than a list before the day's first line.
+- `DELETE /api/sessions/:id` needs the delete permission and deletes any account's session; `POST /api/sessions/batch/delete` needs an admin.
 
 `ROADMAP.md` records the tool design rules and what is deliberately not wrapped.

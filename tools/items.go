@@ -34,6 +34,7 @@ func registerItemTools(r *registry) {
 	type fileRow struct {
 		Index    int    `json:"index,omitempty"`
 		Filename string `json:"filename"`
+		Path     string `json:"path,omitempty"         jsonschema:"its path in the item's folder, when it is in a folder of its own (a disc folder); item_edit tracks takes it where two files share a name"`
 		Duration int    `json:"duration_s,omitempty"   jsonschema:"length in seconds"`
 		Size     int64  `json:"size"                   jsonschema:"bytes"`
 		Codec    string `json:"codec,omitempty"`
@@ -42,6 +43,7 @@ func registerItemTools(r *registry) {
 		Excluded bool   `json:"excluded,omitempty"     jsonschema:"not part of the playable tracks"`
 		Error    string `json:"error,omitempty"`
 		Type     string `json:"type,omitempty"         jsonschema:"for non-audio files: ebook, image, text, metadata"`
+		Main     bool   `json:"main,omitempty"         jsonschema:"the ebook readers open; the book's other ebooks are supplementary (item_edit ebook changes it)"`
 	}
 	type getIn struct {
 		itemRef
@@ -100,7 +102,10 @@ func registerItemTools(r *registry) {
 			if f.FileType == "audio" {
 				continue
 			}
-			out.OtherFiles = append(out.OtherFiles, fileRow{Filename: f.Metadata.Filename, Size: f.Metadata.Size, Type: f.FileType})
+			out.OtherFiles = append(out.OtherFiles, fileRow{
+				Filename: f.Metadata.Filename, Path: subfolderPath(f.Metadata), Size: f.Metadata.Size, Type: f.FileType,
+				Main: f.FileType == "ebook" && it.Media.EbookFile != nil && it.Media.EbookFile.Ino == f.Ino,
+			})
 		}
 		if it.IsPodcast() {
 			out.Downloads = &downloadSettings{
@@ -140,6 +145,7 @@ func registerItemTools(r *registry) {
 				list = append(list, fileRow{
 					Index:    af.Index,
 					Filename: af.Metadata.Filename,
+					Path:     subfolderPath(af.Metadata),
 					Duration: wholeSec(af.Duration),
 					Size:     af.Metadata.Size,
 					Codec:    af.Codec,
@@ -179,23 +185,31 @@ func registerItemTools(r *registry) {
 		PodcastAuthor string   `json:"podcast_author,omitempty" jsonschema:"podcasts only"`
 		FeedURL       string   `json:"feed_url,omitempty"       jsonschema:"podcasts only"`
 		Clear         []string `json:"clear,omitempty"          jsonschema:"fields to blank: subtitle, narrators, series, genres, tags, year, publisher, description, isbn, asin, language"`
+		Tracks        []string `json:"tracks,omitempty"         jsonschema:"books: the play order, as every audio file of the book by the filename item_get files=true lists (by its path in the folder where two share a name). The list must be whole: the server drops a file it is not sent from the book. Excluded files stay excluded. Chapters that each sit inside one track move with it. The order holds until the book's audio files change on disk, when the scan that finds it sorts them by track number again"`
+		Ebook         string   `json:"ebook,omitempty"          jsonschema:"books: the ebook file readers open, by filename; the book's other ebooks become supplementary. none leaves it with no main ebook"`
 	}
 	type editOut struct {
-		Updated bool     `json:"updated"`
-		Fields  []string `json:"fields_sent"`
+		Updated  bool     `json:"updated"`
+		Fields   []string `json:"fields_sent"`
+		Tracks   []string `json:"tracks,omitempty"   jsonschema:"with tracks: the play order now, read back from the server"`
+		Chapters string   `json:"chapters,omitempty" jsonschema:"with tracks: moved (each chapter went with its track), unchanged (the order was already so, or the book has none), or left (a chapter runs across two tracks, so they could not follow the files; audit_chapters and item_chapters_set)"`
+		Ebook    string   `json:"ebook,omitempty"    jsonschema:"with ebook: the main ebook now, read back from the server, or none"`
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "item_edit",
-		Description: "Edit an item's metadata: title, authors, narrators, series, genres, tags, year, publisher, description, isbn, asin, language, explicit/abridged flags. Only provided fields change; list a field in clear to blank it. series and tags replace the list, add_series, remove_series, add_tags and remove_tags edit it. Changes server state.",
+		Description: "Edit an item's metadata: title, authors, narrators, series, genres, tags, year, publisher, description, isbn, asin, language, explicit/abridged flags; and a book's track order and main ebook. Only provided fields change; list a field in clear to blank it. series and tags replace the list, add_series, remove_series, add_tags and remove_tags edit it. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in editIn) (*mcp.CallToolResult, editOut, error) {
 		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
 		if err != nil {
 			return nil, editOut{}, err
 		}
+		if (len(in.Tracks) > 0 || in.Ebook != "") && it.IsPodcast() {
+			return nil, editOut{}, errors.New("tracks and ebook are a book's; this item is a podcast")
+		}
 		defer r.locks.hold(itemKeys(it.ID)...)()
 		// the lists are edited from the item as it is once held, not as the
 		// lookup found it: a call running alongside may have changed them
-		if len(in.AddSeries)+len(in.RemoveSeries)+len(in.AddTags)+len(in.RemoveTags) > 0 {
+		if len(in.AddSeries)+len(in.RemoveSeries)+len(in.AddTags)+len(in.RemoveTags)+len(in.Tracks) > 0 || in.Ebook != "" {
 			if it, err = client.Item(ctx, it.ID); err != nil {
 				return nil, editOut{}, err
 			}
@@ -312,18 +326,110 @@ func registerItemTools(r *registry) {
 				return nil, editOut{}, fmt.Errorf("cannot clear %q", c)
 			}
 		}
-		if len(fields) == 0 {
+		metadata := len(fields) > 0
+
+		// the files are planned before anything is sent, so a list that names
+		// a file wrongly changes nothing at all
+		var (
+			order          []abs.TrackOrder
+			before, played []abs.AudioFile
+			chapters       []abs.Chapter
+			flip           *abs.LibraryFile
+			wantEbook      string
+		)
+		out := editOut{}
+		if len(in.Tracks) > 0 {
+			var listed []abs.AudioFile
+			if order, listed, err = trackOrder(it, in.Tracks); err != nil {
+				return nil, editOut{}, err
+			}
+			before = playOrder(it.Media.AudioFiles)
+			played = slices.DeleteFunc(listed, func(af abs.AudioFile) bool { return af.Exclude })
+			switch moved, ok := chaptersMoved(it.Media.Chapters, before, played); {
+			case sameTracks(before, played):
+				order, out.Chapters = nil, "unchanged"
+			case len(it.Media.Chapters) == 0:
+				out.Chapters = "unchanged"
+			case ok:
+				chapters, out.Chapters = moved, "moved"
+			default:
+				out.Chapters = "left"
+			}
+			if order != nil {
+				fields = append(fields, "tracks")
+			}
+		}
+		if in.Ebook != "" {
+			if flip, wantEbook, err = ebookFlip(it, in.Ebook); err != nil {
+				return nil, editOut{}, err
+			}
+			if flip != nil {
+				fields = append(fields, "ebook")
+			}
+		}
+		// tracks already in that order, or an ebook already the main one, is
+		// an answer and not a mistake
+		if len(fields) == 0 && len(in.Tracks) == 0 && in.Ebook == "" {
 			return nil, editOut{}, errors.New("nothing to change: pass at least one field")
 		}
+		out.Fields = fields
 
-		// empty slices must survive JSON encoding to clear server-side
-		upd.Metadata = &md
-		updated, err := client.UpdateMedia(ctx, it.ID, upd)
-		if err != nil {
-			return nil, editOut{}, err
+		// each change after the first is said to have followed it when it
+		// fails, so a partial edit is never reported as none
+		var done []string
+		failed := func(what string, err error) error {
+			if len(done) == 0 {
+				return fmt.Errorf("%s: %w", what, err)
+			}
+			return fmt.Errorf("%s changed, but %s failed: %w", strings.Join(done, " and "), what, err)
+		}
+		if metadata {
+			// empty slices must survive JSON encoding to clear server-side
+			upd.Metadata = &md
+			if out.Updated, err = client.UpdateMedia(ctx, it.ID, upd); err != nil {
+				return nil, editOut{}, err
+			}
+			done = append(done, "the metadata")
+		}
+		if order != nil {
+			got, err := client.UpdateTracks(ctx, it.ID, order)
+			if err != nil {
+				return nil, editOut{}, failed("reordering the tracks", err)
+			}
+			done = append(done, "the track order")
+			out.Updated = true
+			if now := playOrder(got.Media.AudioFiles); !sameTracks(now, played) {
+				return nil, editOut{}, failed("checking the order", fmt.Errorf("the server was sent %s but plays %s", strings.Join(trackNames(played), ", "), strings.Join(trackNames(now), ", ")))
+			}
+			if chapters != nil {
+				if _, err := client.SetChapters(ctx, it.ID, chapters); err != nil {
+					return nil, editOut{}, failed("moving the chapters with their tracks (they still follow the old order: item_chapters_set)", err)
+				}
+				done = append(done, "the chapters")
+			}
+			out.Tracks = trackNames(played)
+		} else if len(in.Tracks) > 0 {
+			out.Tracks = trackNames(before)
+		}
+		if in.Ebook != "" {
+			out.Ebook = wantEbook
+			if flip != nil {
+				if err := client.SetEbookPrimary(ctx, it.ID, flip.Ino, wantEbook != "none"); err != nil {
+					return nil, editOut{}, failed("setting the main ebook", err)
+				}
+				done = append(done, "the main ebook")
+				out.Updated = true
+				got, err := client.Item(ctx, it.ID)
+				if err != nil {
+					return nil, editOut{}, failed("reading the main ebook back", err)
+				}
+				if out.Ebook = mainEbook(got); out.Ebook != wantEbook {
+					return nil, editOut{}, failed("checking the main ebook", fmt.Errorf("it is %s, not %s", out.Ebook, wantEbook))
+				}
+			}
 		}
 
-		return nil, editOut{Updated: updated, Fields: fields}, nil
+		return nil, out, nil
 	})
 
 	type matchIn struct {
@@ -943,25 +1049,136 @@ func registerItemTools(r *registry) {
 
 	type embedIn struct {
 		itemRef
-		Backup bool `json:"backup,omitempty" jsonschema:"keep a copy of the original audio files"`
+		Backup   bool `json:"backup,omitempty"       jsonschema:"keep a copy of the original audio files"`
+		M4B      bool `json:"m4b,omitempty"          jsonschema:"instead of tagging the files: merge the audio that plays into one m4b named after the book's folder, carrying its metadata, chapters and cover. The server moves the files merged out of the folder into its cache for the book, which a cache purge empties. Without confirm nothing changes and the answer says what would happen"`
+		Bitrate  int  `json:"bitrate_kbps,omitempty" jsonschema:"with m4b: the bitrate to encode at, 16 to 320; default the book's own, the highest of its files'"`
+		Channels int  `json:"channels,omitempty"     jsonschema:"with m4b: 1 or 2; default the book's own"`
+		Confirm  bool `json:"confirm,omitempty"      jsonschema:"with m4b: true to merge"`
+		Cancel   bool `json:"cancel,omitempty"       jsonschema:"with m4b: stop the book's merge while it is still running; the files stay as they were"`
 	}
 	type embedOut struct {
-		Item     string `json:"item"`
-		Embedded bool   `json:"embedded"          jsonschema:"the files' tags carry the item's metadata, read back after a rescan"`
-		Running  bool   `json:"running,omitempty" jsonschema:"the embed was still running or queued when this stopped waiting: item_rescan the item once server_tasks no longer lists it, or audit_unembedded keeps reading the old tags"`
-		Rescan   string `json:"rescan,omitempty"  jsonschema:"the rescan result once the embed finished"`
-		Differs  string `json:"differs,omitempty" jsonschema:"what the files' tags still disagree on after the embed: it failed, or wrote something else"`
+		Item       string   `json:"item"`
+		Embedded   *bool    `json:"embedded,omitempty"    jsonschema:"tagging the files: they carry the item's metadata, read back after a rescan"`
+		Running    bool     `json:"running,omitempty"     jsonschema:"the embed or merge was still running or queued when this stopped waiting: item_rescan the item once server_tasks no longer lists it, or audit_unembedded keeps reading the old tags; a merge's result is then item_get files=true"`
+		Rescan     string   `json:"rescan,omitempty"      jsonschema:"the rescan result once the embed or merge finished"`
+		Differs    string   `json:"differs,omitempty"     jsonschema:"what the files' tags still disagree on after the embed: it failed, or wrote something else"`
+		WouldMerge *m4bPlan `json:"would_merge,omitempty" jsonschema:"m4b without confirm: what a confirmed call does; nothing has changed"`
+		Merged     *m4bPlan `json:"merged,omitempty"      jsonschema:"m4b: what was merged, checked after a rescan: the book plays the one m4b, at the length the files had"`
+		Cancelled  bool     `json:"cancelled,omitempty"`
 	}
+	// mergeM4B merges a book into one m4b, or says what that would do, or
+	// stops a merge running. The server lists the merge only while it runs,
+	// failed and finished alike leaving the list, so the book is scanned and
+	// read back to learn which it was
+	mergeM4B := func(ctx context.Context, it *abs.Item, kbps, channels int, confirm, cancel bool) (embedOut, error) {
+		tasks, err := client.Tasks(ctx)
+		if err != nil {
+			return embedOut{}, err
+		}
+		switch running := mergeRunning(tasks, it.ID); {
+		case cancel && !running:
+			return embedOut{}, fmt.Errorf("no merge of %q is running", it.Title())
+		case cancel:
+			if err := client.CancelEncodeM4B(ctx, it.ID); err != nil {
+				return embedOut{}, err
+			}
+			return embedOut{Cancelled: true}, nil
+		case running:
+			return embedOut{Running: true}, nil
+		}
+		if confirm {
+			release := r.locks.hold(itemKeys(it.ID)...)
+			defer release()
+			if it, err = client.Item(ctx, it.ID); err != nil { // as it is once held
+				return embedOut{}, err
+			}
+		}
+		plan, err := planM4B(it, kbps, channels)
+		if err != nil {
+			return embedOut{}, err
+		}
+		if !confirm {
+			return embedOut{WouldMerge: plan}, nil
+		}
+
+		before := 0.0
+		for _, af := range playOrder(it.Media.AudioFiles) {
+			before += af.Duration
+		}
+		if err := client.EncodeM4B(ctx, it.ID, strconv.Itoa(plan.Bitrate)+"k", strconv.Itoa(plan.Channels), ""); err != nil {
+			return embedOut{}, err
+		}
+		deadline := time.Now().Add(embedWait)
+		for {
+			tasks, err = client.Tasks(ctx)
+			if err != nil {
+				return embedOut{}, fmt.Errorf("the merge started, but reading the server's tasks failed: %w", err)
+			}
+			if !mergeRunning(tasks, it.ID) {
+				break
+			}
+			if time.Now().After(deadline) {
+				return embedOut{Running: true}, nil
+			}
+			select {
+			case <-ctx.Done():
+				return embedOut{}, ctx.Err()
+			case <-time.After(embedPoll):
+			}
+		}
+		// the server's file watcher sees the merge's new file too, and until
+		// its own scan runs a rescan skips a file it holds: for some seconds
+		// the book reads as holding no audio. The files merged still playing
+		// is a merge that failed; anything else is waited out
+		out := embedOut{}
+		merged := playOrder(it.Media.AudioFiles)
+		settle := time.Now().Add(mergeSettle)
+		for {
+			if out.Rescan, err = client.ScanItem(ctx, it.ID); err != nil {
+				return embedOut{}, fmt.Errorf("the merge ended, but the rescan that reads the book back failed: %w", err)
+			}
+			after, err := client.Item(ctx, it.ID)
+			if err != nil {
+				return embedOut{}, fmt.Errorf("the merge ended, but reading the book back failed: %w", err)
+			}
+			merr := mergedInto(after, plan.Into, before)
+			if merr == nil {
+				break
+			}
+			if sameTracks(playOrder(after.Media.AudioFiles), merged) || time.Now().After(settle) {
+				return embedOut{}, fmt.Errorf("the merge of %q ended without making the book one m4b: %w. server_tasks log=true match=AbMergeManager says why", it.Title(), merr)
+			}
+			select {
+			case <-ctx.Done():
+				return embedOut{}, ctx.Err()
+			case <-time.After(embedPoll):
+			}
+		}
+		out.Merged = plan
+		return out, nil
+	}
+
 	add(r, writeTool, &mcp.Tool{
 		Name:        "item_embed_metadata",
-		Description: "Write the item's metadata and chapters into its audio files' tags so they travel with the files, then rescan the item and check the tags: embedded says they now match. audit_unembedded lists the books where this is due. Waits for the embed, up to two minutes; a longer one comes back running. Admin only. Changes the files on disk.",
+		Description: "Write the item's metadata and chapters into its audio files' tags so they travel with the files, then rescan the item and check the tags: embedded says they now match. audit_unembedded lists the books where this is due. With m4b, merge the book's audio into one m4b instead, previewed until confirm. Waits for the embed or merge, up to two minutes; a longer one comes back running. Admin only. Changes the files on disk.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in embedIn) (*mcp.CallToolResult, embedOut, error) {
+		if !in.M4B && (in.Bitrate != 0 || in.Channels != 0 || in.Confirm || in.Cancel) {
+			return nil, embedOut{}, errors.New("bitrate_kbps, channels, confirm and cancel are for m4b; tagging the files takes none of them")
+		}
+		if in.M4B && in.Backup {
+			return nil, embedOut{}, errors.New("m4b keeps the files it merges in the server's cache already; backup is for tagging the files")
+		}
 		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
 		if err != nil {
 			return nil, embedOut{}, err
 		}
 		if it.IsPodcast() {
 			return nil, embedOut{}, errNotBook
+		}
+		if in.M4B {
+			out, merr := mergeM4B(ctx, it, in.Bitrate, in.Channels, in.Confirm, in.Cancel)
+			out.Item = it.Title()
+			return nil, out, merr
 		}
 		if err := client.EmbedMetadata(ctx, it.ID, true, in.Backup); err != nil {
 			return nil, embedOut{}, err
@@ -998,32 +1215,98 @@ func registerItemTools(r *registry) {
 			return nil, embedOut{}, err
 		}
 		detail, stale := checkEmbedded(after)
-		out.Embedded, out.Differs = !stale, detail
+		out.Embedded, out.Differs = new(!stale), detail
 
 		return nil, out, nil
 	})
 
 	type deleteIn struct {
 		itemRef
-		DeleteFiles bool `json:"delete_files,omitempty" jsonschema:"also delete the item's folder from disk (irreversible); default keeps the files"`
-		Confirm     bool `json:"confirm,omitempty"      jsonschema:"true to delete; without it nothing changes and the answer says what a confirmed call would remove"`
+		DeleteFiles bool   `json:"delete_files,omitempty" jsonschema:"also delete the item's folder from disk (irreversible); default keeps the files"`
+		Confirm     bool   `json:"confirm,omitempty"      jsonschema:"true to delete; without it nothing changes and the answer says what a confirmed call would remove"`
+		File        string `json:"file,omitempty"         jsonschema:"delete only this file of the book, by the filename item_get files=true lists (its path in the folder where two share a name), from the book and from disk; the book stays. Not an audio file, whose removal the server does not take off the book's length: take one out on disk and item_rescan. Not the cover: item_cover_edit first"`
 	}
 	type deleteOut struct {
-		Deleted          string   `json:"deleted,omitempty"           jsonschema:"the item deleted"`
-		WouldDelete      string   `json:"would_delete,omitempty"      jsonschema:"without confirm: the item a confirmed call deletes; nothing has changed"`
-		Files            string   `json:"files,omitempty"             jsonschema:"with delete_files: what is erased from disk, the item's folder and everything in it, or the one file of a book that is a single file at the library root"`
-		FilesRemoved     bool     `json:"files_removed"`
+		Deleted          string   `json:"deleted,omitempty"           jsonschema:"the item deleted, or with file the file"`
+		WouldDelete      string   `json:"would_delete,omitempty"      jsonschema:"without confirm: the item a confirmed call deletes, or with file the file; nothing has changed"`
+		Files            string   `json:"files,omitempty"             jsonschema:"with delete_files or file: what is erased from disk, the item's folder and everything in it, or the one file"`
+		FilesRemoved     bool     `json:"files_removed"               jsonschema:"with file: checked on disk and gone"`
 		Bookmarks        []string `json:"bookmarks,omitempty"         jsonschema:"the API key user's bookmarks on it, which go before the item does"`
 		BookmarksRemoved int      `json:"bookmarks_removed,omitempty" jsonschema:"the API key user's bookmarks on it, removed before the delete"`
+		Note             string   `json:"note,omitempty"              jsonschema:"with file: what else changes, or what could not be checked"`
+	}
+	// deleteFile takes one file out of a book and off the disk, then looks at
+	// the disk: the server takes the file out of the book even when it cannot
+	// remove it, and the next scan would put it back
+	deleteFile := func(ctx context.Context, it *abs.Item, name string, confirm bool) (deleteOut, error) {
+		release := r.locks.hold(itemKeys(it.ID)...)
+		defer release()
+		it, err := client.Item(ctx, it.ID) // as it is once held
+		if err != nil {
+			return deleteOut{}, err
+		}
+		me, err := client.Me(ctx)
+		if err != nil {
+			return deleteOut{}, err
+		}
+		if !me.Permissions.Delete {
+			return deleteOut{}, fmt.Errorf("%s may not delete files: the account lacks the delete permission", me.Username)
+		}
+		f, err := fileToDelete(it, name)
+		if err != nil {
+			return deleteOut{}, err
+		}
+
+		label := fmt.Sprintf("%q from %q", cmp.Or(f.Metadata.RelPath, f.Metadata.Filename), it.Title())
+		out := deleteOut{Files: "the file " + f.Metadata.Path}
+		if ef := it.Media.EbookFile; ef != nil && ef.Ino == f.Ino {
+			out.Note = "it is the main ebook, and the book is left with none"
+			if slices.ContainsFunc(it.LibraryFiles, func(o abs.LibraryFile) bool { return o.FileType == "ebook" && o.Ino != f.Ino }) {
+				out.Note += ": item_edit ebook makes one of the others the main one"
+			}
+		}
+		if !confirm {
+			out.WouldDelete = label
+			return out, nil
+		}
+
+		if err := client.DeleteItemFile(ctx, it.ID, f.Ino); err != nil {
+			return deleteOut{}, err
+		}
+		out.Deleted = label
+		if !me.Permissions.Upload {
+			out.Note = joinWarnings(out.Note, "not checked on disk: the check needs the upload permission, which "+me.Username+" lacks")
+			return out, nil
+		}
+		lib, err := client.Library(ctx, it.LibraryID)
+		if err != nil {
+			return deleteOut{}, fmt.Errorf("%s was taken out of the book, but reading its library to look at the disk failed: %w", label, err)
+		}
+		gone, err := fileGone(ctx, client, lib, it, f)
+		switch {
+		case err != nil:
+			return deleteOut{}, fmt.Errorf("%s was taken out of the book, but looking for it on disk failed: %w", label, err)
+		case !gone:
+			return deleteOut{}, fmt.Errorf("%s was taken out of the book but is still on disk at %s: the server could not remove it, and the next scan puts it back", label, f.Metadata.Path)
+		}
+		out.FilesRemoved = true
+		return out, nil
 	}
 	add(r, deleteTool, &mcp.Tool{
 		Name: "item_delete",
-		Description: "Remove an item from the library, and with delete_files also erase its folder from disk. Listening progress for it is lost. The API key user's bookmarks on it are removed first: Audiobookshelf keeps a bookmark on a deleted item and will not remove it afterwards, though other accounts' bookmarks stay. " +
+		Description: "Remove an item from the library, and with delete_files also erase its folder from disk; or with file, erase one file of a book and keep the book. Listening progress for it is lost. The API key user's bookmarks on it are removed first: Audiobookshelf keeps a bookmark on a deleted item and will not remove it afterwards, though other accounts' bookmarks stay. " +
 			"Without confirm=true nothing changes and the answer says what would go: the record, the folder or file on disk with delete_files, and the bookmarks. Requires the delete permission.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in deleteIn) (*mcp.CallToolResult, deleteOut, error) {
+		if in.File != "" && in.DeleteFiles {
+			return nil, deleteOut{}, errors.New("file erases that one file and keeps the book; delete_files erases the book's whole folder. One or the other")
+		}
 		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
 		if err != nil {
 			return nil, deleteOut{}, err
+		}
+		if in.File != "" {
+			out, derr := deleteFile(ctx, it, in.File, in.Confirm)
+			return nil, out, derr
 		}
 		// the account's bookmarks are one list, which user_bookmark_edit
 		// reads and saves whole: held from reading them to the delete
@@ -1032,8 +1315,9 @@ func registerItemTools(r *registry) {
 		if err != nil {
 			return nil, deleteOut{}, err
 		}
-		// asked before the bookmarks go, so a refused delete costs nothing
-		if !me.IsAdmin() && !me.Permissions.Delete {
+		// asked before the bookmarks go, so a refused delete costs nothing;
+		// the server grants it by the permission alone, an admin's too
+		if !me.Permissions.Delete {
 			return nil, deleteOut{}, fmt.Errorf("%s may not delete items: the account lacks the delete permission", me.Username)
 		}
 		out := deleteOut{}
@@ -1077,10 +1361,14 @@ func registerItemTools(r *registry) {
 }
 
 // embedWait is how long item_embed_metadata waits for its embed before
-// handing back a running one, and embedPoll how often it looks.
+// handing back a running one, and embedPoll how often it looks. mergeSettle
+// is how long a merged book is read back for while the server's file watcher
+// holds its new file: the watcher's own scan runs ten seconds after the last
+// change it saw.
 var (
-	embedWait = 2 * time.Minute
-	embedPoll = 500 * time.Millisecond
+	embedWait   = 2 * time.Minute
+	embedPoll   = 500 * time.Millisecond
+	mergeSettle = 30 * time.Second
 )
 
 // checkNamed refuses a provider the caller named that the server does not

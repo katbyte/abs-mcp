@@ -1,7 +1,9 @@
 package tools
 
 import (
+	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -220,4 +222,57 @@ func TestServerSizesInBytes(t *testing.T) {
 	}
 	wantNumbers(t, "server_backups", out, map[string]float64{"backups.0.size": 5242880})
 	wantAbsent(t, "server_backups", out, "backups.0.size_mb")
+}
+
+// log adds today's server log, newest first, from warnings up unless level
+// says otherwise, narrowed by match and cut at limit; the log's options are
+// refused without it.
+func TestServerTasksLog(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/tasks", `{"tasks":[]}`)
+	f.json("GET /api/logger-data", `{"currentDailyLogs":[`+
+		`{"timestamp":"2026-09-29 10:00:00.000","source":"Scanner.js:1","message":"[Scanner] started","levelName":"INFO","level":2},`+
+		`{"timestamp":"2026-09-29 10:00:01.000","source":"AbMergeManager.js:9","message":"[AbMergeManager] Failed to move m4b","levelName":"ERROR","level":4},`+
+		`{"timestamp":"2026-09-29 10:00:02.000","source":"Scanner.js:2","message":"[Scanner] slow folder","levelName":"WARN","level":3}]}`)
+	call := toolCaller(t, f)
+
+	out, err := call("server_tasks", map[string]any{"log": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := column(t, "message", out["log"]); !slices.Equal(got, []string{"[Scanner] slow folder", "[AbMergeManager] Failed to move m4b"}) {
+		t.Errorf("log = %v, want warnings and errors, newest first", got)
+	}
+	wantNumbers(t, "server_tasks", out, map[string]float64{"log_matched": 2})
+
+	out, err = call("server_tasks", map[string]any{"log": true, "level": "Info", "match": "scanner", "limit": 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := column(t, "message", out["log"]); !slices.Equal(got, []string{"[Scanner] slow folder"}) {
+		t.Errorf("log = %v", got)
+	}
+	wantNumbers(t, "server_tasks", out, map[string]float64{"log_matched": 2})
+
+	out, err = call("server_tasks", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, has := out["log"]; has || len(f.requests("/api/logger-data")) != 2 {
+		t.Errorf("without log the log was read: %v", out)
+	}
+
+	for _, c := range []struct {
+		args map[string]any
+		says string
+	}{
+		{map[string]any{"match": "x"}, "pass log too"},
+		{map[string]any{"log": true, "level": "loud"}, "unknown level"},
+		{map[string]any{"log": true, "limit": 900}, "1 to 500"},
+	} {
+		_, err := call("server_tasks", c.args)
+		wantErr(t, fmt.Sprint(c.args), err, c.says)
+	}
 }

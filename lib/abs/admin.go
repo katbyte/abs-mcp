@@ -1,8 +1,11 @@
 package abs
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 )
@@ -176,7 +179,23 @@ func (c *Client) MeUpdateEReaderDevices(ctx context.Context, devices []EReaderDe
 	return resp.EReaderDevices, nil
 }
 
-// SendEbookToDevice emails an item's ebook file to a configured device.
+// EReaderDevices lists the e-readers the calling account may send ebooks to:
+// the ones set up for everyone at its level, and its own. It is what the
+// server answers a sign-in with; EmailSettings lists every device, and only
+// for an admin.
+func (c *Client) EReaderDevices(ctx context.Context) ([]EReaderDevice, error) {
+	var resp struct {
+		EReaderDevices []EReaderDevice `json:"ereaderDevices"`
+	}
+	if err := c.post(ctx, "/api/authorize", nil, nil, &resp); err != nil {
+		return nil, err
+	}
+	return resp.EReaderDevices, nil
+}
+
+// SendEbookToDevice emails an item's main ebook file to a configured device,
+// by the device's name exactly. The server answers once the mail is sent or
+// has failed.
 func (c *Client) SendEbookToDevice(ctx context.Context, itemID, deviceName string) error {
 	body := map[string]string{"libraryItemId": itemID, "deviceName": deviceName}
 	return c.post(ctx, "/api/emails/send-ebook-to-device", nil, body, nil)
@@ -331,13 +350,39 @@ func (c *Client) UpdateWatcher(ctx context.Context, libraryID string, enabled bo
 	return c.post(ctx, "/api/watcher/update", nil, body, nil)
 }
 
-// LoggerData returns the server's log settings and the levels available.
-func (c *Client) LoggerData(ctx context.Context) (map[string]any, error) {
-	var out map[string]any
-	if err := c.get(ctx, "/api/logger-data", nil, &out); err != nil {
+// LogLine is one line of the server's log.
+type LogLine struct {
+	// the server's local time, "2026-09-29 16:54:53.555", not the epoch
+	// milliseconds the rest of the API uses
+	Timestamp string `json:"timestamp"`
+	Source    string `json:"source"` // file and line, "LibraryScan.js:141"
+	Message   string `json:"message"`
+	LevelName string `json:"levelName"` // TRACE, DEBUG, INFO, WARN, ERROR, FATAL or NOTE
+	Level     int    `json:"level"`     // 0 (TRACE) to 6 (NOTE)
+}
+
+// LoggerData returns today's lines of the server's log, oldest first, at most
+// the last 5,000 (admin only). The server keeps one file a day and serves
+// only today's, and keeps only lines at or above its log level.
+func (c *Client) LoggerData(ctx context.Context) ([]LogLine, error) {
+	var resp struct {
+		CurrentDailyLogs json.RawMessage `json:"currentDailyLogs"`
+	}
+	if err := c.get(ctx, "/api/logger-data", nil, &resp); err != nil {
 		return nil, err
 	}
-	return out, nil
+	// before the day's first line the server answers an empty string, not an
+	// empty list
+	lines := []LogLine{}
+	switch raw := bytes.TrimSpace(resp.CurrentDailyLogs); {
+	case len(raw) == 0, string(raw) == "null", string(raw) == `""`:
+		return lines, nil
+	default:
+		if err := json.Unmarshal(raw, &lines); err != nil {
+			return nil, fmt.Errorf("GET /api/logger-data: decoding the log: %w", err)
+		}
+	}
+	return lines, nil
 }
 
 // PurgeCache empties the whole server cache (admin only).
@@ -388,9 +433,12 @@ func (c *Client) ServerPathExists(ctx context.Context, path string) (bool, error
 	return err == nil, err
 }
 
-// PathExists reports whether a directory exists inside a library folder, and
-// names the library item already there when one is. This is what the new-item
-// dialog calls before it will let you create a folder.
+// PathExists reports whether a directory or file exists inside a library
+// folder, and names the library item already there when one is. This is what
+// the new-item dialog calls before it will let you create a folder. A path
+// that is not on disk but sits one or two levels inside an item's folder
+// still answers exists, with that item's title: a path really on disk
+// answers exists with no title. Needs the upload permission.
 func (c *Client) PathExists(ctx context.Context, folderPath, directory string) (exists bool, itemTitle string, err error) {
 	var resp struct {
 		Exists           bool   `json:"exists"`
@@ -412,8 +460,9 @@ type MediaItemShare struct {
 	Slug        string `json:"slug"`
 	// ISO timestamps, like the API key ones and unlike the epoch
 	// milliseconds the rest of the API uses
-	ExpiresAt string `json:"expiresAt"`
-	CreatedAt string `json:"createdAt"`
+	ExpiresAt      string `json:"expiresAt"`
+	CreatedAt      string `json:"createdAt"`
+	IsDownloadable bool   `json:"isDownloadable"`
 }
 
 // ShareMediaItem opens a public link to a media item (admin only). expiresAt
@@ -433,6 +482,21 @@ func (c *Client) ShareMediaItem(ctx context.Context, mediaItemID, mediaItemType,
 		return nil, err
 	}
 	return &share, nil
+}
+
+// ItemShare returns the public link open for a book, or nil when there is
+// none. The server has no route that lists links; a book's record carries its
+// own when asked, and only for an admin, and only in the expanded record: the
+// short one ignores include.
+func (c *Client) ItemShare(ctx context.Context, itemID string) (*MediaItemShare, error) {
+	var resp struct {
+		Share *MediaItemShare `json:"mediaItemShare"`
+	}
+	q := url.Values{"expanded": {"1"}, "include": {"share"}}
+	if err := c.get(ctx, "/api/items/"+url.PathEscape(itemID), q, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Share, nil
 }
 
 // UnshareMediaItem closes a public link.
@@ -550,19 +614,22 @@ func (c *Client) UnlinkOpenID(ctx context.Context, userID string) error {
 
 // --- item files and ebooks ----------------------------------------------
 
-// DeleteItemFile removes one file from an item, by the file id the item
-// reports in LibraryFiles.
-func (c *Client) DeleteItemFile(ctx context.Context, itemID, fileID string) (*Item, error) {
-	var it Item
-	path := "/api/items/" + url.PathEscape(itemID) + "/file/" + url.PathEscape(fileID)
-	if err := c.do(ctx, http.MethodDelete, path, nil, nil, &it); err != nil {
-		return nil, err
-	}
-	return &it, nil
+// DeleteItemFile removes one file from an item and from disk, by the file id
+// (inode) the item reports in LibraryFiles. The server answers a plain OK,
+// not the item, and takes the file off the item even when removing it from
+// disk fails. An audio file taken out this way leaves the book's duration as
+// it was, and no scan corrects it.
+func (c *Client) DeleteItemFile(ctx context.Context, itemID, fileID string) error {
+	return c.del(ctx, "/api/items/"+url.PathEscape(itemID)+"/file/"+url.PathEscape(fileID), nil)
 }
 
-// SetEbookPrimary marks which ebook file is the primary one when an item has
-// several. isPrimary false makes it supplementary.
+// SetEbookPrimary flips one ebook file between primary and supplementary.
+// The server reads no body: a supplementary file becomes the primary one and
+// every other ebook supplementary, and the primary file becomes
+// supplementary, leaving the item with no primary ebook, whatever isPrimary
+// says. Read the item first (Media.EbookFile is the primary) and call only
+// when the file is not already what isPrimary asks for; isPrimary is sent for
+// a server that one day reads it.
 func (c *Client) SetEbookPrimary(ctx context.Context, itemID, fileID string, isPrimary bool) error {
 	path := "/api/items/" + url.PathEscape(itemID) + "/ebook/" + url.PathEscape(fileID) + "/status"
 	return c.patch(ctx, path, map[string]bool{"isSupplementary": !isPrimary}, nil)

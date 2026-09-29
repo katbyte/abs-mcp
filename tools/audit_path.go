@@ -207,7 +207,57 @@ func checkPath(it *abs.Item) (string, bool) {
 		return fmt.Sprintf("parent folder %q does not name author %q", path.Dir(rel), m.AuthorDisplay()), true
 	}
 
-	return "", false
+	return checkPathYear(base, m)
+}
+
+var (
+	// "(1965)", "[Unabridged, 2007]": a year in brackets
+	pathBracketed = regexp.MustCompile(`[(\[]([^)\]]*)[)\]]`)
+	// a year from 1900 to 2099 as a whole word
+	pathYear      = regexp.MustCompile(`\b((?:19|20)\d\d)\b`)
+	pathYearWhole = regexp.MustCompile(`^(?:19|20)\d\d$`)
+)
+
+// checkPathYear flags a book whose year is earlier than every year its folder
+// carries. Collectors write the first printing's year ("Dune (1965)") or the
+// recording's, and either way the recording cannot be older: an earlier year
+// is another book or an older edition matched, or a year mistyped. A later
+// year is what a first printing's folder looks like, so it is not reported.
+func checkPathYear(base string, m abs.Metadata) (string, bool) {
+	have := m.PublishedYear.String()
+	if len(have) < 4 || !pathYearWhole.MatchString(have[:4]) {
+		return "", false
+	}
+	have = have[:4]
+
+	// a number the book's name carries is its name, not a year: "1984 -
+	// Original Adaptation", "The Year 2000 Problem (1999)"
+	named := " " + pathWords(m.Title+" "+m.Subtitle) + " "
+	var years []string
+	take := func(s string) {
+		for _, g := range pathYear.FindAllStringSubmatch(s, -1) {
+			if y := g[1]; !strings.Contains(named, " "+y+" ") && !slices.Contains(years, y) {
+				years = append(years, y)
+			}
+		}
+	}
+	for _, g := range pathBracketed.FindAllStringSubmatch(base, -1) {
+		take(g[1])
+	}
+	// "2003 - Title", the layout Audiobookshelf itself reads a year from, and
+	// "Title - 2003"; a folder that is only a number is a title
+	if segs := pathSegment.Split(pathBracketed.ReplaceAllString(base, ""), -1); len(segs) > 1 {
+		for _, s := range segs {
+			if s = strings.TrimSpace(s); pathYearWhole.MatchString(s) {
+				take(s)
+			}
+		}
+	}
+	if len(years) == 0 || have >= slices.Min(years) {
+		return "", false
+	}
+
+	return fmt.Sprintf("folder %q says %s but the year is %s, earlier than the folder allows: another book or edition was matched, or the year is mistyped", base, strings.Join(years, ", "), have), true
 }
 
 // parentNames is one parent folder as the names it may carry: the whole

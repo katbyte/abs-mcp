@@ -93,17 +93,94 @@ func resolveUser(ctx context.Context, client *abs.Client, nameOrID string) (*abs
 	return nil, false, withMe(lookupErr)
 }
 
+type userRow struct {
+	ID        string `json:"id"`
+	Username  string `json:"username"`
+	Type      string `json:"type"`
+	Active    bool   `json:"active"`
+	LastSeen  string `json:"last_seen,omitempty"`
+	Listening string `json:"last_listened,omitempty" jsonschema:"title of their most recent session"`
+}
+
+type progressRow struct {
+	ItemID    string `json:"item_id"`
+	EpisodeID string `json:"episode_id,omitempty"`
+	Percent   int    `json:"percent"`
+	Finished  bool   `json:"finished"`
+	Updated   string `json:"updated,omitempty"`
+}
+
+type userDetail struct {
+	userRow
+	Self         bool          `json:"self"                  jsonschema:"true when this is the account the API key acts as"`
+	Email        string        `json:"email,omitempty"`
+	CanUpdate    bool          `json:"can_update"`
+	CanDelete    bool          `json:"can_delete"`
+	CanDownload  bool          `json:"can_download"`
+	CanUpload    bool          `json:"can_upload"`
+	AllLibraries bool          `json:"all_libraries"         jsonschema:"the account can open every library; when false, only those in libraries"`
+	Libraries    []string      `json:"libraries,omitempty"   jsonschema:"with all_libraries false: the ids of the only libraries the account can open (none when empty)"`
+	AllTags      bool          `json:"all_tags"              jsonschema:"the account sees books whatever their tags; when false, tags or denied_tags says which"`
+	Tags         []string      `json:"tags,omitempty"        jsonschema:"with all_tags false: the account sees only books carrying one of these"`
+	DeniedTags   []string      `json:"denied_tags,omitempty" jsonschema:"with all_tags false: the account sees every book except those carrying one of these"`
+	Explicit     bool          `json:"explicit"              jsonschema:"the account sees books marked explicit"`
+	InProgress   int           `json:"items_in_progress"`
+	Finished     int           `json:"items_finished"`
+	Bookmarks    int           `json:"bookmarks"`
+	Created      string        `json:"created,omitempty"`
+	Recent       []progressRow `json:"recent_progress"       jsonschema:"their 10 most recently updated items"`
+}
+
+// describeUser is an account as user_get answers it. The server grants a
+// permission by the permission alone, not by the account's type, and
+// only while the account is active: an admin without delete may not
+// delete
+func describeUser(u *abs.User, self bool) userDetail {
+	row := userRow{ID: u.ID, Username: u.Username, Type: u.Type, Active: u.IsActive, LastSeen: fmtTime(u.LastSeen)}
+	out := userDetail{
+		userRow:      row,
+		Self:         self,
+		Email:        u.Email,
+		CanUpdate:    u.IsActive && u.Permissions.Update,
+		CanDelete:    u.IsActive && u.Permissions.Delete,
+		CanDownload:  u.IsActive && u.Permissions.Download,
+		CanUpload:    u.IsActive && u.Permissions.Upload,
+		AllLibraries: u.Permissions.AccessAllLibraries,
+		AllTags:      u.Permissions.AccessAllTags,
+		Explicit:     u.Permissions.AccessExplicitContent,
+		Bookmarks:    len(u.Bookmarks),
+		Created:      fmtDate(u.CreatedAt),
+		Recent:       []progressRow{},
+	}
+	if !u.Permissions.AccessAllLibraries {
+		out.Libraries = u.LibrariesAccessible
+	}
+	if !u.Permissions.AccessAllTags {
+		if u.Permissions.SelectedTagsNotAccessible {
+			out.DeniedTags = u.ItemTagsSelected
+		} else {
+			out.Tags = u.ItemTagsSelected
+		}
+	}
+	progress := slices.Clone(u.MediaProgress)
+	slices.SortFunc(progress, func(a, b abs.MediaProgress) int { return cmp.Compare(b.LastUpdate, a.LastUpdate) })
+	for _, p := range progress {
+		switch {
+		case p.IsFinished:
+			out.Finished++
+		case p.CurrentTime > 0 || p.EbookProgress > 0:
+			out.InProgress++
+		}
+		if len(out.Recent) < 10 {
+			out.Recent = append(out.Recent, progressRow{ItemID: p.LibraryItemID, EpisodeID: p.EpisodeID, Percent: percent(p.Progress), Finished: p.IsFinished, Updated: fmtTime(p.LastUpdate)})
+		}
+	}
+	return out
+}
+
 func registerUserTools(r *registry) {
 	client := r.client
 
-	type userRow struct {
-		ID        string `json:"id"`
-		Username  string `json:"username"`
-		Type      string `json:"type"`
-		Active    bool   `json:"active"`
-		LastSeen  string `json:"last_seen,omitempty"`
-		Listening string `json:"last_listened,omitempty" jsonschema:"title of their most recent session"`
-	}
 	type listOut struct {
 		Users []userRow `json:"users"`
 	}
@@ -128,82 +205,15 @@ func registerUserTools(r *registry) {
 		return nil, out, nil
 	})
 
-	type progressRow struct {
-		ItemID    string `json:"item_id"`
-		EpisodeID string `json:"episode_id,omitempty"`
-		Percent   int    `json:"percent"`
-		Finished  bool   `json:"finished"`
-		Updated   string `json:"updated,omitempty"`
-	}
-	type getOut struct {
-		userRow
-		Self         bool          `json:"self"                  jsonschema:"true when this is the account the API key acts as"`
-		Email        string        `json:"email,omitempty"`
-		CanUpdate    bool          `json:"can_update"`
-		CanDelete    bool          `json:"can_delete"`
-		CanDownload  bool          `json:"can_download"`
-		CanUpload    bool          `json:"can_upload"`
-		AllLibraries bool          `json:"all_libraries"         jsonschema:"the account can open every library; when false, only those in libraries"`
-		Libraries    []string      `json:"libraries,omitempty"   jsonschema:"with all_libraries false: the ids of the only libraries the account can open (none when empty)"`
-		AllTags      bool          `json:"all_tags"              jsonschema:"the account sees books whatever their tags; when false, tags or denied_tags says which"`
-		Tags         []string      `json:"tags,omitempty"        jsonschema:"with all_tags false: the account sees only books carrying one of these"`
-		DeniedTags   []string      `json:"denied_tags,omitempty" jsonschema:"with all_tags false: the account sees every book except those carrying one of these"`
-		Explicit     bool          `json:"explicit"              jsonschema:"the account sees books marked explicit"`
-		InProgress   int           `json:"items_in_progress"`
-		Finished     int           `json:"items_finished"`
-		Bookmarks    int           `json:"bookmarks"`
-		Created      string        `json:"created,omitempty"`
-		Recent       []progressRow `json:"recent_progress"       jsonschema:"their 10 most recently updated items"`
-	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "user_get",
 		Description: "An account's details, permissions, and a summary of its listening progress. Omit user for the account the API key acts as - the usual case, and the only one available without admin rights. Call this first when unsure what the key can do.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in userRef) (*mcp.CallToolResult, getOut, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in userRef) (*mcp.CallToolResult, userDetail, error) {
 		u, self, err := resolveUser(ctx, client, in.User)
 		if err != nil {
-			return nil, getOut{}, err
+			return nil, userDetail{}, err
 		}
-		row := userRow{ID: u.ID, Username: u.Username, Type: u.Type, Active: u.IsActive, LastSeen: fmtTime(u.LastSeen)}
-		out := getOut{
-			userRow:      row,
-			Self:         self,
-			Email:        u.Email,
-			CanUpdate:    u.IsAdmin() || u.Permissions.Update,
-			CanDelete:    u.IsAdmin() || u.Permissions.Delete,
-			CanDownload:  u.IsAdmin() || u.Permissions.Download,
-			CanUpload:    u.IsAdmin() || u.Permissions.Upload,
-			AllLibraries: u.Permissions.AccessAllLibraries,
-			AllTags:      u.Permissions.AccessAllTags,
-			Explicit:     u.Permissions.AccessExplicitContent,
-			Bookmarks:    len(u.Bookmarks),
-			Created:      fmtDate(u.CreatedAt),
-			Recent:       []progressRow{},
-		}
-		if !u.Permissions.AccessAllLibraries {
-			out.Libraries = u.LibrariesAccessible
-		}
-		if !u.Permissions.AccessAllTags {
-			if u.Permissions.SelectedTagsNotAccessible {
-				out.DeniedTags = u.ItemTagsSelected
-			} else {
-				out.Tags = u.ItemTagsSelected
-			}
-		}
-		progress := slices.Clone(u.MediaProgress)
-		slices.SortFunc(progress, func(a, b abs.MediaProgress) int { return cmp.Compare(b.LastUpdate, a.LastUpdate) })
-		for _, p := range progress {
-			switch {
-			case p.IsFinished:
-				out.Finished++
-			case p.CurrentTime > 0 || p.EbookProgress > 0:
-				out.InProgress++
-			}
-			if len(out.Recent) < 10 {
-				out.Recent = append(out.Recent, progressRow{ItemID: p.LibraryItemID, EpisodeID: p.EpisodeID, Percent: percent(p.Progress), Finished: p.IsFinished, Updated: fmtTime(p.LastUpdate)})
-			}
-		}
-
-		return nil, out, nil
+		return nil, describeUser(u, self), nil
 	})
 
 	type inProgressIn struct {
@@ -389,31 +399,76 @@ func registerUserTools(r *registry) {
 	})
 
 	type progressSetIn struct {
-		progressRef
+		Item     string   `json:"item,omitempty"               jsonschema:"library item id, or its whole title; or series instead"`
+		Library  string   `json:"library,omitempty"            jsonschema:"narrow a title lookup to one library by name or id"`
+		Episode  string   `json:"episode,omitempty"            jsonschema:"episode id for podcasts; omit for books"`
+		Series   string   `json:"series,omitempty"             jsonschema:"instead of item: a series by name or id, with hide_from_continue alone, to take it off (true) or put it back on (false) the Continue Series shelf, which offers the next book of a series once one is finished"`
 		Finished *bool    `json:"finished,omitempty"           jsonschema:"mark finished (true) or not finished (false)"`
 		Position *float64 `json:"position_s,omitempty"         jsonschema:"set the playback position in seconds"`
 		Percent  *float64 `json:"percent,omitempty"            jsonschema:"set the position as a percentage 0-100 instead"`
-		Hide     *bool    `json:"hide_from_continue,omitempty" jsonschema:"remove from (true) or restore to (false) the continue-listening shelf"`
+		Hide     *bool    `json:"hide_from_continue,omitempty" jsonschema:"remove from (true) or restore to (false) the continue-listening shelf; with series, the Continue Series shelf"`
+	}
+	type progressSetOut struct {
+		progressGetOut
+		Series       string `json:"series,omitempty"        jsonschema:"with series: the series"`
+		SeriesHidden *bool  `json:"series_hidden,omitempty" jsonschema:"with series: kept off the Continue Series shelf, read back from the account"`
+	}
+	// hideSeries takes a series off the Continue Series shelf or puts it
+	// back, and reads the account back to say which it is
+	hideSeries := func(ctx context.Context, in progressSetIn) (progressSetOut, error) {
+		switch {
+		case in.Item != "" || in.Episode != "":
+			return progressSetOut{}, errors.New("series stands in for item; pass one or the other")
+		case in.Hide == nil:
+			return progressSetOut{}, errors.New("with series, pass hide_from_continue: true takes it off the Continue Series shelf, false puts it back")
+		case in.Finished != nil || in.Position != nil || in.Percent != nil:
+			return progressSetOut{}, errors.New("a series has no progress of its own: set finished, position_s or percent on a book")
+		}
+		s, err := resolveSeries(ctx, client, in.Library, in.Series)
+		if err != nil {
+			return progressSetOut{}, err
+		}
+		if *in.Hide {
+			err = client.HideSeriesFromContinueListening(ctx, s.ID)
+		} else {
+			err = client.UnhideSeriesFromContinueListening(ctx, s.ID)
+		}
+		if err != nil {
+			return progressSetOut{}, err
+		}
+		me, err := client.Me(ctx)
+		if err != nil {
+			return progressSetOut{}, fmt.Errorf("the series was sent, but reading the account back failed: %w", err)
+		}
+		hidden := slices.Contains(me.SeriesHidden, s.ID)
+		if hidden != *in.Hide {
+			return progressSetOut{}, fmt.Errorf("the server was asked to change %q on the Continue Series shelf, but the account still has it %s", s.Name, map[bool]string{true: "hidden", false: "shown"}[hidden])
+		}
+		return progressSetOut{Series: s.Name, SeriesHidden: &hidden}, nil
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "user_progress_set",
-		Description: "Update the API key user's progress on a book or episode: mark finished/unfinished, set the position (seconds or percent), or hide it from continue-listening. Always the API key's own account - Audiobookshelf has no way to set someone else's progress. Changes server state.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in progressSetIn) (*mcp.CallToolResult, progressGetOut, error) {
+		Description: "Update the API key user's progress on a book or episode: mark finished/unfinished, set the position (seconds or percent), or hide it from continue-listening; or hide a whole series from the Continue Series shelf. Always the API key's own account - Audiobookshelf has no way to set someone else's progress. Changes server state.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in progressSetIn) (*mcp.CallToolResult, progressSetOut, error) {
+		if in.Series != "" {
+			out, err := hideSeries(ctx, in)
+			return nil, out, err
+		}
 		switch {
 		case in.Percent != nil && (*in.Percent < 0 || *in.Percent > 100):
-			return nil, progressGetOut{}, fmt.Errorf("percent %v is not between 0 and 100", *in.Percent)
+			return nil, progressSetOut{}, fmt.Errorf("percent %v is not between 0 and 100", *in.Percent)
 		case in.Position != nil && *in.Position < 0:
-			return nil, progressGetOut{}, fmt.Errorf("position_s %v is before the start", *in.Position)
+			return nil, progressSetOut{}, fmt.Errorf("position_s %v is before the start", *in.Position)
 		}
 		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
 		if err != nil {
-			return nil, progressGetOut{}, err
+			return nil, progressSetOut{}, err
 		}
 		// a podcast's progress is kept per episode; one set on the show
 		// itself is on nothing that plays, and it has no length, so any
 		// percent of it would be position 0
 		if it.IsPodcast() && in.Episode == "" {
-			return nil, progressGetOut{}, fmt.Errorf("%q is a podcast: name the episode (podcast_episodes lists them)", it.Title())
+			return nil, progressSetOut{}, fmt.Errorf("%q is a podcast: name the episode (podcast_episodes lists them)", it.Title())
 		}
 		duration := it.Media.Duration
 		if in.Episode != "" {
@@ -424,11 +479,11 @@ func registerUserTools(r *registry) {
 				}
 			}
 			if !found {
-				return nil, progressGetOut{}, fmt.Errorf("no episode %s in %q", in.Episode, it.Title())
+				return nil, progressSetOut{}, fmt.Errorf("no episode %s in %q", in.Episode, it.Title())
 			}
 		}
 		if in.Position == nil && in.Percent != nil && duration <= 0 {
-			return nil, progressGetOut{}, fmt.Errorf("%q has no length to take a percent of: pass position_s", it.Title())
+			return nil, progressSetOut{}, fmt.Errorf("%q has no length to take a percent of: pass position_s", it.Title())
 		}
 
 		upd := abs.ProgressUpdate{IsFinished: in.Finished, HideFromContinueListening: in.Hide}
@@ -448,18 +503,18 @@ func registerUserTools(r *registry) {
 			upd.Progress = new(0.0)
 		}
 		if upd.CurrentTime == nil && upd.IsFinished == nil && upd.HideFromContinueListening == nil {
-			return nil, progressGetOut{}, errors.New("nothing to change: pass finished, position_s, percent or hide_from_continue")
+			return nil, progressSetOut{}, errors.New("nothing to change: pass finished, position_s, percent or hide_from_continue")
 		}
 		if err := client.SetProgress(ctx, it.ID, in.Episode, upd); err != nil {
-			return nil, progressGetOut{}, err
+			return nil, progressSetOut{}, err
 		}
 
 		p, err := client.Progress(ctx, it.ID, in.Episode)
 		if err != nil {
-			return nil, progressGetOut{}, err
+			return nil, progressSetOut{}, err
 		}
 
-		return nil, progressGetOut{Item: it.Title(), Duration: wholeSec(duration), Progress: progressOf(p)}, nil
+		return nil, progressSetOut{Item: it.Title(), Duration: wholeSec(duration), Progress: progressOf(p)}, nil
 	})
 
 	type progressRemoveOut struct {
@@ -761,9 +816,83 @@ func registerUserTools(r *registry) {
 		return nil, out, nil
 	})
 
+	type historyRemoveIn struct {
+		userRef
+		Sessions []string `json:"sessions"          jsonschema:"the ids of the sessions to remove, as user_history lists them"`
+		Confirm  bool     `json:"confirm,omitempty" jsonschema:"true to remove; without it nothing changes and the answer lists what a confirmed call removes"`
+	}
+	type historyRemoveOut struct {
+		User        string           `json:"user"`
+		WouldRemove []sessionSummary `json:"would_remove,omitempty" jsonschema:"without confirm: the sessions a confirmed call removes; nothing has changed"`
+		Removed     []sessionSummary `json:"removed,omitempty"      jsonschema:"the sessions removed, and checked gone"`
+	}
+	add(r, deleteTool, &mcp.Tool{
+		Name: "user_history_remove",
+		Description: "Remove listening sessions from an account's history: a session logged twice, or a book left playing overnight. Progress and finished marks stay; the sessions' listening time goes from user_stats and the year in review. " +
+			"Omit user for the account the API key acts as. Without confirm=true nothing changes and the answer lists the sessions that would go. Requires the delete permission.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in historyRemoveIn) (*mcp.CallToolResult, historyRemoveOut, error) {
+		if len(in.Sessions) == 0 {
+			return nil, historyRemoveOut{}, errors.New("sessions is required: the ids user_history lists")
+		}
+		u, self, err := resolveUser(ctx, client, in.User)
+		if err != nil {
+			return nil, historyRemoveOut{}, err
+		}
+		// the server reads a stored session by no id, and deletes any id it
+		// is given whosever it is: each is found in this account's own history
+		found, err := sessionsOf(ctx, client, u.ID, self, in.Sessions)
+		if err != nil {
+			return nil, historyRemoveOut{}, err
+		}
+		var missing []string
+		rows := make([]sessionSummary, 0, len(in.Sessions))
+		for _, id := range in.Sessions {
+			ses, ok := found[id]
+			if !ok {
+				missing = append(missing, id)
+				continue
+			}
+			row := summarizeSession(&ses)
+			row.User = u.Username
+			rows = append(rows, row)
+		}
+		if len(missing) > 0 {
+			return nil, historyRemoveOut{}, fmt.Errorf("%s has no session %s: pass ids from user_history for that account", u.Username, strings.Join(missing, ", "))
+		}
+		out := historyRemoveOut{User: u.Username}
+		if !in.Confirm {
+			out.WouldRemove = rows
+			return nil, out, nil
+		}
+
+		for i, row := range rows {
+			if err := client.DeleteSession(ctx, row.ID); err != nil {
+				if i == 0 {
+					return nil, historyRemoveOut{}, err
+				}
+				return nil, historyRemoveOut{}, fmt.Errorf("%d of the %d sessions were removed, then removing %s failed: %w", i, len(rows), row.ID, err)
+			}
+		}
+		left, err := sessionsOf(ctx, client, u.ID, self, in.Sessions)
+		if err != nil {
+			return nil, historyRemoveOut{}, fmt.Errorf("the sessions were removed, but reading the history back failed: %w", err)
+		}
+		if len(left) > 0 {
+			ids := make([]string, 0, len(left))
+			for id := range left {
+				ids = append(ids, id)
+			}
+			slices.Sort(ids)
+			return nil, historyRemoveOut{}, fmt.Errorf("the server answered each removal, but %s's history still holds %s", u.Username, strings.Join(ids, ", "))
+		}
+		out.Removed = rows
+		return nil, out, nil
+	})
+
 	type statsIn struct {
 		userRef
-		Year int `json:"year,omitempty" jsonschema:"year-in-review for this year instead of all-time totals; own account only"`
+		Year   int  `json:"year,omitempty"   jsonschema:"year-in-review for this year instead of all-time totals; own account only, or with server every account's"`
+		Server bool `json:"server,omitempty" jsonschema:"with year: the whole server's year instead of one account's, every account's listening and what the library gained. Admin only"`
 	}
 	type itemTime struct {
 		ID     string `json:"id"`
@@ -790,11 +919,52 @@ func registerUserTools(r *registry) {
 		TopNarrators  []nameTime `json:"top_narrators,omitempty"  jsonschema:"year view"`
 		TopGenres     []nameTime `json:"top_genres,omitempty"     jsonschema:"year view"`
 		Finished      []itemTime `json:"finished,omitempty"       jsonschema:"year view: books finished, with their length"`
+		BooksAdded    int        `json:"books_added,omitempty"    jsonschema:"server year: books added to the library that year"`
+		AddedSize     int64      `json:"added_size,omitempty"     jsonschema:"server year: bytes"`
+		AddedLength   int        `json:"added_s,omitempty"        jsonschema:"server year: the books added, in seconds"`
+		AuthorsAdded  int        `json:"authors_added,omitempty"  jsonschema:"server year"`
+		Books         int        `json:"books,omitempty"          jsonschema:"server year: the library at the end of the year, every book added by then"`
+		Size          int64      `json:"size,omitempty"           jsonschema:"server year: bytes"`
+		Length        int        `json:"length_s,omitempty"       jsonschema:"server year: seconds"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "user_stats",
-		Description: "A user's listening statistics: total time, recent days, most listened items; or with year, a year-in-review with books finished and top authors, narrators and genres. Omit user for the account the API key acts as; year-in-review is only available for that account.",
+		Description: "A user's listening statistics: total time, recent days, most listened items; or with year, a year-in-review with books finished and top authors, narrators and genres. Omit user for the account the API key acts as; year-in-review is only available for that account, or with server for the whole server: every account's listening and what the library gained.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in statsIn) (*mcp.CallToolResult, statsOut, error) {
+		if in.Server {
+			switch {
+			case in.Year == 0:
+				return nil, statsOut{}, errors.New("server is a year in review of the whole server: pass year")
+			case in.User != "":
+				return nil, statsOut{}, errors.New("server covers every account; omit user")
+			}
+			ys, err := client.ServerYearStats(ctx, in.Year)
+			if err != nil {
+				return nil, statsOut{}, err
+			}
+			out := statsOut{
+				User:         "every account",
+				Total:        wholeSec(ys.ListeningTime),
+				Sessions:     ys.ListeningSessions,
+				BooksAdded:   ys.BooksAdded,
+				AddedSize:    ys.BooksAddedSize,
+				AddedLength:  wholeSec(ys.BooksAddedDuration),
+				AuthorsAdded: ys.AuthorsAdded,
+				Books:        ys.Books,
+				Size:         ys.BooksSize,
+				Length:       wholeSec(ys.BooksDuration),
+			}
+			for _, a := range ys.TopAuthors {
+				out.TopAuthors = append(out.TopAuthors, nameTime{Name: a.Name, Time: wholeSec(a.Time)})
+			}
+			for _, n := range ys.TopNarrators {
+				out.TopNarrators = append(out.TopNarrators, nameTime{Name: n.Name, Time: wholeSec(n.Time)})
+			}
+			for _, g := range ys.TopGenres {
+				out.TopGenres = append(out.TopGenres, nameTime{Name: g.Genre, Time: wholeSec(g.Time)})
+			}
+			return nil, out, nil
+		}
 		u, self, err := resolveUser(ctx, client, in.User)
 		if err != nil {
 			return nil, statsOut{}, err
@@ -895,6 +1065,38 @@ func bookmarkAt(bms []abs.Bookmark, itemID string, seconds float64) *abs.Bookmar
 		}
 	}
 	return nil
+}
+
+// sessionsOf finds sessions by id in one account's history, reading it a
+// page at a time, newest first, until each is found or the history ends.
+func sessionsOf(ctx context.Context, client *abs.Client, userID string, self bool, ids []string) (map[string]abs.Session, error) {
+	want := map[string]bool{}
+	for _, id := range ids {
+		want[id] = true
+	}
+	found := map[string]abs.Session{}
+	for page := 0; len(found) < len(want); page++ {
+		var sessions []abs.Session
+		var total int
+		var err error
+		if self {
+			sessions, total, err = client.ListeningSessions(ctx, historyPageSize, page)
+		} else {
+			sessions, total, err = client.UserSessions(ctx, userID, historyPageSize, page)
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, s := range sessions {
+			if want[s.ID] {
+				found[s.ID] = s
+			}
+		}
+		if len(sessions) == 0 || (page+1)*historyPageSize >= total {
+			break
+		}
+	}
+	return found, nil
 }
 
 // historyPageSize and historyPages bound how far back itemSessionsOf reads.

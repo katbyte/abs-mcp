@@ -113,3 +113,80 @@ func TestServerPathExists(t *testing.T) {
 		t.Error("a 403 was taken for an answer")
 	}
 }
+
+// Before the day's first line the server answers the log with an empty
+// string, not a list; and a line keeps its level and source.
+func TestLoggerData(t *testing.T) {
+	t.Parallel()
+
+	for body, want := range map[string]int{
+		`{"currentDailyLogs":""}`:   0,
+		`{"currentDailyLogs":null}`: 0,
+		`{"currentDailyLogs":[{"timestamp":"2026-09-29 10:00:00.000","source":"Scanner.js:1","message":"m","levelName":"WARN","level":3}]}`: 1,
+	} {
+		c := newClient(t, newJSONServer(t, always(http.StatusOK, body)))
+		lines, err := c.LoggerData(t.Context())
+		if err != nil {
+			t.Fatalf("%s: %v", body, err)
+		}
+		if lines == nil || len(lines) != want {
+			t.Errorf("%s: %d lines (nil %v), want %d", body, len(lines), lines == nil, want)
+		}
+		if want == 1 && (lines[0].LevelName != "WARN" || lines[0].Level != 3 || lines[0].Source != "Scanner.js:1") {
+			t.Errorf("line = %+v", lines[0])
+		}
+	}
+}
+
+// The server answers a file delete with a plain OK, which is not a record to
+// decode: every delete that worked came back as an error.
+func TestDeleteItemFileTakesAPlainOK(t *testing.T) {
+	t.Parallel()
+
+	s := newRawServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte("OK"))
+	})
+	if err := newClient(t, s).DeleteItemFile(t.Context(), "i1", "f1"); err != nil {
+		t.Errorf("DeleteItemFile: %v", err)
+	}
+	if got := s.requests(); len(got) != 1 || got[0] != "DELETE /api/items/i1/file/f1" {
+		t.Errorf("sent %v", got)
+	}
+}
+
+// A book's share link comes with its record when asked for, and nil when it
+// has none.
+func TestItemShare(t *testing.T) {
+	t.Parallel()
+
+	s := newJSONServer(t, always(http.StatusOK, `{"id":"i1","mediaItemShare":{"id":"sh1","slug":"abc","isDownloadable":true}}`))
+	share, err := newClient(t, s).ItemShare(t.Context(), "i1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the server honours include only on the expanded record
+	if q := s.values(t); share == nil || share.Slug != "abc" || !share.IsDownloadable || q.Get("include") != "share" || q.Get("expanded") != "1" {
+		t.Errorf("share = %+v, query %v", share, s.values(t))
+	}
+	none, err := newClient(t, newJSONServer(t, always(http.StatusOK, `{"id":"i1","mediaItemShare":null}`))).ItemShare(t.Context(), "i1")
+	if err != nil || none != nil {
+		t.Errorf("no share = %+v, %v", none, err)
+	}
+}
+
+func TestEReaderDevices(t *testing.T) {
+	t.Parallel()
+
+	s := newJSONServer(t, always(http.StatusOK, `{"user":{},"ereaderDevices":[{"name":"Kindle","email":"k@x","availabilityOption":"userOrUp"}]}`))
+	devices, err := newClient(t, s).EReaderDevices(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(devices) != 1 || devices[0].Name != "Kindle" || devices[0].AvailableTo != "userOrUp" {
+		t.Errorf("devices = %+v", devices)
+	}
+	if got := s.requests(); len(got) != 1 || got[0] != "POST /api/authorize" {
+		t.Errorf("sent %v", got)
+	}
+}

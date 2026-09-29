@@ -527,6 +527,8 @@ type User struct {
 	ItemTagsSelected    []string        `json:"itemTagsSelected"`
 	HasOpenIDLink       bool            `json:"hasOpenIDLink"`
 	LatestSession       *Session        `json:"latestSession,omitempty"`
+	// SeriesHidden are the series kept off the Continue Series shelf
+	SeriesHidden []string `json:"seriesHideFromContinueListening"`
 }
 
 // IsAdmin reports whether the user is root or admin.

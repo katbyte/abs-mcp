@@ -80,6 +80,17 @@ func list(t *testing.T, v any) []map[string]any {
 	return out
 }
 
+// object reads a nested object of an answer.
+func object(t *testing.T, v any) map[string]any {
+	t.Helper()
+
+	m, ok := v.(map[string]any)
+	if !ok {
+		t.Fatalf("%v is %T, want an object", v, v)
+	}
+	return m
+}
+
 // column is one field of every row of a list, in order.
 func column(t *testing.T, field string, v any) []string {
 	t.Helper()

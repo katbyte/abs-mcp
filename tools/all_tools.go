@@ -48,15 +48,15 @@ type Options struct {
 }
 
 // Toolsets group the tools by the job someone is doing, so a client can load a
-// working subset instead of all of them. The whole surface is around 12,000
+// working subset instead of all of them. The whole surface is around 28,000
 // tokens of tool definitions (name, description, input schema) before anyone
-// has asked a question; core alone is about 1,000.
+// has asked a question; core alone is about 1,200.
 //
 // "all" is every tool, which is what the library does when no toolset is asked
 // for; the abs-mcp binary defaults to core instead (see cli.FlagData.ToolOptions).
 //
 // --toolsets also takes a resource family - item, podcast, library, user,
-// audit, author, series, narrator, collection, playlist, server - which is
+// audit, author, series, narrator, collection, playlist, feed, server - which is
 // every tool with that prefix. Those are derived from the registered names
 // rather than listed here, so they cannot go stale.
 //
@@ -68,11 +68,12 @@ var Toolsets = map[string][]string{
 	"core": {
 		"server_info", "library_list", "library_search", "library_items", "item_get",
 	},
-	// the API key user's own listening: progress, bookmarks, history, statistics
+	// the API key user's own listening: progress, bookmarks, history, statistics,
+	// and sending a book to an e-reader
 	"listening": {
 		"user_get", "user_in_progress", "user_progress_get", "user_progress_set",
 		"user_progress_remove", "user_bookmarks", "user_bookmark_edit",
-		"user_history", "user_stats",
+		"user_history", "user_history_remove", "user_stats", "item_send_ebook",
 	},
 	// find what is wrong with a library and fix it: every audit, the metadata
 	// and cover and chapter editors, and metadata_rename, which merges
@@ -95,12 +96,13 @@ var Toolsets = map[string][]string{
 		"podcast_episode_edit", "podcast_feed_episodes", "podcast_episode_download",
 		"podcast_check_new", "podcast_downloads", "podcast_settings", "podcast_episode_delete",
 	},
-	// group things: shared collections and personal playlists
+	// group things: shared collections and personal playlists, and the feeds
+	// and links that let someone listen to them from outside the app
 	"organise": {
 		"collection_list", "collection_get", "collection_create", "collection_edit",
 		"collection_books_edit", "collection_delete",
 		"playlist_list", "playlist_get", "playlist_create", "playlist_edit",
-		"playlist_entries_edit", "playlist_delete",
+		"playlist_entries_edit", "playlist_delete", "feed_list", "feed_edit",
 	},
 	// running the server rather than using it: libraries, scans, tasks, backups,
 	// other people's accounts, and the tools that remove records
@@ -108,6 +110,7 @@ var Toolsets = map[string][]string{
 		"server_sessions", "server_tasks", "server_backups", "server_backup_create",
 		"library_create", "library_edit", "library_scan", "library_issues_remove",
 		"item_rescan", "item_embed_metadata", "item_delete", "author_delete", "user_list",
+		"user_create", "user_edit",
 	},
 }
 
@@ -163,7 +166,7 @@ func add[In, Out any](r *registry, kind toolKind, t *mcp.Tool, h mcp.ToolHandler
 		// MCP reads destructive false as "only ever adds": true of a tool
 		// that creates something new, not of one that overwrites a field,
 		// replaces a cover or a list, or rewrites a file's tags
-		t.Annotations = &mcp.ToolAnnotations{DestructiveHint: new(!additiveTools[t.Name]), OpenWorldHint: &f}
+		t.Annotations = &mcp.ToolAnnotations{DestructiveHint: new(!additiveTools[t.Name]), OpenWorldHint: new(openWorldTools[t.Name])}
 	case deleteTool:
 		t.Annotations = &mcp.ToolAnnotations{DestructiveHint: new(true), OpenWorldHint: &f}
 	}
@@ -186,7 +189,8 @@ func add[In, Out any](r *registry, kind toolKind, t *mcp.Tool, h mcp.ToolHandler
 }
 
 // additiveTools are the write tools that only ever add - a new library,
-// collection, playlist or podcast, or episodes the podcast did not hold - and
+// collection, playlist, podcast or account, or episodes the podcast did not
+// hold - or change nothing on the server, as sending an ebook does not, and
 // so can say they are not destructive. Every other write tool can overwrite
 // or remove something. A backup is not here: the server prunes the oldest
 // past its limit.
@@ -196,6 +200,13 @@ var additiveTools = map[string]bool{
 	"playlist_create":          true,
 	"podcast_add":              true,
 	"podcast_episode_download": true,
+	"user_create":              true,
+	"item_send_ebook":          true,
+}
+
+// openWorldTools reach past the server: sending an ebook emails it out.
+var openWorldTools = map[string]bool{
+	"item_send_ebook": true,
 }
 
 // emptyNilSlices walks v (structs, pointers, slices) and replaces every
@@ -313,6 +324,9 @@ func queueTools(r *registry) {
 	registerPlaylistTools(r)
 	registerPodcastTools(r)
 	registerUserTools(r)
+	registerAccountTools(r)
+	registerFeedTools(r)
+	registerSendEbookTool(r)
 }
 
 // selected applies the kind gates and the toolset/allow/deny filters, and is

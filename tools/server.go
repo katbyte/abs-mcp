@@ -69,9 +69,10 @@ func registerServerTools(r *registry) {
 			URL:           client.BaseURL(),
 			User:          me.Username,
 			UserType:      me.Type,
-			CanUpdate:     me.IsAdmin() || me.Permissions.Update,
-			CanDelete:     me.IsAdmin() || me.Permissions.Delete,
-			Libraries:     []libraryRow{}, // none is an answer, not null
+			// the server grants each by the permission alone, an admin's too
+			CanUpdate: me.IsActive && me.Permissions.Update,
+			CanDelete: me.IsActive && me.Permissions.Delete,
+			Libraries: []libraryRow{}, // none is an answer, not null
 		}
 		for i := range libs {
 			out.Libraries = append(out.Libraries, libraryRowOf(&libs[i]))
@@ -125,18 +126,61 @@ func registerServerTools(r *registry) {
 		Started     string `json:"started,omitempty"`
 		Finished    string `json:"finished,omitempty"`
 	}
+	type tasksIn struct {
+		Log   bool   `json:"log,omitempty"   jsonschema:"also today's lines of the server's log, newest first: why a scan, match, embed or merge failed. Admin only"`
+		Level string `json:"level,omitempty" jsonschema:"with log: the least severe line to include, debug, info, warn or error; default warn"`
+		Match string `json:"match,omitempty" jsonschema:"with log: only lines containing this, in any case: a title, an item id, or a part of the server such as Scanner or AbMergeManager"`
+		Limit int    `json:"limit,omitempty" jsonschema:"with log: the newest lines to return, default 50, at most 500"`
+	}
+	type logRow struct {
+		Time    string `json:"time"             jsonschema:"the server's local time"`
+		Level   string `json:"level"`
+		Source  string `json:"source,omitempty" jsonschema:"the file and line in the server's code that wrote it"`
+		Message string `json:"message"`
+	}
 	type tasksOut struct {
-		Tasks []taskRow `json:"tasks" jsonschema:"library scans, matches, metadata embeds and encodes, running and recently finished"`
+		Tasks      []taskRow `json:"tasks"                 jsonschema:"library scans, matches, metadata embeds and m4b merges running now"`
+		Log        []logRow  `json:"log,omitempty"         jsonschema:"with log: today's lines, newest first"`
+		LogMatched int       `json:"log_matched,omitempty" jsonschema:"with log: today's lines at the level and matching, before limit; the server serves today's log only, its last 5,000 lines"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "server_tasks",
-		Description: "Running and recently finished background tasks: library scans, match-all runs, metadata embeds, m4b encodes. Use it to see when a scan started by library_scan has finished.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, tasksOut, error) {
+		Description: "Background tasks running now: library scans, match-all runs, metadata embeds, m4b merges. Use it to see when a scan started by library_scan has finished: a task leaves the list the moment it ends, finished or failed alike, and with log the server's log for today says how it went.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in tasksIn) (*mcp.CallToolResult, tasksOut, error) {
+		if !in.Log && (in.Level != "" || in.Match != "" || in.Limit != 0) {
+			return nil, tasksOut{}, errors.New("level, match and limit narrow the log; pass log too")
+		}
+		least := logLevels["warn"]
+		if in.Level != "" {
+			var ok bool
+			if least, ok = logLevels[strings.ToLower(in.Level)]; !ok {
+				return nil, tasksOut{}, fmt.Errorf("unknown level %q: debug, info, warn or error", in.Level)
+			}
+		}
+		if in.Limit < 0 || in.Limit > maxLogLines {
+			return nil, tasksOut{}, fmt.Errorf("limit %d: 1 to %d", in.Limit, maxLogLines)
+		}
 		tasks, err := client.Tasks(ctx)
 		if err != nil {
 			return nil, tasksOut{}, err
 		}
 		out := tasksOut{Tasks: []taskRow{}}
+		if in.Log {
+			lines, err := client.LoggerData(ctx)
+			if err != nil {
+				return nil, tasksOut{}, err
+			}
+			match := strings.ToLower(in.Match)
+			for _, l := range slices.Backward(lines) {
+				if l.Level < least || !strings.Contains(strings.ToLower(l.Message+" "+l.Source), match) {
+					continue
+				}
+				out.LogMatched++
+				if len(out.Log) < cmp.Or(in.Limit, defaultLogLines) {
+					out.Log = append(out.Log, logRow{Time: l.Timestamp, Level: l.LevelName, Source: l.Source, Message: clip(l.Message, logMessageCap)})
+				}
+			}
+		}
 		for _, t := range tasks {
 			status := "running"
 			switch {
@@ -308,3 +352,14 @@ func registerServerTools(r *registry) {
 		return nil, out, nil
 	})
 }
+
+// logLevels are the server's levels a caller can ask for the log from; NOTE,
+// the server's own level for what it always says, and FATAL are above all.
+var logLevels = map[string]int{"debug": 1, "info": 2, "warn": 3, "error": 4}
+
+const (
+	defaultLogLines = 50
+	maxLogLines     = 500
+	// logMessageCap is where a line is cut: the server logs whole objects
+	logMessageCap = 1000
+)

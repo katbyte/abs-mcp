@@ -61,6 +61,17 @@ func (f *fakeABS) failsAfter(route string, n int32, body string) {
 	})
 }
 
+// inTurn serves a route that answers each body in turn, then the last one
+// for good: a record read before a change and read back after it.
+func (f *fakeABS) inTurn(route string, bodies ...string) {
+	var served atomic.Int32
+	f.mux.HandleFunc(route, func(w http.ResponseWriter, _ *http.Request) {
+		n := min(int(served.Add(1)), len(bodies)) - 1
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, bodies[n])
+	})
+}
+
 // json registers a route ("GET /api/libraries") that answers with a body; a
 // route registered again answers with the new body.
 func (f *fakeABS) json(route, body string) { f.answer(route, reply{http.StatusOK, body}) }

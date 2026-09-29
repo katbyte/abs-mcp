@@ -4,7 +4,10 @@ package acceptance
 
 import (
 	"slices"
+	"strings"
 	"testing"
+
+	"github.com/katbyte/abs-mcp/lib/abs"
 )
 
 func TestItemGet(t *testing.T) {
@@ -302,5 +305,31 @@ func TestItemGetPodcast(t *testing.T) {
 	}
 	if got := rows(t, chapters, "chapter_list"); len(got) != 0 {
 		t.Errorf("chapter_list = %v, want empty on a podcast", got)
+	}
+}
+
+// item_send_ebook lists the e-readers the key's account can send to and sends
+// the book's main ebook by the server's mail settings, which this container
+// has none of: the server's refusal is the answer.
+func TestItemSendEbook(t *testing.T) {
+	admin := adminClient(t)
+	before, err := admin.EmailSettings(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := admin.UpdateEReaderDevices(ctx, append(before.EReaderDevices, abs.EReaderDevice{Name: "Zzyzx Reader", Email: "reader@zzyzx.test", AvailableTo: "adminOrUp"})); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = admin.UpdateEReaderDevices(ctx, before.EReaderDevices) })
+
+	out := call(t, "item_send_ebook", map[string]any{"item": "Foundation", "library": "Fiction"})
+	if !slices.Contains(strs(t, out["devices"], "devices"), "Zzyzx Reader") || truth(out["sent"]) {
+		t.Errorf("the device list = %v", out)
+	}
+	if msg := callErr(t, "item_send_ebook", map[string]any{"item": "Foundation", "library": "Fiction", "device": "zzyzx reader"}); !strings.Contains(msg, "SMTP") {
+		t.Errorf("sending with no mail server set up: %s", msg)
+	}
+	if msg := callErr(t, "item_send_ebook", map[string]any{"item": "Leviathan Wakes", "library": "Fiction", "device": "Zzyzx Reader"}); !strings.Contains(msg, "has no ebook") {
+		t.Errorf("a book with no ebook: %s", msg)
 	}
 }

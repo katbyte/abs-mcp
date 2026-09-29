@@ -548,7 +548,7 @@ func TestBookmarksOnADeletedItem(t *testing.T) {
 
 		f := newFakeABS(t)
 		f.json("GET /api/items/"+bookB1, item(bookB1, "First", "", ""))
-		f.json("GET /api/me", `{"id":"u1","username":"kt","type":"root","bookmarks":[{"libraryItemId":"`+bookB1+`","title":"Mark","time":5},{"libraryItemId":"`+bookB2+`","title":"Other","time":7}]}`)
+		f.json("GET /api/me", `{"id":"u1","username":"kt","type":"root","permissions":{"delete":true},"bookmarks":[{"libraryItemId":"`+bookB1+`","title":"Mark","time":5},{"libraryItemId":"`+bookB2+`","title":"Other","time":7}]}`)
 		f.json("DELETE /api/me/item/"+bookB1+"/bookmark/5", `OK`)
 		f.json("DELETE /api/items/"+bookB1, `OK`)
 		call := toolCaller(t, f)
@@ -642,5 +642,122 @@ func TestListeningTimesInSeconds(t *testing.T) {
 		}
 		wantNumbers(t, tc.tool, out, tc.want)
 		wantAbsent(t, tc.tool, out, tc.absent...)
+	}
+}
+
+// series takes a whole series off the Continue Series shelf or puts it back,
+// and the account is read back to say which it is.
+func TestUserProgressSetHidesASeries(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/series/"+seriesA, `{"id":"`+seriesA+`","name":"Dune","libraryId":"`+libID+`"}`)
+	f.json("GET /api/me/series/"+seriesA+"/remove-from-continue-listening", `{}`)
+	f.json("GET /api/me/series/"+seriesA+"/readd-to-continue-listening", `{}`)
+	f.inTurn("GET /api/me", `{"id":"`+meID+`","username":"kt","type":"root","seriesHideFromContinueListening":["`+seriesA+`"]}`,
+		`{"id":"`+meID+`","username":"kt","type":"root","seriesHideFromContinueListening":[]}`,
+		`{"id":"`+meID+`","username":"kt","type":"root","seriesHideFromContinueListening":[]}`)
+	call := toolCaller(t, f)
+
+	out, err := call("user_progress_set", map[string]any{"series": seriesA, "hide_from_continue": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out["series"] != "Dune" || !isTrue(out["series_hidden"]) || len(f.requests("/api/me/series/"+seriesA+"/remove-from-continue-listening")) != 1 {
+		t.Errorf("hide = %v", out)
+	}
+	out, err = call("user_progress_set", map[string]any{"series": seriesA, "hide_from_continue": false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if boolOf(t, out["series_hidden"]) || len(f.requests("/api/me/series/"+seriesA+"/readd-to-continue-listening")) != 1 {
+		t.Errorf("show = %v", out)
+	}
+	// the server answered, but the account says otherwise
+	_, err = call("user_progress_set", map[string]any{"series": seriesA, "hide_from_continue": true})
+	wantErr(t, "a hide not kept", err, "still has it shown")
+
+	for _, c := range []struct {
+		args map[string]any
+		says string
+	}{
+		{map[string]any{"series": seriesA}, "pass hide_from_continue"},
+		{map[string]any{"series": seriesA, "item": itemID, "hide_from_continue": true}, "one or the other"},
+		{map[string]any{"series": seriesA, "finished": true, "hide_from_continue": true}, "no progress of its own"},
+	} {
+		_, err := call("user_progress_set", c.args)
+		wantErr(t, fmt.Sprint(c.args), err, c.says)
+	}
+}
+
+// With server, a year in review of the whole server: every account's
+// listening and what the library gained, in its own shape.
+func TestUserStatsForTheWholeServer(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/stats/year/2025", `{"numListeningSessions":40,"totalListeningTime":7200.4,"numBooksAdded":3,"totalBooksAddedSize":1048576,"totalBooksAddedDuration":36000.2,`+
+		`"numAuthorsAdded":2,"numBooks":120,"totalBooksSize":987654321,"totalBooksDuration":3600000,"topAuthors":[{"name":"Frank Herbert","time":3600}],`+
+		`"topNarrators":[{"name":"Scott Brick","time":1800}],"topGenres":[{"genre":"Science Fiction","time":7200}],"booksAddedWithCovers":["x"]}`)
+	call := toolCaller(t, f)
+
+	out, err := call("user_stats", map[string]any{"year": 2025, "server": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantNumbers(t, "user_stats", out, map[string]float64{
+		"total_listened_s": 7200, "sessions": 40, "books_added": 3, "added_size": 1048576, "added_s": 36000,
+		"authors_added": 2, "books": 120, "size": 987654321, "length_s": 3600000,
+		"top_authors.0.time_s": 3600, "top_narrators.0.time_s": 1800, "top_genres.0.time_s": 7200,
+	})
+	if out["user"] != "every account" || dig(out, "top_genres.0.name") != "Science Fiction" {
+		t.Errorf("answer = %v", out)
+	}
+
+	_, err = call("user_stats", map[string]any{"server": true})
+	wantErr(t, "server without a year", err, "pass year")
+	_, err = call("user_stats", map[string]any{"server": true, "year": 2025, "user": "reader"})
+	wantErr(t, "server with a user", err, "omit user")
+}
+
+// user_history_remove finds each session in the account's own history before
+// anything goes, previews without confirm, and reads the history back after.
+func TestUserHistoryRemove(t *testing.T) {
+	t.Parallel()
+
+	const s1, s2 = "a1a1a1a1-0000-4000-8000-000000000001", "a1a1a1a1-0000-4000-8000-000000000002"
+	session := func(id string) string {
+		return `{"id":"` + id + `","userId":"` + meID + `","libraryItemId":"` + itemID + `","displayTitle":"Dune","timeListening":600,"currentTime":1200,"updatedAt":1759000000000}`
+	}
+	f := newFakeABS(t)
+	accounts(f)
+	both := `{"total":2,"sessions":[` + session(s1) + `,` + session(s2) + `]}`
+	f.inTurn("GET /api/me/listening-sessions", both, both, both, `{"total":1,"sessions":[`+session(s2)+`]}`)
+	f.json("DELETE /api/sessions/"+s1, `OK`)
+	call := toolCaller(t, f)
+
+	out, err := call("user_history_remove", map[string]any{"sessions": []any{s1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := column(t, "id", out["would_remove"]); !slices.Equal(got, []string{s1}) || len(f.changes()) != 0 {
+		t.Errorf("preview = %v, sent %v", out, f.changes())
+	}
+
+	_, err = call("user_history_remove", map[string]any{"sessions": []any{s1, "a1a1a1a1-0000-4000-8000-000000000009"}, "confirm": true})
+	wantErr(t, "a session not theirs", err, "kt has no session", "000000000009")
+	if len(f.changes()) != 0 {
+		t.Errorf("sent %v", f.changes())
+	}
+
+	out, err = call("user_history_remove", map[string]any{"sessions": []any{s1}, "confirm": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := column(t, "id", out["removed"]); !slices.Equal(got, []string{s1}) {
+		t.Errorf("removed = %v", out)
+	}
+	if got := f.changes(); len(got) != 1 || got[0].Path != "/api/sessions/"+s1 {
+		t.Errorf("sent %v", got)
 	}
 }

@@ -942,10 +942,11 @@ func TestJourneyFoldersNameTheirBooks(t *testing.T) {
 	first, second, third := author+"/"+saga+"/01 - Zzyzx First Voyage", author+"/"+saga+"/02 - Zzyzx Second Voyage", author+"/"+saga+"/03 - Zzyzx Third Voyage"
 	institute := author + "/The Zzyzx Institute"
 	sisters, vanya := "Антон Чехов/Три сестры", "Антон Чехов/Дядя Ваня"
+	dated := author + "/Zzyzx Dated Book (1965)"
 
 	s := newDiskShelf(t, "Zzyzx Folder Shelf", "zzyzx-folders")
-	s.write(t, first+"/01.mp3", second+"/01.mp3", third+"/01.mp3", institute+"/01.mp3", sisters+"/01.mp3", vanya+"/01.mp3")
-	s.open(t, 6)
+	s.write(t, first+"/01.mp3", second+"/01.mp3", third+"/01.mp3", institute+"/01.mp3", sisters+"/01.mp3", vanya+"/01.mp3", dated+"/01.mp3")
+	s.open(t, 7)
 	ids := s.ids(t)
 	if got := call(t, "item_get", map[string]any{"item": ids[sisters]}); got["title"] != "Три сестры" || got["author"] != "Антон Чехов" {
 		t.Fatalf("the Cyrillic book scanned as %v by %v", got["title"], got["author"])
@@ -989,4 +990,224 @@ func TestJourneyFoldersNameTheirBooks(t *testing.T) {
 			t.Errorf("audit_path = %v once every title is its folder's", got)
 		}
 	})
+
+	// a folder carries its first printing's year, and a recording is never
+	// older than that: a year before it is a wrong match or a slip
+	t.Run("a year earlier than the folder's", func(t *testing.T) {
+		call(t, "item_edit", map[string]any{"item": ids[dated], "title": "Zzyzx Dated Book", "year": "1959"})
+		out := call(t, "audit_path", map[string]any{"library": s.name})
+		found := rows(t, out["findings"], "findings")
+		if len(found) != 1 || found[0]["id"] != ids[dated] || !strings.Contains(text(found[0]["detail"]), "says 1965 but the year is 1959") {
+			t.Fatalf("audit_path = %v, want the dated book, its year before its folder's", found)
+		}
+		// audit_all counts it, as it counts every audit_path finding
+		counts := rows(t, call(t, "audit_all", map[string]any{"library": s.name})["audits"], "audits")
+		i := slices.IndexFunc(counts, func(r map[string]any) bool { return r["audit"] == "audit_path" })
+		if i < 0 || number(counts[i]["found"]) != 1 {
+			t.Errorf("audit_all's audit_path = %v", counts)
+		}
+
+		// a later year is what a recording of a book first printed then is
+		call(t, "item_edit", map[string]any{"item": ids[dated], "year": "2007"})
+		if got := diskFindingIDs(t, call(t, "audit_path", map[string]any{"library": s.name})); len(got) != 0 {
+			t.Errorf("audit_path = %v for a recording later than the folder's year", got)
+		}
+	})
+}
+
+// --- the files inside a book --------------------------------------------------
+
+// writeText writes a file of text into the shelf, for the files a book
+// carries beside its audio.
+func (s *diskShelf) writeText(t *testing.T, rel, body string) {
+	t.Helper()
+
+	p := filepath.Join(s.root, rel)
+	if err := os.MkdirAll(filepath.Dir(p), 0o777); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(body), 0o666); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// chapterSpans reads a book's chapters as "title start-end", in whole seconds.
+func chapterSpans(t *testing.T, id string) []string {
+	t.Helper()
+
+	chapters := rows(t, call(t, "item_get", map[string]any{"item": id, "chapters": true})["chapter_list"], "chapter_list")
+	out := make([]string, 0, len(chapters))
+	for _, ch := range chapters {
+		out = append(out, fmt.Sprintf("%s %.0f-%.0f", text(ch["title"]), number(ch["start_s"]), number(ch["end_s"])))
+	}
+	return out
+}
+
+// trackOrder reads a book's audio files in play order.
+func trackOrder(t *testing.T, id string) []string {
+	t.Helper()
+
+	return valuesIn(t, call(t, "item_get", map[string]any{"item": id, "files": true})["track_list"], "track_list", "filename")
+}
+
+// A book whose files play in the wrong order, and whose two ebooks open the
+// wrong one: item_edit puts the tracks in order, the chapters, one to a file
+// as the scanner cut them, going with their files, and chooses the ebook
+// readers open. A plain rescan keeps it all.
+func TestJourneyTracksReorderedAndEbookChosen(t *testing.T) {
+	const book = "Zzyzx Track Author/Zzyzx Track Book"
+
+	s := newDiskShelf(t, "Zzyzx Track Shelf", "zzyzx-tracks")
+	for i, secs := range []int{2, 3, 4} {
+		diskSilence(t, filepath.Join(s.root, book, fmt.Sprintf("0%d.mp3", i+1)), secs)
+	}
+	s.write(t, book+"/Zzyzx Track Book.epub", book+"/Zzyzx Track Book Extras.epub")
+	s.open(t, 1)
+	id := s.ids(t)[book]
+
+	if got := chapterSpans(t, id); !slices.Equal(got, []string{"01 0-2", "02 2-5", "03 5-9"}) {
+		t.Fatalf("the scan chaptered it %v, want one chapter to a file", got)
+	}
+	msg := callErr(t, "item_edit", map[string]any{"item": id, "tracks": []any{"03.mp3", "01.mp3"}})
+	if !strings.Contains(msg, "leaves out") || !strings.Contains(msg, "02.mp3") {
+		t.Errorf("a list short of a file: %s", msg)
+	}
+	if got := trackOrder(t, id); !slices.Equal(got, []string{"01.mp3", "02.mp3", "03.mp3"}) {
+		t.Fatalf("a refused list changed the order to %v", got)
+	}
+
+	out := call(t, "item_edit", map[string]any{"item": id, "tracks": []any{"03.mp3", "01.mp3", "02.mp3"}})
+	if out["chapters"] != "moved" || !slices.Equal(strs(t, out["tracks"], "tracks"), []string{"03.mp3", "01.mp3", "02.mp3"}) {
+		t.Errorf("item_edit tracks = %v", out)
+	}
+	if got := trackOrder(t, id); !slices.Equal(got, []string{"03.mp3", "01.mp3", "02.mp3"}) {
+		t.Errorf("plays %v", got)
+	}
+	if got := chapterSpans(t, id); !slices.Equal(got, []string{"03 0-4", "01 4-6", "02 6-9"}) {
+		t.Errorf("chapters %v, want each with its file", got)
+	}
+	if found := rows(t, call(t, "audit_chapters", map[string]any{"library": s.name})["findings"], "findings"); len(found) != 0 {
+		t.Errorf("audit_chapters = %v after the chapters moved", found)
+	}
+	call(t, "item_rescan", map[string]any{"item": id})
+	if got, ch := trackOrder(t, id), chapterSpans(t, id); !slices.Equal(got, []string{"03.mp3", "01.mp3", "02.mp3"}) || ch[0] != "03 0-4" {
+		t.Errorf("after a rescan: plays %v, chapters %v", got, ch)
+	}
+
+	// the ebooks: the scan chose one, and the other is supplementary
+	mainOf := func() string {
+		for _, f := range rows(t, call(t, "item_get", map[string]any{"item": id})["other_files"], "other_files") {
+			if truth(f["main"]) {
+				return text(f["filename"])
+			}
+		}
+		return "none"
+	}
+	chosen := mainOf()
+	other := "Zzyzx Track Book.epub"
+	if chosen == other {
+		other = "Zzyzx Track Book Extras.epub"
+	}
+	if chosen == "none" {
+		t.Fatal("the scan made neither ebook the main one")
+	}
+	out = call(t, "item_edit", map[string]any{"item": id, "ebook": other})
+	if out["ebook"] != other || mainOf() != other {
+		t.Errorf("item_edit ebook = %v; main is now %s", out, mainOf())
+	}
+	// asked again, it is already so: one more flip would leave none
+	if out = call(t, "item_edit", map[string]any{"item": id, "ebook": other}); truth(out["updated"]) || mainOf() != other {
+		t.Errorf("a second call = %v; main is now %s", out, mainOf())
+	}
+	if out = call(t, "item_edit", map[string]any{"item": id, "ebook": "none"}); out["ebook"] != "none" || mainOf() != "none" {
+		t.Errorf("item_edit ebook none = %v; main is now %s", out, mainOf())
+	}
+}
+
+// Stray files beside a book's audio - a note, a second ebook - taken out one
+// at a time and off the disk, while the audio and the cover, whose removal
+// the server would not carry through the book, are refused.
+func TestJourneyOneFileDeleted(t *testing.T) {
+	const book = "Zzyzx Stray Author/Zzyzx Stray Book"
+
+	s := newDiskShelf(t, "Zzyzx Stray Shelf", "zzyzx-stray")
+	s.write(t, book+"/01.mp3", book+"/02.mp3", book+"/cover.jpg", book+"/Zzyzx Stray Book.epub")
+	s.writeText(t, book+"/notes .txt", "notes\n")
+	s.open(t, 1)
+	id := s.ids(t)[book]
+
+	out := call(t, "item_delete", map[string]any{"item": id, "file": "notes .txt"})
+	if out["would_delete"] != `"notes .txt" from "Zzyzx Stray Book"` || !slices.Contains(s.onDisk(t), book+"/notes .txt") {
+		t.Fatalf("the preview = %v, and the disk %v", out, s.onDisk(t))
+	}
+	out = call(t, "item_delete", map[string]any{"item": id, "file": "notes .txt", "confirm": true})
+	if !truth(out["files_removed"]) || slices.Contains(s.onDisk(t), book+"/notes .txt") {
+		t.Errorf("the delete = %v, and the disk %v", out, s.onDisk(t))
+	}
+	for _, f := range rows(t, call(t, "item_get", map[string]any{"item": id})["other_files"], "other_files") {
+		if f["filename"] == "notes .txt" {
+			t.Error("the book still lists the note")
+		}
+	}
+
+	for file, says := range map[string]string{"02.mp3": "audio file", "cover.jpg": "cover"} {
+		if msg := callErr(t, "item_delete", map[string]any{"item": id, "file": file, "confirm": true}); !strings.Contains(msg, says) {
+			t.Errorf("deleting %s: %s", file, msg)
+		}
+		if !slices.Contains(s.onDisk(t), book+"/"+file) {
+			t.Errorf("%s went from disk though refused", file)
+		}
+	}
+
+	out = call(t, "item_delete", map[string]any{"item": id, "file": "Zzyzx Stray Book.epub", "confirm": true})
+	if !strings.Contains(text(out["note"]), "left with none") || slices.Contains(s.onDisk(t), book+"/Zzyzx Stray Book.epub") {
+		t.Errorf("the main ebook's delete = %v, and the disk %v", out, s.onDisk(t))
+	}
+	if got := call(t, "item_get", map[string]any{"item": id}); got["ebook"] != nil || num(t, got["audio_tracks"], "audio_tracks") != 2 {
+		t.Errorf("after: ebook %v, %v tracks", got["ebook"], got["audio_tracks"])
+	}
+}
+
+// A book in three files merged into one m4b: previewed at its own quality,
+// then merged, waited for and read back. The m4b is in the folder, the files
+// it was made from are not, and it plays for as long as they did.
+func TestJourneyMergedIntoOneM4B(t *testing.T) {
+	const book = "Zzyzx Merge Author/Zzyzx Merge Book"
+
+	s := newDiskShelf(t, "Zzyzx Merge Shelf", "zzyzx-merge")
+	for i, secs := range []int{2, 3, 4} {
+		diskSilence(t, filepath.Join(s.root, book, fmt.Sprintf("0%d.mp3", i+1)), secs)
+	}
+	s.open(t, 1)
+	id := s.ids(t)[book]
+
+	out := call(t, "item_embed_metadata", map[string]any{"item": id, "m4b": true})
+	plan := object(out["would_merge"])
+	if plan["into"] != "Zzyzx Merge Book.m4b" || number(plan["channels"]) != 1 || !slices.Equal(strs(t, plan["files"], "files"), []string{"01.mp3", "02.mp3", "03.mp3"}) {
+		t.Fatalf("the preview = %v", out)
+	}
+	if got := s.onDisk(t); slices.Contains(got, book+"/Zzyzx Merge Book.m4b") {
+		t.Fatalf("a preview merged: %v", got)
+	}
+
+	out = call(t, "item_embed_metadata", map[string]any{"item": id, "m4b": true, "confirm": true})
+	if truth(out["running"]) {
+		diskUntil(t, "the merge", func() (bool, string) {
+			tasks := rows(t, call(t, "server_tasks", nil)["tasks"], "tasks")
+			return len(tasks) == 0, fmt.Sprint(tasks)
+		})
+		call(t, "item_rescan", map[string]any{"item": id})
+	} else if object(out["merged"])["into"] != "Zzyzx Merge Book.m4b" {
+		t.Fatalf("the merge = %v", out)
+	}
+	if got := s.onDisk(t); !slices.Equal(got, []string{"Zzyzx Merge Author/", book + "/", book + "/Zzyzx Merge Book.m4b"}) {
+		t.Errorf("on disk after the merge: %v", got)
+	}
+	tracks := rows(t, call(t, "item_get", map[string]any{"item": id, "files": true})["track_list"], "track_list")
+	if len(tracks) != 1 || tracks[0]["filename"] != "Zzyzx Merge Book.m4b" || tracks[0]["codec"] != "aac" || number(tracks[0]["duration_s"]) < 8 || number(tracks[0]["duration_s"]) > 10 {
+		t.Errorf("plays %v", tracks)
+	}
+	if msg := callErr(t, "item_embed_metadata", map[string]any{"item": id, "m4b": true}); !strings.Contains(msg, "already one m4b") {
+		t.Errorf("merging it again: %s", msg)
+	}
 }

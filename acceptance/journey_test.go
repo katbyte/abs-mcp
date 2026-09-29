@@ -465,14 +465,21 @@ func TestJourneyLookupsChangeNothing(t *testing.T) {
 		{tool: "user_history"},
 		{tool: "user_stats"},
 		{tool: "user_stats", args: map[string]any{"year": 2026}},
+		{tool: "user_stats", args: map[string]any{"year": 2026, "server": true}},
 		{tool: "server_sessions"},
 		{tool: "server_tasks"},
+		{tool: "server_tasks", args: map[string]any{"log": true, "level": "debug"}},
 		{tool: "server_backups"},
+		{tool: "feed_list"},
 	}
 	// previews promise the same: they decide and change nothing
 	previews := []readCall{
 		{tool: "item_match_apply", args: map[string]any{"library": "Messy", "item": "Foundation (Unabridged)", "provider": "audible", "asin": "B003D8W5VS", "smart": true, "preview": true}},
 		{tool: "item_match_apply_batch", args: map[string]any{"matches": []any{map[string]any{"item": "Foundation (Unabridged)", "asin": "B003D8W5VS"}}, "provider": "audible", "smart": true, "preview": true}},
+		{tool: "item_embed_metadata", args: map[string]any{"library": "Messy", "item": "Guards! Guards!", "m4b": true}},
+		{tool: "item_delete", args: map[string]any{"library": "Messy", "item": "The Egg", "file": "notes .txt"}},
+		// the e-readers the account can send to, and nothing sent
+		{tool: "item_send_ebook", args: map[string]any{"library": "Fiction", "item": "Foundation"}},
 	}
 
 	// every read-only tool the server registers must be in the list

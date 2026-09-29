@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -296,6 +297,21 @@ func TestSharing(t *testing.T) {
 	if share.Slug != "sdk-share" {
 		t.Errorf("slug = %q", share.Slug)
 	}
+
+	// the server lists no links: the book's record carries its own
+	got, err := client.ItemShare(ctx, item.ID)
+	if err != nil {
+		t.Fatalf("ItemShare: %v", err)
+	}
+	if got == nil || got.ID != share.ID || got.Slug != "sdk-share" {
+		t.Errorf("ItemShare = %+v, want the link just opened", got)
+	}
+	if err := client.UnshareMediaItem(ctx, share.ID); err != nil {
+		t.Fatalf("UnshareMediaItem: %v", err)
+	}
+	if got, err := client.ItemShare(ctx, item.ID); err != nil || got != nil {
+		t.Errorf("ItemShare after closing = %+v, %v; want none", got, err)
+	}
 }
 
 func TestFileStreams(t *testing.T) {
@@ -437,6 +453,14 @@ func TestRemainingAdminSurface(t *testing.T) {
 	}
 	t.Cleanup(func() { _, _ = client.MeUpdateEReaderDevices(t.Context(), nil) })
 
+	// what a sign-in answers: the devices this account may send to, its own
+	// among them
+	if mine, err := client.EReaderDevices(ctx); err != nil {
+		t.Errorf("EReaderDevices: %v", err)
+	} else if !slices.ContainsFunc(mine, func(d abs.EReaderDevice) bool { return d.Name == "SDK Me Reader" }) {
+		t.Errorf("EReaderDevices = %+v, want the account's own device among them", mine)
+	}
+
 	// the password is not what this suite authenticates with - it uses an API
 	// key - so changing it and changing it back is safe
 	if err := client.ChangePassword(ctx, "abs-mcp-integration", "sdk-new-password"); err != nil {
@@ -506,17 +530,6 @@ func TestBackupFiles(t *testing.T) {
 		t.Error("ApplyBackup accepted a nonexistent id")
 	} else if !errors.As(err, &he) {
 		t.Errorf("ApplyBackup did not reach the server: %v", err)
-	}
-}
-
-// DeleteItemFile runs against a throwaway copy, since it removes a file.
-func TestDeleteItemFile(t *testing.T) {
-	ctx := skipUnlessLive(t)
-	id := library(t)
-
-	item := must(client.Items(ctx, id, abs.ItemsOptions{Limit: 1})).Results[0]
-	if _, err := client.DeleteItemFile(ctx, item.ID, "no-such-file"); err == nil {
-		t.Error("DeleteItemFile accepted a nonexistent file id")
 	}
 }
 

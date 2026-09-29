@@ -3,7 +3,15 @@
 package acceptance
 
 import (
+	"context"
+	"maps"
+	"os"
+	"slices"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/katbyte/abs-mcp/lib/abs"
 )
 
 // there is only the root account, which is also the account the API key acts
@@ -216,5 +224,162 @@ func TestUserStatsYearByOwnName(t *testing.T) {
 func TestUserUnknown(t *testing.T) {
 	if msg := callErr(t, "user_get", map[string]any{"user": "nobody"}); msg == "" {
 		t.Error("an unknown user should be an error")
+	}
+}
+
+// An account made for someone: active, with a password made for it that
+// signs in, opening only the library named; then changed - every library,
+// upload allowed, and stopped from signing in - each change read back.
+func TestUserCreateAndEdit(t *testing.T) {
+	const name = "zzyzx-newcomer"
+	admin := adminClient(t)
+	existing, err := admin.Users(ctx, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range existing {
+		if u.Username == name { // left by a run that died
+			_ = admin.DeleteUser(ctx, u.ID)
+		}
+	}
+
+	out := call(t, "user_create", map[string]any{"username": name, "libraries": []any{"Fiction"}})
+	id := text(out["id"])
+	t.Cleanup(func() {
+		eventually(t, "deleting "+name, func() error { return admin.DeleteUser(context.WithoutCancel(ctx), id) })
+	})
+	password := text(out["password"])
+	if len(password) != 16 || !truth(out["active"]) || out["type"] != "user" || !isFalse(out["all_libraries"]) ||
+		!slices.Equal(strs(t, out["libraries"], "libraries"), []string{libraryID(t, "Fiction")}) {
+		t.Fatalf("user_create = %v", out)
+	}
+	if err := login(name, password); err != nil {
+		t.Fatalf("the new account cannot sign in with the password made for it: %v", err)
+	}
+	if msg := callErr(t, "user_create", map[string]any{"username": name, "password": "x"}); !strings.Contains(msg, "taken") {
+		t.Errorf("a second account of that name: %s", msg)
+	}
+
+	out = call(t, "user_edit", map[string]any{"user": name, "libraries": []any{"all"}, "can_upload": true, "email": "newcomer@zzyzx.test"})
+	if !truth(out["all_libraries"]) || !truth(out["can_upload"]) || out["email"] != "newcomer@zzyzx.test" {
+		t.Errorf("user_edit = %v", out)
+	}
+	got, err := admin.User(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Permissions.AccessAllLibraries || !got.Permissions.Upload {
+		t.Errorf("the server holds %+v", got.Permissions)
+	}
+
+	out = call(t, "user_edit", map[string]any{"user": name, "active": false})
+	if truth(out["active"]) {
+		t.Errorf("user_edit active false = %v", out)
+	}
+	if err := login(name, password); err == nil {
+		t.Error("an account stopped from signing in still signs in")
+	}
+	out = call(t, "user_edit", map[string]any{"user": name, "active": true, "password": "new"})
+	if err := login(name, text(out["password"])); err != nil {
+		t.Errorf("the new password does not sign in: %v", err)
+	}
+
+	if msg := callErr(t, "user_edit", map[string]any{"user": "root", "active": false}); !strings.Contains(msg, "lock the key out") {
+		t.Errorf("stopping the key's own account: %s", msg)
+	}
+}
+
+// Sessions taken out of an account's history, one of the key's own and one
+// of another account's: previewed, removed, and gone from user_history.
+func TestUserHistoryRemove(t *testing.T) {
+	listener := newUser(t, "zzyzx-forgetful", abs.UserCreate{})
+	lc, err := abs.New(os.Getenv("ABS_SERVER"), listener.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bookID := itemID(t, "Fiction", "Foundation and Empire")
+	play := func(c *abs.Client) string {
+		t.Helper()
+		s, err := c.Play(ctx, bookID, "", abs.PlayRequest{MediaPlayer: "zzyzx-player", SupportedMimeTypes: []string{"audio/mpeg"}, ForceDirectPlay: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := c.SyncSession(ctx, s.ID, 0.3, 0.3); err != nil {
+			t.Fatal(err)
+		}
+		if err := c.CloseSession(ctx, s.ID, map[string]any{"currentTime": 0.3, "timeListened": 0.3}); err != nil {
+			t.Fatal(err)
+		}
+		return s.ID
+	}
+	theirs, mine := play(lc), play(adminClient(t))
+
+	for _, c := range []struct {
+		user    map[string]any
+		session string
+	}{{map[string]any{"user": listener.Name}, theirs}, {map[string]any{}, mine}} {
+		args := func(extra map[string]any) map[string]any {
+			out := map[string]any{"sessions": []any{c.session}}
+			maps.Copy(out, c.user)
+			maps.Copy(out, extra)
+			return out
+		}
+		history := func() []string {
+			return valuesIn(t, call(t, "user_history", c.user)["sessions"], "sessions", "id")
+		}
+		if !slices.Contains(history(), c.session) {
+			t.Fatalf("user_history %v does not hold %s", c.user, c.session)
+		}
+		out := call(t, "user_history_remove", args(nil))
+		if got := valuesIn(t, out["would_remove"], "would_remove", "id"); !slices.Equal(got, []string{c.session}) || !slices.Contains(history(), c.session) {
+			t.Fatalf("the preview = %v", out)
+		}
+		out = call(t, "user_history_remove", args(map[string]any{"confirm": true}))
+		if got := valuesIn(t, out["removed"], "removed", "id"); !slices.Equal(got, []string{c.session}) || slices.Contains(history(), c.session) {
+			t.Errorf("the removal = %v; history holds %v", out, history())
+		}
+	}
+	// one account's session is not another's to name
+	other := play(lc)
+	if msg := callErr(t, "user_history_remove", map[string]any{"sessions": []any{other}, "confirm": true}); !strings.Contains(msg, "has no session") {
+		t.Errorf("removing another account's session as the key's own: %s", msg)
+	}
+}
+
+// A series taken off the Continue Series shelf and put back, as the account
+// then holds it.
+func TestUserProgressSetSeries(t *testing.T) {
+	admin := adminClient(t)
+	hidden := func() bool {
+		me, err := admin.Me(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := call(t, "series_get", map[string]any{"series": "Foundation", "library": "Fiction"})
+		return slices.Contains(me.SeriesHidden, text(s["id"]))
+	}
+	t.Cleanup(func() {
+		_, _ = invoke("user_progress_set", map[string]any{"series": "Foundation", "library": "Fiction", "hide_from_continue": false})
+	})
+
+	out := call(t, "user_progress_set", map[string]any{"series": "Foundation", "library": "Fiction", "hide_from_continue": true})
+	if out["series"] != "Foundation" || !truth(out["series_hidden"]) || !hidden() {
+		t.Errorf("hide = %v", out)
+	}
+	out = call(t, "user_progress_set", map[string]any{"series": "Foundation", "library": "Fiction", "hide_from_continue": false})
+	if !isFalse(out["series_hidden"]) || hidden() {
+		t.Errorf("show = %v", out)
+	}
+}
+
+// The whole server's year, in the shape the server gives it: the seeded
+// books were all added this year.
+func TestUserStatsServerYear(t *testing.T) {
+	out := call(t, "user_stats", map[string]any{"year": time.Now().Year(), "server": true})
+	if out["user"] != "every account" || number(out["books_added"]) < 10 || number(out["books"]) < number(out["books_added"]) || number(out["added_s"]) <= 0 {
+		t.Errorf("user_stats server = %v", out)
+	}
+	if msg := callErr(t, "user_stats", map[string]any{"year": 1999, "server": true}); !strings.Contains(strings.ToLower(msg), "year") {
+		t.Errorf("a year the server refuses: %s", msg)
 	}
 }
