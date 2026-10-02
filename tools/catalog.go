@@ -389,6 +389,7 @@ func registerAuthorTools(r *registry) {
 		Name        string   `json:"name,omitempty"        jsonschema:"rename; renaming to an existing author's name merges them"`
 		Description string   `json:"description,omitempty"`
 		ASIN        string   `json:"asin,omitempty"`
+		ImageURL    string   `json:"image_url,omitempty"   jsonschema:"a photo for the author, which the server downloads from this url; needs the upload permission. author_match_apply already fetches one from Audible, so this is for an author it cannot find"`
 		Clear       []string `json:"clear,omitempty"       jsonschema:"fields to blank: description, asin, image. How to undo an author_match that found the wrong person"`
 	}
 	type editOut struct {
@@ -398,7 +399,7 @@ func registerAuthorTools(r *registry) {
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "author_edit",
-		Description: "Rename an author, set their description or asin, or blank those and the photo with clear. Renaming to a name that already exists merges the two authors (the way to fix 'J.R.R. Tolkien' vs 'J. R. Tolkien'); clear=[asin, description, image] undoes an author_match that found the wrong person. Changes server state.",
+		Description: "Rename an author, set their description, asin or photo, or blank those with clear. Renaming to a name that already exists merges the two authors (the way to fix 'J.R.R. Tolkien' vs 'J. R. Tolkien'); clear=[asin, description, image] undoes an author_match that found the wrong person. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in editIn) (*mcp.CallToolResult, editOut, error) {
 		upd := abs.AuthorUpdate{Name: strPtr(in.Name), Description: strPtr(in.Description), ASIN: strPtr(in.ASIN)}
 		var clearImage bool
@@ -415,8 +416,12 @@ func registerAuthorTools(r *registry) {
 				return nil, editOut{}, fmt.Errorf("cannot clear %q: choose from description, asin, image", c)
 			}
 		}
-		if upd.Name == nil && upd.Description == nil && upd.ASIN == nil && !clearImage {
-			return nil, editOut{}, errors.New("nothing to change: pass name, description or asin, or list fields in clear")
+		imageURL := strings.TrimSpace(in.ImageURL)
+		switch {
+		case imageURL != "" && clearImage:
+			return nil, editOut{}, errors.New("image_url sets the photo and clear image removes it; one or the other")
+		case upd.Name == nil && upd.Description == nil && upd.ASIN == nil && !clearImage && imageURL == "":
+			return nil, editOut{}, errors.New("nothing to change: pass name, description, asin or image_url, or list fields in clear")
 		}
 
 		a, err := resolveAuthor(ctx, client, in.Library, in.Author)
@@ -425,7 +430,7 @@ func registerAuthorTools(r *registry) {
 		}
 		// a rename that changes nothing writes nothing, and says so rather
 		// than report a rename done
-		if upd.Name != nil && *upd.Name == a.Name && upd.Description == nil && upd.ASIN == nil && !clearImage {
+		if upd.Name != nil && *upd.Name == a.Name && upd.Description == nil && upd.ASIN == nil && !clearImage && imageURL == "" {
 			return nil, editOut{Unchanged: true, Author: authorRowOf(a, true)}, nil
 		}
 		updated, merged := a, false
@@ -446,42 +451,23 @@ func registerAuthorTools(r *registry) {
 				return nil, editOut{}, err
 			}
 		}
+		// a new photo goes last, onto the record that is left: after a
+		// rename that merged, that is the author merged into
+		if imageURL != "" {
+			was := updated
+			if updated, err = client.SetAuthorImage(ctx, was.ID, imageURL); err != nil {
+				if upd.Name != nil || upd.Description != nil || upd.ASIN != nil {
+					return nil, editOut{}, fmt.Errorf("%q was changed, but setting the photo failed: %w", was.Name, err)
+				}
+				return nil, editOut{}, err
+			}
+		}
 
 		full, err := withBooks(ctx, client, updated)
 		if err != nil {
 			return nil, editOut{}, err
 		}
 		return nil, editOut{Merged: merged, Author: authorRowOf(full, true)}, nil
-	})
-
-	type imageIn struct {
-		authorIn
-		URL string `json:"url" jsonschema:"image url; the server downloads it"`
-	}
-	type imageOut struct {
-		Author authorRow `json:"author"`
-	}
-	add(r, writeTool, &mcp.Tool{
-		Name:        "author_image_set",
-		Description: "Set an author's photo from an image url, which the server downloads. author_match already fetches one from Audible, so use this for authors it cannot find. Requires the upload permission. Changes server state.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in imageIn) (*mcp.CallToolResult, imageOut, error) {
-		if strings.TrimSpace(in.URL) == "" {
-			return nil, imageOut{}, errors.New("url is required")
-		}
-		a, err := resolveAuthor(ctx, client, in.Library, in.Author)
-		if err != nil {
-			return nil, imageOut{}, err
-		}
-		updated, err := client.SetAuthorImage(ctx, a.ID, in.URL)
-		if err != nil {
-			return nil, imageOut{}, err
-		}
-
-		full, err := withBooks(ctx, client, updated)
-		if err != nil {
-			return nil, imageOut{}, err
-		}
-		return nil, imageOut{Author: authorRowOf(full, true)}, nil
 	})
 
 	type matchIn struct {
@@ -592,10 +578,14 @@ func registerNarratorTools(r *registry) {
 	}
 	type listIn struct {
 		Library string `json:"library,omitempty" jsonschema:"library name or id; optional when the server has one library"`
+		Limit   int    `json:"limit,omitempty"   jsonschema:"page size, default 100, at most 1000"`
+		Offset  int    `json:"offset,omitempty"  jsonschema:"skip this many narrators: a previous page's next_offset"`
 	}
 	type listOut struct {
-		Total     int           `json:"total"`
-		Narrators []narratorRow `json:"narrators"`
+		Total      int           `json:"total"`
+		Offset     int           `json:"offset"`
+		NextOffset int           `json:"next_offset,omitempty" jsonschema:"pass back as offset for the next page; absent on the last"`
+		Narrators  []narratorRow `json:"narrators"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "narrator_list",
@@ -605,6 +595,7 @@ func registerNarratorTools(r *registry) {
 		if err != nil {
 			return nil, listOut{}, err
 		}
+		limit, offset := pageArgs(in.Limit, in.Offset, 100)
 		restricted, err := restrictedKey(ctx, client)
 		if err != nil {
 			return nil, listOut{}, err
@@ -615,8 +606,9 @@ func registerNarratorTools(r *registry) {
 			if verr != nil {
 				return nil, listOut{}, verr
 			}
-			out := listOut{Total: len(v.Narrators), Narrators: make([]narratorRow, 0, len(v.Narrators))}
-			for _, name := range keysOf(v.Narrators) {
+			names, next := pageOf(keysOf(v.Narrators), limit, offset)
+			out := listOut{Total: len(v.Narrators), Offset: offset, NextOffset: next, Narrators: make([]narratorRow, 0, len(names))}
+			for _, name := range names {
 				out.Narrators = append(out.Narrators, narratorRow{Name: name, Books: v.Narrators[name]})
 			}
 			return nil, out, nil
@@ -626,9 +618,13 @@ func registerNarratorTools(r *registry) {
 			return nil, listOut{}, err
 		}
 
-		out := listOut{Total: len(ns), Narrators: make([]narratorRow, 0, len(ns))}
-		for i := range ns {
-			out.Narrators = append(out.Narrators, narratorRow{Name: ns[i].Name, Books: ns[i].NumBooks})
+		// by name, as an account kept from some books is answered, so a page
+		// is the same page however the server happened to list them
+		slices.SortStableFunc(ns, func(a, b abs.NarratorRow) int { return strings.Compare(a.Name, b.Name) })
+		page, next := pageOf(ns, limit, offset)
+		out := listOut{Total: len(ns), Offset: offset, NextOffset: next, Narrators: make([]narratorRow, 0, len(page))}
+		for i := range page {
+			out.Narrators = append(out.Narrators, narratorRow{Name: page[i].Name, Books: page[i].NumBooks})
 		}
 
 		return nil, out, nil

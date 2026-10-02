@@ -38,7 +38,7 @@ type authorRecordFinding struct {
 	Name        string   `json:"name"`
 	Books       int      `json:"books"`
 	ASIN        string   `json:"asin,omitempty"`
-	Problems    []string `json:"problems"              jsonschema:"unmatched: no asin, author_match is the fix; no_photo: author_match if unmatched, else a photo from elsewhere with author_image_set (Audible holds none for many); no_books: nothing links to this record, author_delete it; bio_mismatch: the description opens with another person's name and never mentions this author's surname, a wrong match to undo with author_edit clear"`
+	Problems    []string `json:"problems"              jsonschema:"unmatched: no asin, author_match is the fix; no_photo: author_match if unmatched, else a photo from elsewhere with author_edit image_url (Audible holds none for many); no_books: nothing links to this record, author_delete it; bio_mismatch: the description opens with another person's name and never mentions this author's surname, a wrong match to undo with author_edit clear"`
 	Description string   `json:"description,omitempty" jsonschema:"bio_mismatch only: how the description opens"`
 }
 
@@ -172,7 +172,7 @@ func registerAuthorAudit(r *registry) {
 	add(r, readTool, &mcp.Tool{
 		Name: "audit_authors",
 		Description: "Everything wrong with authors. Items: a book whose author field holds its title (fix with item_edit, then author_delete the stray record). " +
-			"Records: authors never matched (no asin: author_match), with no photo (author_match, or author_image_set with a photo from elsewhere when Audible has none), with no books (author_delete), or whose biography opens with someone else's name and never mentions theirs, a wrong match to undo with author_edit clear=[asin, description, image]. " +
+			"Records: authors never matched (no asin: author_match), with no photo (author_match, or author_edit image_url with a photo from elsewhere when Audible has none), with no books (author_delete), or whose biography opens with someone else's name and never mentions theirs, a wrong match to undo with author_edit clear=[asin, description, image]. " +
 			"Names: author records that are one another spelled differently, cut short or a typo apart, merged by author_edit name= onto the one to keep. counts says how many of each; the sections are worst first.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in authorsIn) (*mcp.CallToolResult, authorsOut, error) {
 		libs, err := resolveLibraries(ctx, client, in.Library)

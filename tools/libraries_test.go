@@ -460,3 +460,46 @@ func TestLibraryGetInSecondsAndBytes(t *testing.T) {
 		})
 	})
 }
+
+// library_filters pages every list alike, says how long each is in full, and
+// with fields answers only the lists asked for.
+func TestLibraryFiltersPagesAndNarrows(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	oneLibrary(f)
+	f.json("GET /api/me", `{"id":"u1","username":"kt","type":"root","permissions":{"accessAllTags":true,"accessExplicitContent":true}}`)
+	f.json("GET /api/libraries/"+libID+"/filterdata", `{"genres":["Fantasy","History","Science Fiction"],"tags":["sf"],"narrators":["Jim Dale","Kate Reading"],"languages":["English"],"publishers":[],"publishedDecades":[]}`)
+	f.json("GET /api/libraries/"+libID+"/authors", `{"results":[{"id":"a1","name":"Frank Herbert"},{"id":"a2","name":"Isaac Asimov"},{"id":"a3","name":"Terry Pratchett"}],"total":3}`)
+	f.json("GET /api/libraries/"+libID+"/series", `{"results":[{"id":"s1","name":"Dune"}],"total":1}`)
+	call := toolCaller(t, f)
+
+	out, err := call("library_filters", map[string]any{"limit": 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	totals, ok := out["totals"].(map[string]any)
+	if !ok || num(t, totals["genres"]) != 3 || num(t, totals["authors"]) != 3 || num(t, totals["series"]) != 1 || num(t, totals["publishers"]) != 0 {
+		t.Fatalf("totals = %v, want each list's full length", out["totals"])
+	}
+	if !slices.Equal(strs(t, out["genres"]), []string{"Fantasy", "History"}) || len(list(t, out["authors"])) != 2 || num(t, out["next_offset"]) != 2 {
+		t.Errorf("the first page = %v, want two of each longer list and the next at 2", out)
+	}
+
+	out, err = call("library_filters", map[string]any{"limit": 2, "offset": 2, "fields": []any{"genres", "authors"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(strs(t, out["genres"]), []string{"Science Fiction"}) || !slices.Equal(column(t, "name", out["authors"]), []string{"Terry Pratchett"}) || out["next_offset"] != nil {
+		t.Errorf("the second page = %v, want the last genre and author and no next", out)
+	}
+	if out["tags"] != nil || out["series"] != nil || out["narrators"] != nil {
+		t.Errorf("lists not asked for came back: %v", out)
+	}
+	if totals, ok = out["totals"].(map[string]any); !ok || len(totals) != 2 {
+		t.Errorf("totals = %v, want only the lists asked for", totals)
+	}
+
+	_, err = call("library_filters", map[string]any{"fields": []any{"genre"}})
+	wantErr(t, "a list that does not exist", err, `"genre"`, "genres")
+}

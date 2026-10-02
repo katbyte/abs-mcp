@@ -32,7 +32,7 @@ func TestPlaylistEntriesRefusedBeforeTheServerSeesThem(t *testing.T) {
 		{playlistQ, map[string]any{"item": podcastID, "episode": "ep-somebody-elses"}, "has no episode"},
 		{playlistP, map[string]any{"item": otherBook}, "another library"},
 	} {
-		_, err := call("playlist_entries_edit", map[string]any{"playlist": tc.playlist, "action": "add", "entries": []any{tc.entry}})
+		_, err := call("playlist_edit", map[string]any{"playlist": tc.playlist, "add_entries": []any{tc.entry}})
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%v: err = %v, want %q", tc.entry, err, tc.want)
 		}
@@ -69,7 +69,7 @@ func TestPlaylistEntriesReportWhatChanged(t *testing.T) {
 	})
 	call := toolCaller(t, f)
 
-	out, err := call("playlist_entries_edit", map[string]any{"playlist": playlistP, "action": "add", "entries": []any{map[string]any{"item": bookB1}, map[string]any{"item": bookB2}}})
+	out, err := call("playlist_edit", map[string]any{"playlist": playlistP, "add_entries": []any{map[string]any{"item": bookB1}, map[string]any{"item": bookB2}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,14 +85,14 @@ func TestPlaylistEntriesReportWhatChanged(t *testing.T) {
 	}
 
 	// nothing new: nothing sent
-	out, err = call("playlist_entries_edit", map[string]any{"playlist": playlistP, "action": "add", "entries": []any{map[string]any{"item": bookB1}}})
+	out, err = call("playlist_edit", map[string]any{"playlist": playlistP, "add_entries": []any{map[string]any{"item": bookB1}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(f.requests("/api/playlists/"+playlistP+"/batch/add")) != 1 || out["added"] != nil {
 		t.Errorf("re-adding a held entry sent a request or reported an add: %v", out)
 	}
-	out, err = call("playlist_entries_edit", map[string]any{"playlist": playlistP, "action": "remove", "entries": []any{map[string]any{"item": bookB3}}})
+	out, err = call("playlist_edit", map[string]any{"playlist": playlistP, "remove_entries": []any{map[string]any{"item": bookB3}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestPlaylistEntriesReportWhatChanged(t *testing.T) {
 	}
 
 	// the last entry goes, and the playlist with it
-	out, err = call("playlist_entries_edit", map[string]any{"playlist": playlistP, "action": "remove", "entries": []any{map[string]any{"item": bookB1}}})
+	out, err = call("playlist_edit", map[string]any{"playlist": playlistP, "remove_entries": []any{map[string]any{"item": bookB1}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,11 +161,43 @@ func TestEmptyingAPlaylistNeedsDeletesOn(t *testing.T) {
 	f.json("POST /api/playlists/"+playlistP+"/batch/remove", `{}`)
 	call := callerWith(t, f, Options{})
 
-	_, err := call("playlist_entries_edit", map[string]any{"playlist": playlistP, "action": "remove", "entries": []any{map[string]any{"item": bookB1}}})
+	_, err := call("playlist_edit", map[string]any{"playlist": playlistP, "remove_entries": []any{map[string]any{"item": bookB1}}})
 	if err == nil || !strings.Contains(err.Error(), "--enable-delete") {
 		t.Errorf("emptying a playlist with deletes off: %v", err)
 	}
 	if got := f.requests("/api/playlists/" + playlistP + "/batch/remove"); len(got) != 0 {
 		t.Errorf("the removal was sent: %v", got)
 	}
+}
+
+// One call adds an entry and takes another out: with deletes off that is
+// allowed, as the playlist is not left empty, where taking out the only
+// entry alone is refused.
+func TestPlaylistEditAddsAndRemovesAtOnce(t *testing.T) {
+	t.Parallel()
+
+	list := func(books ...string) string {
+		rows := make([]string, 0, len(books))
+		for _, b := range books {
+			rows = append(rows, `{"libraryItemId":"`+b+`"}`)
+		}
+		return `{"id":"` + playlistP + `","libraryId":"` + libID + `","name":"Books List","items":[` + strings.Join(rows, ",") + `]}`
+	}
+	f := newFakeABS(t)
+	shelfRoutes(f)
+	f.inTurn("GET /api/playlists/"+playlistP, list(bookB1), list(bookB1), list(bookB2))
+	f.json("POST /api/playlists/"+playlistP+"/batch/add", list(bookB1, bookB2))
+	f.json("POST /api/playlists/"+playlistP+"/batch/remove", list(bookB1, bookB2))
+	call := callerWith(t, f, Options{})
+
+	out, err := call("playlist_edit", map[string]any{"playlist": playlistP, "add_entries": []any{map[string]any{"item": bookB2}}, "remove_entries": []any{map[string]any{"item": bookB1}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(strs(t, out["added"]), []string{"Second"}) || !slices.Equal(strs(t, out["removed"]), []string{"First"}) || num(t, out["entries"]) != 1 || out["deleted"] != nil {
+		t.Errorf("answer = %v, want Second in, First out, one entry left", out)
+	}
+
+	_, err = call("playlist_edit", map[string]any{"playlist": playlistP, "add_entries": []any{map[string]any{"item": bookB3}}, "remove_entries": []any{map[string]any{"item": bookB3}}})
+	wantErr(t, "an entry both added and removed", err, "Third", "one or the other")
 }

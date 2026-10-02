@@ -26,10 +26,10 @@ func TestAStoreAlreadyRecordedIsNotWrittenAgain(t *testing.T) {
 	f.json("PATCH /api/items/"+itemID+"/media", `{"updated":true}`)
 	call := toolCaller(t, f)
 
-	if _, err := call("item_match_apply", map[string]any{"item": itemID, "asin": "B0DUNE", "provider": "audible"}); err != nil {
+	if _, err := call("item_match_apply", map[string]any{"confirm": true, "item": itemID, "asin": "B0DUNE", "providers": []any{"audible"}}); err != nil {
 		t.Fatal(err)
 	}
-	out, err := call("item_match_apply_batch", map[string]any{"matches": []any{map[string]any{"item": itemID, "asin": "B0DUNE", "provider": "audible"}}})
+	out, err := call("item_match_apply_batch", map[string]any{"confirm": true, "matches": []any{map[string]any{"item": itemID, "asin": "B0DUNE", "provider": "audible"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,8 +108,8 @@ func TestLookupRefusesALibraryOnGoogle(t *testing.T) {
 		{"audit_matched", map[string]any{"library": "Books", "filter": "genres:Fiction"}},
 		{"audit_covers", map[string]any{"library": "Books", "store": true}},
 		{"item_match_tag", map[string]any{"library": "Books"}},
-		{"item_cover_upgrade", map[string]any{"library": "Books", "items": []any{"li_1"}}},
-		{"item_cover_upgrade", map[string]any{"items": []any{"li_1"}}}, // the book's own library
+		{"item_cover_upgrade", map[string]any{"confirm": true, "library": "Books", "items": []any{"li_1"}}},
+		{"item_cover_upgrade", map[string]any{"confirm": true, "items": []any{"li_1"}}}, // the book's own library
 	} {
 		_, err := call(tc.tool, tc.args)
 		if err == nil || !strings.Contains(err.Error(), `library "Books" is on the google provider, which cannot look up an asin`) || !strings.Contains(err.Error(), "--providers (ABS_PROVIDERS), e.g. audible.ca,audible") {
@@ -238,9 +238,9 @@ func TestAMatchKeepsTheTagsItFilled(t *testing.T) {
 		tool string
 		args map[string]any
 	}{
-		{"item_match_apply", map[string]any{"item": itemID, "asin": "B0DUNE", "provider": "audible", "smart": true}},
-		{"item_match_apply_batch", map[string]any{"matches": []any{map[string]any{"item": itemID, "asin": "B0DUNE", "provider": "audible"}}, "smart": true}},
-		{"item_match_apply", map[string]any{"item": itemID, "asin": "B0DUNE", "provider": "audible"}},
+		{"item_match_apply", map[string]any{"confirm": true, "item": itemID, "asin": "B0DUNE", "providers": []any{"audible"}, "smart": true}},
+		{"item_match_apply_batch", map[string]any{"confirm": true, "matches": []any{map[string]any{"item": itemID, "asin": "B0DUNE", "provider": "audible"}}, "smart": true}},
+		{"item_match_apply", map[string]any{"confirm": true, "item": itemID, "asin": "B0DUNE", "providers": []any{"audible"}}},
 	} {
 		before := len(tagWrites(t, f, itemID))
 		if _, err := call(tc.tool, tc.args); err != nil {
@@ -265,7 +265,7 @@ func TestAMatchThatFoundNothingRecordsNothing(t *testing.T) {
 	f.json("PATCH /api/items/"+itemID+"/media", `{"updated":true}`)
 	call := toolCaller(t, f)
 
-	out, err := call("item_match_apply", map[string]any{"item": itemID, "asin": "B0NONE", "provider": "audible", "override_details": true, "keep": []any{"title"}})
+	out, err := call("item_match_apply", map[string]any{"confirm": true, "item": itemID, "asin": "B0NONE", "providers": []any{"audible"}, "override_details": true, "keep": []any{"title"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -276,7 +276,7 @@ func TestAMatchThatFoundNothingRecordsNothing(t *testing.T) {
 		t.Errorf("answer = %v, want nothing updated or kept", out)
 	}
 
-	out, err = call("item_match_apply_batch", map[string]any{"matches": []any{map[string]any{"item": itemID, "asin": "B0NONE", "provider": "audible"}}})
+	out, err = call("item_match_apply_batch", map[string]any{"confirm": true, "matches": []any{map[string]any{"item": itemID, "asin": "B0NONE", "provider": "audible"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,12 +311,12 @@ func TestServersKeepTheirOwnProviderSettings(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 5 {
 		wg.Go(func() {
-			if _, err := callA("item_match_apply", map[string]any{"item": bookA, "asin": "B0DUNE"}); err != nil {
+			if _, err := callA("item_match_apply", map[string]any{"confirm": true, "item": bookA, "asin": "B0DUNE"}); err != nil {
 				t.Error(err)
 			}
 		})
 		wg.Go(func() {
-			if _, err := callB("item_match_apply", map[string]any{"item": bookB, "asin": "B0DUNE"}); err != nil {
+			if _, err := callB("item_match_apply", map[string]any{"confirm": true, "item": bookB, "asin": "B0DUNE"}); err != nil {
 				t.Error(err)
 			}
 		})
@@ -354,7 +354,7 @@ func TestProvidersAreCheckedAgainstTheServer(t *testing.T) {
 		{"audit_matched", map[string]any{"providers": []any{"google"}}, "google cannot look up an asin; only an Audible store can: audible, audible.ca"},
 		{"item_match_tag", map[string]any{"library": "Books", "providers": []any{"Audible.ca"}}, `no provider "Audible.ca"`},
 		{"audit_covers", map[string]any{"library": "Books", "store": true, "providers": []any{"google"}}, "cannot look up an asin"},
-		{"item_cover_upgrade", map[string]any{"items": []any{"li_1"}, "providers": []any{"google"}}, "cannot look up an asin"},
+		{"item_cover_upgrade", map[string]any{"confirm": true, "items": []any{"li_1"}, "providers": []any{"google"}}, "cannot look up an asin"},
 	} {
 		_, err := call(tc.tool, tc.args)
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
@@ -438,7 +438,7 @@ func TestSingleBookMatchesCheckTheProviderNamed(t *testing.T) {
 	call := toolCaller(t, f)
 
 	for _, tool := range []string{"item_match", "item_match_apply", "item_cover_search"} {
-		args := map[string]any{"item": itemID, "provider": "audibel.ca"}
+		args := map[string]any{"item": itemID, "providers": []any{"audibel.ca"}}
 		if tool == "item_match_apply" {
 			args["asin"] = "B0DUNE"
 		}
@@ -452,7 +452,180 @@ func TestSingleBookMatchesCheckTheProviderNamed(t *testing.T) {
 		}
 	}
 
-	if _, err := call("item_match", map[string]any{"item": itemID, "provider": "audible.ca"}); err != nil {
+	if _, err := call("item_match", map[string]any{"item": itemID, "providers": []any{"audible.ca"}}); err != nil {
 		t.Errorf("a store the server has was refused: %v", err)
+	}
+}
+
+// storesHolding serves the provider search so that only the stores named have
+// candidates for a title and a record for an asin.
+func storesHolding(f *fakeABS, holding ...string) {
+	f.json("GET /api/search/providers", `{"providers":{"books":[{"value":"google"},{"value":"audible"},{"value":"audible.ca"}],"podcasts":[]}}`)
+	f.mux.HandleFunc("GET /api/search/books", func(w http.ResponseWriter, r *http.Request) {
+		if !slices.Contains(holding, r.URL.Query().Get("provider")) {
+			_, _ = w.Write([]byte(`[]`))
+			return
+		}
+		_, _ = w.Write([]byte(`[{"title":"Dune","author":"Frank Herbert","asin":"B0DUNE"}]`))
+	})
+}
+
+// asked is the stores the provider search was asked, in order.
+func asked(t *testing.T, f *fakeABS) []string {
+	t.Helper()
+
+	reqs := f.requests("/api/search/books")
+	out := make([]string, 0, len(reqs))
+	for _, r := range reqs {
+		out = append(out, parseQuery(t, r.Query).Get("provider"))
+	}
+	return out
+}
+
+// The single-book tools take the stores in order, as the batch tools do: the
+// first with any candidates answers, and the answer says which it was.
+func TestItemMatchAsksEachProviderInOrder(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	oneLibrary(f)
+	f.json("GET /api/items/"+itemID, item(itemID, "Dune", `"authorName":"Frank Herbert"`, ""))
+	f.json("GET /api/search/covers", `{"results":[]}`)
+	storesHolding(f, "audible")
+	call := toolCaller(t, f)
+
+	out, err := call("item_match", map[string]any{"item": itemID, "providers": []any{"audible.ca", "audible", "google"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if str(t, out["provider"]) != "audible" || len(list(t, out["candidates"])) != 1 {
+		t.Errorf("answer = %v, want the candidate, from audible", out)
+	}
+	if got := asked(t, f); !slices.Equal(got, []string{"audible.ca", "audible"}) {
+		t.Errorf("asked %v, want audible.ca then audible, and no further", got)
+	}
+
+	// no store has any: the last one asked is named, and that is an answer
+	out, err = call("item_match", map[string]any{"item": itemID, "providers": []any{"audible.ca", "google"}})
+	if err != nil || str(t, out["provider"]) != "google" || len(list(t, out["candidates"])) != 0 {
+		t.Errorf("no store holding it = %v, %v", out, err)
+	}
+
+	// covers are asked for the same way
+	out, err = call("item_cover_search", map[string]any{"item": itemID, "providers": []any{"audible.ca", "audible"}})
+	if err != nil || str(t, out["provider"]) != "audible" {
+		t.Errorf("item_cover_search = %v, %v; want both stores asked and the last named", out, err)
+	}
+	if got := f.requests("/api/search/covers"); len(got) != 2 {
+		t.Errorf("covers asked %d times, want once a store", len(got))
+	}
+}
+
+// With no store named the server's --providers are asked in order, the
+// store the book's tag records first.
+func TestItemMatchDefaultsToTheConfiguredProviders(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	oneLibrary(f)
+	f.json("GET /api/items/"+itemID, item(itemID, "Dune", `"authorName":"Frank Herbert"`, `"tags":["zz-provider:audible"]`))
+	storesHolding(f)
+	call := callerWith(t, f, Options{Providers: []string{"audible.ca", "audible"}})
+
+	if _, err := call("item_match", map[string]any{"item": itemID}); err != nil {
+		t.Fatal(err)
+	}
+	if got := asked(t, f); !slices.Equal(got, []string{"audible", "audible.ca"}) {
+		t.Errorf("asked %v, want the recorded store and then the other", got)
+	}
+}
+
+// An asin is applied from the first store that holds it, and without confirm
+// nothing is applied: the answer says which book, from which store.
+func TestItemMatchApplyFindsTheStoreAndWaitsForConfirm(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	oneLibrary(f)
+	f.json("GET /api/items/"+itemID, item(itemID, "Dune", `"authorName":"Frank Herbert"`, ""))
+	f.json("POST /api/items/"+itemID+"/match", `{"updated":true,"libraryItem":`+item(itemID, "Dune", `"authorName":"Frank Herbert","asin":"B0DUNE"`, "")+`}`)
+	f.json("PATCH /api/items/"+itemID+"/media", `{"updated":true}`)
+	storesHolding(f, "audible")
+	call := toolCaller(t, f)
+
+	args := map[string]any{"item": itemID, "asin": "B0DUNE", "providers": []any{"audible.ca", "audible"}}
+	out, err := call("item_match_apply", args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	would, ok := out["would_apply"].(map[string]any)
+	if !ok || str(t, would["provider"]) != "audible" || str(t, would["asin"]) != "B0DUNE" || out["applied"] != nil {
+		t.Errorf("without confirm = %v, want would_apply naming audible", out)
+	}
+	if got := f.changes(); len(got) != 0 {
+		t.Fatalf("without confirm sent %v", got)
+	}
+
+	args["confirm"] = true
+	if out, err = call("item_match_apply", args); err != nil {
+		t.Fatal(err)
+	}
+	applied, ok := out["applied"].(map[string]any)
+	if !ok || str(t, applied["provider"]) != "audible" || !boolOf(t, out["updated"]) || out["would_apply"] != nil {
+		t.Errorf("with confirm = %v, want it applied from audible", out)
+	}
+	matches := f.requests("/api/items/" + itemID + "/match")
+	if len(matches) != 1 || !strings.Contains(matches[0].Body, `"provider":"audible"`) {
+		t.Errorf("matched with %v, want one match at audible", matches)
+	}
+	if writes := tagWrites(t, f, itemID); len(writes) != 1 || !slices.Contains(writes[0], "zz-provider:audible") {
+		t.Errorf("tags written %v, want the store that held it recorded", writes)
+	}
+
+	// no store holds it: an error naming them, and nothing sent
+	sent := len(f.changes())
+	_, err = call("item_match_apply", map[string]any{"item": itemID, "asin": "B0DUNE", "providers": []any{"audible.ca", "google"}, "confirm": true})
+	wantErr(t, "an asin no store holds", err, "none of audible.ca, google", "B0DUNE")
+	if len(f.changes()) != sent {
+		t.Error("a match was sent for an asin no store holds")
+	}
+}
+
+// A batch row that names no store is applied from the first of the call's
+// that holds its asin; without confirm no row is applied and each says which
+// store it would be.
+func TestItemMatchApplyBatchFindsTheStoreAndWaitsForConfirm(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	oneLibrary(f)
+	f.json("GET /api/items/"+itemID, item(itemID, "Dune", `"authorName":"Frank Herbert"`, ""))
+	f.json("POST /api/items/"+itemID+"/match", `{"updated":true,"libraryItem":`+item(itemID, "Dune", `"authorName":"Frank Herbert","asin":"B0DUNE"`, "")+`}`)
+	f.json("PATCH /api/items/"+itemID+"/media", `{"updated":true}`)
+	storesHolding(f, "audible")
+	call := toolCaller(t, f)
+
+	args := map[string]any{"matches": []any{map[string]any{"item": itemID, "asin": "B0DUNE"}}, "providers": []any{"audible.ca", "audible"}}
+	out, err := call("item_match_apply_batch", args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := list(t, out["results"])
+	if num(t, out["would_apply"]) != 1 || num(t, out["applied"]) != 0 || len(rows) != 1 || str(t, rows[0]["provider"]) != "audible" {
+		t.Errorf("without confirm = %v, want one row that would be applied from audible", out)
+	}
+	if got := f.changes(); len(got) != 0 {
+		t.Fatalf("without confirm sent %v", got)
+	}
+
+	args["confirm"] = true
+	if out, err = call("item_match_apply_batch", args); err != nil {
+		t.Fatal(err)
+	}
+	if num(t, out["applied"]) != 1 || out["would_apply"] != nil {
+		t.Errorf("with confirm = %v, want the row applied", out)
+	}
+	if matches := f.requests("/api/items/" + itemID + "/match"); len(matches) != 1 || !strings.Contains(matches[0].Body, `"provider":"audible"`) {
+		t.Errorf("matched with %v, want one match at audible", matches)
 	}
 }

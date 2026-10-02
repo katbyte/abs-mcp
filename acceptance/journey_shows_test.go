@@ -116,18 +116,25 @@ func showSubscribe(t *testing.T, feed *showFeed, folder string, latest int) (id 
 	return id, added
 }
 
-// showFindings is an audit of Podcasts as title -> detail, checked against
-// the count it reports.
-func showFindings(t *testing.T, audit string) map[string]string {
+// showFindings is one problem of audit_podcasts over Podcasts, as title ->
+// detail, the audit's count checked against everything it lists.
+func showFindings(t *testing.T, problem string) map[string]string {
 	t.Helper()
 
-	out := call(t, audit, map[string]any{"library": "Podcasts"})
+	out := call(t, "audit_podcasts", map[string]any{"library": "Podcasts"})
+	all := rows(t, out["findings"], "findings")
 	found := map[string]string{}
-	for _, f := range rows(t, out["findings"], "findings") {
-		found[text(f["title"])] = text(f["detail"])
+	for _, f := range all {
+		switch f["problem"] {
+		case problem:
+			found[text(f["title"])] = text(f["detail"])
+		case "no_episodes", "stale_feed":
+		default:
+			t.Errorf("a finding with no problem named: %v", f)
+		}
 	}
-	if n := num(t, out["total_findings"], "total_findings"); n != len(found) {
-		t.Errorf("%s reports %d findings and lists %v", audit, n, found)
+	if n := num(t, out["total_findings"], "total_findings"); n != len(all) {
+		t.Errorf("audit_podcasts reports %d findings and lists %d: %v", n, len(all), all)
 	}
 
 	return found
@@ -138,11 +145,11 @@ func showDate(when time.Time) string { return when.UTC().Format("2006-01-02") }
 
 // The podcast audits, each given a show to find and a show to leave alone.
 // A show subscribed with nothing downloaded is found by
-// audit_podcast_no_episodes until an episode arrives - and while its episodes
+// audit_podcasts no_episodes until an episode arrives - and while its episodes
 // are held back in the download queue, podcast_downloads shows one
 // downloading and one waiting, and a second request for them is not queued
 // twice. A show whose newest episode came out 200 days ago is found by
-// audit_podcast_stale_feed although its feed was checked a moment earlier,
+// audit_podcasts stale_feed although its feed was checked a moment earlier,
 // and one with yesterday's episode is not; the seeded shows, laid out on
 // disk, are found for having no feed. audit_all over the podcasts calls
 // every book audit not applicable, and says why. An audit that judged a show
@@ -164,13 +171,13 @@ func TestJourneyPodcastAuditsGivenSomethingToFind(t *testing.T) {
 	}
 
 	t.Run("nothing downloaded, found", func(t *testing.T) {
-		found := showFindings(t, "audit_podcast_no_episodes")
+		found := showFindings(t, "no_episodes")
 		if found["Zzyzx Fresh Show"] != "no episodes downloaded" || len(found) != 1 {
-			t.Errorf("audit_podcast_no_episodes = %v, want the new show alone", found)
+			t.Errorf("audit_podcasts no_episodes = %v, want the new show alone", found)
 		}
 		// no episode is not a stale one: that is the other audit's finding
-		if detail, ok := showFindings(t, "audit_podcast_stale_feed")["Zzyzx Fresh Show"]; ok {
-			t.Errorf("audit_podcast_stale_feed finds a show with nothing downloaded: %s", detail)
+		if detail, ok := showFindings(t, "stale_feed")["Zzyzx Fresh Show"]; ok {
+			t.Errorf("audit_podcasts stale_feed finds a show with nothing downloaded: %s", detail)
 		}
 	})
 
@@ -217,8 +224,8 @@ func TestJourneyPodcastAuditsGivenSomethingToFind(t *testing.T) {
 		if again["queued"] != nil || !slices.Equal(strs(t, again["already_queued"], "already_queued"), []string{"Zzyzx Fresh Two", "Zzyzx Fresh One"}) {
 			t.Errorf("asking again while they download = %v, want both already queued", again)
 		}
-		if _, ok := showFindings(t, "audit_podcast_no_episodes")["Zzyzx Fresh Show"]; !ok {
-			t.Error("the show is off audit_podcast_no_episodes before an episode arrived")
+		if _, ok := showFindings(t, "no_episodes")["Zzyzx Fresh Show"]; !ok {
+			t.Error("the show is off audit_podcasts no_episodes before an episode arrived")
 		}
 
 		release()
@@ -228,8 +235,8 @@ func TestJourneyPodcastAuditsGivenSomethingToFind(t *testing.T) {
 		if got := queue(); len(got) != 0 {
 			t.Errorf("podcast_downloads once they arrived = %v, want nothing", got)
 		}
-		if found := showFindings(t, "audit_podcast_no_episodes"); len(found) != 0 {
-			t.Errorf("audit_podcast_no_episodes after the downloads = %v, want nothing", found)
+		if found := showFindings(t, "no_episodes"); len(found) != 0 {
+			t.Errorf("audit_podcasts no_episodes after the downloads = %v, want nothing", found)
 		}
 	})
 
@@ -246,10 +253,10 @@ func TestJourneyPodcastAuditsGivenSomethingToFind(t *testing.T) {
 			t.Fatalf("last_check = %v (%v), want just now", downloads["last_check"], err)
 		}
 
-		found := showFindings(t, "audit_podcast_stale_feed")
+		found := showFindings(t, "stale_feed")
 		days := int(time.Since(quietNewest).Hours() / 24)
 		if want := fmt.Sprintf("no new episode in %d days: the newest came out %s", days, showDate(quietNewest)); found["Zzyzx Quiet Show"] != want {
-			t.Errorf("audit_podcast_stale_feed on the quiet show = %q, want %q", found["Zzyzx Quiet Show"], want)
+			t.Errorf("audit_podcasts stale_feed on the quiet show = %q, want %q", found["Zzyzx Quiet Show"], want)
 		}
 		if detail, ok := found["Zzyzx Fresh Show"]; ok {
 			t.Errorf("a show with yesterday's episode is stale: %s", detail)
@@ -260,7 +267,7 @@ func TestJourneyPodcastAuditsGivenSomethingToFind(t *testing.T) {
 			}
 		}
 		if len(found) != 1+len(podcasts) {
-			t.Errorf("audit_podcast_stale_feed = %v, want the quiet show and the seeded ones", found)
+			t.Errorf("audit_podcasts stale_feed = %v, want the quiet show and the seeded ones", found)
 		}
 	})
 
@@ -275,8 +282,8 @@ func TestJourneyPodcastAuditsGivenSomethingToFind(t *testing.T) {
 			{"auto_download": true, "schedule": "0 25 * * *"},
 		} {
 			args["item"] = quietID
-			if msg := callErr(t, "podcast_settings", args); !strings.Contains(msg, "schedule") && !strings.Contains(msg, "0 or more") {
-				t.Errorf("podcast_settings %v: %s", args, msg)
+			if msg := callErr(t, "podcast_edit", args); !strings.Contains(msg, "schedule") && !strings.Contains(msg, "0 or more") {
+				t.Errorf("podcast_edit %v: %s", args, msg)
 			}
 		}
 		if after := call(t, "item_get", map[string]any{"item": quietID})["downloads"]; !sameJSON(before, after) {
@@ -311,11 +318,13 @@ func TestJourneyPodcastAuditsGivenSomethingToFind(t *testing.T) {
 		for _, r := range rows(t, all["audits"], "audits") {
 			counts[text(r["audit"])] = num(t, r["found"], "found")
 		}
-		if counts["audit_podcast_stale_feed"] != 1+len(podcasts) || slices.Contains(strs(t, all["clean"], "clean"), "audit_podcast_stale_feed") {
-			t.Errorf("audit_all stale feeds = %d, want %d", counts["audit_podcast_stale_feed"], 1+len(podcasts))
+		// the stale feeds, and no show without episodes: audit_all's count is
+		// audit_podcasts' own
+		if counts["audit_podcasts"] != 1+len(podcasts) || slices.Contains(strs(t, all["clean"], "clean"), "audit_podcasts") {
+			t.Errorf("audit_all's audit_podcasts = %d, want %d", counts["audit_podcasts"], 1+len(podcasts))
 		}
-		if !slices.Contains(strs(t, all["clean"], "clean"), "audit_podcast_no_episodes") {
-			t.Errorf("audit_podcast_no_episodes is not clean in audit_all: %v", all)
+		if n := len(showFindings(t, "stale_feed")) + len(showFindings(t, "no_episodes")); n != counts["audit_podcasts"] {
+			t.Errorf("audit_podcasts lists %d findings and audit_all counts %d", n, counts["audit_podcasts"])
 		}
 
 		// and the reverse, over the books
@@ -324,7 +333,7 @@ func TestJourneyPodcastAuditsGivenSomethingToFind(t *testing.T) {
 		for _, r := range rows(t, books["not_run"], "not_run") {
 			reasons[text(r["audit"])] = text(r["reason"])
 		}
-		for _, name := range []string{"audit_podcast_stale_feed", "audit_podcast_no_episodes"} {
+		for _, name := range []string{"audit_podcasts"} {
 			if !strings.Contains(reasons[name], "holds books") {
 				t.Errorf("not_run over Fiction %s = %q, want it said the library holds books", name, reasons[name])
 			}

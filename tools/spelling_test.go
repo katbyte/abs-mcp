@@ -54,7 +54,7 @@ func TestMetadataRenameRemoveNeedsConfirm(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	preview, ok := out["preview"].(map[string]any)
+	preview, ok := out["would_remove"].(map[string]any)
 	if !ok || num(t, preview["found"]) != 3 || !slices.Equal(strs(t, preview["items"]), []string{"Dune", "Emma", "A Podcast"}) || num(t, out["items_updated"]) != 0 {
 		t.Errorf("tag preview = %v, want 3 items in both libraries named, nothing updated", out)
 	}
@@ -63,7 +63,7 @@ func TestMetadataRenameRemoveNeedsConfirm(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if preview, ok := out["preview"].(map[string]any); !ok || num(t, preview["found"]) != 1 {
+	if preview, ok := out["would_remove"].(map[string]any); !ok || num(t, preview["found"]) != 1 {
 		t.Errorf("narrator preview = %v", out)
 	}
 	// a podcast library has no narrators and answers an unknown filter with
@@ -78,7 +78,7 @@ func TestMetadataRenameRemoveNeedsConfirm(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if preview, ok := out["preview"].(map[string]any); !ok || num(t, preview["found"]) != 1 || !slices.Equal(strs(t, preview["items"]), []string{"Hobbit"}) {
+	if preview, ok := out["would_remove"].(map[string]any); !ok || num(t, preview["found"]) != 1 || !slices.Equal(strs(t, preview["items"]), []string{"Hobbit"}) {
 		t.Errorf("language preview = %v, want the one book spelled eng", out)
 	}
 
@@ -93,7 +93,7 @@ func TestMetadataRenameRemoveNeedsConfirm(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if num(t, out["items_updated"]) != 3 || out["preview"] != nil {
+	if num(t, out["items_updated"]) != 3 || out["would_remove"] != nil {
 		t.Errorf("confirmed remove = %v", out)
 	}
 	if got := f.requests("/api/tags/" + b64("zz-provider:audible.ca")); len(got) != 1 || got[0].Method != http.MethodDelete {

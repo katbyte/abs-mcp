@@ -140,6 +140,60 @@
       "body": "[{\"asin\":\"B07WH3DRTX\",\"name\":\"BY [Yuval Noah Harari] A Brief History of Humankind Sapiens \u0026 Homo Deus: A Brief History of Tomorrow[Paperback]\"},{\"asin\":\"B07WH3DRTX\",\"name\":\"BY [Yuval Noah Harari] A Brief History of Humankind Sapiens \u0026 Homo Deus: A Brief History of Tomorrow[Paperback]\"},{\"asin\":\"B07WH3DRTX\",\"name\":\"BY [Yuval Noah Harari] A Brief History of Humankind Sapiens \u0026 Homo Deus: A Brief History of Tomorrow[Paperback]\"},{\"asin\":\"B005QSV2P8\",\"name\":\"A Brief History of Time\"},{\"name\":\"Sapiens: A Brief History of Humankind\",\"asin\":\"B0741F3M7C\"},{\"asin\":\"B00ICN066A\",\"name\":\"Sapiens: A Brief History of Humankind\"},{\"asin\":\"B08J8CGVMC\",\"name\":\"Crónicas matemáticas [Mathematical Chronicles]: Una breve historia de la ciencia más antigua y sus personajes [A Brief History of the Oldest Science and Its Characters]\"},{\"asin\":\"B008TVG9K2\",\"name\":\"The Influence of Sea Power Upon History, 1660-1783 (Dover Military History, Weapons, Armor)\"},{\"asin\":\"B073P6TMPK\",\"name\":\"Captivating History\"},{\"asin\":\"B09FHZ7V8J\",\"name\":\"Enthralling History\"},{\"asin\":\"B07D2JSHRF\",\"name\":\"THE HISTORY HOUR\"},{\"asin\":\"B087GD6N5T\",\"name\":\"History Nerds\"},{\"asin\":\"B07HYFTJVQ\",\"name\":\"The History Journals\"},{\"asin\":\"B073P6TMPK\",\"name\":\"Captivating History\"},{\"asin\":\"B073P6TMPK\",\"name\":\"Captivating History\"},{\"asin\":\"B09FHZ7V8J\",\"name\":\"Enthralling History\"},{\"asin\":\"B073P6TMPK\",\"name\":\"Captivating History\"},{\"asin\":\"B087GD6N5T\",\"name\":\"History Nerds\"},{\"asin\":\"B01HK3YQOA\",\"name\":\"History of Thrones\"},{\"asin\":\"B01HXXGBSQ\",\"name\":\"Hourly History\"},{\"asin\":\"B07DYQY8FH\",\"name\":\"Virginia Vice\"},{\"asin\":\"B09FHZ7V8J\",\"name\":\"Enthralling History\"},{\"asin\":\"B09Z97J4LQ\",\"name\":\"HISTORY FOREVER\"},{\"asin\":\"B08W59L7QS\",\"name\":\"Making History\"},{\"asin\":\"B09FHZ7V8J\",\"name\":\"Enthralling History\"}]"
     },
     {
+      "key": "GET api.audnex.us/authors?name=foundation+and+empire",
+      "method": "GET",
+      "host": "api.audnex.us",
+      "path": "/authors",
+      "query": "name=foundation+and+empire",
+      "status": 200,
+      "headers": {
+        "Content-Security-Policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+        "Content-Type": "application/json; charset=utf-8",
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Cross-Origin-Resource-Policy": "same-origin",
+        "Origin-Agent-Cluster": "?1",
+        "Referrer-Policy": "no-referrer",
+        "Server": "cloudflare",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+        "Vary": "Accept-Encoding",
+        "X-Content-Type-Options": "nosniff",
+        "X-Dns-Prefetch-Control": "off",
+        "X-Download-Options": "noopen",
+        "X-Frame-Options": "SAMEORIGIN",
+        "X-Permitted-Cross-Domain-Policies": "none",
+        "X-Ratelimit-Limit": "300",
+        "X-Xss-Protection": "0"
+      },
+      "body": "[{\"asin\":\"B003IF37TK\",\"name\":\"Foundation\"},{\"asin\":\"B000FC1PPC\",\"name\":\"Foundation's Triumph (Second Foundation Trilogy Series Book 3)\"},{\"asin\":\"B0B3LRLLBZ\",\"name\":\"Lillian Empire\"},{\"asin\":\"B00DB5ZIP8\",\"name\":\"Anasazi Foundation\"},{\"asin\":\"B0B3LRLLBZ\",\"name\":\"Lillian Empire\"},{\"asin\":\"B0B3LRLLBZ\",\"name\":\"Lillian Empire\"},{\"asin\":\"B08FM62D1J\",\"name\":\"Parkinson's Foundation\"},{\"asin\":\"B01HILFEVI\",\"name\":\"Empire Publishing\"},{\"asin\":\"B01MA6LA7C\",\"name\":\"Napoleon Hill Foundation\"},{\"asin\":\"B01MA6LA7C\",\"name\":\"Napoleon Hill Foundation\"},{\"asin\":\"B09KKR1NJB\",\"name\":\"Daughter of the Drowned Empire\"},{\"asin\":\"B089B6PQXW\",\"name\":\"Tejgyan Global Foundation\"},{\"asin\":\"B001QKBHG4\",\"name\":\"The Final Empire: Mistborn Book 1\"},{\"asin\":\"B07XCGBBMS\",\"name\":\"Invasion (The Falling Empires Series Book 3)\"},{\"asin\":\"B07N7GNCQ7\",\"name\":\"How to Hide an Empire: A History of the Greater United States\"},{\"asin\":\"B07RV36CCH\",\"name\":\"Peacekeepers (The Falling Empires Series Book 2)\"},{\"asin\":\"B079H3CHYS\",\"name\":\"The Fall of the Gas-Lit Empire: The Complete Series\"},{\"asin\":\"B01E4G7GYS\",\"name\":\"Night of Knives: Novels of the Malazan Empire, Book 1\"},{\"asin\":\"B0DR3873M9\",\"name\":\"Empire of AI: Dreams and Nightmares in Sam Altman's OpenAI\"},{\"asin\":\"B084FY6ST8\",\"name\":\"The Bone Shard Daughter (The Drowning Empire Book 1)\"},{\"asin\":\"B0BKCCZXL5\",\"name\":\"The Four Foundations of Golf: How to Build a Game That Lasts a Lifetime\"},{\"asin\":\"B082TRM9BL\",\"name\":\"How To Rule An Empire and Get Away With It: The Siege, Book 2\"},{\"asin\":\"B0DQSQKMY4\",\"name\":\"Empire of AI: Dreams and Nightmares in Sam Altman's OpenAI\"},{\"asin\":\"B089S7FPLB\",\"name\":\"From a Certain Point of View: The Empire Strikes Back (Star Wars)\"},{\"asin\":\"B084BVRV5H\",\"name\":\"Dawn of Empire: A Mecha Scifi Epic (The Messenger Book 5)\"}]"
+    },
+    {
+      "key": "GET api.audnex.us/authors?name=isaac+asimov",
+      "method": "GET",
+      "host": "api.audnex.us",
+      "path": "/authors",
+      "query": "name=isaac+asimov",
+      "status": 200,
+      "headers": {
+        "Content-Security-Policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+        "Content-Type": "application/json; charset=utf-8",
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Cross-Origin-Resource-Policy": "same-origin",
+        "Origin-Agent-Cluster": "?1",
+        "Referrer-Policy": "no-referrer",
+        "Server": "cloudflare",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+        "Vary": "Accept-Encoding",
+        "X-Content-Type-Options": "nosniff",
+        "X-Dns-Prefetch-Control": "off",
+        "X-Download-Options": "noopen",
+        "X-Frame-Options": "SAMEORIGIN",
+        "X-Permitted-Cross-Domain-Policies": "none",
+        "X-Ratelimit-Limit": "300",
+        "X-Xss-Protection": "0"
+      },
+      "body": "[{\"asin\":\"B003RY2ISS\",\"name\":\"Isaac Asimov\"},{\"asin\":\"B003RY2ISS\",\"name\":\"Isaac Asimov\"},{\"asin\":\"B003RY2ISS\",\"name\":\"Isaac Asimov\"},{\"asin\":\"B003RY2ISS\",\"name\":\"Isaac Asimov\"},{\"asin\":\"B003RY2ISS\",\"name\":\"Isaac Asimov\"},{\"asin\":\"B003RY2ISS\",\"name\":\"Isaac Asimov\"},{\"asin\":\"B003RY2ISS\",\"name\":\"Isaac Asimov\"},{\"asin\":\"B003RY2ISS\",\"name\":\"Isaac Asimov\"},{\"asin\":\"B003RY2ISS\",\"name\":\"Isaac Asimov\"},{\"asin\":\"B09FQ92PLT\",\"name\":\"Isaac Steele and the Forever Man: The Isaac Steele Chronicles\"},{\"asin\":\"B07CSWV9M7\",\"name\":\"Danielle Isaac\"},{\"asin\":\"B001H9VHXM\",\"name\":\"Isaac Deutscher\"},{\"asin\":\"B079WTJPSG\",\"name\":\"Isaac Daly\"},{\"asin\":\"B000APWFLM\",\"name\":\"Susan Isaacs\"},{\"asin\":\"B00CWH6PHQ\",\"name\":\"Isaac Weishaupt\"},{\"asin\":\"B001H9VHXM\",\"name\":\"Isaac Deutscher\"},{\"asin\":\"B0GQD95VK1\",\"name\":\"Robert Isaacs\"},{\"asin\":\"B00CF4B3UU\",\"name\":\"Isaac Thorne\"},{\"asin\":\"B0CYBPN2NS\",\"name\":\"Isaac Arnsdorf\"},{\"asin\":\"B00C430X1W\",\"name\":\"Isaac Ummin\"},{\"asin\":\"B004VRW47U\",\"name\":\"Tracy Isaacs\"},{\"asin\":\"B073S34CFC\",\"name\":\"Jay Isaacs\"},{\"asin\":\"B082XWDQ5C\",\"name\":\"Isaac Craft\"},{\"asin\":\"B07PVWKY3S\",\"name\":\"Mike Isaac\"},{\"asin\":\"B0GQD95VK1\",\"name\":\"Robert Isaacs\"}]"
+    },
+    {
       "key": "GET api.audnex.us/authors?name=qxvzq+jzkfh",
       "method": "GET",
       "host": "api.audnex.us",
@@ -219,6 +273,33 @@
         "X-Xss-Protection": "0"
       },
       "body": "[{\"asin\":\"B001KH8KDQ\",\"name\":\"Robert Evans\"},{\"asin\":\"B089CVKXMW\",\"name\":\"Robert Evans\"},{\"asin\":\"B001KH8KDQ\",\"name\":\"Robert Evans\"},{\"asin\":\"B000APOII0\",\"name\":\"Robert Evans\"},{\"asin\":\"B001KH8KDQ\",\"name\":\"Robert Evans\"},{\"asin\":\"B089CVKXMW\",\"name\":\"Robert Evans\"},{\"asin\":\"B001KH8KDQ\",\"name\":\"Robert Evans\"},{\"asin\":\"B000APOII0\",\"name\":\"Robert Evans\"},{\"asin\":\"B000APOII0\",\"name\":\"Robert Evans\"},{\"asin\":\"B089CVKXMW\",\"name\":\"Robert Evans\"},{\"asin\":\"B089CVKXMW\",\"name\":\"Robert Evans\"},{\"asin\":\"B001KH8KDQ\",\"name\":\"Robert Evans\"},{\"asin\":\"B011RGAO10\",\"name\":\"WE Roberts\"},{\"asin\":\"B011RGAO10\",\"name\":\"WE Roberts\"},{\"asin\":\"B011RGAO10\",\"name\":\"WE Roberts\"},{\"asin\":\"B011RGAO10\",\"name\":\"WE Roberts\"},{\"asin\":\"B011RGAO10\",\"name\":\"WE Roberts\"},{\"asin\":\"B011RGAO10\",\"name\":\"WE Roberts\"},{\"asin\":\"B011RGAO10\",\"name\":\"WE Roberts\"},{\"asin\":\"B011RGAO10\",\"name\":\"WE Roberts\"},{\"asin\":\"B095RNXKW6\",\"name\":\"Robert Cheeke\"},{\"asin\":\"B07C8Q6M7N\",\"name\":\"Richard Roberts\"},{\"asin\":\"B000APQRZW\",\"name\":\"Robert Swindells\"},{\"asin\":\"B004FT1H7C\",\"name\":\"Dan Roberts\"},{\"asin\":\"B07WHF5V8P\",\"name\":\"Bec Evans\"}]"
+    },
+    {
+      "key": "GET api.audnex.us/authors?name=second+foundation",
+      "method": "GET",
+      "host": "api.audnex.us",
+      "path": "/authors",
+      "query": "name=second+foundation",
+      "status": 200,
+      "headers": {
+        "Content-Security-Policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+        "Content-Type": "application/json; charset=utf-8",
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Cross-Origin-Resource-Policy": "same-origin",
+        "Origin-Agent-Cluster": "?1",
+        "Referrer-Policy": "no-referrer",
+        "Server": "cloudflare",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+        "Vary": "Accept-Encoding",
+        "X-Content-Type-Options": "nosniff",
+        "X-Dns-Prefetch-Control": "off",
+        "X-Download-Options": "noopen",
+        "X-Frame-Options": "SAMEORIGIN",
+        "X-Permitted-Cross-Domain-Policies": "none",
+        "X-Ratelimit-Limit": "300",
+        "X-Xss-Protection": "0"
+      },
+      "body": "[{\"asin\":\"B000FC1PPC\",\"name\":\"Foundation's Triumph (Second Foundation Trilogy Series Book 3)\"},{\"asin\":\"B003IF37TK\",\"name\":\"Foundation\"},{\"asin\":\"B08FM62D1J\",\"name\":\"Parkinson's Foundation\"},{\"asin\":\"B0FF568LHP\",\"name\":\"Second Chapter\"},{\"asin\":\"B00EECE1ZU\",\"name\":\"Seconde Nimenya\"},{\"asin\":\"B00DB5ZIP8\",\"name\":\"Anasazi Foundation\"},{\"asin\":\"B01MA6LA7C\",\"name\":\"Napoleon Hill Foundation\"},{\"asin\":\"B0FGXD57X5\",\"name\":\"Second Chance Duet\"},{\"asin\":\"B01MA6LA7C\",\"name\":\"Napoleon Hill Foundation\"},{\"asin\":\"B089B6PQXW\",\"name\":\"Tejgyan Global Foundation\"},{\"asin\":\"B07XVPWXZ1\",\"name\":\"Dishonesty Is the Second-Best Policy\"},{\"asin\":\"B09P2M657H\",\"name\":\"Training Essentials for Ultrarunning: Second Edition\"},{\"asin\":\"B00NPBNKFS\",\"name\":\"Second Son: (Jack Reacher Short Story)\"},{\"asin\":\"B0BKCCZXL5\",\"name\":\"The Four Foundations of Golf: How to Build a Game That Lasts a Lifetime\"},{\"asin\":\"B001LF2O16\",\"name\":\"Tasting and Smelling (Handbook of Perception and Cognition, Second Edition)\"},{\"asin\":\"B07NS53TKR\",\"name\":\"Social Engineering, Second Edition: The Science of Human Hacking\"},{\"asin\":\"B0GGTW86SM\",\"name\":\"The Betrayal Bind (Second Edition): How to Heal When the Person You Love the Most Hurts You the Worst\"},{\"name\":\"White Gold Wielder: The Second Chronicles of Thomas Covenant, Book 3\",\"asin\":\"B0B433HTT4\"},{\"asin\":\"B00D0OO306\",\"name\":\"White Gold Wielder (The Second Chronicles: Thomas Covenant the Unbeliever Book 3)\"},{\"asin\":\"B07GNXPP4P\",\"name\":\"I Will Teach You to Be Rich: No Guilt. No Excuses. Just a 6-Week Program That Works (Second Edition)\"},{\"asin\":\"B005WL38RY\",\"name\":\"Psychoanalytic Diagnosis, Second Edition: Understanding Personality Structure in the Clinical Process 2nd Edition by McWilliams PhD, Nancy [Hardcover]\"},{\"asin\":\"B0DP7M91F2\",\"name\":\"Season of the Witch: A Spicy Witch Christmas Romance – A Captivating Second Chance Fake Dating Contemporary Story (Toil and Trouble Book 3)\"},{\"asin\":\"B0DP7M91F2\",\"name\":\"Season of the Witch: A Spicy Witch Christmas Romance – A Captivating Second Chance Fake Dating Contemporary Story (Toil and Trouble Book 3)\"},{\"asin\":\"B0DP7M91F2\",\"name\":\"Season of the Witch: A Spicy Witch Christmas Romance – A Captivating Second Chance Fake Dating Contemporary Story (Toil and Trouble Book 3)\"},{\"asin\":\"B00F50EY1Q\",\"name\":\"Death Without Company: The thrilling second book in the best-selling, award-winning series - now a hit Netflix show! (Walt Longmire 2)\"}]"
     },
     {
       "key": "GET api.audnex.us/authors?name=smedley+butler",

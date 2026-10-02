@@ -3,6 +3,7 @@
 package acceptance
 
 import (
+	"slices"
 	"testing"
 )
 
@@ -29,9 +30,9 @@ func TestPlaylistLifecycle(t *testing.T) {
 		t.Error("the new playlist is not in playlist_list")
 	}
 
-	added := call(t, "playlist_entries_edit", map[string]any{
-		"playlist": "Integration Playlist", "action": "add",
-		"entries": []any{map[string]any{"item": "Foundation and Empire"}},
+	added := call(t, "playlist_edit", map[string]any{
+		"playlist":    "Integration Playlist",
+		"add_entries": []any{map[string]any{"item": "Foundation and Empire"}},
 	})
 	if n := num(t, added["entries"], "entries"); n != 2 {
 		t.Errorf("after add = %d entries, want 2", n)
@@ -42,9 +43,9 @@ func TestPlaylistLifecycle(t *testing.T) {
 		t.Errorf("playlist_get returned %d entries, want 2", len(entries))
 	}
 
-	removed := call(t, "playlist_entries_edit", map[string]any{
-		"playlist": "Integration Playlist", "action": "remove",
-		"entries": []any{map[string]any{"item": "Foundation"}},
+	removed := call(t, "playlist_edit", map[string]any{
+		"playlist":       "Integration Playlist",
+		"remove_entries": []any{map[string]any{"item": "Foundation"}},
 	})
 	if n := num(t, removed["entries"], "entries"); n != 1 {
 		t.Errorf("after remove = %d entries, want 1", n)
@@ -55,6 +56,21 @@ func TestPlaylistLifecycle(t *testing.T) {
 	})
 	if edited["description"] != "renamed description" {
 		t.Errorf("description = %v", edited["description"])
+	}
+
+	// all of it in one call: a description, an entry in and an entry out
+	both := call(t, "playlist_edit", map[string]any{
+		"playlist": "Integration Playlist", "description": "Zzyzx: three things at once",
+		"add_entries":    []any{map[string]any{"item": "Foundation"}},
+		"remove_entries": []any{map[string]any{"item": "Foundation and Empire"}},
+	})
+	if both["description"] != "Zzyzx: three things at once" || num(t, both["entries"], "entries") != 1 ||
+		!slices.Equal(strs(t, both["added"], "added"), []string{"Foundation"}) || !slices.Equal(strs(t, both["removed"], "removed"), []string{"Foundation and Empire"}) {
+		t.Errorf("three changes in one call = %v", both)
+	}
+	entries := rows(t, call(t, "playlist_get", map[string]any{"playlist": "Integration Playlist"})["entries"], "entries")
+	if len(entries) != 1 || text(object(entries[0]["item"])["title"]) != "Foundation" {
+		t.Errorf("the playlist holds %v, want Foundation alone", entries)
 	}
 }
 

@@ -97,8 +97,12 @@ func registerCollectionTools(r *registry) {
 
 	type listIn struct {
 		Library string `json:"library,omitempty" jsonschema:"restrict to one library by name or id"`
+		pageIn
 	}
 	type listOut struct {
+		Total       int   `json:"total"`
+		Offset      int   `json:"offset"`
+		NextOffset  int   `json:"next_offset,omitempty" jsonschema:"pass back as offset for the next page; absent on the last"`
 		Collections []row `json:"collections"`
 	}
 	add(r, readTool, &mcp.Tool{
@@ -117,9 +121,11 @@ func registerCollectionTools(r *registry) {
 		if err != nil {
 			return nil, listOut{}, err
 		}
-		out := listOut{Collections: []row{}}
-		for i := range cols {
-			out.Collections = append(out.Collections, rowOf(&cols[i]))
+		limit, offset := pageArgs(in.Limit, in.Offset, 50)
+		page, next := pageOf(cols, limit, offset)
+		out := listOut{Total: len(cols), Offset: offset, NextOffset: next, Collections: []row{}}
+		for i := range page {
+			out.Collections = append(out.Collections, rowOf(&page[i]))
 		}
 
 		return nil, out, nil
@@ -171,7 +177,7 @@ func registerCollectionTools(r *registry) {
 		}
 		for i := range existing {
 			if strings.EqualFold(strings.TrimSpace(existing[i].Name), name) {
-				return nil, row{}, fmt.Errorf("a collection named %q already exists in %s (%s): collection_books_edit adds books to it", existing[i].Name, lib.Name, existing[i].ID)
+				return nil, row{}, fmt.Errorf("a collection named %q already exists in %s (%s): collection_edit add_items adds books to it", existing[i].Name, lib.Name, existing[i].ID)
 			}
 		}
 		books, err := libraryBooks(ctx, client, lib.ID, in.Items)
@@ -188,124 +194,132 @@ func registerCollectionTools(r *registry) {
 
 	type editIn struct {
 		getIn
-		Name        string `json:"name,omitempty"`
-		Description string `json:"description,omitempty"`
+		Name        string   `json:"name,omitempty"`
+		Description string   `json:"description,omitempty"`
+		AddItems    []string `json:"add_items,omitempty"    jsonschema:"books to add, by id or exact title"`
+		RemoveItems []string `json:"remove_items,omitempty" jsonschema:"books to take out, by id or exact title; they stay in the library"`
 	}
-	add(r, writeTool, &mcp.Tool{
-		Name:        "collection_edit",
-		Description: "Rename a collection or change its description. Changes server state.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in editIn) (*mcp.CallToolResult, row, error) {
-		// a name of only spaces would leave a collection nothing can name
-		name := strings.TrimSpace(in.Name)
-		switch {
-		case in.Name != "" && name == "":
-			return nil, row{}, errors.New("name is blank: pass a name, or leave it out to keep the one it has")
-		case name == "" && in.Description == "":
-			return nil, row{}, errors.New("nothing to change: pass name or description")
-		}
-		c, err := resolveCollection(ctx, client, in.Collection)
-		if err != nil {
-			return nil, row{}, err
-		}
-		if name != "" {
-			others, cerr := client.Collections(ctx, c.LibraryID)
-			if cerr != nil {
-				return nil, row{}, cerr
-			}
-			for i := range others {
-				if others[i].ID != c.ID && strings.EqualFold(strings.TrimSpace(others[i].Name), name) {
-					return nil, row{}, fmt.Errorf("a collection named %q already exists (%s): two collections with one name cannot be told apart by name", others[i].Name, others[i].ID)
-				}
-			}
-		}
-		updated, err := client.UpdateCollection(ctx, c.ID, strPtr(name), strPtr(in.Description))
-		if err != nil {
-			return nil, row{}, err
-		}
-
-		return nil, rowOf(updated), nil
-	})
-
-	type itemsIn struct {
-		getIn
-		Items []string `json:"items" jsonschema:"books by id or exact title"`
-	}
-	type changeOut struct {
-		Collection  string   `json:"collection"`
-		Books       int      `json:"books"                  jsonschema:"size after the change"`
+	type editOut struct {
+		row
 		Added       []string `json:"added,omitempty"`
 		AlreadyHeld []string `json:"already_held,omitempty" jsonschema:"books asked for that the collection already held, left where they were"`
 		Removed     []string `json:"removed,omitempty"`
 		NotHeld     []string `json:"not_held,omitempty"     jsonschema:"books asked to be removed that the collection did not hold"`
 	}
-	type booksEditIn struct {
-		itemsIn
-		Action string `json:"action" jsonschema:"add or remove"`
-	}
 	add(r, writeTool, &mcp.Tool{
-		Name:        "collection_books_edit",
-		Description: "Add books to a collection or take them out of it, and say which were added or removed and which it already held or never did. Removing only changes the collection; the books stay in the library. Changes server state.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in booksEditIn) (*mcp.CallToolResult, changeOut, error) {
-		action := strings.ToLower(strings.TrimSpace(in.Action))
-		if action != "add" && action != "remove" {
-			return nil, changeOut{}, fmt.Errorf("action %q must be add or remove", in.Action)
+		Name:        "collection_edit",
+		Description: "Change a collection: rename it, change its description, add books to it or take books out of it. The answer is the collection as it now is, with which books were added or removed and which it already held or never did. Removing only changes the collection; the books stay in the library. Changes server state.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in editIn) (*mcp.CallToolResult, editOut, error) {
+		// a name of only spaces would leave a collection nothing can name
+		name := strings.TrimSpace(in.Name)
+		switch {
+		case in.Name != "" && name == "":
+			return nil, editOut{}, errors.New("name is blank: pass a name, or leave it out to keep the one it has")
+		case name == "" && in.Description == "" && len(in.AddItems) == 0 && len(in.RemoveItems) == 0:
+			return nil, editOut{}, errors.New("nothing to change: pass name, description, add_items or remove_items")
 		}
-
 		c, err := resolveCollection(ctx, client, in.Collection)
 		if err != nil {
-			return nil, changeOut{}, err
+			return nil, editOut{}, err
 		}
 		// what it holds is judged once held, so two adds of one book at once
 		// do not both say they added it
 		defer r.locks.hold("collection:" + c.ID)()
 		if c, err = client.Collection(ctx, c.ID); err != nil {
-			return nil, changeOut{}, err
+			return nil, editOut{}, err
 		}
-		books, err := libraryBooks(ctx, client, c.LibraryID, in.Items)
-		if err != nil {
-			return nil, changeOut{}, err
+		if name != "" {
+			others, cerr := client.Collections(ctx, c.LibraryID)
+			if cerr != nil {
+				return nil, editOut{}, cerr
+			}
+			for i := range others {
+				if others[i].ID != c.ID && strings.EqualFold(strings.TrimSpace(others[i].Name), name) {
+					return nil, editOut{}, fmt.Errorf("a collection named %q already exists (%s): two collections with one name cannot be told apart by name", others[i].Name, others[i].ID)
+				}
+			}
 		}
-		held := func(id string) bool { return slices.ContainsFunc(c.Books, func(b abs.Item) bool { return b.ID == id }) }
 
+		// everything is resolved before anything is sent, so a book named
+		// wrongly changes nothing at all
+		var adding, removing []abs.Item
+		if len(in.AddItems) > 0 {
+			if adding, err = libraryBooks(ctx, client, c.LibraryID, in.AddItems); err != nil {
+				return nil, editOut{}, err
+			}
+		}
+		if len(in.RemoveItems) > 0 {
+			if removing, err = libraryBooks(ctx, client, c.LibraryID, in.RemoveItems); err != nil {
+				return nil, editOut{}, err
+			}
+		}
+		for i := range adding {
+			if slices.ContainsFunc(removing, func(b abs.Item) bool { return b.ID == adding[i].ID }) {
+				return nil, editOut{}, fmt.Errorf("%q is in both add_items and remove_items; one or the other", adding[i].Title())
+			}
+		}
+		holds := func(c *abs.Collection, id string) bool {
+			return slices.ContainsFunc(c.Books, func(b abs.Item) bool { return b.ID == id })
+		}
 		// the server answers 200 to adding a book it holds and to removing one
 		// it does not, and changes nothing: the split is made here, so what
 		// comes back says what was actually done
-		out := changeOut{Collection: c.Name, Books: len(c.Books)}
-		var send []abs.Item
-		for i := range books {
-			switch {
-			case action == "add" && held(books[i].ID):
-				out.AlreadyHeld = append(out.AlreadyHeld, books[i].Title())
-			case action == "remove" && !held(books[i].ID):
-				out.NotHeld = append(out.NotHeld, books[i].Title())
-			default:
-				send = append(send, books[i])
+		out := editOut{}
+		var add, remove []abs.Item
+		for i := range adding {
+			if holds(c, adding[i].ID) {
+				out.AlreadyHeld = append(out.AlreadyHeld, adding[i].Title())
+			} else {
+				add = append(add, adding[i])
 			}
 		}
-		if len(send) == 0 {
-			return nil, out, nil
+		for i := range removing {
+			if holds(c, removing[i].ID) {
+				remove = append(remove, removing[i])
+			} else {
+				out.NotHeld = append(out.NotHeld, removing[i].Title())
+			}
 		}
 
-		var updated *abs.Collection
-		if action == "add" {
-			updated, err = client.AddToCollection(ctx, c.ID, bookIDs(send))
-		} else {
-			updated, err = client.RemoveFromCollection(ctx, c.ID, bookIDs(send))
-		}
-		if err != nil {
-			return nil, changeOut{}, err
-		}
-		for i := range send {
-			if held := slices.ContainsFunc(updated.Books, func(b abs.Item) bool { return b.ID == send[i].ID }); held != (action == "add") {
-				return nil, changeOut{}, fmt.Errorf("the server accepted the %s but %q is %s the collection afterwards", action, send[i].Title(), map[bool]string{true: "still in", false: "not in"}[held])
+		// each change after the first is said to have followed it when it
+		// fails, so a partial edit is never reported as none
+		var done []string
+		failed := func(what string, err error) error {
+			if len(done) == 0 {
+				return err
 			}
+			return fmt.Errorf("%s, but %s failed: %w", strings.Join(done, " and "), what, err)
 		}
-		out.Collection, out.Books = updated.Name, len(updated.Books)
-		if action == "add" {
-			out.Added = titles(send)
-		} else {
-			out.Removed = titles(send)
+		if name != "" || in.Description != "" {
+			if c, err = client.UpdateCollection(ctx, c.ID, strPtr(name), strPtr(in.Description)); err != nil {
+				return nil, editOut{}, err
+			}
+			done = append(done, "the name or description was changed")
 		}
+		if len(add) > 0 {
+			if c, err = client.AddToCollection(ctx, c.ID, bookIDs(add)); err != nil {
+				return nil, editOut{}, failed("adding the books", err)
+			}
+			for i := range add {
+				if !holds(c, add[i].ID) {
+					return nil, editOut{}, failed("adding the books", fmt.Errorf("the server accepted the add but %q is not in the collection afterwards", add[i].Title()))
+				}
+			}
+			out.Added = titles(add)
+			done = append(done, fmt.Sprintf("%d books were added", len(add)))
+		}
+		if len(remove) > 0 {
+			if c, err = client.RemoveFromCollection(ctx, c.ID, bookIDs(remove)); err != nil {
+				return nil, editOut{}, failed("removing the books", err)
+			}
+			for i := range remove {
+				if holds(c, remove[i].ID) {
+					return nil, editOut{}, failed("removing the books", fmt.Errorf("the server accepted the removal but %q is still in the collection afterwards", remove[i].Title()))
+				}
+			}
+			out.Removed = titles(remove)
+		}
+		out.row = rowOf(c)
 
 		return nil, out, nil
 	})

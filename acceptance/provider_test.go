@@ -12,8 +12,11 @@
 package acceptance
 
 import (
+	"io"
+	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -81,7 +84,7 @@ func TestItemMatchAndApply(t *testing.T) {
 
 	t.Run("item_match", func(t *testing.T) {
 		out := call(t, "item_match", map[string]any{
-			"item": book, "provider": "audible", "title": "Second Foundation", "author": "Isaac Asimov",
+			"item": book, "providers": []any{"audible"}, "title": "Second Foundation", "author": "Isaac Asimov",
 		})
 		if out["provider"] != "audible" {
 			t.Errorf("provider = %v, want audible", out["provider"])
@@ -112,7 +115,7 @@ func TestItemMatchAndApply(t *testing.T) {
 	})
 
 	t.Run("item_match_apply needs a candidate", func(t *testing.T) {
-		msg := callErr(t, "item_match_apply", map[string]any{"item": book, "provider": "audible", "override_details": true})
+		msg := callErr(t, "item_match_apply", map[string]any{"confirm": true, "item": book, "providers": []any{"audible"}, "override_details": true})
 		if !strings.Contains(msg, "candidate") {
 			t.Errorf("a match naming no candidate, asin or isbn was not refused: %s", msg)
 		}
@@ -125,7 +128,8 @@ func TestItemMatchAndApply(t *testing.T) {
 		t.Cleanup(func() { restoreBook(t, book) })
 
 		out := call(t, "item_match_apply", map[string]any{
-			"item": book, "provider": "audible", "asin": asin, "override_details": true,
+			"confirm": true,
+			"item":    book, "providers": []any{"audible"}, "asin": asin, "override_details": true,
 		})
 		if updated := truth(out["updated"]); !updated {
 			t.Errorf("item_match_apply reported no update: %v", out)
@@ -145,12 +149,13 @@ func TestItemMatchAndApply(t *testing.T) {
 		}
 		t.Cleanup(func() { restoreBook(t, book) })
 
-		if msg := callErr(t, "item_match_apply_batch", map[string]any{"provider": "audible"}); msg == "" {
+		if msg := callErr(t, "item_match_apply_batch", map[string]any{"confirm": true, "providers": []any{"audible"}}); msg == "" {
 			t.Error("a batch with no matches should be refused")
 		}
 
 		out := call(t, "item_match_apply_batch", map[string]any{
-			"matches": []any{map[string]any{"item": book, "asin": asin}}, "provider": "audible", "override_details": true,
+			"confirm": true,
+			"matches": []any{map[string]any{"item": book, "asin": asin}}, "providers": []any{"audible"}, "override_details": true,
 		})
 		if applied := num(t, out["applied"], "applied"); applied != 1 {
 			t.Errorf("applied = %d, want 1: %v", applied, out)
@@ -209,7 +214,7 @@ func TestItemCoverSearchAndSet(t *testing.T) {
 
 	t.Run("item_cover_search", func(t *testing.T) {
 		out := call(t, "item_cover_search", map[string]any{
-			"item": book, "provider": "audible",
+			"item": book, "providers": []any{"audible"},
 			"title": "Foundation and Empire", "author": "Isaac Asimov",
 		})
 		if out["item"] != book {
@@ -255,7 +260,7 @@ func TestItemChaptersSetFromASIN(t *testing.T) {
 	const book = "Foundation"
 
 	match := call(t, "item_match", map[string]any{
-		"item": book, "provider": "audible", "title": "Foundation", "author": "Isaac Asimov",
+		"item": book, "providers": []any{"audible"}, "title": "Foundation", "author": "Isaac Asimov",
 	})
 	candidates := rows(t, match["candidates"], "candidates")
 	if len(candidates) == 0 {
@@ -370,14 +375,14 @@ func TestAuthorMatchFlagsADifferentName(t *testing.T) {
 	}
 }
 
-// author_image_set hands the server a url to download.
-func TestAuthorImageSet(t *testing.T) {
+// author_edit image_url hands the server a url to download.
+func TestAuthorEditImage(t *testing.T) {
 	requireProviders(t)
 
 	// a cover url is a real image the proxy already has to serve; reusing one
 	// keeps this test from depending on a second provider
 	covers := strs(t, call(t, "item_cover_search", map[string]any{
-		"item": "Leviathan Wakes", "provider": "audible",
+		"item": "Leviathan Wakes", "providers": []any{"audible"},
 		"title": "Leviathan Wakes", "author": "James S. A. Corey",
 	})["covers"], "covers")
 	if len(covers) == 0 {
@@ -388,8 +393,8 @@ func TestAuthorImageSet(t *testing.T) {
 	t.Cleanup(func() {
 		call(t, "author_edit", map[string]any{"library": "Fiction", "author": "James S. A. Corey", "clear": []any{"image"}})
 	})
-	out := call(t, "author_image_set", map[string]any{
-		"library": "Fiction", "author": "James S. A. Corey", "url": covers[0],
+	out := call(t, "author_edit", map[string]any{
+		"library": "Fiction", "author": "James S. A. Corey", "image_url": covers[0],
 	})
 	author, ok := out["author"].(map[string]any)
 	if !ok {
@@ -407,13 +412,18 @@ func TestAuthorImageSet(t *testing.T) {
 	}
 }
 
-func TestAuthorImageSetValidation(t *testing.T) {
+func TestAuthorEditImageValidation(t *testing.T) {
 	requireProviders(t)
 
-	if msg := callErr(t, "author_image_set", map[string]any{
-		"library": "Fiction", "author": "Isaac Asimov", "url": "  ",
-	}); msg == "" {
-		t.Error("an empty url should be refused")
+	if msg := callErr(t, "author_edit", map[string]any{
+		"library": "Fiction", "author": "Isaac Asimov", "image_url": "  ",
+	}); !strings.Contains(msg, "nothing to change") {
+		t.Errorf("a blank url: %s", msg)
+	}
+	if msg := callErr(t, "author_edit", map[string]any{
+		"library": "Fiction", "author": "Isaac Asimov", "image_url": "https://img.zzyzx.test/a.jpg", "clear": []any{"image"},
+	}); !strings.Contains(msg, "one or the other") {
+		t.Errorf("a photo set and cleared in one call: %s", msg)
 	}
 }
 
@@ -495,17 +505,17 @@ func TestPodcastProviderFlow(t *testing.T) {
 		}
 	})
 
-	t.Run("podcast_settings", func(t *testing.T) {
+	t.Run("podcast_edit", func(t *testing.T) {
 		if podcastID == "" {
 			t.Skip("nothing subscribed")
 		}
-		out := call(t, "podcast_settings", map[string]any{
+		out := call(t, "podcast_edit", map[string]any{
 			"item": podcastID, "auto_download": true,
 			"schedule": "0 * * * *", "keep_episodes": 3, "new_per_check": 1,
 		})
 		// the settings as the server now has them, not as they were asked
 		if !truth(out["auto_download"]) || out["schedule"] != "0 * * * *" || num(t, out["keep_episodes"], "keep_episodes") != 3 || num(t, out["new_per_check"], "new_per_check") != 1 {
-			t.Errorf("podcast_settings = %v, want the settings read back", out)
+			t.Errorf("podcast_edit = %v, want the settings read back", out)
 		}
 	})
 
@@ -534,4 +544,50 @@ func TestPodcastProviderFlow(t *testing.T) {
 		// queued may legitimately be empty when the episode is already held
 		rows(t, out["queued"], "queued")
 	})
+}
+
+// The stores are asked in the order given, and the first with anything
+// answers. The Canadian store is served here with nothing to sell, so the US
+// store's answer is what comes back, and says it is the US store's; asked the
+// other way round, the Canadian store is not asked at all.
+func TestProvidersAreAskedInOrder(t *testing.T) {
+	requireProviders(t)
+
+	var mu sync.Mutex
+	asked := 0
+	t.Cleanup(proxy.Serve("api.audible.ca", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		asked++
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"products":[],"total_results":0}`)
+	})))
+	canadaAsked := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return asked
+	}
+	book := map[string]any{"item": "Second Foundation", "title": "Second Foundation", "author": "Isaac Asimov"}
+
+	out := call(t, "item_match", withArgs(book, map[string]any{"providers": []any{"audible.ca", "audible"}}))
+	if out["provider"] != "audible" || len(rows(t, out["candidates"], "candidates")) == 0 || canadaAsked() == 0 {
+		t.Errorf("item_match, the Canadian store first: provider %v, %d candidates, the Canadian store asked %d times", out["provider"], len(rows(t, out["candidates"], "candidates")), canadaAsked())
+	}
+	// the store with nothing, alone: an answer with no candidates, naming it
+	if out = call(t, "item_match", withArgs(book, map[string]any{"providers": []any{"audible.ca"}})); out["provider"] != "audible.ca" || len(rows(t, out["candidates"], "candidates")) != 0 {
+		t.Errorf("item_match at the Canadian store alone = %v", out)
+	}
+
+	before := canadaAsked()
+	out = call(t, "item_match", withArgs(book, map[string]any{"providers": []any{"audible", "audible.ca"}}))
+	if out["provider"] != "audible" || canadaAsked() != before {
+		t.Errorf("item_match, the US store first: provider %v, and the Canadian store was asked %d more times", out["provider"], canadaAsked()-before)
+	}
+
+	covers := call(t, "item_cover_search", map[string]any{
+		"item": "Foundation and Empire", "title": "Foundation and Empire", "author": "Isaac Asimov", "providers": []any{"audible.ca", "audible"},
+	})
+	if covers["provider"] != "audible" || len(strs(t, covers["covers"], "covers")) == 0 || canadaAsked() == before {
+		t.Errorf("item_cover_search, the Canadian store first = %v", covers)
+	}
 }

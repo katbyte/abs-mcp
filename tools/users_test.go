@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"slices"
 	"strconv"
@@ -252,28 +253,28 @@ func TestUserBookmarkEditSaysWhatChanged(t *testing.T) {
 	call := toolCaller(t, f)
 
 	for _, tc := range []struct {
-		args               map[string]any
-		result, title, was string
+		args             map[string]any
+		list, title, was string
 	}{
-		{map[string]any{"action": "add", "title": "Mark"}, "added", "Mark", ""},
-		{map[string]any{"action": "add", "title": "Renamed"}, "renamed", "Renamed", "Mark"},
-		{map[string]any{"action": "remove"}, "removed", "Renamed", ""},
+		{map[string]any{"add_bookmarks": []any{map[string]any{"time_s": 5, "title": "Mark"}}}, "added", "Mark", ""},
+		{map[string]any{"add_bookmarks": []any{map[string]any{"time_s": 5, "title": "Renamed"}}}, "renamed", "Renamed", "Mark"},
+		{map[string]any{"remove_bookmarks": []any{5}}, "removed", "Renamed", ""},
 	} {
-		tc.args["item"], tc.args["time_s"] = bookB1, 5
+		tc.args["item"] = bookB1
 		out, err := call("user_bookmark_edit", tc.args)
 		if err != nil {
 			t.Fatalf("%v: %v", tc.args, err)
 		}
-		b, ok := out["bookmark"].(map[string]any)
-		if !ok || str(t, out["result"]) != tc.result || str(t, b["title"]) != tc.title || str(t, out["was_titled"]) != tc.was {
-			t.Errorf("%v: %v, want %s %q", tc.args, out, tc.result, tc.title)
+		rows := list(t, out[tc.list])
+		if len(rows) != 1 || str(t, rows[0]["title"]) != tc.title || str(t, rows[0]["was_titled"]) != tc.was || len(out) != 1 {
+			t.Errorf("%v: %v, want one %s, %q", tc.args, out, tc.list, tc.title)
 		}
 	}
 	if adds := f.requests("/api/me/item/" + bookB1 + "/bookmark"); len(adds) != 2 || adds[0].Method != http.MethodPost || adds[1].Method != http.MethodPatch {
 		t.Errorf("sent %v, want a POST to add and a PATCH to rename", adds)
 	}
 
-	if _, err := call("user_bookmark_edit", map[string]any{"item": bookB1, "action": "remove", "time_s": 5}); err == nil || !strings.Contains(err.Error(), "no bookmark") {
+	if _, err := call("user_bookmark_edit", map[string]any{"item": bookB1, "remove_bookmarks": []any{5}}); err == nil || !strings.Contains(err.Error(), "no bookmark") {
 		t.Errorf("removing one not there: %v", err)
 	}
 	if got := f.requests("/api/me/item/" + bookB1 + "/bookmark/5"); len(got) != 1 {
@@ -281,7 +282,7 @@ func TestUserBookmarkEditSaysWhatChanged(t *testing.T) {
 	}
 }
 
-// user_progress_remove says whether there was progress to remove, and reads
+// user_progress_set remove says whether there was progress to remove, and reads
 // the progress back rather than trusting the delete's answer.
 func TestUserProgressRemoveSaysWhatItRemoved(t *testing.T) {
 	t.Parallel()
@@ -302,14 +303,14 @@ func TestUserProgressRemoveSaysWhatItRemoved(t *testing.T) {
 	})
 	call := toolCaller(t, f)
 
-	out, err := call("user_progress_remove", map[string]any{"item": bookB1})
+	out, err := call("user_progress_set", map[string]any{"item": bookB1, "remove": true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !boolOf(t, out["removed"]) || str(t, out["item"]) != "First" {
 		t.Errorf("first removal = %v, want removed", out)
 	}
-	if out, err = call("user_progress_remove", map[string]any{"item": bookB1}); err != nil || boolOf(t, out["removed"]) {
+	if out, err = call("user_progress_set", map[string]any{"item": bookB1, "remove": true}); err != nil || boolOf(t, out["removed"]) {
 		t.Errorf("second removal = %v, %v; want nothing removed", out, err)
 	}
 	if got := f.requests("/api/me/progress/mp1"); len(got) != 1 {
@@ -364,7 +365,7 @@ func TestProgressRemovalThatCannotBeReadBackIsAnError(t *testing.T) {
 	f.json("DELETE /api/me/progress/mp1", `{}`)
 	call := toolCaller(t, f)
 
-	_, err := call("user_progress_remove", map[string]any{"item": bookB1})
+	_, err := call("user_progress_set", map[string]any{"item": bookB1, "remove": true})
 	wantErr(t, "a removal whose read-back failed", err, "accepted the removal", "reading it back", "500")
 }
 
@@ -400,7 +401,7 @@ func TestBookmarkRemovalOnAGoneItemSaysTheAccountReadFailed(t *testing.T) {
 	f.fails("GET /api/me")
 	call := toolCaller(t, f)
 
-	_, err := call("user_bookmark_edit", map[string]any{"item": itemID, "action": "remove", "time_s": 5})
+	_, err := call("user_bookmark_edit", map[string]any{"item": itemID, "remove_bookmarks": []any{5}})
 	wantErr(t, "the account read failing beside a gone item", err, "404", "reading the account's bookmarks", "500")
 }
 
@@ -438,7 +439,7 @@ func TestABookmarkAddThatFailsSaysWhy(t *testing.T) {
 	})
 	call := toolCaller(t, f)
 
-	_, err := call("user_bookmark_edit", map[string]any{"item": bookB1, "action": "add", "time_s": 5, "title": "Mark"})
+	_, err := call("user_bookmark_edit", map[string]any{"item": bookB1, "add_bookmarks": []any{map[string]any{"time_s": 5, "title": "Mark"}}})
 	wantErr(t, "an add and a rename both failing", err, "adding the bookmark failed", "the add failed", "no such bookmark")
 }
 
@@ -538,7 +539,7 @@ func TestBookmarksOnADeletedItem(t *testing.T) {
 				t.Errorf("bookmark %v: item_deleted = %v", b, deleted)
 			}
 		}
-		if _, err := call("user_bookmark_edit", map[string]any{"item": itemID, "action": "remove", "time_s": 5}); err == nil || !strings.Contains(err.Error(), "will not remove") {
+		if _, err := call("user_bookmark_edit", map[string]any{"item": itemID, "remove_bookmarks": []any{5}}); err == nil || !strings.Contains(err.Error(), "will not remove") {
 			t.Errorf("removing a bookmark on a deleted item: %v", err)
 		}
 	})
@@ -759,5 +760,62 @@ func TestUserHistoryRemove(t *testing.T) {
 	}
 	if got := f.changes(); len(got) != 1 || got[0].Path != "/api/sessions/"+s1 {
 		t.Errorf("sent %v", got)
+	}
+}
+
+// remove takes the progress away and nothing else: beside something to set
+// it is refused, before anything is sent.
+func TestUserProgressSetRemoveStandsAlone(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/items/"+bookB1, item(bookB1, "First", "", `"duration":60`))
+	call := toolCaller(t, f)
+
+	for _, extra := range []map[string]any{{"percent": 50}, {"finished": true}, {"hide_from_continue": true}, {"series": "Dune"}} {
+		args := map[string]any{"item": bookB1, "remove": true}
+		maps.Copy(args, extra)
+		_, err := call("user_progress_set", args)
+		wantErr(t, fmt.Sprint(extra), err, "remove deletes the progress", "alone")
+	}
+	if got := f.changes(); len(got) != 0 {
+		t.Errorf("sent %v", got)
+	}
+}
+
+// Several bookmarks in one call: the removals are checked before anything is
+// sent, so one that is not there changes nothing, and a position both added
+// and removed is refused.
+func TestUserBookmarkEditTakesSeveral(t *testing.T) {
+	t.Parallel()
+
+	marks := `[{"libraryItemId":"` + bookB1 + `","title":"One","time":1},{"libraryItemId":"` + bookB1 + `","title":"Two","time":2}]`
+	f := newFakeABS(t)
+	f.json("GET /api/items/"+bookB1, item(bookB1, "First", "", `"duration":3600`))
+	// read once by the refused removal, once before the changes, and once after
+	f.inTurn("GET /api/me/bookmarks", `{"bookmarks":`+marks+`}`, `{"bookmarks":`+marks+`}`, `{"bookmarks":[]}`)
+	f.json("DELETE /api/me/item/"+bookB1+"/bookmark/{time}", `{}`)
+	f.json("POST /api/me/item/"+bookB1+"/bookmark", `{"libraryItemId":"`+bookB1+`","title":"Three","time":3}`)
+	call := toolCaller(t, f)
+
+	_, err := call("user_bookmark_edit", map[string]any{"item": bookB1, "remove_bookmarks": []any{1, 9}})
+	wantErr(t, "one of two removals not there", err, "no bookmark at 9", "nothing was changed")
+	_, err = call("user_bookmark_edit", map[string]any{"item": bookB1, "add_bookmarks": []any{map[string]any{"time_s": 1, "title": "Again"}}, "remove_bookmarks": []any{1}})
+	wantErr(t, "a position added and removed", err, "one or the other")
+	_, err = call("user_bookmark_edit", map[string]any{"item": bookB1, "add_bookmarks": []any{map[string]any{"time_s": 4, "title": " "}}})
+	wantErr(t, "an add with no title", err, "no title")
+	if got := f.changes(); len(got) != 0 {
+		t.Fatalf("refused calls sent %v", got)
+	}
+
+	out, err := call("user_bookmark_edit", map[string]any{"item": bookB1, "remove_bookmarks": []any{2, 1}, "add_bookmarks": []any{map[string]any{"time_s": 3, "title": "Three"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(column(t, "title", out["removed"]), []string{"One", "Two"}) || !slices.Equal(column(t, "title", out["added"]), []string{"Three"}) || out["renamed"] != nil {
+		t.Errorf("answer = %v, want One and Two removed and Three added", out)
+	}
+	if sent := f.changes(); len(sent) != 3 || sent[0].Method != http.MethodDelete || sent[1].Method != http.MethodDelete || sent[2].Method != http.MethodPost {
+		t.Errorf("sent %v, want the two removals and then the add", sent)
 	}
 }

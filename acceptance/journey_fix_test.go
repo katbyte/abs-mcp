@@ -557,7 +557,7 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 		requireProviders(t)
 
 		covers := strs(t, call(t, "item_cover_search", map[string]any{
-			"item": "Foundation and Empire", "provider": "audible", "title": "Foundation and Empire", "author": "Isaac Asimov",
+			"item": "Foundation and Empire", "providers": []any{"audible"}, "title": "Foundation and Empire", "author": "Isaac Asimov",
 		})["covers"], "covers")
 		if len(covers) == 0 {
 			t.Skip("no recorded cover to replace it with")
@@ -622,7 +622,7 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 		requireProviders(t)
 
 		covers := strs(t, call(t, "item_cover_search", map[string]any{
-			"item": "Foundation and Empire", "provider": "audible", "title": "Foundation and Empire", "author": "Isaac Asimov",
+			"item": "Foundation and Empire", "providers": []any{"audible"}, "title": "Foundation and Empire", "author": "Isaac Asimov",
 		})["covers"], "covers")
 		if len(covers) == 0 {
 			t.Skip("no recorded cover")
@@ -677,13 +677,13 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 			},
 			fix: func(t *testing.T) {
 				candidates := rows(t, call(t, "item_match", map[string]any{
-					"library": "Non-Fiction", "item": book, "provider": "audible", "title": book, "author": "Smedley D. Butler",
+					"library": "Non-Fiction", "item": book, "providers": []any{"audible"}, "title": book, "author": "Smedley D. Butler",
 				})["candidates"], "candidates")
 				if len(candidates) == 0 {
 					t.Fatal("item_match found no candidate")
 				}
 				asin := text(candidates[0]["asin"])
-				out := call(t, "item_match_apply", map[string]any{"library": "Non-Fiction", "item": book, "provider": "audible", "asin": asin})
+				out := call(t, "item_match_apply", map[string]any{"confirm": true, "library": "Non-Fiction", "item": book, "providers": []any{"audible"}, "asin": asin})
 				if updated := truth(out["updated"]); !updated {
 					t.Errorf("item_match_apply reported no update: %v", out)
 				}

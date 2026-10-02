@@ -91,7 +91,7 @@ func TestJourneyCallsAtOnce(t *testing.T) {
 		t.Cleanup(func() { call(t, "collection_delete", map[string]any{"collection": "Zzyzx At Once Shelf"}) })
 		others := []string{"Foundation and Empire", "Second Foundation", "City of Golden Shadow", "Sea of Silver Light", "Leviathan Wakes", "Abaddon's Gate"}
 		atOnce(t, len(others), func(i int) (string, map[string]any) {
-			return "collection_books_edit", map[string]any{"collection": "Zzyzx At Once Shelf", "action": "add", "items": []any{others[i]}}
+			return "collection_edit", map[string]any{"collection": "Zzyzx At Once Shelf", "add_items": []any{others[i]}}
 		})
 		if got := titlesIn(t, call(t, "collection_get", map[string]any{"collection": "Zzyzx At Once Shelf"})["items"], "items"); len(got) != 1+len(others) {
 			t.Errorf("the collection holds %v, want all %d", got, 1+len(others))
@@ -103,7 +103,7 @@ func TestJourneyCallsAtOnce(t *testing.T) {
 		t.Cleanup(func() { call(t, "playlist_delete", map[string]any{"playlist": "Zzyzx At Once Queue"}) })
 		others := []string{"Foundation and Empire", "Second Foundation", "City of Golden Shadow", "Sea of Silver Light", "Leviathan Wakes", "Abaddon's Gate"}
 		atOnce(t, len(others), func(i int) (string, map[string]any) {
-			return "playlist_entries_edit", map[string]any{"playlist": "Zzyzx At Once Queue", "action": "add", "entries": []any{map[string]any{"item": others[i]}}}
+			return "playlist_edit", map[string]any{"playlist": "Zzyzx At Once Queue", "add_entries": []any{map[string]any{"item": others[i]}}}
 		})
 		if got := rows(t, call(t, "playlist_get", map[string]any{"playlist": "Zzyzx At Once Queue"})["entries"], "entries"); len(got) != 1+len(others) {
 			t.Errorf("the playlist holds %d entries, want all %d", len(got), 1+len(others))
@@ -114,11 +114,11 @@ func TestJourneyCallsAtOnce(t *testing.T) {
 		seconds := func(i int) float64 { return 0.1 + float64(i)/10 }
 		t.Cleanup(func() {
 			for i := range n {
-				_, _ = invoke("user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Second Foundation", "action": "remove", "time_s": seconds(i)})
+				_, _ = invoke("user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Second Foundation", "remove_bookmarks": []any{seconds(i)}})
 			}
 		})
 		atOnce(t, n, func(i int) (string, map[string]any) {
-			return "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Second Foundation", "action": "add", "time_s": seconds(i), "title": fmt.Sprintf("Zzyzx At Once %d", i)}
+			return "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Second Foundation", "add_bookmarks": []any{map[string]any{"time_s": seconds(i), "title": fmt.Sprintf("Zzyzx At Once %d", i)}}}
 		})
 		if got := rows(t, call(t, "user_bookmarks", map[string]any{"library": "Fiction", "item": "Second Foundation"})["bookmarks"], "bookmarks"); len(got) != n {
 			t.Errorf("bookmarks = %v, want all %d", titlesIn(t, got, "bookmarks"), n)
@@ -129,7 +129,7 @@ func TestJourneyCallsAtOnce(t *testing.T) {
 		books := []string{"Foundation", "Foundation and Empire", "Second Foundation", "City of Golden Shadow"}
 		t.Cleanup(func() {
 			for _, b := range books {
-				_, _ = invoke("user_progress_remove", map[string]any{"library": "Fiction", "item": b})
+				_, _ = invoke("user_progress_set", map[string]any{"remove": true, "library": "Fiction", "item": b})
 			}
 		})
 		atOnce(t, len(books), func(i int) (string, map[string]any) {

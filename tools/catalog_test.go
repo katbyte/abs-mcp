@@ -743,7 +743,7 @@ func TestNamesStoredWithSpacesAreFoundAsWritten(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := out["preview"].(map[string]any); !ok {
+	if _, ok := out["would_remove"].(map[string]any); !ok {
 		t.Fatalf("remove without confirm = %v, want a preview", out)
 	}
 	filter := "narrators." + base64.StdEncoding.EncodeToString([]byte("Michael Kramer "))
@@ -1134,4 +1134,61 @@ func TestSeriesListInSeconds(t *testing.T) {
 	}
 	wantNumbers(t, "series_list", out, map[string]float64{"series.0.duration_s": 75600})
 	wantAbsent(t, "series_list", out, "series.0.duration")
+}
+
+// author_edit image_url sets the photo, after any rename, on the record the
+// rename leaves; beside clear image it is refused.
+func TestAuthorEditSetsThePhoto(t *testing.T) {
+	t.Parallel()
+
+	const authorID = "77777777-7777-4777-8777-777777777781"
+	plain := `{"id":"` + authorID + `","name":"Frank Herbert","libraryItems":[]}`
+	renamed := `{"id":"` + authorID + `","name":"Frank P. Herbert","libraryItems":[]}`
+	photo := `{"id":"` + authorID + `","name":"Frank P. Herbert","imagePath":"/metadata/authors/a.jpg","libraryItems":[]}`
+	f := newFakeABS(t)
+	f.inTurn("GET /api/authors/"+authorID, plain, photo)
+	f.json("PATCH /api/authors/"+authorID, `{"author":`+renamed+`,"merged":false}`)
+	f.json("POST /api/authors/"+authorID+"/image", `{"author":`+photo+`}`)
+	call := toolCaller(t, f)
+
+	_, err := call("author_edit", map[string]any{"author": authorID, "image_url": "https://img.test/h.jpg", "clear": []any{"image"}})
+	wantErr(t, "a photo set and cleared", err, "one or the other")
+	if got := f.changes(); len(got) != 0 {
+		t.Fatalf("a refused edit sent %v", got)
+	}
+
+	out, err := call("author_edit", map[string]any{"author": authorID, "name": "Frank P. Herbert", "image_url": "https://img.test/h.jpg"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	author, ok := out["author"].(map[string]any)
+	if !ok || str(t, author["name"]) != "Frank P. Herbert" || !boolOf(t, author["has_image"]) {
+		t.Errorf("answer = %v, want the renamed author with a photo", out)
+	}
+	sent := f.changes()
+	if len(sent) != 2 || sent[0].Method != http.MethodPatch || sent[1].Path != "/api/authors/"+authorID+"/image" || !strings.Contains(sent[1].Body, "https://img.test/h.jpg") {
+		t.Errorf("sent %v, want the rename and then the photo", sent)
+	}
+}
+
+// narrator_list answers a page by name, whatever order the server lists in.
+func TestNarratorListPagesByName(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	oneLibrary(f)
+	f.json("GET /api/me", `{"id":"u1","username":"kt","type":"root","permissions":{"accessAllTags":true,"accessExplicitContent":true}}`)
+	f.json("GET /api/libraries/"+libID+"/narrators", `{"narrators":[{"name":"Scott Brick","numBooks":3},{"name":"Jim Dale","numBooks":7},{"name":"Kate Reading","numBooks":2}]}`)
+	call := toolCaller(t, f)
+
+	out, err := call("narrator_list", map[string]any{"limit": 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if num(t, out["total"]) != 3 || num(t, out["next_offset"]) != 2 || !slices.Equal(column(t, "name", out["narrators"]), []string{"Jim Dale", "Kate Reading"}) {
+		t.Errorf("page = %v, want the first two by name of 3 and the next at 2", out)
+	}
+	if out, err = call("narrator_list", map[string]any{"limit": 2, "offset": 2}); err != nil || out["next_offset"] != nil || !slices.Equal(column(t, "name", out["narrators"]), []string{"Scott Brick"}) {
+		t.Errorf("the last page = %v, %v", out, err)
+	}
 }

@@ -3,6 +3,8 @@
 package acceptance
 
 import (
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -42,16 +44,16 @@ func TestCollectionLifecycle(t *testing.T) {
 	}
 
 	// add
-	added := call(t, "collection_books_edit", map[string]any{
-		"collection": "Integration Collection", "action": "add", "items": []any{"Second Foundation"},
+	added := call(t, "collection_edit", map[string]any{
+		"collection": "Integration Collection", "add_items": []any{"Second Foundation"},
 	})
 	if n := num(t, added["books"], "books"); n != 3 {
 		t.Errorf("after add = %d books, want 3", n)
 	}
 
 	// remove
-	removed := call(t, "collection_books_edit", map[string]any{
-		"collection": "Integration Collection", "action": "remove", "items": []any{"Leviathan Wakes"},
+	removed := call(t, "collection_edit", map[string]any{
+		"collection": "Integration Collection", "remove_items": []any{"Leviathan Wakes"},
 	})
 	if n := num(t, removed["books"], "books"); n != 2 {
 		t.Errorf("after remove = %d books, want 2", n)
@@ -66,6 +68,28 @@ func TestCollectionLifecycle(t *testing.T) {
 		t.Errorf("description = %v", edited["description"])
 	}
 
+	// all of it in one call: a description, a book in and a book out, and
+	// the answer is the collection as it then is
+	both := call(t, "collection_edit", map[string]any{
+		"collection": "Integration Collection", "description": "Zzyzx: three things at once",
+		"add_items": []any{"Leviathan Wakes"}, "remove_items": []any{"Second Foundation"},
+	})
+	if both["description"] != "Zzyzx: three things at once" || num(t, both["books"], "books") != 2 ||
+		!slices.Equal(strs(t, both["added"], "added"), []string{"Leviathan Wakes"}) || !slices.Equal(strs(t, both["removed"], "removed"), []string{"Second Foundation"}) {
+		t.Errorf("three changes in one call = %v", both)
+	}
+	held := titlesIn(t, call(t, "collection_get", map[string]any{"collection": "Integration Collection"})["items"], "items")
+	if !slices.Contains(held, "Leviathan Wakes") || slices.Contains(held, "Second Foundation") {
+		t.Errorf("the collection holds %v, want Leviathan Wakes in and Second Foundation out", held)
+	}
+	// what it already holds and what it never did are said, and nothing sent
+	same := call(t, "collection_edit", map[string]any{
+		"collection": "Integration Collection", "add_items": []any{"Leviathan Wakes"}, "remove_items": []any{"Second Foundation"},
+	})
+	if !slices.Equal(strs(t, same["already_held"], "already_held"), []string{"Leviathan Wakes"}) || !slices.Equal(strs(t, same["not_held"], "not_held"), []string{"Second Foundation"}) || same["added"] != nil || same["removed"] != nil {
+		t.Errorf("the same change again = %v", same)
+	}
+
 	// the books are untouched by removal from a collection
 	if item := call(t, "item_get", map[string]any{"item": "Leviathan Wakes"}); item["title"] != "Leviathan Wakes" {
 		t.Error("removing from a collection should not touch the item")
@@ -78,10 +102,13 @@ func TestCollectionUnknown(t *testing.T) {
 	}
 }
 
-func TestCollectionBooksEditValidation(t *testing.T) {
-	if msg := callErr(t, "collection_books_edit", map[string]any{
-		"collection": "No Such Collection", "action": "sideways", "items": []any{"Foundation"},
+func TestCollectionEditValidation(t *testing.T) {
+	if msg := callErr(t, "collection_edit", map[string]any{
+		"collection": "No Such Collection", "add_items": []any{"Foundation"},
 	}); msg == "" {
-		t.Error("an unknown action should be refused")
+		t.Error("an unknown collection should be refused")
+	}
+	if msg := callErr(t, "collection_edit", map[string]any{"collection": "No Such Collection"}); !strings.Contains(msg, "nothing to change") {
+		t.Errorf("an edit with nothing to change: %s", msg)
 	}
 }

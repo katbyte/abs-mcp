@@ -421,9 +421,9 @@ func TestJourneyLookupsChangeNothing(t *testing.T) {
 		{tool: "series_get", args: map[string]any{"library": "Fiction", "series": "Foundation"}},
 		{tool: "narrator_list", args: map[string]any{"library": "Messy"}},
 		{tool: "server_tags"},
-		{tool: "item_match", args: map[string]any{"item": "Second Foundation", "provider": "audible", "title": "Second Foundation", "author": "Isaac Asimov"}},
+		{tool: "item_match", args: map[string]any{"item": "Second Foundation", "providers": []any{"audible"}, "title": "Second Foundation", "author": "Isaac Asimov"}},
 		{tool: "item_match_batch", args: map[string]any{"library": "Fiction", "filter": "series:Foundation", "providers": []any{"audible"}, "candidates": 2}},
-		{tool: "item_cover_search", args: map[string]any{"item": "Foundation and Empire", "provider": "audible", "title": "Foundation and Empire", "author": "Isaac Asimov"}},
+		{tool: "item_cover_search", args: map[string]any{"item": "Foundation and Empire", "providers": []any{"audible"}, "title": "Foundation and Empire", "author": "Isaac Asimov"}},
 		{tool: "audit_all", args: map[string]any{"library": "Messy", "deep": true}},
 		{tool: "audit_authors", args: map[string]any{"library": "Messy"}},
 		{tool: "audit_chapters", args: map[string]any{"library": "Messy"}},
@@ -436,8 +436,7 @@ func TestJourneyLookupsChangeNothing(t *testing.T) {
 		{tool: "audit_narrators", args: map[string]any{"library": "Messy"}},
 		{tool: "audit_no_audio", args: map[string]any{"library": "Messy"}},
 		{tool: "audit_path", args: map[string]any{"library": "Messy", "files": true}},
-		{tool: "audit_podcast_no_episodes", args: map[string]any{"library": "Podcasts"}},
-		{tool: "audit_podcast_stale_feed", args: map[string]any{"library": "Podcasts"}},
+		{tool: "audit_podcasts", args: map[string]any{"library": "Podcasts"}},
 		{tool: "audit_series", args: map[string]any{"library": "Messy", "articles": true}},
 		{tool: "audit_spelling", args: map[string]any{"library": "Messy"}},
 		{tool: "audit_unembedded", args: map[string]any{"library": "Messy"}},
@@ -474,8 +473,8 @@ func TestJourneyLookupsChangeNothing(t *testing.T) {
 	}
 	// previews promise the same: they decide and change nothing
 	previews := []readCall{
-		{tool: "item_match_apply", args: map[string]any{"library": "Messy", "item": "Foundation (Unabridged)", "provider": "audible", "asin": "B003D8W5VS", "smart": true, "preview": true}},
-		{tool: "item_match_apply_batch", args: map[string]any{"matches": []any{map[string]any{"item": "Foundation (Unabridged)", "asin": "B003D8W5VS"}}, "provider": "audible", "smart": true, "preview": true}},
+		{tool: "item_match_apply", args: map[string]any{"library": "Messy", "item": "Foundation (Unabridged)", "providers": []any{"audible"}, "asin": "B003D8W5VS", "smart": true}},
+		{tool: "item_match_apply_batch", args: map[string]any{"matches": []any{map[string]any{"item": "Foundation (Unabridged)", "asin": "B003D8W5VS"}}, "providers": []any{"audible"}, "smart": true}},
 		{tool: "item_embed_metadata", args: map[string]any{"library": "Messy", "item": "Guards! Guards!", "m4b": true}},
 		{tool: "item_delete", args: map[string]any{"library": "Messy", "item": "The Egg", "file": "notes .txt"}},
 		// the e-readers the account can send to, and nothing sent
@@ -566,11 +565,11 @@ func TestJourneyEditsDuringAScan(t *testing.T) {
 
 	// while it runs
 	call(t, "collection_create", map[string]any{"library": "Messy", "name": "Zzyzx Scan Shelf", "items": []any{mort, sourcery}})
-	call(t, "collection_books_edit", map[string]any{"collection": "Zzyzx Scan Shelf", "action": "add", "items": []any{eric, reaper}})
-	call(t, "collection_books_edit", map[string]any{"collection": "Zzyzx Scan Shelf", "action": "remove", "items": []any{sourcery}})
+	call(t, "collection_edit", map[string]any{"collection": "Zzyzx Scan Shelf", "add_items": []any{eric, reaper}})
+	call(t, "collection_edit", map[string]any{"collection": "Zzyzx Scan Shelf", "remove_items": []any{sourcery}})
 	call(t, "playlist_create", map[string]any{"library": "Messy", "name": "Zzyzx Scan Queue", "entries": []any{map[string]any{"item": wyrd}}})
-	call(t, "playlist_entries_edit", map[string]any{"playlist": "Zzyzx Scan Queue", "action": "add", "entries": []any{map[string]any{"item": witches}, map[string]any{"item": rites}}})
-	call(t, "playlist_entries_edit", map[string]any{"playlist": "Zzyzx Scan Queue", "action": "remove", "entries": []any{map[string]any{"item": wyrd}}})
+	call(t, "playlist_edit", map[string]any{"playlist": "Zzyzx Scan Queue", "add_entries": []any{map[string]any{"item": witches}, map[string]any{"item": rites}}})
+	call(t, "playlist_edit", map[string]any{"playlist": "Zzyzx Scan Queue", "remove_entries": []any{map[string]any{"item": wyrd}}})
 	call(t, "item_edit", map[string]any{"item": colour, "add_tags": []any{"zzyzx-scan"}, "add_series": []any{"Zzyzx Scan Saga #1"}})
 	call(t, "series_edit", map[string]any{"library": "Messy", "series": "Discworld", "description": "Zzyzx: edited mid-scan"})
 
@@ -701,7 +700,7 @@ func TestJourneyWritesDoneTwice(t *testing.T) {
 
 	t.Run("progress finished twice", func(t *testing.T) {
 		t.Cleanup(func() {
-			_, _ = invoke("user_progress_remove", map[string]any{"library": "Fiction", "item": "City of Golden Shadow"})
+			_, _ = invoke("user_progress_set", map[string]any{"remove": true, "library": "Fiction", "item": "City of Golden Shadow"})
 		})
 		first := call(t, "user_progress_set", map[string]any{"library": "Fiction", "item": "City of Golden Shadow", "finished": true})
 		second := call(t, "user_progress_set", map[string]any{"library": "Fiction", "item": "City of Golden Shadow", "finished": true})
@@ -710,10 +709,10 @@ func TestJourneyWritesDoneTwice(t *testing.T) {
 		if p1["progress_id"] != p2["progress_id"] || p1["finished_at"] != p2["finished_at"] {
 			t.Errorf("finishing a finished book changed its record: %v then %v", p1, p2)
 		}
-		if done := truth(call(t, "user_progress_remove", map[string]any{"library": "Fiction", "item": "City of Golden Shadow"})["removed"]); !done {
+		if done := truth(call(t, "user_progress_set", map[string]any{"remove": true, "library": "Fiction", "item": "City of Golden Shadow"})["removed"]); !done {
 			t.Error("the first removal removed nothing")
 		}
-		if done := truth(call(t, "user_progress_remove", map[string]any{"library": "Fiction", "item": "City of Golden Shadow"})["removed"]); done {
+		if done := truth(call(t, "user_progress_set", map[string]any{"remove": true, "library": "Fiction", "item": "City of Golden Shadow"})["removed"]); done {
 			t.Error("the second removal said it removed something")
 		}
 	})
@@ -722,12 +721,12 @@ func TestJourneyWritesDoneTwice(t *testing.T) {
 		call(t, "collection_create", map[string]any{"library": "Fiction", "name": "Zzyzx Twice Shelf", "items": []any{"Foundation", "Second Foundation"}})
 		t.Cleanup(func() { call(t, "collection_delete", map[string]any{"collection": "Zzyzx Twice Shelf"}) })
 
-		out := call(t, "collection_books_edit", map[string]any{"collection": "Zzyzx Twice Shelf", "action": "add", "items": []any{"Foundation"}})
+		out := call(t, "collection_edit", map[string]any{"collection": "Zzyzx Twice Shelf", "add_items": []any{"Foundation"}})
 		if got := strs(t, out["already_held"], "already_held"); !slices.Equal(got, []string{"Foundation"}) || out["added"] != nil {
 			t.Errorf("adding a held book: %v", out)
 		}
-		removed := call(t, "collection_books_edit", map[string]any{"collection": "Zzyzx Twice Shelf", "action": "remove", "items": []any{"Second Foundation"}})
-		again := call(t, "collection_books_edit", map[string]any{"collection": "Zzyzx Twice Shelf", "action": "remove", "items": []any{"Second Foundation"}})
+		removed := call(t, "collection_edit", map[string]any{"collection": "Zzyzx Twice Shelf", "remove_items": []any{"Second Foundation"}})
+		again := call(t, "collection_edit", map[string]any{"collection": "Zzyzx Twice Shelf", "remove_items": []any{"Second Foundation"}})
 		if !slices.Equal(strs(t, removed["removed"], "removed"), []string{"Second Foundation"}) || !slices.Equal(strs(t, again["not_held"], "not_held"), []string{"Second Foundation"}) {
 			t.Errorf("removing twice: %v then %v", removed, again)
 		}
@@ -740,16 +739,16 @@ func TestJourneyWritesDoneTwice(t *testing.T) {
 		call(t, "playlist_create", map[string]any{"library": "Fiction", "name": "Zzyzx Twice Queue", "entries": []any{map[string]any{"item": "Foundation"}, map[string]any{"item": "Leviathan Wakes"}}})
 		t.Cleanup(func() { call(t, "playlist_delete", map[string]any{"playlist": "Zzyzx Twice Queue"}) })
 
-		first := call(t, "playlist_entries_edit", map[string]any{"playlist": "Zzyzx Twice Queue", "action": "add", "entries": []any{map[string]any{"item": "Abaddon's Gate"}}})
-		second := call(t, "playlist_entries_edit", map[string]any{"playlist": "Zzyzx Twice Queue", "action": "add", "entries": []any{map[string]any{"item": "Abaddon's Gate"}}})
+		first := call(t, "playlist_edit", map[string]any{"playlist": "Zzyzx Twice Queue", "add_entries": []any{map[string]any{"item": "Abaddon's Gate"}}})
+		second := call(t, "playlist_edit", map[string]any{"playlist": "Zzyzx Twice Queue", "add_entries": []any{map[string]any{"item": "Abaddon's Gate"}}})
 		if !slices.Equal(strs(t, first["added"], "added"), []string{"Abaddon's Gate"}) || !slices.Equal(strs(t, second["already_held"], "already_held"), []string{"Abaddon's Gate"}) {
 			t.Errorf("adding twice: %v then %v", first, second)
 		}
 		if n := num(t, second["entries"], "entries"); n != 3 {
 			t.Errorf("entries = %d after the second add, want 3", n)
 		}
-		call(t, "playlist_entries_edit", map[string]any{"playlist": "Zzyzx Twice Queue", "action": "remove", "entries": []any{map[string]any{"item": "Foundation"}}})
-		again := call(t, "playlist_entries_edit", map[string]any{"playlist": "Zzyzx Twice Queue", "action": "remove", "entries": []any{map[string]any{"item": "Foundation"}}})
+		call(t, "playlist_edit", map[string]any{"playlist": "Zzyzx Twice Queue", "remove_entries": []any{map[string]any{"item": "Foundation"}}})
+		again := call(t, "playlist_edit", map[string]any{"playlist": "Zzyzx Twice Queue", "remove_entries": []any{map[string]any{"item": "Foundation"}}})
 		if !slices.Equal(strs(t, again["not_held"], "not_held"), []string{"Foundation"}) {
 			t.Errorf("the second removal: %v", again)
 		}
@@ -798,10 +797,10 @@ func TestJourneyWritesDoneTwice(t *testing.T) {
 
 	t.Run("a bookmark added twice", func(t *testing.T) {
 		t.Cleanup(func() {
-			call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Leviathan Wakes", "action": "remove", "time_s": 0.5})
+			call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Leviathan Wakes", "remove_bookmarks": []any{0.5}})
 		})
-		call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Leviathan Wakes", "action": "add", "time_s": 0.5, "title": "Zzyzx once"})
-		call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Leviathan Wakes", "action": "add", "time_s": 0.5, "title": "Zzyzx twice"})
+		call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Leviathan Wakes", "add_bookmarks": []any{map[string]any{"time_s": 0.5, "title": "Zzyzx once"}}})
+		call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Leviathan Wakes", "add_bookmarks": []any{map[string]any{"time_s": 0.5, "title": "Zzyzx twice"}}})
 		marks := rows(t, call(t, "user_bookmarks", map[string]any{"library": "Fiction", "item": "Leviathan Wakes"})["bookmarks"], "bookmarks")
 		if len(marks) != 1 || marks[0]["title"] != "Zzyzx twice" {
 			t.Errorf("bookmarks = %v, want one, renamed", marks)
@@ -967,7 +966,7 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 		if !strings.Contains(msg, madeID) || !strings.Contains(msg, twin.ID) {
 			t.Errorf("a name two collections share: %s", msg)
 		}
-		if msg := callErr(t, "collection_books_edit", map[string]any{"collection": "Zzyzx Shared", "action": "add", "items": []any{"Leviathan Wakes"}}); !strings.Contains(msg, "pass an id") {
+		if msg := callErr(t, "collection_edit", map[string]any{"collection": "Zzyzx Shared", "add_items": []any{"Leviathan Wakes"}}); !strings.Contains(msg, "pass an id") {
 			t.Errorf("an edit by a shared name: %s", msg)
 		}
 		for _, id := range []string{madeID, twin.ID} {

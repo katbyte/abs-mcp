@@ -59,7 +59,7 @@ func registerItemTools(r *registry) {
 	}
 	type getOut struct {
 		itemSummary
-		Downloads     *downloadSettings `json:"downloads,omitempty"      jsonschema:"podcasts: the automatic download settings podcast_settings changes"`
+		Downloads     *downloadSettings `json:"downloads,omitempty"      jsonschema:"podcasts: the automatic download settings podcast_edit changes"`
 		Description   string            `json:"description,omitempty"`
 		PublishedDate string            `json:"published_date,omitempty"`
 		Authors       []abs.NameRef     `json:"authors,omitempty"        jsonschema:"with ids for author_get"`
@@ -537,10 +537,10 @@ func registerItemTools(r *registry) {
 
 	type matchIn struct {
 		itemRef
-		Provider string `json:"provider,omitempty" jsonschema:"metadata provider (server_info lists them); default the library's"`
-		Title    string `json:"title,omitempty"    jsonschema:"override the search title; default the item's"`
-		Author   string `json:"author,omitempty"   jsonschema:"override the search author; default the item's"`
-		Limit    int    `json:"limit,omitempty"    jsonschema:"maximum candidates, default 8"`
+		Providers []string `json:"providers,omitempty" jsonschema:"metadata providers to try in order (server_info lists them), the first with any candidates answering; default the server's --providers, else the library's"`
+		Title     string   `json:"title,omitempty"     jsonschema:"override the search title; default the item's"`
+		Author    string   `json:"author,omitempty"    jsonschema:"override the search author; default the item's"`
+		Limit     int      `json:"limit,omitempty"     jsonschema:"maximum candidates, default 8"`
 	}
 	type candidate struct {
 		Index       int      `json:"index"                 jsonschema:"pass to item_match_apply as candidate"`
@@ -562,7 +562,7 @@ func registerItemTools(r *registry) {
 	type matchOut struct {
 		Item         string      `json:"item"`
 		ItemDuration int         `json:"item_duration_s,omitempty" jsonschema:"the book's length in seconds"`
-		Provider     string      `json:"provider"`
+		Provider     string      `json:"provider"                  jsonschema:"the provider the candidates came from; the last one asked when none had any"`
 		Candidates   []candidate `json:"candidates"                jsonschema:"suggestions only; nothing changes until item_match_apply"`
 	}
 	add(r, readTool, &mcp.Tool{
@@ -577,14 +577,15 @@ func registerItemTools(r *registry) {
 			return nil, matchOut{}, errNotBook
 		}
 
-		if err := prov.checkNamed(ctx, client, in.Provider); err != nil {
+		if err := prov.checkNamed(ctx, client, in.Providers); err != nil {
 			return nil, matchOut{}, err
 		}
-		provider, title, author, err := prov.matchQuery(ctx, client, it, in.Provider, in.Title, in.Author)
+		providers, err := prov.itemProviders(ctx, client, it, in.Providers)
 		if err != nil {
 			return nil, matchOut{}, err
 		}
-		results, err := client.SearchBooks(ctx, provider, title, author, it.ID)
+		title, author := matchSearch(it, in.Title, in.Author)
+		provider, results, err := searchProviders(ctx, client, it, providers, title, author)
 		if err != nil {
 			return nil, matchOut{}, err
 		}
@@ -625,7 +626,7 @@ func registerItemTools(r *registry) {
 
 	type applyIn struct {
 		itemRef
-		Provider        string   `json:"provider,omitempty"         jsonschema:"must match the provider used in item_match"`
+		Providers       []string `json:"providers,omitempty"        jsonschema:"metadata providers to try in order, as item_match takes them and with the same default: for a candidate the first with any candidates, so pass what item_match was passed; for an asin or isbn the first that holds it"`
 		Candidate       *int     `json:"candidate,omitempty"        jsonschema:"index from item_match; the candidate's asin/isbn is used to match exactly"`
 		ASIN            string   `json:"asin,omitempty"             jsonschema:"match this asin directly instead of a candidate"`
 		ISBN            string   `json:"isbn,omitempty"             jsonschema:"match this isbn directly instead of a candidate"`
@@ -635,26 +636,28 @@ func registerItemTools(r *registry) {
 		OverrideCover   bool     `json:"override_cover,omitempty"   jsonschema:"replace the existing cover"`
 		Keep            []string `json:"keep,omitempty"             jsonschema:"with override_details: fields to put back as they were after the match: title, subtitle, authors, narrators, series, genres, tags, publisher, year, language, description"`
 		Smart           bool     `json:"smart,omitempty"            jsonschema:"fill the empty fields, then decide each remaining difference by rule: a file-tag title, a company in the narrator field or a timestamp year is written; a curated series, a plain year or an honorific-only difference is kept; anything else is reported for review with both values. Cannot combine with override_details"`
-		Preview         bool     `json:"preview,omitempty"          jsonschema:"with smart: report the decisions and change nothing"`
+		Confirm         bool     `json:"confirm,omitempty"          jsonschema:"true to apply. Without it nothing changes and the answer says what would be applied, and with smart every decision"`
 	}
 	type appliedRef struct {
-		Title  string `json:"title,omitempty"`
-		Author string `json:"author,omitempty"`
-		ASIN   string `json:"asin,omitempty"`
-		ISBN   string `json:"isbn,omitempty"`
+		Title    string `json:"title,omitempty"`
+		Author   string `json:"author,omitempty"`
+		ASIN     string `json:"asin,omitempty"`
+		ISBN     string `json:"isbn,omitempty"`
+		Provider string `json:"provider,omitempty" jsonschema:"the provider it comes from"`
 	}
 	type applyOut struct {
-		Updated bool            `json:"updated"`
-		Kept    []string        `json:"kept,omitempty"    jsonschema:"fields restored after the match"`
-		Fields  []fieldDecision `json:"fields,omitempty"  jsonschema:"with smart: every field the provider would write differently and what was done about it"`
-		Counts  map[string]int  `json:"counts,omitempty"  jsonschema:"with smart: decisions by action"`
-		Warning string          `json:"warning,omitempty"`
-		Applied *appliedRef     `json:"applied,omitempty" jsonschema:"the candidate that was applied; check it against item"`
-		Item    *itemSummary    `json:"item,omitempty"    jsonschema:"the item after matching"`
+		WouldApply *appliedRef     `json:"would_apply,omitempty" jsonschema:"without confirm: the candidate a confirmed call applies; nothing has changed"`
+		Updated    bool            `json:"updated"`
+		Kept       []string        `json:"kept,omitempty"        jsonschema:"fields restored after the match"`
+		Fields     []fieldDecision `json:"fields,omitempty"      jsonschema:"with smart: every field the provider would write differently and what was done about it"`
+		Counts     map[string]int  `json:"counts,omitempty"      jsonschema:"with smart: decisions by action"`
+		Warning    string          `json:"warning,omitempty"`
+		Applied    *appliedRef     `json:"applied,omitempty"     jsonschema:"the candidate that was applied; check it against item"`
+		Item       *itemSummary    `json:"item,omitempty"        jsonschema:"the item after matching"`
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "item_match_apply",
-		Description: "Apply a match: pull metadata and cover from the provider into the item, for a candidate from item_match or an asin/isbn you already know (one of candidate, asin or isbn is required: the match is never left to the provider's first guess). By default only empty fields are filled; set override_details to replace. Changes server state.",
+		Description: "Apply a match: pull metadata and cover from the provider into the item, for a candidate from item_match or an asin/isbn you already know (one of candidate, asin or isbn is required: the match is never left to the provider's first guess). By default only empty fields are filled; set override_details to replace. Without confirm nothing changes and the answer says what would be applied. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in applyIn) (*mcp.CallToolResult, applyOut, error) {
 		// a match with nothing to name the book would take the provider's
 		// first hit unseen, and with override_details replace the metadata
@@ -687,23 +690,25 @@ func registerItemTools(r *registry) {
 		if in.Smart && in.OverrideDetails {
 			return nil, applyOut{}, errors.New("smart and override_details are two answers to the same question; pick one")
 		}
-		if in.Preview && !in.Smart {
-			return nil, applyOut{}, errors.New("preview only means something with smart")
-		}
 
-		if err := prov.checkNamed(ctx, client, in.Provider); err != nil {
+		if err := prov.checkNamed(ctx, client, in.Providers); err != nil {
 			return nil, applyOut{}, err
 		}
-		provider, title, author, err := prov.matchQuery(ctx, client, it, in.Provider, in.Title, in.Author)
+		providers, err := prov.itemProviders(ctx, client, it, in.Providers)
 		if err != nil {
 			return nil, applyOut{}, err
 		}
-		opts := abs.MatchOptions{Provider: provider, ASIN: in.ASIN, ISBN: in.ISBN, OverrideCover: in.OverrideCover, OverrideDetails: in.OverrideDetails}
+		title, author := matchSearch(it, in.Title, in.Author)
+		opts := abs.MatchOptions{ASIN: strings.TrimSpace(in.ASIN), ISBN: strings.TrimSpace(in.ISBN), OverrideCover: in.OverrideCover, OverrideDetails: in.OverrideDetails}
 		var applied appliedRef
+		var provider string
 
-		if in.Candidate != nil && opts.ASIN == "" && opts.ISBN == "" {
-			results, serr := client.SearchBooks(ctx, provider, title, author, it.ID)
-			if serr != nil {
+		// a candidate comes from the first store with any, as item_match's
+		// did; an asin or isbn from the first store that holds it
+		if byCandidate := in.Candidate != nil && opts.ASIN == "" && opts.ISBN == ""; byCandidate {
+			var results []abs.BookSearchResult
+			var serr error
+			if provider, results, serr = searchProviders(ctx, client, it, providers, title, author); serr != nil {
 				return nil, applyOut{}, serr
 			}
 			if *in.Candidate < 0 || *in.Candidate >= len(results) {
@@ -718,21 +723,25 @@ func registerItemTools(r *registry) {
 				// hit, which is the one place a match is not pinned to an id
 				opts.Title, opts.Author = c.Title, c.Author
 			}
+		} else if provider, err = providerHolding(ctx, client, it, providers, opts.ASIN, opts.ISBN); err != nil {
+			// no store named holds the asin or isbn
+			return nil, applyOut{}, err
 		}
-		applied.ASIN, applied.ISBN = opts.ASIN, opts.ISBN
+		opts.Provider = provider
+		applied.ASIN, applied.ISBN, applied.Provider = opts.ASIN, opts.ISBN, provider
 
 		if in.Smart {
 			if opts.ASIN == "" && opts.ISBN == "" {
 				return nil, applyOut{}, errors.New("smart needs an asin or isbn to fetch the provider's record")
 			}
-			decisions, res, serr := smartApply(ctx, client, it, provider, opts.ASIN, opts.ISBN, in.Preview)
+			decisions, res, serr := smartApply(ctx, client, it, provider, opts.ASIN, opts.ISBN, !in.Confirm)
 			if serr != nil {
 				return nil, applyOut{}, serr
 			}
-			out := applyOut{Applied: &applied, Fields: decisions, Counts: smartCounts(decisions)}
-			if in.Preview {
-				return nil, out, nil
+			if !in.Confirm {
+				return nil, applyOut{WouldApply: &applied, Fields: decisions, Counts: smartCounts(decisions)}, nil
 			}
+			out := applyOut{Applied: &applied, Fields: decisions, Counts: smartCounts(decisions)}
 			out.Updated, out.Warning = res.Updated, res.Warning
 			// a match that found nothing has no store to record
 			if res.LibraryItem != nil {
@@ -749,6 +758,9 @@ func registerItemTools(r *registry) {
 			return nil, out, nil
 		}
 
+		if !in.Confirm {
+			return nil, applyOut{WouldApply: &applied}, nil
+		}
 		res, err := client.Match(ctx, it.ID, opts)
 		if err != nil {
 			return nil, applyOut{}, err
@@ -812,13 +824,14 @@ func registerItemTools(r *registry) {
 
 	type coverSearchIn struct {
 		itemRef
-		Provider string `json:"provider,omitempty" jsonschema:"cover provider; default the library's; audiobookcovers searches audiobookcovers.com"`
-		Title    string `json:"title,omitempty"    jsonschema:"override the search title"`
-		Author   string `json:"author,omitempty"   jsonschema:"override the search author"`
+		Providers []string `json:"providers,omitempty" jsonschema:"cover providers to try in order, the first with any covers answering; default the server's --providers, else the library's; audiobookcovers searches audiobookcovers.com"`
+		Title     string   `json:"title,omitempty"     jsonschema:"override the search title"`
+		Author    string   `json:"author,omitempty"    jsonschema:"override the search author"`
 	}
 	type coverSearchOut struct {
-		Item   string   `json:"item"`
-		Covers []string `json:"covers" jsonschema:"image urls; pass one to item_cover_edit"`
+		Item     string   `json:"item"`
+		Provider string   `json:"provider" jsonschema:"the provider the covers came from; the last one asked when none had any"`
+		Covers   []string `json:"covers"   jsonschema:"image urls; pass one to item_cover_edit"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "item_cover_search",
@@ -828,25 +841,30 @@ func registerItemTools(r *registry) {
 		if err != nil {
 			return nil, coverSearchOut{}, err
 		}
-		if err := prov.checkNamed(ctx, client, in.Provider); err != nil {
+		if err := prov.checkNamed(ctx, client, in.Providers); err != nil {
 			return nil, coverSearchOut{}, err
 		}
-		provider, title, author, err := prov.matchQuery(ctx, client, it, in.Provider, in.Title, in.Author)
+		providers, err := prov.itemProviders(ctx, client, it, in.Providers)
 		if err != nil {
 			return nil, coverSearchOut{}, err
 		}
+		title, author := matchSearch(it, in.Title, in.Author)
 		if it.IsPodcast() {
 			author = ""
 		}
-		covers, err := client.SearchCovers(ctx, provider, title, author, it.IsPodcast())
-		if err != nil {
-			return nil, coverSearchOut{}, err
-		}
-		if covers == nil {
-			covers = []string{}
+		out := coverSearchOut{Item: it.Title(), Covers: []string{}}
+		for _, out.Provider = range providers {
+			covers, err := client.SearchCovers(ctx, out.Provider, title, author, it.IsPodcast())
+			if err != nil {
+				return nil, coverSearchOut{}, err
+			}
+			if len(covers) > 0 {
+				out.Covers = covers
+				break
+			}
 		}
 
-		return nil, coverSearchOut{Item: it.Title(), Covers: covers}, nil
+		return nil, out, nil
 	})
 
 	type coverEditOut struct {
@@ -1349,37 +1367,75 @@ var (
 	mergeSettle = 30 * time.Second
 )
 
-// checkNamed refuses a provider the caller named that the server does not
-// have. The server answers a name it does not know by searching Google, so a
-// misspelt audible.ca comes back as Google's guesses with nothing to say so.
-func (p providerConfig) checkNamed(ctx context.Context, client *abs.Client, provider string) error {
-	if provider == "" {
-		return nil
+// itemProviders is the stores a call about one item asks, in order: the ones
+// it named, as it named them; else the configured default, else the item's
+// library's own, with the store the item's provider tag records first, as the
+// store that had the book last time is the one to ask first. Stores a call
+// names are checked by checkNamed before this, once a call.
+func (p providerConfig) itemProviders(ctx context.Context, client *abs.Client, it *abs.Item, named []string) ([]string, error) {
+	if len(named) > 0 {
+		return named, nil
 	}
-
-	return p.checkProviders(ctx, client, []string{provider}, false)
+	if len(p.providers) > 0 {
+		return p.providerOrder(it, slices.Clone(p.providers)), nil
+	}
+	lib, err := client.Library(ctx, it.LibraryID)
+	if err != nil {
+		return nil, fmt.Errorf("reading the library's provider, as none was named: %w", err)
+	}
+	return p.providerOrder(it, []string{lib.Provider}), nil
 }
 
-// matchQuery fills in the provider, title and author for a provider search
-// from the item, the configured default and its library when not overridden.
-func (p providerConfig) matchQuery(ctx context.Context, client *abs.Client, it *abs.Item, provider, title, author string) (resolvedProvider, resolvedTitle, resolvedAuthor string, err error) {
-	if title == "" {
-		title = it.Title()
+// checkNamed refuses a store a call named that the server does not have. The
+// server answers a name it does not know by searching Google, so a misspelt
+// audible.ca comes back as Google's guesses with nothing to say so.
+func (p providerConfig) checkNamed(ctx context.Context, client *abs.Client, named []string) error {
+	if len(named) == 0 {
+		return nil
 	}
-	if author == "" {
-		author = it.Media.Metadata.AuthorDisplay()
-	}
-	if provider == "" && len(p.providers) > 0 {
-		provider = p.providers[0]
-	}
-	if provider == "" {
-		lib, err := client.Library(ctx, it.LibraryID)
+	return p.checkProviders(ctx, client, named, false)
+}
+
+// matchSearch is the title and author a provider search asks for: the ones
+// given, else the item's own.
+func matchSearch(it *abs.Item, title, author string) (searchTitle, searchAuthor string) {
+	return cmp.Or(title, it.Title()), cmp.Or(author, it.Media.Metadata.AuthorDisplay())
+}
+
+// searchProviders asks each store in turn for a title and author and answers
+// with the first that has any candidates, and which store that was; the last
+// one asked when none has.
+func searchProviders(ctx context.Context, client *abs.Client, it *abs.Item, providers []string, title, author string) (string, []abs.BookSearchResult, error) {
+	var provider string
+	for _, provider = range providers {
+		results, err := client.SearchBooks(ctx, provider, title, author, it.ID)
 		if err != nil {
-			return "", "", "", fmt.Errorf("reading the library's provider, as none was named: %w", err)
+			return provider, nil, err
 		}
-		provider = lib.Provider
+		if len(results) > 0 {
+			return provider, results, nil
+		}
 	}
-	return provider, title, author, nil
+	return provider, nil, nil
+}
+
+// providerHolding is the first of the stores that has a record for an asin
+// or isbn. One store alone is taken at its word, without asking it first.
+func providerHolding(ctx context.Context, client *abs.Client, it *abs.Item, providers []string, asin, isbn string) (string, error) {
+	if len(providers) == 1 {
+		return providers[0], nil
+	}
+	for _, provider := range providers {
+		_, err := providerRecord(ctx, client, it, provider, asin, isbn)
+		var none *noRecordError
+		switch {
+		case err == nil:
+			return provider, nil
+		case !errors.As(err, &none):
+			return "", err
+		}
+	}
+	return "", fmt.Errorf("none of %s has a record for %s", strings.Join(providers, ", "), cmp.Or(asin, isbn))
 }
 
 // joinWarnings adds a warning to whatever the server already said.

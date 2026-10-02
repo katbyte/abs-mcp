@@ -131,7 +131,7 @@ func playlistNameInUse(ctx context.Context, client *abs.Client, libraryID, name,
 	}
 	for i := range pls {
 		if pls[i].ID != except && strings.EqualFold(strings.TrimSpace(pls[i].Name), strings.TrimSpace(name)) {
-			return fmt.Errorf("a playlist named %q already exists (%s): playlist_entries_edit adds to it", pls[i].Name, pls[i].ID)
+			return fmt.Errorf("a playlist named %q already exists (%s): playlist_edit add_entries adds to it", pls[i].Name, pls[i].ID)
 		}
 	}
 	return nil
@@ -154,9 +154,13 @@ func registerPlaylistTools(r *registry) {
 
 	type listIn struct {
 		Library string `json:"library,omitempty" jsonschema:"restrict to one library by name or id"`
+		pageIn
 	}
 	type listOut struct {
-		Playlists []row `json:"playlists" jsonschema:"playlists belong to the API key's user"`
+		Total      int   `json:"total"`
+		Offset     int   `json:"offset"`
+		NextOffset int   `json:"next_offset,omitempty" jsonschema:"pass back as offset for the next page; absent on the last"`
+		Playlists  []row `json:"playlists"             jsonschema:"playlists belong to the API key's user"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "playlist_list",
@@ -174,9 +178,11 @@ func registerPlaylistTools(r *registry) {
 		if err != nil {
 			return nil, listOut{}, err
 		}
-		out := listOut{Playlists: []row{}}
-		for i := range pls {
-			out.Playlists = append(out.Playlists, rowOf(&pls[i]))
+		limit, offset := pageArgs(in.Limit, in.Offset, 50)
+		page, next := pageOf(pls, limit, offset)
+		out := listOut{Total: len(pls), Offset: offset, NextOffset: next, Playlists: []row{}}
+		for i := range page {
+			out.Playlists = append(out.Playlists, rowOf(&page[i]))
 		}
 
 		return nil, out, nil
@@ -296,153 +302,160 @@ func registerPlaylistTools(r *registry) {
 
 	type editIn struct {
 		getIn
-		Name        string `json:"name,omitempty"`
-		Description string `json:"description,omitempty"`
+		Name          string            `json:"name,omitempty"`
+		Description   string            `json:"description,omitempty"`
+		AddEntries    []playlistEntryIn `json:"add_entries,omitempty"    jsonschema:"books or podcast episodes to append"`
+		RemoveEntries []playlistEntryIn `json:"remove_entries,omitempty" jsonschema:"entries to take out; the items stay in the library"`
 	}
-	add(r, writeTool, &mcp.Tool{
-		Name:        "playlist_edit",
-		Description: "Rename a playlist or change its description. Changes server state.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in editIn) (*mcp.CallToolResult, row, error) {
-		// a name of only spaces would leave a playlist nothing can name
-		name := strings.TrimSpace(in.Name)
-		switch {
-		case in.Name != "" && name == "":
-			return nil, row{}, errors.New("name is blank: pass a name, or leave it out to keep the one it has")
-		case name == "" && in.Description == "":
-			return nil, row{}, errors.New("nothing to change: pass name or description")
-		}
-		p, err := resolvePlaylist(ctx, client, in.Playlist)
-		if err != nil {
-			return nil, row{}, err
-		}
-		if name != "" {
-			if err := playlistNameInUse(ctx, client, p.LibraryID, name, p.ID); err != nil {
-				return nil, row{}, err
-			}
-		}
-		updated, err := client.UpdatePlaylist(ctx, p.ID, strPtr(name), strPtr(in.Description))
-		if err != nil {
-			return nil, row{}, err
-		}
-
-		return nil, rowOf(updated), nil
-	})
-
-	type entriesIn struct {
-		getIn
-		Entries []playlistEntryIn `json:"entries"`
-	}
-	type changeOut struct {
-		Playlist    string   `json:"playlist"`
-		Entries     int      `json:"entries"                jsonschema:"size after the change"`
+	type editOut struct {
+		row
 		Added       []string `json:"added,omitempty"`
 		AlreadyHeld []string `json:"already_held,omitempty" jsonschema:"entries asked for that the playlist already held, left where they were"`
 		Removed     []string `json:"removed,omitempty"`
 		NotHeld     []string `json:"not_held,omitempty"     jsonschema:"entries asked to be removed that the playlist did not hold"`
 		Deleted     bool     `json:"deleted,omitempty"      jsonschema:"the last entry was removed, and Audiobookshelf deletes a playlist left empty"`
 	}
-	type entriesEditIn struct {
-		entriesIn
-		Action string `json:"action" jsonschema:"add or remove"`
-	}
 	add(r, writeTool, &mcp.Tool{
-		Name:        "playlist_entries_edit",
-		Description: "Append books or podcast episodes to a playlist, or take them out of it, and say which were added or removed and which it already held or never did. Removing only changes the playlist; the items stay in the library. Removing every entry deletes the playlist, as Audiobookshelf keeps no empty one, so that is refused unless the delete tools are switched on. Changes server state.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in entriesEditIn) (*mcp.CallToolResult, changeOut, error) {
-		action := strings.ToLower(strings.TrimSpace(in.Action))
-		if action != "add" && action != "remove" {
-			return nil, changeOut{}, fmt.Errorf("action %q must be add or remove", in.Action)
+		Name:        "playlist_edit",
+		Description: "Change a playlist: rename it, change its description, append books or podcast episodes to it or take entries out of it. The answer is the playlist as it now is, with which entries were added or removed and which it already held or never did. Removing only changes the playlist; the items stay in the library. Removing every entry deletes the playlist, as Audiobookshelf keeps no empty one, so that is refused unless the delete tools are switched on. Changes server state.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in editIn) (*mcp.CallToolResult, editOut, error) {
+		// a name of only spaces would leave a playlist nothing can name
+		name := strings.TrimSpace(in.Name)
+		switch {
+		case in.Name != "" && name == "":
+			return nil, editOut{}, errors.New("name is blank: pass a name, or leave it out to keep the one it has")
+		case name == "" && in.Description == "" && len(in.AddEntries) == 0 && len(in.RemoveEntries) == 0:
+			return nil, editOut{}, errors.New("nothing to change: pass name, description, add_entries or remove_entries")
 		}
-
 		p, err := resolvePlaylist(ctx, client, in.Playlist)
 		if err != nil {
-			return nil, changeOut{}, err
+			return nil, editOut{}, err
 		}
 		// what it holds is judged once held, so two adds of one entry at once
 		// do not both say they added it
 		defer r.locks.hold("playlist:" + p.ID)()
 		if p, err = client.Playlist(ctx, p.ID); err != nil {
-			return nil, changeOut{}, err
+			return nil, editOut{}, err
 		}
-		entries, err := resolvePlaylistEntries(ctx, client, p.LibraryID, in.Entries)
-		if err != nil {
-			return nil, changeOut{}, err
+		if name != "" {
+			if err := playlistNameInUse(ctx, client, p.LibraryID, name, p.ID); err != nil {
+				return nil, editOut{}, err
+			}
+		}
+
+		// everything is resolved before anything is sent, so an entry named
+		// wrongly changes nothing at all
+		var adding, removing []playlistEntry
+		if len(in.AddEntries) > 0 {
+			if adding, err = resolvePlaylistEntries(ctx, client, p.LibraryID, in.AddEntries); err != nil {
+				return nil, editOut{}, err
+			}
+		}
+		if len(in.RemoveEntries) > 0 {
+			if removing, err = resolvePlaylistEntries(ctx, client, p.LibraryID, in.RemoveEntries); err != nil {
+				return nil, editOut{}, err
+			}
+		}
+		for i := range adding {
+			if slices.ContainsFunc(removing, func(e playlistEntry) bool { return e.key() == adding[i].key() }) {
+				return nil, editOut{}, fmt.Errorf("%q is in both add_entries and remove_entries; one or the other", adding[i].label())
+			}
 		}
 		held := map[string]bool{}
 		for i := range p.Items {
 			held[playlistKey(&p.Items[i])] = true
 		}
-
 		// the server answers 200 to adding what it holds and to removing what
 		// it does not, and changes nothing: split them here, so what comes back
 		// says what was actually done
-		out := changeOut{Playlist: p.Name, Entries: len(p.Items)}
-		var send []playlistEntry
-		for i := range entries {
-			switch {
-			case action == "add" && held[entries[i].key()]:
-				out.AlreadyHeld = append(out.AlreadyHeld, entries[i].label())
-			case action == "remove" && !held[entries[i].key()]:
-				out.NotHeld = append(out.NotHeld, entries[i].label())
-			default:
-				send = append(send, entries[i])
+		out := editOut{}
+		var add, remove []playlistEntry
+		for i := range adding {
+			if held[adding[i].key()] {
+				out.AlreadyHeld = append(out.AlreadyHeld, adding[i].label())
+			} else {
+				add = append(add, adding[i])
 			}
 		}
-		if len(send) == 0 {
-			return nil, out, nil
+		for i := range removing {
+			if held[removing[i].key()] {
+				remove = append(remove, removing[i])
+			} else {
+				out.NotHeld = append(out.NotHeld, removing[i].label())
+			}
 		}
 		// the server deletes a playlist its last entry leaves, so emptying one
 		// is a delete, and is only done where deleting is switched on
-		if action == "remove" && len(send) == len(p.Items) && !r.opts.EnableDelete {
-			return nil, changeOut{}, fmt.Errorf("removing every entry of %q deletes the playlist, as Audiobookshelf keeps no empty one; that needs the delete tools switched on (--enable-delete), and then playlist_delete says so plainly", p.Name)
+		if len(remove) > 0 && len(p.Items)+len(add)-len(remove) == 0 && !r.opts.EnableDelete {
+			return nil, editOut{}, fmt.Errorf("removing every entry of %q deletes the playlist, as Audiobookshelf keeps no empty one; that needs the delete tools switched on (--enable-delete), and then playlist_delete says so plainly", p.Name)
 		}
-		refs := make([]abs.PlaylistEntry, 0, len(send))
-		labels := make([]string, 0, len(send))
-		for i := range send {
-			refs = append(refs, send[i].ref())
-			labels = append(labels, send[i].label())
+		refs := func(entries []playlistEntry) (refs []abs.PlaylistEntry, labels []string) {
+			for i := range entries {
+				refs, labels = append(refs, entries[i].ref()), append(labels, entries[i].label())
+			}
+			return refs, labels
 		}
 
-		if action == "add" {
-			updated, aerr := client.AddToPlaylist(ctx, p.ID, refs)
-			if aerr != nil {
-				return nil, changeOut{}, aerr
+		// each change after the first is said to have followed it when it
+		// fails, so a partial edit is never reported as none
+		var done []string
+		failed := func(what string, err error) error {
+			if len(done) == 0 {
+				return err
+			}
+			return fmt.Errorf("%s, but %s failed: %w", strings.Join(done, " and "), what, err)
+		}
+		if name != "" || in.Description != "" {
+			if p, err = client.UpdatePlaylist(ctx, p.ID, strPtr(name), strPtr(in.Description)); err != nil {
+				return nil, editOut{}, err
+			}
+			done = append(done, "the name or description was changed")
+		}
+		if len(add) > 0 {
+			send, labels := refs(add)
+			if p, err = client.AddToPlaylist(ctx, p.ID, send); err != nil {
+				return nil, editOut{}, failed("adding the entries", err)
 			}
 			now := map[string]bool{}
-			for i := range updated.Items {
-				now[playlistKey(&updated.Items[i])] = true
+			for i := range p.Items {
+				now[playlistKey(&p.Items[i])] = true
 			}
-			for i := range send {
-				if !now[send[i].key()] {
-					return nil, changeOut{}, fmt.Errorf("the server accepted the add but %q is not in the playlist afterwards", send[i].label())
+			for i := range add {
+				if !now[add[i].key()] {
+					return nil, editOut{}, failed("adding the entries", fmt.Errorf("the server accepted the add but %q is not in the playlist afterwards", add[i].label()))
 				}
 			}
-			out.Playlist, out.Entries, out.Added = updated.Name, len(updated.Items), labels
-			return nil, out, nil
+			out.Added = labels
+			done = append(done, fmt.Sprintf("%d entries were added", len(add)))
 		}
-
-		if _, err := client.RemoveFromPlaylist(ctx, p.ID, refs); err != nil {
-			return nil, changeOut{}, err
-		}
-		out.Removed = labels
-		// the reply is the playlist as it was before the server deleted an
-		// emptied one, so the playlist is read back rather than trusted
-		after, err := client.Playlist(ctx, p.ID)
-		switch {
-		case abs.IsNotFound(err):
-			out.Entries, out.Deleted = 0, true
-			return nil, out, nil
-		case err != nil:
-			return nil, changeOut{}, err
-		}
-		for i := range after.Items {
-			for j := range send {
-				if playlistKey(&after.Items[i]) == send[j].key() {
-					return nil, changeOut{}, fmt.Errorf("the server accepted the removal but %q is still in the playlist", send[j].label())
+		if len(remove) > 0 {
+			send, labels := refs(remove)
+			if _, err = client.RemoveFromPlaylist(ctx, p.ID, send); err != nil {
+				return nil, editOut{}, failed("removing the entries", err)
+			}
+			out.Removed = labels
+			// the reply is the playlist as it was before the server deleted
+			// an emptied one, so the playlist is read back rather than trusted
+			var after *abs.Playlist
+			after, err = client.Playlist(ctx, p.ID)
+			switch {
+			case abs.IsNotFound(err):
+				out.row, out.Deleted = rowOf(p), true
+				out.Entries = 0
+				return nil, out, nil
+			case err != nil:
+				return nil, editOut{}, failed("reading the playlist back after removing the entries", err)
+			}
+			for i := range after.Items {
+				for j := range remove {
+					if playlistKey(&after.Items[i]) == remove[j].key() {
+						return nil, editOut{}, failed("removing the entries", fmt.Errorf("the server accepted the removal but %q is still in the playlist", remove[j].label()))
+					}
 				}
 			}
+			p = after
 		}
-		out.Entries = len(after.Items)
+		out.row = rowOf(p)
 
 		return nil, out, nil
 	})

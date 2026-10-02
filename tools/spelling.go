@@ -445,11 +445,11 @@ func registerSpellingTools(r *registry) {
 	}
 	type renameOut struct {
 		Field        string         `json:"field"`
-		ItemsUpdated int            `json:"items_updated"       jsonschema:"items changed; for authors, the books the author had, which now carry the new name, or after a merge the other author"`
-		Merged       bool           `json:"merged,omitempty"    jsonschema:"authors: the rename merged into an author that already existed"`
-		Items        []string       `json:"items,omitempty"     jsonschema:"languages and publishers: the titles changed, capped at 50"`
-		Preview      *removePreview `json:"preview,omitempty"   jsonschema:"remove without confirm: what confirm=true would drop the value from; nothing was changed"`
-		Unchanged    bool           `json:"unchanged,omitempty" jsonschema:"nothing was written: from and to are the same, or the narrator or author already has the name asked for everywhere it was found"`
+		ItemsUpdated int            `json:"items_updated"          jsonschema:"items changed; for authors, the books the author had, which now carry the new name, or after a merge the other author"`
+		Merged       bool           `json:"merged,omitempty"       jsonschema:"authors: the rename merged into an author that already existed"`
+		Items        []string       `json:"items,omitempty"        jsonschema:"languages and publishers: the titles changed, capped at 50"`
+		Preview      *removePreview `json:"would_remove,omitempty" jsonschema:"remove without confirm: what confirm=true would drop the value from; nothing was changed"`
+		Unchanged    bool           `json:"unchanged,omitempty"    jsonschema:"nothing was written: from and to are the same, or the narrator or author already has the name asked for everywhere it was found"`
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name: "metadata_rename",

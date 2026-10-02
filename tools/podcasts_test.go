@@ -171,7 +171,7 @@ func TestPodcastSettingsRefusesWhatCannotRun(t *testing.T) {
 		{"new_per_check": -2},
 	} {
 		args["item"] = podcastID
-		if _, err := call("podcast_settings", args); err == nil {
+		if _, err := call("podcast_edit", args); err == nil {
 			t.Errorf("%v was accepted", args)
 		}
 	}
@@ -180,7 +180,7 @@ func TestPodcastSettingsRefusesWhatCannotRun(t *testing.T) {
 	}
 
 	for _, schedule := range []string{"0 * * * *", " 0 3 * * * ", "*/15 9-17 * * mon-fri", "0 0 1 Jan,jul *", "30 0 6 * * sunday", "0 0 * * 0,7"} {
-		if _, err := call("podcast_settings", map[string]any{"item": podcastID, "schedule": schedule, "keep_episodes": 0}); err != nil {
+		if _, err := call("podcast_edit", map[string]any{"item": podcastID, "schedule": schedule, "keep_episodes": 0}); err != nil {
 			t.Errorf("%q: %v", schedule, err)
 		}
 	}
@@ -285,7 +285,7 @@ func TestPodcastCheckNewOffersNoIndex(t *testing.T) {
 	}
 }
 
-// podcast_settings answers the settings as the server saved them, read back
+// podcast_edit answers the settings as the server saved them, read back
 // after the change, rather than a bare done.
 func TestPodcastSettingsReadsTheSettingsBack(t *testing.T) {
 	t.Parallel()
@@ -305,12 +305,12 @@ func TestPodcastSettingsReadsTheSettingsBack(t *testing.T) {
 	})
 	call := toolCaller(t, f)
 
-	out, err := call("podcast_settings", map[string]any{"item": podcastID, "auto_download": true, "schedule": "0 3 * * *", "keep_episodes": 5, "new_per_check": 2})
+	out, err := call("podcast_edit", map[string]any{"item": podcastID, "auto_download": true, "schedule": "0 3 * * *", "keep_episodes": 5, "new_per_check": 2})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !boolOf(t, out["updated"]) || !boolOf(t, out["auto_download"]) || str(t, out["schedule"]) != "0 3 * * *" || num(t, out["keep_episodes"]) != 5 || num(t, out["new_per_check"]) != 2 {
-		t.Errorf("podcast_settings = %v, want the saved settings", out)
+		t.Errorf("podcast_edit = %v, want the saved settings", out)
 	}
 	if _, ok := out["done"]; ok {
 		t.Error("still answers done")

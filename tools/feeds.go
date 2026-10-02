@@ -66,19 +66,24 @@ func registerFeedTools(r *registry) {
 	client := r.client
 
 	type listOut struct {
-		Feeds []feedRow `json:"feeds" jsonschema:"every RSS feed the server is publishing"`
+		Total      int       `json:"total"`
+		Offset     int       `json:"offset"`
+		NextOffset int       `json:"next_offset,omitempty" jsonschema:"pass back as offset for the next page; absent on the last"`
+		Feeds      []feedRow `json:"feeds"                 jsonschema:"the RSS feeds the server is publishing"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "feed_list",
 		Description: "The RSS feeds the server is publishing, each with what it is for and its url. Share links to single books are not listed, as the server keeps no list of them: feed_edit on the book says whether it has one. Admin only.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, listOut, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in pageIn) (*mcp.CallToolResult, listOut, error) {
 		feeds, err := client.Feeds(ctx)
 		if err != nil {
 			return nil, listOut{}, err
 		}
-		out := listOut{Feeds: []feedRow{}}
-		for i := range feeds {
-			out.Feeds = append(out.Feeds, feedRowOf(&feeds[i], client.BaseURL()))
+		limit, offset := pageArgs(in.Limit, in.Offset, 50)
+		page, next := pageOf(feeds, limit, offset)
+		out := listOut{Total: len(feeds), Offset: offset, NextOffset: next, Feeds: []feedRow{}}
+		for i := range page {
+			out.Feeds = append(out.Feeds, feedRowOf(&page[i], client.BaseURL()))
 		}
 		return nil, out, nil
 	})

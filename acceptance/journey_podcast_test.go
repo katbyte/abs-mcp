@@ -244,7 +244,7 @@ func TestJourneyPodcastLife(t *testing.T) {
 	})
 
 	t.Run("download settings, read back", func(t *testing.T) {
-		call(t, "podcast_settings", map[string]any{"item": id, "auto_download": true, "schedule": "0 3 * * *", "keep_episodes": 10, "new_per_check": 2})
+		call(t, "podcast_edit", map[string]any{"item": id, "auto_download": true, "schedule": "0 3 * * *", "keep_episodes": 10, "new_per_check": 2})
 		want := map[string]any{"auto_download": true, "schedule": "0 3 * * *", "keep_episodes": float64(10), "new_per_check": float64(2)}
 		got := object(call(t, "item_get", map[string]any{"item": id})["downloads"])
 		for k, v := range want {
@@ -255,7 +255,7 @@ func TestJourneyPodcastLife(t *testing.T) {
 		if got["last_check"] == nil {
 			t.Errorf("downloads.last_check is unset after two checks: %v", got)
 		}
-		call(t, "podcast_settings", map[string]any{"item": id, "auto_download": false})
+		call(t, "podcast_edit", map[string]any{"item": id, "auto_download": false})
 		if got := object(call(t, "item_get", map[string]any{"item": id})["downloads"]); truth(got["auto_download"]) {
 			t.Errorf("auto_download still on: %v", got)
 		}
@@ -276,7 +276,7 @@ func TestJourneyPodcastLife(t *testing.T) {
 			map[string]any{"item": id, "episode": one}, map[string]any{"item": id, "episode": two},
 		}})
 		call(t, "user_progress_set", map[string]any{"item": id, "episode": one, "percent": 50})
-		t.Cleanup(func() { _, _ = invoke("user_progress_remove", map[string]any{"item": id, "episode": one}) })
+		t.Cleanup(func() { _, _ = invoke("user_progress_set", map[string]any{"remove": true, "item": id, "episode": one}) })
 
 		// unconfirmed, it says what it would erase and erases nothing
 		preview := call(t, "podcast_episode_delete", map[string]any{"item": id, "episode": one, "delete_file": true})
@@ -335,7 +335,7 @@ func TestJourneyPodcastLife(t *testing.T) {
 	})
 
 	t.Run("not stale, and unsubscribed", func(t *testing.T) {
-		for _, f := range rows(t, call(t, "audit_podcast_stale_feed", map[string]any{"library": "Podcasts"})["findings"], "findings") {
+		for _, f := range rows(t, call(t, "audit_podcasts", map[string]any{"library": "Podcasts"})["findings"], "findings") {
 			if f["id"] == id {
 				t.Errorf("a show published today is stale: %v", f)
 			}

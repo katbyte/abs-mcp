@@ -8,6 +8,7 @@
 package acceptance
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -16,6 +17,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/katbyte/abs-mcp/lib/abs"
 )
 
 // pageWalk reads a listing that pages by offset from one offset to its end,
@@ -543,7 +546,7 @@ func TestJourneyReadsAnswerWhatWasAsked(t *testing.T) {
 		titles := []string{"Foundation", "Foundation and Empire", "Second Foundation"}
 		t.Cleanup(func() {
 			for _, title := range titles {
-				_, _ = invoke("user_progress_remove", map[string]any{"library": "Fiction", "item": title})
+				_, _ = invoke("user_progress_set", map[string]any{"remove": true, "library": "Fiction", "item": title})
 			}
 		})
 		finished := func(t *testing.T) (map[string]bool, int, bool) {
@@ -579,8 +582,127 @@ func TestJourneyReadsAnswerWhatWasAsked(t *testing.T) {
 		call(t, "user_progress_set", map[string]any{"library": "Fiction", "item": "Foundation and Empire", "finished": false})
 		check(t, "one unfinished again", "Foundation", "Second Foundation")
 		for _, title := range titles {
-			call(t, "user_progress_remove", map[string]any{"library": "Fiction", "item": title})
+			call(t, "user_progress_set", map[string]any{"remove": true, "library": "Fiction", "item": title})
 		}
 		check(t, "progress removed")
+	})
+}
+
+// The lists the tools hold whole and page themselves - collections,
+// playlists, accounts, feeds, narrators and a library's vocabulary - each
+// walked a page at a time: the pages together are the list asked for whole,
+// nothing twice and nothing missed.
+func TestJourneyListsHeldWholeArePaged(t *testing.T) {
+	admin := adminClient(t)
+	titles := []string{"Foundation", "Foundation and Empire", "Second Foundation", "City of Golden Shadow", "Sea of Silver Light"}
+
+	t.Run("collection_list", func(t *testing.T) {
+		for _, title := range titles {
+			name := "Zzyzx Paged Shelf " + title
+			call(t, "collection_create", map[string]any{"library": "Fiction", "name": name, "items": []any{title}})
+			t.Cleanup(func() { _, _ = invoke("collection_delete", map[string]any{"collection": name}) })
+		}
+		all := everyPageOnce(t, "collection_list", "collections", map[string]any{"library": "Fiction"}, 1)
+		if len(all) < len(titles) {
+			t.Errorf("collection_list holds %d, want the %d made", len(all), len(titles))
+		}
+	})
+
+	t.Run("playlist_list", func(t *testing.T) {
+		for _, title := range titles {
+			name := "Zzyzx Paged Queue " + title
+			call(t, "playlist_create", map[string]any{"library": "Fiction", "name": name, "entries": []any{map[string]any{"item": title}}})
+			t.Cleanup(func() { _, _ = invoke("playlist_delete", map[string]any{"playlist": name}) })
+		}
+		everyPageOnce(t, "playlist_list", "playlists", map[string]any{"library": "Fiction"}, 2)
+	})
+
+	t.Run("user_list", func(t *testing.T) {
+		for i := range 4 {
+			name := fmt.Sprintf("zzyzx-paged-%d", i)
+			u, err := admin.CreateUser(ctx, abs.UserCreate{Username: name, Password: name + "-password", Type: "user", IsActive: new(true)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				eventually(t, "deleting "+name, func() error { return admin.DeleteUser(context.WithoutCancel(ctx), u.ID) })
+			})
+		}
+		everyPageOnce(t, "user_list", "users", nil, 1)
+	})
+
+	t.Run("feed_list", func(t *testing.T) {
+		for _, title := range titles {
+			book := map[string]any{"library": "Fiction", "item": title}
+			call(t, "feed_edit", book)
+			t.Cleanup(func() { _, _ = invoke("feed_edit", withArgs(book, map[string]any{"close": true})) })
+		}
+		everyPageOnce(t, "feed_list", "feeds", nil, 1)
+	})
+
+	t.Run("narrator_list", func(t *testing.T) {
+		whole := call(t, "narrator_list", withMessy(map[string]any{"limit": 1000}))
+		names := valuesIn(t, whole["narrators"], "narrators", "name")
+		if num(t, whole["total"], "total") != len(names) || whole["next_offset"] != nil || len(names) < 5 {
+			t.Fatalf("narrator_list whole: %d names of %v, next %v", len(names), whole["total"], whole["next_offset"])
+		}
+		if !slices.IsSorted(names) {
+			t.Errorf("narrators are not by name: %v", names)
+		}
+		var walked []string
+		for offset := 0; ; {
+			out := call(t, "narrator_list", withMessy(map[string]any{"limit": 2, "offset": offset}))
+			page := valuesIn(t, out["narrators"], "narrators", "name")
+			walked = append(walked, page...)
+			if out["next_offset"] == nil {
+				break
+			}
+			if len(page) != 2 || num(t, out["next_offset"], "next_offset") != offset+2 {
+				t.Fatalf("a page of %d at %d, next %v", len(page), offset, out["next_offset"])
+			}
+			offset += 2
+		}
+		if !slices.Equal(walked, names) {
+			t.Errorf("paged by 2 read\n  %v\nwant\n  %v", walked, names)
+		}
+	})
+
+	t.Run("library_filters", func(t *testing.T) {
+		whole := call(t, "library_filters", withMessy(map[string]any{"limit": 1000}))
+		authors := valuesIn(t, whole["authors"], "authors", "name")
+		totals := object(whole["totals"])
+		if num(t, totals["authors"], "totals.authors") != len(authors) || whole["next_offset"] != nil || len(authors) < 5 {
+			t.Fatalf("library_filters whole: %d authors, totals %v, next %v", len(authors), totals, whole["next_offset"])
+		}
+		for _, list := range []string{"genres", "tags", "narrators", "languages", "publishers", "published_decades", "authors", "series"} {
+			if _, ok := totals[list]; !ok {
+				t.Errorf("totals has no %s: %v", list, totals)
+			}
+		}
+		// only the lists asked for, a page of each at a time
+		var walked []string
+		for offset := 0; ; {
+			out := call(t, "library_filters", withMessy(map[string]any{"fields": []any{"authors", "genres"}, "limit": 2, "offset": offset}))
+			if out["series"] != nil || out["tags"] != nil || out["narrators"] != nil || len(object(out["totals"])) != 2 {
+				t.Fatalf("lists not asked for came back at offset %d: %v", offset, out)
+			}
+			walked = append(walked, valuesIn(t, items(out["authors"]), "authors", "name")...)
+			if got := len(items(out["genres"])); got > 2 {
+				t.Errorf("a page of %d genres, want at most 2", got)
+			}
+			if out["next_offset"] == nil {
+				break
+			}
+			offset = num(t, out["next_offset"], "next_offset")
+			if offset > 1000 {
+				t.Fatal("library_filters never reached its last page")
+			}
+		}
+		if !slices.Equal(walked, authors) {
+			t.Errorf("paged by 2 read\n  %v\nwant\n  %v", walked, authors)
+		}
+		if msg := callErr(t, "library_filters", withMessy(map[string]any{"fields": []any{"genre"}})); !strings.Contains(msg, "genres") {
+			t.Errorf("a list that does not exist: %s", msg)
+		}
 	})
 }

@@ -72,7 +72,7 @@ var Toolsets = map[string][]string{
 	// and sending a book to an e-reader
 	"listening": {
 		"user_get", "user_in_progress", "user_progress_get", "user_progress_set",
-		"user_progress_remove", "user_bookmarks", "user_bookmark_edit",
+		"user_bookmarks", "user_bookmark_edit",
 		"user_history", "user_history_remove", "user_stats", "item_send_ebook",
 	},
 	// find what is wrong with a library and fix it: every audit, the metadata
@@ -80,12 +80,12 @@ var Toolsets = map[string][]string{
 	// near-duplicate authors, narrators, tags, genres, languages and publishers
 	"curation": {
 		"audit_all", "audit_missing", "audit_unmatched", "audit_issues", "audit_no_audio",
-		"audit_podcast_no_episodes", "audit_chapters", "audit_authors",
-		"audit_path", "audit_covers", "audit_podcast_stale_feed",
+		"audit_podcasts", "audit_chapters", "audit_authors",
+		"audit_path", "audit_covers",
 		"audit_duplicates", "audit_series", "audit_spelling", "audit_narrators", "audit_genres", "audit_unembedded", "audit_matched", "audit_abridged", "audit_whitespace", "audit_unplayable", "metadata_rename",
 		"item_edit", "item_match", "item_match_apply", "item_match_batch", "item_match_apply_batch", "item_match_tag", "item_compare_audio",
 		"item_cover_search", "item_cover_edit", "item_cover_upgrade", "item_chapters_set",
-		"author_list", "author_get", "author_edit", "author_match", "author_match_apply", "author_image_set",
+		"author_list", "author_get", "author_edit", "author_match", "author_match_apply",
 		"narrator_list", "series_list", "series_get", "series_edit", "series_merge",
 		"library_get", "library_filters", "library_recent", "server_tags",
 	},
@@ -94,15 +94,15 @@ var Toolsets = map[string][]string{
 	"podcasts": {
 		"podcast_search", "podcast_add", "podcast_episodes", "podcast_episode_get",
 		"podcast_episode_edit", "podcast_feed_episodes", "podcast_episode_download",
-		"podcast_check_new", "podcast_downloads", "podcast_settings", "podcast_episode_delete",
+		"podcast_check_new", "podcast_downloads", "podcast_edit", "podcast_episode_delete",
 	},
 	// group things: shared collections and personal playlists, and the feeds
 	// and links that let someone listen to them from outside the app
 	"organise": {
 		"collection_list", "collection_get", "collection_create", "collection_edit",
-		"collection_books_edit", "collection_delete",
+		"collection_delete",
 		"playlist_list", "playlist_get", "playlist_create", "playlist_edit",
-		"playlist_entries_edit", "playlist_delete", "feed_list", "feed_edit",
+		"playlist_delete", "feed_list", "feed_edit",
 	},
 	// running the server rather than using it: libraries, scans, tasks, backups,
 	// other people's accounts, and the tools that remove records

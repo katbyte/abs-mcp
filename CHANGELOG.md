@@ -3,6 +3,17 @@
 ### Breaking
 
 - `item_batch_edit` is gone: `item_edit` takes `items` to make the same change on many
+- `collection_books_edit` is gone: `collection_edit` takes `add_items` and `remove_items`
+- `playlist_entries_edit` is gone: `playlist_edit` takes `add_entries` and `remove_entries`
+- `author_image_set` is gone: `author_edit` takes `image_url`
+- `user_progress_remove` is gone: `user_progress_set` takes `remove`
+- `audit_podcast_no_episodes` and `audit_podcast_stale_feed` are one audit, `audit_podcasts`, each finding naming its `problem`
+- `podcast_settings` is renamed `podcast_edit`
+- `user_bookmark_edit` takes `add_bookmarks` and `remove_bookmarks` in place of `action`
+- `item_match`, `item_match_apply`, `item_match_apply_batch` and `item_cover_search` take `providers`, a list tried in order, in place of `provider`
+- `item_match_apply`, `item_match_apply_batch` and `item_cover_upgrade` change nothing without `confirm`; `preview` is gone
+- `metadata_rename` answers `would_remove` in place of `preview`
+- `library_filters` leaves out a list that is empty or not asked for; `totals` gives each list's length
 - `lib/abs`: `LoggerData` returns log lines, `ServerYearStats` returns `AdminYearStats`, and `DeleteItemFile` returns only an error
 
 ### Added
@@ -21,6 +32,10 @@
 - `user_progress_set` `series` hides a series from Continue Series
 - `item_get` shows which ebook is the main one, and where a file sits in a disc folder
 - `item_edit` with `items` changes podcasts as well as books
+- `collection_edit` and `playlist_edit` rename, describe, add and remove in one call
+- `collection_list`, `playlist_list`, `user_list`, `feed_list`, `narrator_list` and `library_filters` take `limit` and `offset`
+- `library_filters` `fields` asks for only some of its lists
+- a match with no provider named asks each of `--providers` in turn, the book's recorded store first
 - `item_cover_edit` `file` takes a filename, and finds an image added since the last scan
 
 ### Fixed

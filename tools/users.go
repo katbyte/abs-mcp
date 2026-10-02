@@ -182,19 +182,24 @@ func registerUserTools(r *registry) {
 	client := r.client
 
 	type listOut struct {
-		Users []userRow `json:"users"`
+		Total      int       `json:"total"`
+		Offset     int       `json:"offset"`
+		NextOffset int       `json:"next_offset,omitempty" jsonschema:"pass back as offset for the next page; absent on the last"`
+		Users      []userRow `json:"users"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name:        "user_list",
 		Description: "List the server's user accounts with type, last seen, and what they last listened to. Admin only; every other user tool defaults to the API key's own account and needs no admin rights.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, listOut, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in pageIn) (*mcp.CallToolResult, listOut, error) {
 		users, err := client.Users(ctx, true)
 		if err != nil {
 			return nil, listOut{}, err
 		}
-		out := listOut{Users: []userRow{}}
-		for i := range users {
-			u := &users[i]
+		limit, offset := pageArgs(in.Limit, in.Offset, 50)
+		page, next := pageOf(users, limit, offset)
+		out := listOut{Total: len(users), Offset: offset, NextOffset: next, Users: []userRow{}}
+		for i := range page {
+			u := &page[i]
 			row := userRow{ID: u.ID, Username: u.Username, Type: u.Type, Active: u.IsActive, LastSeen: fmtTime(u.LastSeen)}
 			if u.LatestSession != nil {
 				row.Listening = u.LatestSession.DisplayTitle
@@ -407,11 +412,13 @@ func registerUserTools(r *registry) {
 		Position *float64 `json:"position_s,omitempty"         jsonschema:"set the playback position in seconds"`
 		Percent  *float64 `json:"percent,omitempty"            jsonschema:"set the position as a percentage 0-100 instead"`
 		Hide     *bool    `json:"hide_from_continue,omitempty" jsonschema:"remove from (true) or restore to (false) the continue-listening shelf; with series, the Continue Series shelf"`
+		Remove   bool     `json:"remove,omitempty"             jsonschema:"instead of setting anything: delete the progress on the book or episode, resetting it to never started"`
 	}
 	type progressSetOut struct {
 		progressGetOut
 		Series       string `json:"series,omitempty"        jsonschema:"with series: the series"`
 		SeriesHidden *bool  `json:"series_hidden,omitempty" jsonschema:"with series: kept off the Continue Series shelf, read back from the account"`
+		Removed      *bool  `json:"removed,omitempty"       jsonschema:"with remove: false when there was no progress to remove"`
 	}
 	// hideSeries takes a series off the Continue Series shelf or puts it
 	// back, and reads the account back to say which it is
@@ -446,11 +453,46 @@ func registerUserTools(r *registry) {
 		}
 		return progressSetOut{Series: s.Name, SeriesHidden: &hidden}, nil
 	}
+	// removeProgress deletes the account's progress on a book or episode, and
+	// reads it back: the server has answered a removal it did not make
+	removeProgress := func(ctx context.Context, in progressSetIn) (progressSetOut, error) {
+		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
+		if err != nil {
+			return progressSetOut{}, err
+		}
+		p, err := client.Progress(ctx, it.ID, in.Episode)
+		if err != nil {
+			return progressSetOut{}, err
+		}
+		out := progressSetOut{Item: it.Title(), Removed: new(false)}
+		if p == nil {
+			return out, nil
+		}
+		if err := client.RemoveProgress(ctx, p.ID); err != nil {
+			return progressSetOut{}, err
+		}
+		left, err := client.Progress(ctx, it.ID, in.Episode)
+		if err != nil {
+			return progressSetOut{}, fmt.Errorf("the server accepted the removal of %q's progress, but reading it back to check failed: %w", it.Title(), err)
+		}
+		if left != nil {
+			return progressSetOut{}, fmt.Errorf("the server accepted the removal but %q still has progress", it.Title())
+		}
+		out.Removed = new(true)
+		return out, nil
+	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "user_progress_set",
-		Description: "Update the API key user's progress on a book or episode: mark finished/unfinished, set the position (seconds or percent), or hide it from continue-listening; or hide a whole series from the Continue Series shelf. Always the API key's own account - Audiobookshelf has no way to set someone else's progress. Changes server state.",
+		Description: "Update the API key user's progress on a book or episode: mark finished/unfinished, set the position (seconds or percent), hide it from continue-listening, or with remove delete the progress; or hide a whole series from the Continue Series shelf. Always the API key's own account - Audiobookshelf has no way to set someone else's progress. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in progressSetIn) (*mcp.CallToolResult, progressSetOut, error) {
-		if in.Series != "" {
+		set := in.Finished != nil || in.Position != nil || in.Percent != nil || in.Hide != nil
+		switch {
+		case in.Remove && (set || in.Series != ""):
+			return nil, progressSetOut{}, errors.New("remove deletes the progress, and takes nothing to set; pass it alone with the item")
+		case in.Remove:
+			out, err := removeProgress(ctx, in)
+			return nil, out, err
+		case in.Series != "":
 			out, err := hideSeries(ctx, in)
 			return nil, out, err
 		}
@@ -517,47 +559,15 @@ func registerUserTools(r *registry) {
 		return nil, progressSetOut{Item: it.Title(), Duration: wholeSec(duration), Progress: progressOf(p)}, nil
 	})
 
-	type progressRemoveOut struct {
-		Item    string `json:"item"`
-		Removed bool   `json:"removed" jsonschema:"false when there was no progress to remove"`
-	}
-	add(r, writeTool, &mcp.Tool{
-		Name:        "user_progress_remove",
-		Description: "Delete the API key user's progress on a book or episode, resetting it to never started. Always the API key's own account. Changes server state.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in progressRef) (*mcp.CallToolResult, progressRemoveOut, error) {
-		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
-		if err != nil {
-			return nil, progressRemoveOut{}, err
-		}
-		p, err := client.Progress(ctx, it.ID, in.Episode)
-		if err != nil {
-			return nil, progressRemoveOut{}, err
-		}
-		if p == nil {
-			return nil, progressRemoveOut{Item: it.Title()}, nil
-		}
-		if err := client.RemoveProgress(ctx, p.ID); err != nil {
-			return nil, progressRemoveOut{}, err
-		}
-		// read back: the server has answered a removal it did not make
-		left, err := client.Progress(ctx, it.ID, in.Episode)
-		if err != nil {
-			return nil, progressRemoveOut{}, fmt.Errorf("the server accepted the removal of %q's progress, but reading it back to check failed: %w", it.Title(), err)
-		}
-		if left != nil {
-			return nil, progressRemoveOut{}, fmt.Errorf("the server accepted the removal but %q still has progress", it.Title())
-		}
-
-		return nil, progressRemoveOut{Item: it.Title(), Removed: true}, nil
-	})
-
 	type bookmarkRow struct {
 		ItemID  string  `json:"item_id"`
 		Item    string  `json:"item,omitempty"`
 		Deleted bool    `json:"item_deleted,omitempty" jsonschema:"the item is no longer on the server; Audiobookshelf keeps the bookmark and will not remove it"`
 		Title   string  `json:"title"`
-		Time    float64 `json:"time_s"                 jsonschema:"position in seconds, exactly as held: pass it as seconds to user_bookmark_edit to remove it"`
+		Time    float64 `json:"time_s"                 jsonschema:"position in seconds, exactly as held: pass it in user_bookmark_edit remove_bookmarks to remove it"`
 		Created string  `json:"created,omitempty"`
+		// set by user_bookmark_edit on a bookmark it renamed
+		WasTitled string `json:"was_titled,omitempty" jsonschema:"renamed: the name it had before"`
 	}
 	type bookmarksIn struct {
 		userRef
@@ -651,28 +661,40 @@ func registerUserTools(r *registry) {
 		return nil, out, nil
 	})
 
+	type bookmarkAdd struct {
+		Seconds float64 `json:"time_s" jsonschema:"position in seconds"`
+		Title   string  `json:"title"  jsonschema:"bookmark name"`
+	}
 	type bookmarkEditIn struct {
 		itemRef
-		Action  string  `json:"action"          jsonschema:"add or remove"`
-		Seconds float64 `json:"time_s"          jsonschema:"position in seconds; user_bookmarks' time_s when removing"`
-		Title   string  `json:"title,omitempty" jsonschema:"bookmark name; required when adding"`
+		Add    []bookmarkAdd `json:"add_bookmarks,omitempty"    jsonschema:"bookmarks to add, each a position and a name; one at a position that already has a bookmark renames it"`
+		Remove []float64     `json:"remove_bookmarks,omitempty" jsonschema:"positions in seconds of the bookmarks to remove: user_bookmarks' time_s"`
 	}
 	type bookmarkEditOut struct {
-		Result    string       `json:"result"               jsonschema:"added, renamed (a bookmark was already at that position), or removed"`
-		Bookmark  *bookmarkRow `json:"bookmark"             jsonschema:"the bookmark as it now stands, or the one removed"`
-		WasTitled string       `json:"was_titled,omitempty" jsonschema:"renamed: the name it had before"`
+		Added   []bookmarkRow `json:"added,omitempty"`
+		Renamed []bookmarkRow `json:"renamed,omitempty" jsonschema:"a bookmark was already at that position: it has the new name, and was_titled the old"`
+		Removed []bookmarkRow `json:"removed,omitempty"`
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "user_bookmark_edit",
-		Description: "Add a named bookmark at a position in a book, or remove the one at that position. Adding at a position that already has a bookmark renames it. Always the API key's own account - bookmarks belong to the user who made them. Changes server state.",
+		Description: "Add named bookmarks at positions in a book, or remove the ones at positions. Adding at a position that already has a bookmark renames it. Always the API key's own account - bookmarks belong to the user who made them. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in bookmarkEditIn) (*mcp.CallToolResult, bookmarkEditOut, error) {
-		action := strings.ToLower(strings.TrimSpace(in.Action))
-		if action != "add" && action != "remove" {
-			return nil, bookmarkEditOut{}, fmt.Errorf("action %q must be add or remove", in.Action)
+		if len(in.Add) == 0 && len(in.Remove) == 0 {
+			return nil, bookmarkEditOut{}, errors.New("nothing to change: pass add_bookmarks or remove_bookmarks")
+		}
+		for i, a := range in.Add {
+			switch {
+			case strings.TrimSpace(a.Title) == "":
+				return nil, bookmarkEditOut{}, fmt.Errorf("the bookmark to add at %v seconds has no title", a.Seconds)
+			case slices.Contains(in.Remove, a.Seconds):
+				return nil, bookmarkEditOut{}, fmt.Errorf("%v seconds is in both add_bookmarks and remove_bookmarks; one or the other", a.Seconds)
+			case slices.ContainsFunc(in.Add[:i], func(o bookmarkAdd) bool { return o.Seconds == a.Seconds }):
+				return nil, bookmarkEditOut{}, fmt.Errorf("add_bookmarks names %v seconds twice", a.Seconds)
+			}
 		}
 
 		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
-		if err != nil && abs.IsNotFound(err) && action == "remove" && looksLikeID(in.Item) {
+		if err != nil && abs.IsNotFound(err) && len(in.Remove) > 0 && looksLikeID(in.Item) {
 			me, merr := client.Me(ctx)
 			if merr != nil {
 				return nil, bookmarkEditOut{}, fmt.Errorf("%w; reading the account's bookmarks to say whether one is left on it also failed: %w", err, merr)
@@ -684,63 +706,83 @@ func registerUserTools(r *registry) {
 		if err != nil {
 			return nil, bookmarkEditOut{}, err
 		}
-		if action == "add" && strings.TrimSpace(in.Title) == "" {
-			return nil, bookmarkEditOut{}, errors.New("title is required when adding a bookmark")
-		}
 		// the server keeps an account's bookmarks as one list, read and
 		// saved whole by every add and removal
 		defer r.locks.hold("bookmarks")()
 
-		rowOf := func(b *abs.Bookmark) *bookmarkRow {
-			return &bookmarkRow{
+		rowOf := func(b *abs.Bookmark) bookmarkRow {
+			return bookmarkRow{
 				ItemID: it.ID, Item: it.Title(), Title: b.Title,
 				Time: b.Time, Created: fmtTime(b.CreatedAt),
 			}
 		}
-		// the one already at that position, which a removal takes and an add
-		// renames
+		// the ones already at those positions, which a removal takes and an
+		// add renames: every removal is checked before anything is sent
 		bms, err := client.Bookmarks(ctx)
 		if err != nil {
 			return nil, bookmarkEditOut{}, err
 		}
-		held := bookmarkAt(bms, it.ID, in.Seconds)
+		for _, at := range in.Remove {
+			if bookmarkAt(bms, it.ID, at) == nil {
+				return nil, bookmarkEditOut{}, fmt.Errorf("no bookmark at %v seconds in %q: user_bookmarks lists them; nothing was changed", at, it.Title())
+			}
+		}
 
-		if action == "remove" {
-			if held == nil {
-				return nil, bookmarkEditOut{}, fmt.Errorf("no bookmark at %v seconds in %q: user_bookmarks lists them", in.Seconds, it.Title())
+		// a change that fails after others were made says which those were
+		out := bookmarkEditOut{}
+		failed := func(err error) error {
+			if n := len(out.Added) + len(out.Renamed) + len(out.Removed); n > 0 {
+				return fmt.Errorf("%d bookmarks were changed before this, and stay changed (%d removed, %d added, %d renamed): %w", n, len(out.Removed), len(out.Added), len(out.Renamed), err)
 			}
-			if err := client.DeleteBookmark(ctx, it.ID, in.Seconds); err != nil {
-				return nil, bookmarkEditOut{}, err
+			return err
+		}
+		for _, at := range slices.Compact(slices.Sorted(slices.Values(in.Remove))) {
+			held := bookmarkAt(bms, it.ID, at)
+			if err := client.DeleteBookmark(ctx, it.ID, at); err != nil {
+				return nil, bookmarkEditOut{}, failed(err)
 			}
+			out.Removed = append(out.Removed, rowOf(held))
+		}
+		if len(out.Removed) > 0 {
 			// read back rather than trusted
 			after, rerr := client.Bookmarks(ctx)
-			switch {
-			case rerr != nil:
-				return nil, bookmarkEditOut{}, fmt.Errorf("removed %q, but reading the bookmarks back failed: %w", held.Title, rerr)
-			case bookmarkAt(after, it.ID, in.Seconds) != nil:
-				return nil, bookmarkEditOut{}, fmt.Errorf("the server accepted the removal but %q is still there", held.Title)
+			if rerr != nil {
+				return nil, bookmarkEditOut{}, failed(fmt.Errorf("reading the bookmarks back after the removal failed: %w", rerr))
 			}
-			return nil, bookmarkEditOut{Result: "removed", Bookmark: rowOf(held)}, nil
-		}
-
-		out := bookmarkEditOut{Result: "added"}
-		var b *abs.Bookmark
-		if held != nil {
-			out.Result, out.WasTitled = "renamed", held.Title
-			b, err = client.UpdateBookmark(ctx, it.ID, in.Seconds, in.Title)
-		} else if b, err = client.CreateBookmark(ctx, it.ID, in.Seconds, in.Title); err != nil {
-			// made meanwhile by another client: renamed rather than
-			// duplicated. When that fails too, both say what went wrong
-			out.Result = "renamed"
-			addErr := err
-			if b, err = client.UpdateBookmark(ctx, it.ID, in.Seconds, in.Title); err != nil {
-				err = fmt.Errorf("adding the bookmark failed: %w; renaming one made meanwhile at that time failed too: %w", addErr, err)
+			for _, gone := range out.Removed {
+				if bookmarkAt(after, it.ID, gone.Time) != nil {
+					return nil, bookmarkEditOut{}, fmt.Errorf("the server accepted the removal but %q is still there", gone.Title)
+				}
 			}
 		}
-		if err != nil {
-			return nil, bookmarkEditOut{}, err
+		for _, a := range in.Add {
+			held := bookmarkAt(bms, it.ID, a.Seconds)
+			renamed := held != nil
+			var b *abs.Bookmark
+			if renamed {
+				b, err = client.UpdateBookmark(ctx, it.ID, a.Seconds, a.Title)
+			} else if b, err = client.CreateBookmark(ctx, it.ID, a.Seconds, a.Title); err != nil {
+				// made meanwhile by another client: renamed rather than
+				// duplicated. When that fails too, both say what went wrong
+				renamed = true
+				addErr := err
+				if b, err = client.UpdateBookmark(ctx, it.ID, a.Seconds, a.Title); err != nil {
+					err = fmt.Errorf("adding the bookmark failed: %w; renaming one made meanwhile at that time failed too: %w", addErr, err)
+				}
+			}
+			if err != nil {
+				return nil, bookmarkEditOut{}, failed(err)
+			}
+			row := rowOf(b)
+			if renamed {
+				if held != nil {
+					row.WasTitled = held.Title
+				}
+				out.Renamed = append(out.Renamed, row)
+			} else {
+				out.Added = append(out.Added, row)
+			}
 		}
-		out.Bookmark = rowOf(b)
 
 		return nil, out, nil
 	})

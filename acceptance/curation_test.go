@@ -152,16 +152,17 @@ func TestItemMatchBatch(t *testing.T) {
 // cannot look an asin up: with no store named the call is refused before any
 // book, saying which library and how to name one.
 func TestItemCoverUpgradeNeedsAnASIN(t *testing.T) {
-	if msg := callErr(t, "item_cover_upgrade", map[string]any{"library": "Fiction"}); msg == "" {
+	if msg := callErr(t, "item_cover_upgrade", map[string]any{"confirm": true, "library": "Fiction"}); msg == "" {
 		t.Error("a call naming no items should be refused")
 	}
 	books := []any{"Foundation", "Leviathan Wakes"}
-	if msg := callErr(t, "item_cover_upgrade", map[string]any{"library": "Fiction", "items": books, "preview": true}); !strings.Contains(msg, `library "Fiction" is on the google provider, which cannot look up an asin`) || !strings.Contains(msg, "--providers (ABS_PROVIDERS)") {
+	if msg := callErr(t, "item_cover_upgrade", map[string]any{"library": "Fiction", "items": books}); !strings.Contains(msg, `library "Fiction" is on the google provider, which cannot look up an asin`) || !strings.Contains(msg, "--providers (ABS_PROVIDERS)") {
 		t.Errorf("no store named for a library on google: %q, want the library, its provider and the fix", msg)
 	}
 
 	out := call(t, "item_cover_upgrade", map[string]any{
-		"library": "Fiction", "items": books, "providers": []any{"audible"}, "preview": true,
+		"confirm": true,
+		"library": "Fiction", "items": books, "providers": []any{"audible"},
 	})
 	if upgraded := num(t, out["upgraded"], "upgraded"); upgraded != 0 {
 		t.Errorf("upgraded = %d, want 0", upgraded)

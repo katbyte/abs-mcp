@@ -207,24 +207,27 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 	if msg := callErr(t, "item_match_batch", withMessy(map[string]any{"filter": "authors:Isaac Asimov", "tolerance": 0.5})); !strings.Contains(msg, "tolerance 0.5") {
 		t.Errorf("a tolerance past a tenth: %s", msg)
 	}
-	if msg := callErr(t, "item_match_apply", map[string]any{"item": id, "provider": "audibel", "asin": foundationASIN, "smart": true, "preview": true}); !strings.Contains(msg, `no provider "audibel"`) { //nolint:misspell // a store misspelt on purpose
+	if msg := callErr(t, "item_match_apply", map[string]any{"item": id, "providers": []any{"audibel"}, "asin": foundationASIN, "smart": true}); !strings.Contains(msg, `no provider "audibel"`) { //nolint:misspell // a store misspelt on purpose
 		t.Errorf("a misspelt store on the apply: %s", msg)
 	}
 
 	// a lookup takes part of a title; a write needs the whole of it, and
 	// says which book the part was nearest
-	look := call(t, "item_match", map[string]any{"library": "Messy", "item": "Foundation", "provider": "audible", "title": "Foundation", "author": "Isaac Asimov", "limit": 3})
+	look := call(t, "item_match", map[string]any{"library": "Messy", "item": "Foundation", "providers": []any{"audible"}, "title": "Foundation", "author": "Isaac Asimov", "limit": 3})
 	if look["item"] != "Foundation (Unabridged)" || len(rows(t, look["candidates"], "candidates")) != 3 {
 		t.Errorf("item_match by part of the title, limit 3: item %v, %d candidates", look["item"], len(rows(t, look["candidates"], "candidates")))
 	}
-	if msg := callErr(t, "item_match_apply", map[string]any{"library": "Messy", "item": "Foundation", "provider": "audible", "asin": foundationASIN, "smart": true, "preview": true}); !strings.Contains(msg, "Foundation (Unabridged)") || !strings.Contains(msg, "whole title") {
+	if msg := callErr(t, "item_match_apply", map[string]any{"library": "Messy", "item": "Foundation", "providers": []any{"audible"}, "asin": foundationASIN, "smart": true}); !strings.Contains(msg, "Foundation (Unabridged)") || !strings.Contains(msg, "whole title") {
 		t.Errorf("a write by part of a title: %s", msg)
 	}
 
-	// the preview: every field the store would write differently, and what
-	// the rules do about it, with nothing changed
-	smart := map[string]any{"library": "Messy", "item": "Foundation (Unabridged)", "provider": "audible", "asin": foundationASIN, "smart": true}
-	preview := call(t, "item_match_apply", withArgs(smart, map[string]any{"preview": true}))
+	// without confirm: every field the store would write differently, and
+	// what the rules do about it, with nothing changed
+	smart := map[string]any{"library": "Messy", "item": "Foundation (Unabridged)", "providers": []any{"audible"}, "asin": foundationASIN, "smart": true}
+	preview := call(t, "item_match_apply", smart)
+	if would := object(preview["would_apply"]); would["asin"] != foundationASIN || would["provider"] != "audible" || preview["applied"] != nil {
+		t.Errorf("without confirm = %v, want would_apply naming the asin and its store", preview)
+	}
 	decided := decisionsByField(t, preview["fields"])
 	want := map[string]string{
 		"title":     "written", // "(Unabridged)" is an importer's suffix
@@ -249,7 +252,7 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 
 	// applied for real: the decisions are the preview's, and the book holds
 	// what each one said
-	applied := call(t, "item_match_apply", smart)
+	applied := call(t, "item_match_apply", withArgs(smart, map[string]any{"confirm": true}))
 	if updated := truth(applied["updated"]); !updated {
 		t.Errorf("updated = %v, want the match to have changed the book: %v", applied["updated"], applied)
 	}
@@ -284,7 +287,7 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 
 	// the same match again changes nothing and says so; the preview and a
 	// batch with rows that cannot be matched are counted by what happened
-	again := call(t, "item_match_apply_batch", map[string]any{"matches": []any{map[string]any{"item": id, "asin": foundationASIN}}, "provider": "audible", "smart": true})
+	again := call(t, "item_match_apply_batch", map[string]any{"confirm": true, "matches": []any{map[string]any{"item": id, "asin": foundationASIN}}, "providers": []any{"audible"}, "smart": true})
 	if a, u, f := num(t, again["applied"], "applied"), num(t, again["unchanged"], "unchanged"), num(t, again["failed"], "failed"); a != 0 || u != 1 || f != 0 {
 		t.Errorf("a second smart match: applied %d, unchanged %d, failed %d, want 0, 1, 0: %v", a, u, f, again)
 	}
@@ -296,11 +299,11 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 	if changed := bookChanges(after, bookNow(t, id)); len(changed) > 0 {
 		t.Errorf("the second match changed the book: %v", changed)
 	}
-	pv := call(t, "item_match_apply_batch", map[string]any{"matches": []any{map[string]any{"item": id, "asin": foundationASIN}}, "provider": "audible", "smart": true, "preview": true})
-	if p, a, u := num(t, pv["previewed"], "previewed"), num(t, pv["applied"], "applied"), num(t, pv["unchanged"], "unchanged"); p != 1 || a != 0 || u != 0 {
-		t.Errorf("a batch preview: previewed %d, applied %d, unchanged %d, want 1, 0, 0", p, a, u)
+	pv := call(t, "item_match_apply_batch", map[string]any{"matches": []any{map[string]any{"item": id, "asin": foundationASIN}}, "providers": []any{"audible"}, "smart": true})
+	if p, a, u := num(t, pv["would_apply"], "would_apply"), num(t, pv["applied"], "applied"), num(t, pv["unchanged"], "unchanged"); p != 1 || a != 0 || u != 0 {
+		t.Errorf("a batch without confirm: would_apply %d, applied %d, unchanged %d, want 1, 0, 0", p, a, u)
 	}
-	mixed := call(t, "item_match_apply_batch", map[string]any{"provider": "audible", "matches": []any{
+	mixed := call(t, "item_match_apply_batch", map[string]any{"confirm": true, "providers": []any{"audible"}, "matches": []any{
 		map[string]any{"item": id, "asin": foundationASIN},
 		map[string]any{"item": "Zzyzx Nowhere On The Shelf", "asin": foundationASIN},
 		map[string]any{"item": id},
@@ -321,13 +324,13 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 	// for the reader, a placeholder genre, a timestamp for the year, a credit
 	// line for a description, a clipped language, and a series number that
 	// disagrees with the store's. Each rule writes, or holds for review
-	smart = map[string]any{"item": id, "provider": "audible", "asin": foundationASIN, "smart": true}
+	smart = map[string]any{"item": id, "providers": []any{"audible"}, "asin": foundationASIN, "smart": true}
 	call(t, "item_edit", map[string]any{
 		"item": id, "title": "01 Foundation", "narrators": []any{"Random House Audio"}, "genres": []any{"Audiobook"},
 		"year": "2010-04-20", "description": "Read by Scott Brick", "language": "Eng", "publisher": "Zzyzx Press", "series": []any{"Foundation #1"},
 	})
 	fromFiles := bookNow(t, id)
-	overTags := call(t, "item_match_apply", smart)
+	overTags := call(t, "item_match_apply", withArgs(smart, map[string]any{"confirm": true}))
 	decided = decisionsByField(t, overTags["fields"])
 	for field, action := range map[string]string{
 		"title": "written", "narrators": "written", "genres": "written", "year": "written",
@@ -362,7 +365,7 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 		"description": "Zzyzx: the collector's own description of the book, long enough to be one rather than a stub, for the override to replace.",
 	})
 	curated := bookNow(t, id)
-	override := map[string]any{"item": id, "provider": "audible", "asin": foundationASIN}
+	override := map[string]any{"item": id, "providers": []any{"audible"}, "asin": foundationASIN}
 	if msg := callErr(t, "item_match_apply", withArgs(override, map[string]any{"keep": []any{"narrators"}})); !strings.Contains(msg, "keep only means something with override_details") {
 		t.Errorf("keep without override_details: %s", msg)
 	}
@@ -372,7 +375,7 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 	if msg := callErr(t, "item_match_apply", withArgs(override, map[string]any{"override_details": true, "smart": true})); !strings.Contains(msg, "pick one") {
 		t.Errorf("smart with override_details: %s", msg)
 	}
-	over := call(t, "item_match_apply", withArgs(override, map[string]any{"override_details": true, "keep": []any{"narrator", "Genres"}}))
+	over := call(t, "item_match_apply", withArgs(override, map[string]any{"confirm": true, "override_details": true, "keep": []any{"narrator", "Genres"}}))
 	if kept := listOrNone(t, over["kept"], "kept"); !slices.Equal(kept, []string{"narrators", "genres"}) {
 		t.Errorf("kept = %v, want [narrators genres]", kept)
 	}
@@ -395,7 +398,7 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 	})
 	mine := bookNow(t, id)
 	keepAll := []string{"title", "subtitle", "authors", "narrators", "series", "genres", "tags", "publisher", "year", "language", "description"}
-	all := call(t, "item_match_apply", withArgs(override, map[string]any{"override_details": true, "keep": toAny(keepAll)}))
+	all := call(t, "item_match_apply", withArgs(override, map[string]any{"confirm": true, "override_details": true, "keep": toAny(keepAll)}))
 	if kept := listOrNone(t, all["kept"], "kept"); !slices.Equal(kept, keepAll) {
 		t.Errorf("kept = %v, want every field", kept)
 	}
@@ -449,14 +452,14 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 	})
 	call(t, "item_edit", map[string]any{"item": nowhere, "title": "Qxvzq Wtrpl Jzkfh", "authors": []any{"Qxvzq Jzkfh"}})
 	unmatchable := bookNow(t, nowhere)
-	nothing := call(t, "item_match_apply_batch", map[string]any{"matches": []any{map[string]any{"item": nowhere, "asin": "B000000000"}}, "provider": "audible"})
+	nothing := call(t, "item_match_apply_batch", map[string]any{"confirm": true, "matches": []any{map[string]any{"item": nowhere, "asin": "B000000000"}}, "providers": []any{"audible"}})
 	if a, u, f := num(t, nothing["applied"], "applied"), num(t, nothing["unchanged"], "unchanged"), num(t, nothing["failed"], "failed"); a != 0 || u != 1 || f != 0 {
 		t.Errorf("a match that found nothing: applied %d, unchanged %d, failed %d, want 0, 1, 0", a, u, f)
 	}
 	if res := rows(t, nothing["results"], "results")[0]; truth(res["updated"]) || !strings.Contains(text(res["warning"]), "No audible match found") || strings.Contains(text(res["warning"]), "asin") {
 		t.Errorf("the row = %v, want no update and only the server's warning", res)
 	}
-	single := call(t, "item_match_apply", map[string]any{"item": nowhere, "provider": "audible", "asin": "B000000000"})
+	single := call(t, "item_match_apply", map[string]any{"confirm": true, "item": nowhere, "providers": []any{"audible"}, "asin": "B000000000"})
 	if truth(single["updated"]) || !strings.Contains(text(single["warning"]), "No audible match found") || strings.Contains(text(single["warning"]), "asin") {
 		t.Errorf("item_match_apply = %v, want no update and only the server's warning", single)
 	}
@@ -517,7 +520,7 @@ func TestJourneyMatchBatchAskAgainAfterApplying(t *testing.T) {
 	before := bookNow(t, vice)
 	t.Cleanup(func() { putBackBook(t, vice, before) })
 
-	applied := call(t, "item_match_apply_batch", map[string]any{"matches": []any{map[string]any{"item": vice, "asin": asin, "provider": row["provider"]}}})
+	applied := call(t, "item_match_apply_batch", map[string]any{"confirm": true, "matches": []any{map[string]any{"item": vice, "asin": asin, "provider": row["provider"]}}})
 	if a, u, f := num(t, applied["applied"], "applied"), num(t, applied["unchanged"], "unchanged"), num(t, applied["failed"], "failed"); a != 1 || u != 0 || f != 0 {
 		t.Errorf("applied %d, unchanged %d, failed %d, want 1, 0, 0: %v", a, u, f, applied)
 	}

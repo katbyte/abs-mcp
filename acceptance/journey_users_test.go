@@ -349,9 +349,9 @@ func TestJourneyWritesAnAccountMayNotMake(t *testing.T) {
 		{tool: "item_chapters_set", args: map[string]any{"library": "Fiction", "item": "Foundation", "chapters": []any{map[string]any{"title": "Zzyzx", "start_s": 0}}}},
 		{tool: "item_cover_edit", args: map[string]any{"library": "Messy", "item": "Moving Pictures", "remove": true}},
 		// Foundation has no asin to look a cover up by
-		{tool: "item_cover_upgrade", args: map[string]any{"library": "Fiction", "items": []any{"Foundation"}}, mayPass: true},
-		{tool: "item_match_apply", args: map[string]any{"library": "Messy", "item": "Foundation (Unabridged)", "provider": "audible", "asin": "B003D8W5VS", "override_details": true}},
-		{tool: "item_match_apply_batch", args: map[string]any{"matches": []any{map[string]any{"item": "Foundation (Unabridged)", "asin": "B003D8W5VS"}}, "provider": "audible"}, refused: noneApplied},
+		{tool: "item_cover_upgrade", args: map[string]any{"confirm": true, "library": "Fiction", "items": []any{"Foundation"}}, mayPass: true},
+		{tool: "item_match_apply", args: map[string]any{"confirm": true, "library": "Messy", "item": "Foundation (Unabridged)", "providers": []any{"audible"}, "asin": "B003D8W5VS", "override_details": true}},
+		{tool: "item_match_apply_batch", args: map[string]any{"confirm": true, "matches": []any{map[string]any{"item": "Foundation (Unabridged)", "asin": "B003D8W5VS"}}, "providers": []any{"audible"}}, refused: noneApplied},
 		{tool: "item_match_tag", args: map[string]any{"library": "Messy", "overwrite": true}, refused: noneTagged},
 		{tool: "item_rescan", args: map[string]any{"library": "Fiction", "item": "Foundation"}},
 		{tool: "item_embed_metadata", args: map[string]any{"library": "Fiction", "item": "Foundation"}},
@@ -367,14 +367,14 @@ func TestJourneyWritesAnAccountMayNotMake(t *testing.T) {
 		{tool: "series_merge", args: map[string]any{"library": "Fiction", "from": "Otherland", "into": "The Expanse"}},
 		{tool: "author_edit", args: map[string]any{"library": "Fiction", "author": "Isaac Asimov", "description": "Zzyzx refused"}},
 		{tool: "author_match_apply", args: map[string]any{"library": "Fiction", "author": "Isaac Asimov", "asin": "B000AP9A6K", "region": "us"}},
-		{tool: "author_image_set", args: map[string]any{"library": "Fiction", "author": "Isaac Asimov", "url": "https://m.media-amazon.com/images/I/zzyzx-refused.jpg"}},
+		{tool: "author_edit", args: map[string]any{"library": "Fiction", "author": "Isaac Asimov", "image_url": "https://m.media-amazon.com/images/I/zzyzx-refused.jpg"}},
 		{tool: "author_delete", args: map[string]any{"library": "Fiction", "author": "Tad Williams"}},
 		{tool: "collection_create", args: map[string]any{"library": "Fiction", "name": "Zzyzx Refused Shelf", "items": []any{"Foundation"}}},
 		{tool: "collection_edit", args: map[string]any{"collection": shelf, "name": "Zzyzx Refused Rename"}},
-		{tool: "collection_books_edit", args: map[string]any{"collection": shelf, "action": "add", "items": []any{"Second Foundation"}}},
+		{tool: "collection_edit", args: map[string]any{"collection": shelf, "add_items": []any{"Second Foundation"}}},
 		{tool: "collection_delete", args: map[string]any{"collection": shelf}},
 		{tool: "podcast_add", args: map[string]any{"feed_url": "http://zzyzx-refused.test/show.xml", "library": "Podcasts"}},
-		{tool: "podcast_settings", args: map[string]any{"item": "Behind the Bastards", "auto_download": true}},
+		{tool: "podcast_edit", args: map[string]any{"item": "Behind the Bastards", "auto_download": true}},
 		{tool: "podcast_episode_edit", args: map[string]any{"item": "Behind the Bastards", "episode": episode, "title": "Zzyzx Refused"}},
 		{tool: "podcast_episode_download", args: map[string]any{"item": "Behind the Bastards", "indexes": []any{0}}},
 		{tool: "podcast_check_new", args: map[string]any{"item": "Behind the Bastards"}},
@@ -390,12 +390,12 @@ func TestJourneyWritesAnAccountMayNotMake(t *testing.T) {
 		{tool: "user_history_remove", args: map[string]any{"sessions": []any{"a1a1a1a1-0000-4000-8000-000000000001"}, "confirm": true}},
 		// its own things, but on a book in a library it cannot open
 		{tool: "user_progress_set", args: map[string]any{"item": racket, "percent": 50}},
-		{tool: "user_progress_remove", args: map[string]any{"item": racket}},
-		{tool: "user_bookmark_edit", args: map[string]any{"item": racket, "action": "add", "time_s": 0.5, "title": "Zzyzx Refused"}},
+		{tool: "user_progress_set", args: map[string]any{"remove": true, "item": racket}},
+		{tool: "user_bookmark_edit", args: map[string]any{"item": racket, "add_bookmarks": []any{map[string]any{"time_s": 0.5, "title": "Zzyzx Refused"}}}},
 		{tool: "playlist_create", args: map[string]any{"library": "Non-Fiction", "name": "Zzyzx Refused Queue", "entries": []any{map[string]any{"item": racket}}}},
 	}
 	// what any account may do with its own listening, in its own libraries
-	own := []string{"user_progress_set", "user_progress_remove", "user_bookmark_edit", "playlist_create", "playlist_edit", "playlist_entries_edit", "playlist_delete"}
+	own := []string{"user_progress_set", "user_bookmark_edit", "playlist_create", "playlist_edit", "playlist_delete"}
 
 	res, err := account.session.ListTools(ctx, nil)
 	if err != nil {
@@ -429,14 +429,14 @@ func TestJourneyWritesAnAccountMayNotMake(t *testing.T) {
 
 	t.Run("its own listening and playlists", func(t *testing.T) {
 		t.Cleanup(func() {
-			_, _ = account.invoke("user_progress_remove", map[string]any{"library": "Fiction", "item": "Foundation"})
-			_, _ = account.invoke("user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Foundation", "action": "remove", "time_s": 0.5})
+			_, _ = account.invoke("user_progress_set", map[string]any{"remove": true, "library": "Fiction", "item": "Foundation"})
+			_, _ = account.invoke("user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Foundation", "remove_bookmarks": []any{0.5}})
 			_, _ = account.invoke("playlist_delete", map[string]any{"playlist": "Zzyzx Own Queue"})
 		})
 		account.call(t, "user_progress_set", map[string]any{"library": "Fiction", "item": "Foundation", "percent": 50})
-		account.call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Foundation", "action": "add", "time_s": 0.5, "title": "Zzyzx Own Mark"})
+		account.call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Foundation", "add_bookmarks": []any{map[string]any{"time_s": 0.5, "title": "Zzyzx Own Mark"}}})
 		account.call(t, "playlist_create", map[string]any{"library": "Fiction", "name": "Zzyzx Own Queue", "entries": []any{map[string]any{"item": "Foundation"}}})
-		account.call(t, "playlist_entries_edit", map[string]any{"playlist": "Zzyzx Own Queue", "action": "add", "entries": []any{map[string]any{"item": "Second Foundation"}}})
+		account.call(t, "playlist_edit", map[string]any{"playlist": "Zzyzx Own Queue", "add_entries": []any{map[string]any{"item": "Second Foundation"}}})
 		account.call(t, "playlist_edit", map[string]any{"playlist": "Zzyzx Own Queue", "description": "Zzyzx: the account's own"})
 		if got := account.call(t, "playlist_get", map[string]any{"playlist": "Zzyzx Own Queue"}); len(rows(t, got["entries"], "entries")) != 2 || got["description"] != "Zzyzx: the account's own" {
 			t.Errorf("the account's playlist = %v", got)
@@ -445,10 +445,10 @@ func TestJourneyWritesAnAccountMayNotMake(t *testing.T) {
 			t.Errorf("the account's progress = %v", p)
 		}
 		account.call(t, "playlist_delete", map[string]any{"playlist": "Zzyzx Own Queue"})
-		if done := truth(account.call(t, "user_progress_remove", map[string]any{"library": "Fiction", "item": "Foundation"})["removed"]); !done {
+		if done := truth(account.call(t, "user_progress_set", map[string]any{"remove": true, "library": "Fiction", "item": "Foundation"})["removed"]); !done {
 			t.Error("the account's progress was not removed")
 		}
-		account.call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Foundation", "action": "remove", "time_s": 0.5})
+		account.call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Foundation", "remove_bookmarks": []any{0.5}})
 		// and none of it is the admin's
 		for _, p := range rows(t, call(t, "playlist_list", nil)["playlists"], "playlists") {
 			if p["name"] == "Zzyzx Own Queue" {
@@ -485,7 +485,7 @@ func TestJourneyAnAdminWithoutDelete(t *testing.T) {
 		t.Fatalf("the server answered the admin's delete HTTP %d %v %v, want it refused", status, out, err)
 	}
 
-	account.call(t, "user_bookmark_edit", map[string]any{"item": id, "action": "add", "time_s": 0.5, "title": "Zzyzx Kept Mark"})
+	account.call(t, "user_bookmark_edit", map[string]any{"item": id, "add_bookmarks": []any{map[string]any{"time_s": 0.5, "title": "Zzyzx Kept Mark"}}})
 	marks := func() []string {
 		return valuesIn(t, account.call(t, "user_bookmarks", map[string]any{"item": id})["bookmarks"], "bookmarks", "title")
 	}

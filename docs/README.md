@@ -61,6 +61,7 @@ Found by the acceptance journeys against Audiobookshelf 2.36; each has a unit te
 - `PATCH /api/items/:id/cover` takes, from 2.37.0, only the path of a file already on the item's record, and answers 500 `Invalid cover path` for an image put in the folder since the last scan; before, any image in the folder.
 - `GET /public/share/:slug/download` answers 404 `Share session not set` to a visitor who has not opened `/public/share/:slug` first, which sets the cookie it knows them by; then 403 unless the link allows downloads.
 - `POST /api/items/batch/update` answered 502 behind a reverse proxy for two podcasts of a real library on 2.36.0, where `PATCH /api/items/:id/media` took the same change. Neither 2.36.0 nor 2.37.1 in a container reproduces it, with a show laid out on disk or one subscribed from a feed.
+- `GET /api/search/books` at a store with nothing for the title and author goes on to ask Audnexus (`/authors?name=`) whether the title, or the author, is an author's name, and searches again the other way round: a store that sells nothing costs three requests, not one.
 - `DELETE /api/sessions/:id` needs the delete permission and deletes any account's session; `POST /api/sessions/batch/delete` needs an admin.
 
 `ROADMAP.md` records the tool design rules and what is deliberately not wrapped.

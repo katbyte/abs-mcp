@@ -772,7 +772,7 @@ func registerPodcastTools(r *registry) {
 		NewPerCheck  int    `json:"new_per_check"      jsonschema:"0 downloads every new one"`
 	}
 	add(r, writeTool, &mcp.Tool{
-		Name:        "podcast_settings",
+		Name:        "podcast_edit",
 		Description: "Change a podcast's automatic download settings: on/off, schedule, how many episodes to keep and to fetch per check, and answer them as the server now has them. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in settingsIn) (*mcp.CallToolResult, settingsOut, error) {
 		// the server saves whatever it is sent: a schedule its scheduler

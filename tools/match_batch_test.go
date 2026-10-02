@@ -81,7 +81,7 @@ func TestItemMatchBatch(t *testing.T) {
 	f.json("GET /api/items/11111111-1111-4111-8111-000000000002", item("11111111-1111-4111-8111-000000000002", "Something Else Entirely", "", ""))
 	f.json("POST /api/items/11111111-1111-4111-8111-000000000002/match", `{"updated":false,"libraryItem":`+item("11111111-1111-4111-8111-000000000002", "Something Else Entirely", `"asin":"OLD"`, "")+`}`)
 	f.json("GET /api/libraries/"+libID, `{"id":"`+libID+`","name":"Books","mediaType":"book","provider":"audible"}`) // a row naming no provider takes the library's
-	out, err = call("item_match_apply_batch", map[string]any{"matches": []any{
+	out, err = call("item_match_apply_batch", map[string]any{"confirm": true, "matches": []any{
 		map[string]any{"item": "11111111-1111-4111-8111-000000000001", "asin": "B0BZGB56RL", "provider": "audible.ca"},
 		map[string]any{"item": "11111111-1111-4111-8111-000000000002", "asin": "B0X"},
 		map[string]any{"item": "11111111-1111-4111-8111-000000000003"},
@@ -166,7 +166,7 @@ func TestItemMatchApplyBatchCountsWhatChanged(t *testing.T) {
 		map[string]any{"item": missing, "asin": "B0DUNE", "provider": "audible"},
 		map[string]any{"item": changed},
 	}
-	out, err := call("item_match_apply_batch", map[string]any{"matches": rows})
+	out, err := call("item_match_apply_batch", map[string]any{"confirm": true, "matches": rows})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,12 +174,12 @@ func TestItemMatchApplyBatchCountsWhatChanged(t *testing.T) {
 		t.Errorf("applied/unchanged/failed = %v/%v/%v, want 1/2/1", out["applied"], out["unchanged"], out["failed"])
 	}
 
-	out, err = call("item_match_apply_batch", map[string]any{"matches": rows[:1], "smart": true, "preview": true})
+	out, err = call("item_match_apply_batch", map[string]any{"matches": rows[:1], "smart": true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if num(t, out["applied"]) != 0 || num(t, out["previewed"]) != 1 {
-		t.Errorf("preview: applied/previewed = %v/%v, want 0/1", out["applied"], out["previewed"])
+	if num(t, out["applied"]) != 0 || num(t, out["would_apply"]) != 1 {
+		t.Errorf("without confirm: applied/would_apply = %v/%v, want 0/1", out["applied"], out["would_apply"])
 	}
 }
 

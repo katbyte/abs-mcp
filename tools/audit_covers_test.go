@@ -199,7 +199,7 @@ func TestItemCoverUpgrade(t *testing.T) {
 	f, store := coverFixture(t)
 	call := toolCaller(t, f)
 
-	out, err := call("item_cover_upgrade", map[string]any{"items": []any{"li_1", "li_2", "li_3"}, "providers": []any{"audible"}, "preview": true})
+	out, err := call("item_cover_upgrade", map[string]any{"items": []any{"li_1", "li_2", "li_3"}, "providers": []any{"audible"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +214,7 @@ func TestItemCoverUpgrade(t *testing.T) {
 		t.Error("preview set a cover")
 	}
 
-	out, err = call("item_cover_upgrade", map[string]any{"items": []any{"li_1", "li_3"}, "providers": []any{"audible"}})
+	out, err = call("item_cover_upgrade", map[string]any{"confirm": true, "items": []any{"li_1", "li_3"}, "providers": []any{"audible"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,23 +236,23 @@ func TestItemCoverUpgrade(t *testing.T) {
 
 	// Other Art is 900px against the store's 1500px, under the factor: with
 	// any_picture the size rule does not apply, since it is another picture
-	out, err = call("item_cover_upgrade", map[string]any{"items": []any{"li_3"}, "providers": []any{"audible"}, "any_picture": true})
+	out, err = call("item_cover_upgrade", map[string]any{"confirm": true, "items": []any{"li_3"}, "providers": []any{"audible"}, "any_picture": true})
 	if err != nil || num(t, out["upgraded"]) != 1 {
 		t.Errorf("any_picture: %v %v", out, err)
 	}
 
 	// the jacket: kept for its picture without square, taken with it
-	out, err = call("item_cover_upgrade", map[string]any{"items": []any{"li_5"}, "providers": []any{"audible"}})
+	out, err = call("item_cover_upgrade", map[string]any{"confirm": true, "items": []any{"li_5"}, "providers": []any{"audible"}})
 	if err != nil || num(t, out["upgraded"]) != 0 || str(t, list(t, out["items"])[0]["action"]) != "kept_picture" {
 		t.Errorf("the jacket without square: %v %v", out, err)
 	}
-	out, err = call("item_cover_upgrade", map[string]any{"items": []any{"li_5"}, "providers": []any{"audible"}, "square": true})
+	out, err = call("item_cover_upgrade", map[string]any{"confirm": true, "items": []any{"li_5"}, "providers": []any{"audible"}, "square": true})
 	if err != nil || num(t, out["upgraded"]) != 1 {
 		t.Errorf("the jacket with square: %v %v", out, err)
 	}
 
 	// a store copy with the ribbon never goes over a clean cover, whatever the flags
-	out, err = call("item_cover_upgrade", map[string]any{"items": []any{"li_6"}, "providers": []any{"audible"}, "any_picture": true, "square": true})
+	out, err = call("item_cover_upgrade", map[string]any{"confirm": true, "items": []any{"li_6"}, "providers": []any{"audible"}, "any_picture": true, "square": true})
 	if err != nil || num(t, out["upgraded"]) != 0 || str(t, list(t, out["items"])[0]["action"]) != "kept_banner" {
 		t.Errorf("the ribboned store copy: %v %v", out, err)
 	}
@@ -378,7 +378,7 @@ func TestItemCoverUpgradeReportsWhatItDidBeforeAFailure(t *testing.T) {
 	f := storeFixture(t)
 	call := toolCaller(t, f)
 
-	out, err := call("item_cover_upgrade", map[string]any{"items": []any{"li_1", "li_3", "li_2", "li_1"}, "providers": []any{"audible"}})
+	out, err := call("item_cover_upgrade", map[string]any{"confirm": true, "items": []any{"li_1", "li_3", "li_2", "li_1"}, "providers": []any{"audible"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -473,7 +473,7 @@ func TestACoverUpgradeWithTheSizeUnreadWritesNothing(t *testing.T) {
 	f.json("GET /api/items/"+coverFails, item(coverFails, "Fails", `"asin":"B001"`, `"coverPath":"/fail.jpg"`))
 	call := toolCaller(t, f)
 
-	_, err := call("item_cover_upgrade", map[string]any{"items": []any{coverFails}, "providers": []any{"audible"}})
+	_, err := call("item_cover_upgrade", map[string]any{"confirm": true, "items": []any{coverFails}, "providers": []any{"audible"}})
 	wantErr(t, "an upgrade over a cover whose size failed", err, "size", "500")
 	if got := f.requests("/api/items/" + coverFails + "/cover"); slices.ContainsFunc(got, func(r request) bool { return r.Method == http.MethodPost }) {
 		t.Errorf("the cover was replaced: %v", got)

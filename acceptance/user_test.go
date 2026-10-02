@@ -86,7 +86,7 @@ func TestUserGetSelfToken(t *testing.T) {
 func TestUserProgress(t *testing.T) {
 	set := call(t, "user_progress_set", map[string]any{"item": "Foundation", "percent": 50})
 	t.Cleanup(func() {
-		call(t, "user_progress_remove", map[string]any{"item": "Foundation"})
+		call(t, "user_progress_set", map[string]any{"remove": true, "item": "Foundation"})
 	})
 	if set["item"] != "Foundation" {
 		t.Errorf("item = %v", set["item"])
@@ -136,10 +136,10 @@ func TestUserProgress(t *testing.T) {
 
 func TestUserProgressRemove(t *testing.T) {
 	call(t, "user_progress_set", map[string]any{"item": "Second Foundation", "percent": 10})
-	out := call(t, "user_progress_remove", map[string]any{"item": "Second Foundation"})
+	out := call(t, "user_progress_set", map[string]any{"remove": true, "item": "Second Foundation"})
 
 	if removed := truth(out["removed"]); !removed {
-		t.Errorf("user_progress_remove removed = %v", out["removed"])
+		t.Errorf("user_progress_set remove: removed = %v", out["removed"])
 	}
 	got := call(t, "user_progress_get", map[string]any{"item": "Second Foundation"})
 	if got["progress"] != nil {
@@ -149,19 +149,13 @@ func TestUserProgressRemove(t *testing.T) {
 
 func TestUserBookmarks(t *testing.T) {
 	added := call(t, "user_bookmark_edit", map[string]any{
-		"item": "Leviathan Wakes", "action": "add", "time_s": 0.25, "title": "A good bit",
+		"item": "Leviathan Wakes", "add_bookmarks": []any{map[string]any{"time_s": 0.25, "title": "A good bit"}},
 	})
 	t.Cleanup(func() {
-		call(t, "user_bookmark_edit", map[string]any{
-			"item": "Leviathan Wakes", "action": "remove", "time_s": 0.25,
-		})
+		_, _ = invoke("user_bookmark_edit", map[string]any{"item": "Leviathan Wakes", "remove_bookmarks": []any{0.25}})
 	})
-	bookmark, ok := added["bookmark"].(map[string]any)
-	if !ok {
-		t.Fatalf("bookmark = %T", added["bookmark"])
-	}
-	if bookmark["title"] != "A good bit" {
-		t.Errorf("title = %v", bookmark["title"])
+	if marks := rows(t, added["added"], "added"); len(marks) != 1 || marks[0]["title"] != "A good bit" {
+		t.Fatalf("added = %v, want the one bookmark", added)
 	}
 
 	out := call(t, "user_bookmarks", map[string]any{"item": "Leviathan Wakes"})
@@ -182,6 +176,28 @@ func TestUserBookmarks(t *testing.T) {
 	// and all of them, unfiltered
 	if all := call(t, "user_bookmarks", nil); len(rows(t, all["bookmarks"], "bookmarks")) == 0 {
 		t.Error("user_bookmarks with no item returned nothing")
+	}
+
+	// several in one call: one added, the one held renamed, then both removed;
+	// a removal of one that is not there changes nothing
+	several := call(t, "user_bookmark_edit", map[string]any{"item": "Leviathan Wakes", "add_bookmarks": []any{
+		map[string]any{"time_s": 0.5, "title": "Another bit"}, map[string]any{"time_s": 0.25, "title": "A better name"},
+	}})
+	if added, renamed := rows(t, several["added"], "added"), rows(t, several["renamed"], "renamed"); len(added) != 1 || added[0]["title"] != "Another bit" || len(renamed) != 1 || renamed[0]["title"] != "A better name" || renamed[0]["was_titled"] != "A good bit" {
+		t.Errorf("an add and a rename in one call = %v", several)
+	}
+	if msg := callErr(t, "user_bookmark_edit", map[string]any{"item": "Leviathan Wakes", "remove_bookmarks": []any{0.25, 0.75}}); !strings.Contains(msg, "no bookmark at 0.75") {
+		t.Errorf("a removal naming one that is not there: %s", msg)
+	}
+	if left := rows(t, call(t, "user_bookmarks", map[string]any{"item": "Leviathan Wakes"})["bookmarks"], "bookmarks"); len(left) != 2 {
+		t.Fatalf("after a refused removal the book has %d bookmarks, want both", len(left))
+	}
+	gone := call(t, "user_bookmark_edit", map[string]any{"item": "Leviathan Wakes", "remove_bookmarks": []any{0.25, 0.5}})
+	if removed := rows(t, gone["removed"], "removed"); len(removed) != 2 {
+		t.Errorf("two removed in one call = %v", gone)
+	}
+	if left := rows(t, call(t, "user_bookmarks", map[string]any{"item": "Leviathan Wakes"})["bookmarks"], "bookmarks"); len(left) != 0 {
+		t.Errorf("bookmarks left after both were removed: %v", left)
 	}
 }
 

@@ -82,7 +82,7 @@ func TestJourneyADeletedBookLeavesNothingBehind(t *testing.T) {
 	call(t, "playlist_create", map[string]any{"library": library, "name": "Zzyzx Gone Queue", "entries": []any{map[string]any{"item": one}, map[string]any{"item": three}}})
 	call(t, "playlist_create", map[string]any{"library": library, "name": "Zzyzx Gone Solo", "entries": []any{map[string]any{"item": one}}})
 	call(t, "user_progress_set", map[string]any{"item": one, "percent": 50})
-	call(t, "user_bookmark_edit", map[string]any{"item": one, "action": "add", "time_s": 0.5, "title": "Zzyzx Gone Mark"})
+	call(t, "user_bookmark_edit", map[string]any{"item": one, "add_bookmarks": []any{map[string]any{"time_s": 0.5, "title": "Zzyzx Gone Mark"}}})
 
 	// someone else listens to it
 	listener := newUser(t, "zzyzx-gone-listener", abs.UserCreate{})
@@ -100,7 +100,7 @@ func TestJourneyADeletedBookLeavesNothingBehind(t *testing.T) {
 	if err := lc.CloseSession(ctx, session.ID, map[string]any{"currentTime": 0.4, "timeListened": 0.4}); err != nil {
 		t.Fatal(err)
 	}
-	listener.call(t, "user_bookmark_edit", map[string]any{"item": one, "action": "add", "time_s": 0.25, "title": "Zzyzx Listener Mark"})
+	listener.call(t, "user_bookmark_edit", map[string]any{"item": one, "add_bookmarks": []any{map[string]any{"time_s": 0.25, "title": "Zzyzx Listener Mark"}}})
 	named := map[string]any{"user": listener.Name}
 
 	// the server keeps a bookmark on a deleted book and will not remove it
@@ -190,7 +190,7 @@ func TestJourneyADeletedBookLeavesNothingBehind(t *testing.T) {
 				t.Errorf("%s: the listener's bookmarks = %v, want the one, marked item_deleted", who, got)
 			}
 		}
-		if msg := listener.callErr(t, "user_bookmark_edit", map[string]any{"item": one, "action": "remove", "time_s": 0.25}); !strings.Contains(msg, "will not remove") {
+		if msg := listener.callErr(t, "user_bookmark_edit", map[string]any{"item": one, "remove_bookmarks": []any{0.25}}); !strings.Contains(msg, "will not remove") {
 			t.Errorf("removing a bookmark on a deleted book: %s", msg)
 		}
 	})

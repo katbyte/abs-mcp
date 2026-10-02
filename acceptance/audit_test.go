@@ -19,8 +19,7 @@ var auditTools = []string{
 	"audit_no_audio",
 	"audit_path",
 	"audit_chapters",
-	"audit_podcast_stale_feed",
-	"audit_podcast_no_episodes",
+	"audit_podcasts",
 }
 
 // missingFields are the values audit_missing accepts. They are one tool rather
@@ -144,15 +143,23 @@ func TestAuditPath(t *testing.T) {
 
 // The podcast audits must read the podcast library and leave the books alone.
 func TestAuditPodcasts(t *testing.T) {
-	out := call(t, "audit_podcast_no_episodes", map[string]any{"library": "Podcasts"})
-	if found := num(t, out["total_findings"], "total_findings"); found != 0 {
-		t.Errorf("audit_podcast_no_episodes = %d, want 0 - both shows have episodes", found)
+	// both shows have episodes, and neither was subscribed from a feed: each
+	// is a stale feed and neither is without episodes
+	out := call(t, "audit_podcasts", map[string]any{"library": "Podcasts"})
+	found := rows(t, out["findings"], "findings")
+	for _, f := range found {
+		if f["problem"] != "stale_feed" || f["detail"] != "no feed url" {
+			t.Errorf("finding %v, want a stale feed for want of a feed url", f)
+		}
+	}
+	if len(found) != len(podcasts) || num(t, out["total_findings"], "total_findings") != len(podcasts) || num(t, out["items_scanned"], "items_scanned") != len(podcasts) {
+		t.Errorf("audit_podcasts = %v, want the %d shows, each looked at once", out, len(podcasts))
 	}
 
 	// a book library has no podcasts to flag
-	out = call(t, "audit_podcast_stale_feed", map[string]any{"library": "Fiction"})
+	out = call(t, "audit_podcasts", map[string]any{"library": "Fiction"})
 	if found := num(t, out["total_findings"], "total_findings"); found != 0 {
-		t.Errorf("audit_podcast_stale_feed on books = %d, want 0", found)
+		t.Errorf("audit_podcasts on books = %d, want 0", found)
 	}
 }
 
@@ -184,8 +191,8 @@ func TestAuditAll(t *testing.T) {
 	if all["not_applicable"] != nil {
 		notApplicable = strs(t, all["not_applicable"], "not_applicable")
 	}
-	if !slices.Equal(notApplicable, []string{"audit_podcast_stale_feed", "audit_podcast_no_episodes"}) {
-		t.Errorf("not_applicable = %v, want the two podcast audits", notApplicable)
+	if !slices.Equal(notApplicable, []string{"audit_podcasts"}) {
+		t.Errorf("not_applicable = %v, want the podcast audit", notApplicable)
 	}
 	crossItem := []string{"audit_duplicates", "audit_spelling", "audit_authors", "audit_narrators", "audit_series", "audit_genres", "audit_whitespace"}
 	for _, name := range slices.Concat(auditTools, crossItem) {
@@ -232,7 +239,7 @@ func TestAuditAll(t *testing.T) {
 		{"audit_matched", map[string]any{"library": "Fiction"}},
 		{"audit_covers", map[string]any{"library": "Fiction", "store": true}},
 		{"item_match_tag", map[string]any{"library": "Fiction"}},
-		{"item_cover_upgrade", map[string]any{"library": "Fiction", "items": []any{"Foundation"}}},
+		{"item_cover_upgrade", map[string]any{"confirm": true, "library": "Fiction", "items": []any{"Foundation"}}},
 	} {
 		if msg := callErr(t, c.tool, c.args); !strings.Contains(msg, onGoogle) || !strings.Contains(msg, "--providers") {
 			t.Errorf("%s on Fiction with no providers: %q, want the library, its provider and the fix", c.tool, msg)

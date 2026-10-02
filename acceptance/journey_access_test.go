@@ -139,7 +139,7 @@ func TestJourneyAnExplicitBookKeptFromAnAccount(t *testing.T) {
 	t.Run("refused every write naming it", func(t *testing.T) {
 		t.Cleanup(func() { _, _ = listener.invoke("playlist_delete", map[string]any{"playlist": "Zzyzx Explicit Queue"}) })
 		listener.callErr(t, "user_progress_set", map[string]any{"item": id, "percent": 50})
-		listener.callErr(t, "user_bookmark_edit", map[string]any{"item": id, "action": "add", "time_s": 0.5, "title": "Zzyzx Explicit Mark"})
+		listener.callErr(t, "user_bookmark_edit", map[string]any{"item": id, "add_bookmarks": []any{map[string]any{"time_s": 0.5, "title": "Zzyzx Explicit Mark"}}})
 		listener.callErr(t, "playlist_create", map[string]any{"library": "Fiction", "name": "Zzyzx Explicit Queue", "entries": []any{map[string]any{"item": id}}})
 
 		// read back as the admin: nothing was written anywhere
@@ -204,17 +204,17 @@ func TestJourneyATagLimitedListenersOwnQueue(t *testing.T) {
 
 	// a book they can see and one they cannot, in one call: refused whole,
 	// not the one added and the other dropped
-	listener.callErr(t, "playlist_entries_edit", map[string]any{"playlist": queue, "action": "add", "entries": []any{map[string]any{"item": "Sea of Silver Light"}, map[string]any{"item": hidden}}})
+	listener.callErr(t, "playlist_edit", map[string]any{"playlist": queue, "add_entries": []any{map[string]any{"item": "Sea of Silver Light"}, map[string]any{"item": hidden}}})
 	if got := entries(); !slices.Equal(got, []string{"City of Golden Shadow"}) {
 		t.Errorf("the queue after a refused add = %v, want City of Golden Shadow alone", got)
 	}
 	// and the hidden book alone, three ways
-	listener.callErr(t, "playlist_entries_edit", map[string]any{"playlist": queue, "action": "add", "entries": []any{map[string]any{"item": hidden}}})
+	listener.callErr(t, "playlist_edit", map[string]any{"playlist": queue, "add_entries": []any{map[string]any{"item": hidden}}})
 	listener.callErr(t, "user_progress_set", map[string]any{"item": hidden, "percent": 50})
-	listener.callErr(t, "user_bookmark_edit", map[string]any{"item": hidden, "action": "add", "time_s": 0.5, "title": "Zzyzx Hidden Mark"})
+	listener.callErr(t, "user_bookmark_edit", map[string]any{"item": hidden, "add_bookmarks": []any{map[string]any{"time_s": 0.5, "title": "Zzyzx Hidden Mark"}}})
 
 	// the book they can see goes in on its own
-	added := listener.call(t, "playlist_entries_edit", map[string]any{"playlist": queue, "action": "add", "entries": []any{map[string]any{"item": "Sea of Silver Light"}}})
+	added := listener.call(t, "playlist_edit", map[string]any{"playlist": queue, "add_entries": []any{map[string]any{"item": "Sea of Silver Light"}}})
 	if !slices.Equal(strs(t, added["added"], "added"), []string{"Sea of Silver Light"}) || num(t, added["entries"], "entries") != 2 {
 		t.Errorf("adding a visible book = %v", added)
 	}
@@ -305,7 +305,7 @@ func TestJourneyListsDeletedAndReadBack(t *testing.T) {
 		made := text(call(t, "playlist_create", map[string]any{"library": "Fiction", "name": "Zzyzx Emptied Queue", "entries": []any{map[string]any{"item": "Foundation"}}})["id"])
 		t.Cleanup(func() { _, _ = invoke("playlist_delete", map[string]any{"playlist": made}) })
 
-		out := call(t, "playlist_entries_edit", map[string]any{"playlist": made, "action": "remove", "entries": []any{map[string]any{"item": "Foundation"}}})
+		out := call(t, "playlist_edit", map[string]any{"playlist": made, "remove_entries": []any{map[string]any{"item": "Foundation"}}})
 		if deleted := truth(out["deleted"]); !deleted || num(t, out["entries"], "entries") != 0 {
 			t.Errorf("removing the last entry = %v, want the playlist reported deleted", out)
 		}
@@ -342,11 +342,11 @@ func TestJourneyListsDeletedAndReadBack(t *testing.T) {
 		t.Cleanup(func() { _ = own.DeletePlaylist(ctx, made) })
 
 		// taking one of two out is an edit, and is allowed
-		if out := keeper.call(t, "playlist_entries_edit", map[string]any{"playlist": queue, "action": "remove", "entries": []any{map[string]any{"item": "Foundation"}}}); num(t, out["entries"], "entries") != 1 {
+		if out := keeper.call(t, "playlist_edit", map[string]any{"playlist": queue, "remove_entries": []any{map[string]any{"item": "Foundation"}}}); num(t, out["entries"], "entries") != 1 {
 			t.Errorf("removing one of two = %v", out)
 		}
 		// taking the last out would delete it
-		msg := keeper.callErr(t, "playlist_entries_edit", map[string]any{"playlist": queue, "action": "remove", "entries": []any{map[string]any{"item": "Second Foundation"}}})
+		msg := keeper.callErr(t, "playlist_edit", map[string]any{"playlist": queue, "remove_entries": []any{map[string]any{"item": "Second Foundation"}}})
 		if !strings.Contains(msg, "--enable-delete") {
 			t.Errorf("emptying a playlist without deletes: %s", msg)
 		}

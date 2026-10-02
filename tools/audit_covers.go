@@ -535,12 +535,12 @@ func registerCoverAudit(r *registry) {
 		AnyPicture bool     `json:"any_picture,omitempty" jsonschema:"replace the cover even when the store's is a different picture; off by default so a curated cover is not swapped for another edition's art"`
 		Square     bool     `json:"square,omitempty"      jsonschema:"take the store's cover whenever the current one is not square (a jacket scan), whatever the picture and size: audiobook art is square by convention"`
 		Tolerance  float64  `json:"tolerance,omitempty"   jsonschema:"with square: how far from square is still square, default 0.1"`
-		Preview    bool     `json:"preview,omitempty"     jsonschema:"say what would happen and change nothing"`
+		Confirm    bool     `json:"confirm,omitempty"     jsonschema:"true to set the covers; without it nothing changes and each row says what would happen"`
 	}
 	type upgradeRow struct {
 		ID       string `json:"id"`
 		Title    string `json:"title"`
-		Action   string `json:"action"                jsonschema:"upgraded: the store's cover was set; would_upgrade: preview; kept_size: the store's is not enough bigger; kept_picture: the store's is another picture, pass any_picture to take it; kept_banner: the store's copy wears the 'Only from Audible' ribbon and the current cover does not, so it is not taken; no_asin: the book is not matched; not_found: no store has the asin or its record has no cover; failed: the book could not be checked or set, error says why, and the batch stopped there"`
+		Action   string `json:"action"                jsonschema:"upgraded: the store's cover was set; would_upgrade: a confirmed call sets it; kept_size: the store's is not enough bigger; kept_picture: the store's is another picture, pass any_picture to take it; kept_banner: the store's copy wears the 'Only from Audible' ribbon and the current cover does not, so it is not taken; no_asin: the book is not matched; not_found: no store has the asin or its record has no cover; failed: the book could not be checked or set, error says why, and the batch stopped there"`
 		Width    int    `json:"width,omitempty"       jsonschema:"the cover before"`
 		StoreW   int    `json:"store_width,omitempty"`
 		StoreURL string `json:"store_url,omitempty"`
@@ -557,7 +557,7 @@ func registerCoverAudit(r *registry) {
 		Name: "item_cover_upgrade",
 		Description: "Replace a matched book's cover with its store's full-size one when that is bigger: the asin is looked up, the store's cover fetched at full size and compared, and set if it is at least factor times as wide and the same picture by perceptual hash (any_picture takes it regardless; square takes it whenever the current cover is not square). A book with no cover, or whose cover file is gone, takes the store's. " +
 			"A store copy wearing the 'Only from Audible' ribbon is never put over a cover that does not wear one. " +
-			"Takes the rows audit_covers reports as upgrade or ratio, or any list of books. A failure part way through a batch stops it and is reported as a failed row after the books already done, with the rest under not_tried. preview reports without changing anything. Changes server state.",
+			"Takes the rows audit_covers reports as upgrade or ratio, or any list of books. A failure part way through a batch stops it and is reported as a failed row after the books already done, with the rest under not_tried. Without confirm nothing changes and each row says what would happen. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in upgradeIn) (*mcp.CallToolResult, upgradeOut, error) {
 		if len(in.Items) == 0 {
 			return nil, upgradeOut{}, errors.New("at least one item is required")
@@ -651,7 +651,7 @@ func registerCoverAudit(r *registry) {
 					return nil
 				}
 			}
-			if in.Preview {
+			if !in.Confirm {
 				row.Action = "would_upgrade"
 				return nil
 			}

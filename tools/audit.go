@@ -40,6 +40,8 @@ type auditFinding struct {
 	Author string `json:"author,omitempty"`
 	Path   string `json:"path,omitempty"`
 	Detail string `json:"detail,omitempty"`
+	// set by the audits that report more than one kind of problem
+	Problem string `json:"problem,omitempty" jsonschema:"audit_podcasts: no_episodes or stale_feed"`
 }
 
 type auditOut struct {
@@ -73,15 +75,11 @@ var auditSpecs = []auditSpec{
 		"audit_path", "path",
 		"Find items whose folder name disagrees with their title or author: a wrong match, a chapter tag or series placeholder left as the title, a pen name under the real name's folder, a book filed under another author, or a year earlier than the one the folder carries ('Dune (1965)' holding a book dated 1959: a recording is never older than the book). Subtitles, series prefixes, disc and edition markers are set aside first, and series, genre and lowercase shelf folders are not taken for author folders. Compare item_get with the path before fixing: the folder is usually right, and item_edit sets the title.",
 	},
-	{
-		"audit_podcast_stale_feed", "stale_feed",
-		"Find podcasts whose newest episode came out more than 90 days ago, whose feed was never checked, or that have no feed url. The show may have ended, or the feed url may be dead. Check with podcast_feed_episodes.",
-	},
-	{
-		"audit_podcast_no_episodes", "no_episodes",
-		"Find podcasts with nothing downloaded. Fill them with podcast_feed_episodes then podcast_episode_download, or podcast_check_new.",
-	},
 }
+
+// podcastChecks are the checks audit_podcasts runs, each a problem a finding
+// names: they are one tool because both are a look at one podcast's feed.
+var podcastChecks = []string{"no_episodes", "stale_feed"}
 
 // missingFields are the checks that are all the same question - is this field
 // empty - and so are one tool with a parameter rather than nine tools. The
@@ -133,6 +131,41 @@ func registerAuditTools(r *registry) {
 			return nil, out, nil
 		})
 	}
+
+	add(r, readTool, &mcp.Tool{
+		Name: "audit_podcasts",
+		Description: "Find podcasts that need a look, each finding's problem saying which. no_episodes: nothing downloaded; fill it with podcast_feed_episodes then podcast_episode_download, or podcast_check_new. " +
+			"stale_feed: the newest episode came out more than 90 days ago, the feed was never checked, or there is no feed url; the show may have ended, or the feed url may be dead: check with podcast_feed_episodes.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in auditIn) (*mcp.CallToolResult, auditOut, error) {
+		libs, err := resolveLibraries(ctx, client, in.Library)
+		if err != nil {
+			return nil, auditOut{}, err
+		}
+
+		out := auditOut{Check: "podcasts", Findings: []auditFinding{}}
+		limit := auditLimit(in.Limit, 100)
+		for n, check := range podcastChecks {
+			part := auditOut{}
+			for i := range libs {
+				if err := runCheck(ctx, client, prov, &libs[i], check, limit, &part); err != nil {
+					return nil, auditOut{}, err
+				}
+			}
+			// each check looks at every item: they are counted once
+			if n == 0 {
+				out.Scanned = part.Scanned
+			}
+			out.Found += part.Found
+			for _, f := range part.Findings {
+				if len(out.Findings) < limit {
+					f.Problem = check
+					out.Findings = append(out.Findings, f)
+				}
+			}
+		}
+
+		return nil, out, nil
+	})
 
 	type missingIn struct {
 		auditIn
@@ -221,7 +254,7 @@ func registerAuditTools(r *registry) {
 		whitespace := whitespaceSweep{namesOnly: !in.Deep}
 		var people joinedNames // roles and narrators read names, which the listing joins
 		authorAsTitle := auditChecksByName["author_as_title"]
-		staleFeed := auditChecksByName["stale_feed"]
+		staleFeed, noEpisodes := auditChecksByName["stale_feed"], auditChecksByName["no_episodes"]
 		var covers coversOut
 		var embedded auditOut
 		unplayable := newUnplayableOut()
@@ -250,13 +283,17 @@ func registerAuditTools(r *registry) {
 					it := &items[j]
 					out.Scanned++
 					for _, spec := range auditSpecs {
-						if spec.Check == "stale_feed" && staleFeedNeedsRecord(it) {
-							feeds = append(feeds, it.ID)
-							continue
-						}
 						if _, suspect := prov.auditCheck(spec.Check)(it); suspect {
 							found[spec.Tool]++
 						}
+					}
+					if staleFeedNeedsRecord(it) {
+						feeds = append(feeds, it.ID)
+					} else if _, suspect := staleFeed(it); suspect {
+						found["audit_podcasts"]++
+					}
+					if _, suspect := noEpisodes(it); suspect {
+						found["audit_podcasts"]++
 					}
 					for _, field := range missingFields {
 						if _, suspect := auditChecksByName[field](it); suspect {
@@ -283,7 +320,7 @@ func registerAuditTools(r *registry) {
 			}
 			if err := podcastRecords(ctx, client, feeds, func(it *abs.Item) {
 				if _, suspect := staleFeed(it); suspect {
-					found["audit_podcast_stale_feed"]++
+					found["audit_podcasts"]++
 				}
 			}); err != nil {
 				return nil, allOut{}, err
@@ -398,6 +435,7 @@ func registerAuditTools(r *registry) {
 		for _, spec := range auditSpecs {
 			report(spec.Tool, "")
 		}
+		report("audit_podcasts", "")
 		for _, field := range missingFields {
 			report("audit_missing", field)
 		}
@@ -1234,7 +1272,7 @@ func allScope(tool, field string) string {
 	switch {
 	case bookOnlyChecks[check], bookOnlyAudits[tool]:
 		return "book"
-	case podcastOnlyChecks[check]:
+	case podcastOnlyChecks[check], tool == "audit_podcasts":
 		return "podcast"
 	}
 	return ""

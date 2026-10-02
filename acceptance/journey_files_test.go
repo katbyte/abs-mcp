@@ -305,7 +305,7 @@ func TestJourneyABookDeletedWithItsFiles(t *testing.T) {
 			return slices.ContainsFunc(names, func(n string) bool { return p == n || strings.HasPrefix(p, n+"/") })
 		})
 	}
-	call(t, "user_bookmark_edit", map[string]any{"item": ids[one], "action": "add", "time_s": 0.5, "title": "Zzyzx Delete Mark"})
+	call(t, "user_bookmark_edit", map[string]any{"item": ids[one], "add_bookmarks": []any{map[string]any{"time_s": 0.5, "title": "Zzyzx Delete Mark"}}})
 
 	t.Run("previewed, nothing goes", func(t *testing.T) {
 		out := call(t, "item_delete", map[string]any{"item": ids[one], "delete_files": true})
@@ -424,10 +424,10 @@ func TestJourneyAFolderRenamedKeepsItsBook(t *testing.T) {
 
 		// everything a listener and a curator hang on a book
 		call(t, "user_progress_set", map[string]any{"item": id, "percent": 50})
-		t.Cleanup(func() { call(t, "user_progress_remove", map[string]any{"item": id}) })
-		call(t, "user_bookmark_edit", map[string]any{"item": id, "action": "add", "time_s": 0.5, "title": "Zzyzx Moved Mark"})
+		t.Cleanup(func() { call(t, "user_progress_set", map[string]any{"remove": true, "item": id}) })
+		call(t, "user_bookmark_edit", map[string]any{"item": id, "add_bookmarks": []any{map[string]any{"time_s": 0.5, "title": "Zzyzx Moved Mark"}}})
 		t.Cleanup(func() {
-			call(t, "user_bookmark_edit", map[string]any{"item": id, "action": "remove", "time_s": 0.5})
+			call(t, "user_bookmark_edit", map[string]any{"item": id, "remove_bookmarks": []any{0.5}})
 		})
 		call(t, "collection_create", map[string]any{"library": "Messy", "name": "Zzyzx Moved Shelf", "items": []any{id}})
 		t.Cleanup(func() { call(t, "collection_delete", map[string]any{"collection": "Zzyzx Moved Shelf"}) })

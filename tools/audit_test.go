@@ -94,20 +94,28 @@ func TestStaleFeedReadsTheNewestEpisode(t *testing.T) {
 	}
 	f := newFakeABS(t)
 	f.json("GET /api/libraries", `{"libraries":[{"id":"`+podLibID+`","name":"Pods","mediaType":"podcast"}]}`)
-	f.json("GET /api/libraries/"+podLibID+"/items", page(minified("ended", nowMs, 2), minified("going", nowMs, 1), minified("unchecked", 0, 1)))
+	f.json("GET /api/libraries/"+podLibID+"/items", page(minified("ended", nowMs, 2), minified("going", nowMs, 1), minified("unchecked", 0, 1), minified("empty", nowMs, 0)))
 	f.json("POST /api/items/batch/get", `{"libraryItems":[`+pod("ended", nowMs, oldMs-1000, oldMs)+","+pod("going", nowMs, nowMs)+`]}`)
 	call := toolCaller(t, f)
 
-	out, err := call("audit_podcast_stale_feed", nil)
+	out, err := call("audit_podcasts", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	detail := map[string]string{}
+	detail, problem := map[string]string{}, map[string]string{}
 	for _, row := range list(t, out["findings"]) {
-		detail[str(t, row["id"])] = str(t, row["detail"])
+		detail[str(t, row["id"])], problem[str(t, row["id"])] = str(t, row["detail"]), str(t, row["problem"])
 	}
-	if len(detail) != 2 || !strings.HasPrefix(detail["ended"], "no new episode in 200 days") || detail["unchecked"] != "feed never checked" {
-		t.Errorf("findings = %v, want the ended show and the unchecked one", detail)
+	// each show is looked at once, though two checks run over them
+	if num(t, out["items_scanned"]) != 4 || num(t, out["total_findings"]) != 3 {
+		t.Errorf("scanned %v and found %v, want the 4 shows once and 3 findings", out["items_scanned"], out["total_findings"])
+	}
+	if len(detail) != 3 || !strings.HasPrefix(detail["ended"], "no new episode in 200 days") || detail["unchecked"] != "feed never checked" || detail["empty"] != "no episodes downloaded" {
+		t.Errorf("findings = %v, want the ended show, the unchecked one and the empty one", detail)
+	}
+	// both checks answer in one list, each finding saying which it is
+	if problem["ended"] != "stale_feed" || problem["unchecked"] != "stale_feed" || problem["empty"] != "no_episodes" {
+		t.Errorf("problems = %v", problem)
 	}
 	if batches := f.requests("/api/items/batch/get"); len(batches) != 1 || strings.Contains(batches[0].Body, "unchecked") {
 		t.Errorf("fetched %v, want the two checked shows only", batches)
@@ -117,8 +125,8 @@ func TestStaleFeedReadsTheNewestEpisode(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, row := range list(t, all["audits"]) {
-		if str(t, row["audit"]) == "audit_podcast_stale_feed" && num(t, row["found"]) != 2 {
-			t.Errorf("audit_all counts %v stale feeds, want 2", row["found"])
+		if str(t, row["audit"]) == "audit_podcasts" && num(t, row["found"]) != 3 {
+			t.Errorf("audit_all counts %v podcast findings, want the 3 audit_podcasts lists", row["found"])
 		}
 	}
 }
@@ -191,7 +199,7 @@ func TestAuditDescriptionsSayWhatTheCodeDoes(t *testing.T) {
 			t.Errorf("%s still says %q", tool, gone)
 		}
 	}
-	if !strings.Contains(desc["audit_series"], "fixed convention") || !strings.Contains(desc["audit_podcast_stale_feed"], "newest episode") {
+	if !strings.Contains(desc["audit_series"], "fixed convention") || !strings.Contains(desc["audit_podcasts"], "newest episode") {
 		t.Error("the padding convention or the stale feed's measure is not described")
 	}
 	if !strings.Contains(desc["audit_unmatched"], "--provider-tag") {
@@ -225,7 +233,7 @@ func TestAuditAllSaysWhatDoesNotApply(t *testing.T) {
 			t.Errorf("%s over podcasts: not_applicable %v, clean %v", name, na, clean)
 		}
 	}
-	for _, name := range []string{"audit_podcast_stale_feed", "audit_missing cover", "audit_duplicates"} {
+	for _, name := range []string{"audit_podcasts", "audit_missing cover", "audit_duplicates"} {
 		if !slices.Contains(clean, name) {
 			t.Errorf("%s should run over podcasts: clean %v", name, clean)
 		}
@@ -244,13 +252,13 @@ func TestAuditAllSaysWhatDoesNotApply(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if na := strs(t, out["not_applicable"]); !slices.Equal(na, []string{"audit_podcast_stale_feed", "audit_podcast_no_episodes"}) {
+	if na := strs(t, out["not_applicable"]); !slices.Equal(na, []string{"audit_podcasts"}) {
 		t.Errorf("not_applicable over books = %v", na)
 	}
 	if skipped := strs(t, out["skipped"]); !slices.Equal(skipped, []string{"audit_covers", "audit_unembedded", "audit_matched", "audit_abridged", "audit_unplayable"}) {
 		t.Errorf("skipped = %v", skipped)
 	}
-	reasons(t, out, 7)
+	reasons(t, out, 6)
 }
 
 // reasons checks audit_all gave every audit it left out a reason.
@@ -812,6 +820,13 @@ func TestAuditSpecsAreComplete(t *testing.T) {
 		t.Errorf("check author_as_title is exposed by both %s and audit_authors", prev)
 	}
 	byCheck["author_as_title"] = "audit_authors"
+	// and the two that are one tool, each a problem its findings name
+	for _, check := range podcastChecks {
+		if prev, dup := byCheck[check]; dup {
+			t.Errorf("check %s is exposed by both %s and audit_podcasts", check, prev)
+		}
+		byCheck[check] = "audit_podcasts"
+	}
 	for check := range auditChecksByName {
 		if _, ok := byCheck[check]; !ok {
 			t.Errorf("check %q has no audit tool, so audit_all never reports it", check)

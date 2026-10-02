@@ -99,6 +99,24 @@ func window[T any](offset, limit int, fetch func(page int) ([]T, int, error)) (r
 	return rows[:min(limit, len(rows))], total, nil
 }
 
+// filterLists are the lists library_filters answers with.
+var filterLists = []string{"genres", "tags", "narrators", "languages", "publishers", "published_decades", "authors", "series"}
+
+// pageIn is how a listing held whole is paged: the same limit and offset the
+// listings the server pages take.
+type pageIn struct {
+	Limit  int `json:"limit,omitempty"  jsonschema:"page size, default 50, at most 1000"`
+	Offset int `json:"offset,omitempty" jsonschema:"skip this many rows: a previous page's next_offset"`
+}
+
+// pageOf is one page of a list held whole: at most limit rows from offset,
+// and where the next page starts, 0 when this was the last.
+func pageOf[T any](all []T, limit, offset int) (page []T, next int) {
+	offset = min(offset, len(all))
+	page = all[offset:min(offset+limit, len(all))]
+	return page, nextOffset(offset, len(page), len(all))
+}
+
 // nextOffset is where the page after one of n rows from offset starts, or 0
 // when that was the last.
 func nextOffset(offset, n, total int) int {
@@ -463,11 +481,19 @@ func registerLibraryTools(r *registry) {
 	})
 
 	type filtersIn struct {
-		Library string `json:"library,omitempty" jsonschema:"library name or id; optional when the server has one library"`
+		Library string   `json:"library,omitempty" jsonschema:"library name or id; optional when the server has one library"`
+		Fields  []string `json:"fields,omitempty"  jsonschema:"only these lists: genres, tags, narrators, languages, publishers, published_decades, authors, series; default all of them"`
+		Limit   int      `json:"limit,omitempty"   jsonschema:"how many values of each list, default 100, at most 1000"`
+		Offset  int      `json:"offset,omitempty"  jsonschema:"skip this many values of each list: a previous page's next_offset"`
 	}
 	type filtersOut struct {
-		Genres           []string      `json:"genres"`
-		Tags             []string      `json:"tags"`
+		Totals     map[string]int `json:"totals"                jsonschema:"how many values each list has in full"`
+		Offset     int            `json:"offset"`
+		NextOffset int            `json:"next_offset,omitempty" jsonschema:"pass back as offset for more of every list that has more; absent once none has"`
+		// a list with nothing in it, or not asked for, is left out: totals
+		// says which, a list asked for being there with its count
+		Genres           []string      `json:"genres,omitempty"`
+		Tags             []string      `json:"tags,omitempty"`
 		Narrators        []string      `json:"narrators,omitempty"`
 		Languages        []string      `json:"languages,omitempty"`
 		Publishers       []string      `json:"publishers,omitempty"`
@@ -477,9 +503,48 @@ func registerLibraryTools(r *registry) {
 	}
 	add(r, readTool, &mcp.Tool{
 		Name: "library_filters",
-		Description: "The distinct genres, tags, narrators, languages, publishers, authors and series in a library: the valid values for library_items filters, and the vocabulary to normalize against. " +
+		Description: "The distinct genres, tags, narrators, languages, publishers, authors and series in a library: the valid values for library_items filters, and the vocabulary to normalize against. Every list is paged alike, a hundred values at a time: totals says how long each is in full, and fields asks for only some of them. " +
 			"Authors and series are read live; the rest come from the server's filter cache, which can keep a value removed from its last book for up to half an hour. For an account kept from some books by tag or by the explicit flag, everything is read from the books it can see.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in filtersIn) (*mcp.CallToolResult, filtersOut, error) {
+		for _, f := range in.Fields {
+			if !slices.Contains(filterLists, f) {
+				return nil, filtersOut{}, fmt.Errorf("unknown list %q; choose from: %s", f, strings.Join(filterLists, ", "))
+			}
+		}
+		limit, offset := pageArgs(in.Limit, in.Offset, 100)
+		// paged cuts every list to the page asked for, drops the lists not
+		// asked for, and says how long each one is in full
+		paged := func(out filtersOut) filtersOut {
+			out.Totals, out.Offset = map[string]int{}, offset
+			wanted := func(name string) bool { return len(in.Fields) == 0 || slices.Contains(in.Fields, name) }
+			names := func(name string, list *[]string) {
+				if !wanted(name) {
+					*list = nil
+					return
+				}
+				out.Totals[name] = len(*list)
+				page, next := pageOf(*list, limit, offset)
+				*list, out.NextOffset = append([]string{}, page...), max(out.NextOffset, next)
+			}
+			refs := func(name string, list *[]abs.NameRef) {
+				if !wanted(name) {
+					*list = nil
+					return
+				}
+				out.Totals[name] = len(*list)
+				page, next := pageOf(*list, limit, offset)
+				*list, out.NextOffset = append([]abs.NameRef{}, page...), max(out.NextOffset, next)
+			}
+			names("genres", &out.Genres)
+			names("tags", &out.Tags)
+			names("narrators", &out.Narrators)
+			names("languages", &out.Languages)
+			names("publishers", &out.Publishers)
+			names("published_decades", &out.PublishedDecades)
+			refs("authors", &out.Authors)
+			refs("series", &out.Series)
+			return out
+		}
 		lib, err := resolveLibrary(ctx, client, in.Library)
 		if err != nil {
 			return nil, filtersOut{}, err
@@ -495,11 +560,11 @@ func registerLibraryTools(r *registry) {
 			if verr != nil {
 				return nil, filtersOut{}, verr
 			}
-			return nil, filtersOut{
+			return nil, paged(filtersOut{
 				Genres: keysOf(v.Genres), Tags: keysOf(v.Tags), Narrators: keysOf(v.Narrators),
 				Languages: keysOf(v.Languages), Publishers: keysOf(v.Publishers), PublishedDecades: keysOf(v.Decades),
 				Authors: v.Authors, Series: v.Series,
-			}, nil
+			}), nil
 		}
 		fd, err := client.FilterData(ctx, lib.ID)
 		if err != nil {
@@ -514,14 +579,6 @@ func registerLibraryTools(r *registry) {
 			PublishedDecades: fd.PublishedDecades,
 			Authors:          fd.Authors,
 			Series:           fd.Series,
-		}
-		// a library with none has them left out of its filter data, and the
-		// answer says none rather than null
-		if out.Genres == nil {
-			out.Genres = []string{}
-		}
-		if out.Tags == nil {
-			out.Tags = []string{}
 		}
 		// the filter data is cached for half an hour and a rename does not
 		// reach it, so the names library_items resolves are read live
@@ -543,7 +600,7 @@ func registerLibraryTools(r *registry) {
 			}
 		}
 
-		return nil, out, nil
+		return nil, paged(out), nil
 	})
 
 	type scanIn struct {

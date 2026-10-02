@@ -142,15 +142,16 @@ func (c *batchCounts) add(confidence string) {
 
 // applyResult is one row of item_match_apply_batch.
 type applyResult struct {
-	Item    string          `json:"item"`
-	Title   string          `json:"title,omitempty"`
-	ASIN    string          `json:"asin,omitempty"`
-	ISBN    string          `json:"isbn,omitempty"`
-	Updated bool            `json:"updated"`
-	Kept    []string        `json:"kept,omitempty"    jsonschema:"fields restored after the match"`
-	Fields  []fieldDecision `json:"fields,omitempty"  jsonschema:"with smart: every field the provider would write differently and what was done about it"`
-	Warning string          `json:"warning,omitempty"`
-	Error   string          `json:"error,omitempty"`
+	Item     string          `json:"item"`
+	Title    string          `json:"title,omitempty"`
+	ASIN     string          `json:"asin,omitempty"`
+	ISBN     string          `json:"isbn,omitempty"`
+	Provider string          `json:"provider,omitempty" jsonschema:"the provider it was applied from, or without confirm would be"`
+	Updated  bool            `json:"updated"`
+	Kept     []string        `json:"kept,omitempty"     jsonschema:"fields restored after the match"`
+	Fields   []fieldDecision `json:"fields,omitempty"   jsonschema:"with smart: every field the provider would write differently and what was done about it"`
+	Warning  string          `json:"warning,omitempty"`
+	Error    string          `json:"error,omitempty"`
 }
 
 // smartRow runs the smart match for one row of a batch: the decisions land on
@@ -224,6 +225,9 @@ func (r *registry) applyRow(ctx context.Context, itemID, provider string, how ro
 		res.Error = err.Error()
 	case how.smart:
 		smartRow(ctx, r.client, r.providerConfig(), fresh, provider, res, how.preview)
+	case how.preview:
+		// a plain match has nothing to decide ahead of time: the row says
+		// which book and which store, and nothing is sent
 	default:
 		matchRow(ctx, r.client, r.providerConfig(), fresh, provider, how.keep, how.opts, res)
 	}
@@ -345,24 +349,24 @@ func registerMatchBatchTools(r *registry) {
 	}
 	type applyBatchIn struct {
 		Matches         []applyPair `json:"matches"                    jsonschema:"the books to match and what to match each to, up to 50; from item_match_batch rows you accept"`
-		Provider        string      `json:"provider,omitempty"         jsonschema:"provider for matches that do not name their own; default the library's"`
+		Providers       []string    `json:"providers,omitempty"        jsonschema:"metadata providers for matches that do not name their own, tried in order, the first that holds the asin or isbn being the one applied; default the server's --providers, else the library's"`
 		OverrideDetails bool        `json:"override_details,omitempty" jsonschema:"replace metadata fields already set instead of only filling empty ones"`
 		OverrideCover   bool        `json:"override_cover,omitempty"`
 		Keep            []string    `json:"keep,omitempty"             jsonschema:"with override_details: fields to put back as they were after the match, so an override can replace everything except what is already curated: title, subtitle, authors, narrators, series, genres, tags, publisher, year, language, description. A kept field that was empty stays empty"`
 		Smart           bool        `json:"smart,omitempty"            jsonschema:"fill the empty fields, then decide each remaining difference by rule: a file-tag title, a company in the narrator field or a timestamp year is written; a curated series, a plain year or an honorific-only difference is kept; anything else is reported for review with both values. Cannot combine with override_details"`
-		Preview         bool        `json:"preview,omitempty"          jsonschema:"with smart: report every decision and change nothing"`
+		Confirm         bool        `json:"confirm,omitempty"          jsonschema:"true to apply. Without it nothing changes and each result says which provider it would be applied from, and with smart every decision"`
 	}
 	type applyBatchOut struct {
-		Applied   int            `json:"applied"             jsonschema:"books the match changed"`
-		Unchanged int            `json:"unchanged"           jsonschema:"books the match left as they were: nothing it had was new, or it found nothing, which the result's warning says"`
-		Previewed int            `json:"previewed,omitempty" jsonschema:"with preview: books whose decisions are reported, with nothing changed"`
-		Failed    int            `json:"failed"`
-		Counts    map[string]int `json:"counts,omitempty"    jsonschema:"with smart: decisions by action over every book"`
-		Results   []applyResult  `json:"results"`
+		Applied    int            `json:"applied"               jsonschema:"books the match changed"`
+		Unchanged  int            `json:"unchanged"             jsonschema:"books the match left as they were: nothing it had was new, or it found nothing, which the result's warning says"`
+		WouldApply int            `json:"would_apply,omitempty" jsonschema:"without confirm: books a confirmed call would match, with nothing changed"`
+		Failed     int            `json:"failed"`
+		Counts     map[string]int `json:"counts,omitempty"      jsonschema:"with smart: decisions by action over every book"`
+		Results    []applyResult  `json:"results"`
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "item_match_apply_batch",
-		Description: "Apply matches to many books at once, each pinned to the asin or isbn you name: the rows from item_match_batch you accept, whether that is every exact row or a hand-picked few. One failure does not stop the rest; each result says what happened, and applied counts only the books that changed. By default only empty fields are filled; override_details replaces them, and keep names the fields to put back afterwards. Changes server state.",
+		Description: "Apply matches to many books at once, each pinned to the asin or isbn you name: the rows from item_match_batch you accept, whether that is every exact row or a hand-picked few. One failure does not stop the rest; each result says what happened, and applied counts only the books that changed. By default only empty fields are filled; override_details replaces them, and keep names the fields to put back afterwards. Without confirm nothing changes and each result says what would be applied. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in applyBatchIn) (*mcp.CallToolResult, applyBatchOut, error) {
 		if len(in.Matches) == 0 {
 			return nil, applyBatchOut{}, errors.New("matches is required: the items and the asin or isbn to match each to")
@@ -380,10 +384,10 @@ func registerMatchBatchTools(r *registry) {
 		if in.Smart && in.OverrideDetails {
 			return nil, applyBatchOut{}, errors.New("smart and override_details are two answers to the same question; pick one")
 		}
-		if in.Preview && !in.Smart {
-			return nil, applyBatchOut{}, errors.New("preview only means something with smart")
+		if err := prov.checkNamed(ctx, client, in.Providers); err != nil {
+			return nil, applyBatchOut{}, err
 		}
-		how := rowMatch{keep: keep, opts: abs.MatchOptions{OverrideCover: in.OverrideCover, OverrideDetails: in.OverrideDetails}, smart: in.Smart, preview: in.Preview}
+		how := rowMatch{keep: keep, opts: abs.MatchOptions{OverrideCover: in.OverrideCover, OverrideDetails: in.OverrideDetails}, smart: in.Smart, preview: !in.Confirm}
 		out := applyBatchOut{Results: []applyResult{}}
 		for _, m := range in.Matches {
 			res := applyResult{Item: m.Item, ASIN: strings.TrimSpace(m.ASIN), ISBN: strings.TrimSpace(m.ISBN)}
@@ -395,17 +399,20 @@ func registerMatchBatchTools(r *registry) {
 				res.Error = errNotBook.Error()
 			} else {
 				res.Title = it.Title()
+				// the row's own store, else the first of the call's that
+				// holds what the row names
 				provider := m.Provider
-				if provider == "" {
-					provider = in.Provider
-				}
 				var err error
 				if provider == "" {
-					provider, _, _, err = prov.matchQuery(ctx, client, it, "", "", "")
+					var providers []string
+					if providers, err = prov.itemProviders(ctx, client, it, in.Providers); err == nil {
+						provider, err = providerHolding(ctx, client, it, providers, res.ASIN, res.ISBN)
+					}
 				}
 				if err != nil {
 					res.Error = err.Error()
 				} else {
+					res.Provider = provider
 					r.applyRow(ctx, it.ID, provider, how, &res)
 					if in.Smart {
 						out.Counts = addCounts(out.Counts, smartCounts(res.Fields))
@@ -417,8 +424,8 @@ func registerMatchBatchTools(r *registry) {
 			switch {
 			case res.Error != "":
 				out.Failed++
-			case in.Preview:
-				out.Previewed++
+			case !in.Confirm:
+				out.WouldApply++
 			case res.Updated:
 				out.Applied++
 			default:

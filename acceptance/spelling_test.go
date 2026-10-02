@@ -147,7 +147,7 @@ func TestMetadataRemoveGenre(t *testing.T) {
 
 	// without confirm it names what it would drop the genre from and drops nothing
 	out := call(t, "metadata_rename", map[string]any{"field": "genres", "from": "Temporary Genre", "remove": true})
-	preview := object(out["preview"])
+	preview := object(out["would_remove"])
 	if found := num(t, preview["found"], "preview.found"); found != 1 || num(t, out["items_updated"], "items_updated") != 0 {
 		t.Errorf("preview = %v, want the one book and nothing changed", out)
 	}

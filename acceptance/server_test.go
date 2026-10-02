@@ -328,7 +328,7 @@ func TestServerSessionsWithAPlaybackSession(t *testing.T) {
 		if err := client.CloseSession(ctx, session.ID, nil); err != nil {
 			t.Errorf("closing the session: %v", err)
 		}
-		call(t, "user_progress_remove", map[string]any{"item": book})
+		call(t, "user_progress_set", map[string]any{"remove": true, "item": book})
 	})
 
 	// it is open, so server_sessions must project it rather than return nothing

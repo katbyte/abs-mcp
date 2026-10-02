@@ -411,7 +411,7 @@ func TestAMatchWhoseLibraryCannotBeReadIsAnError(t *testing.T) {
 		t.Errorf("searched anyway, with no provider: %v", got)
 	}
 
-	out, err := call("item_match_apply_batch", map[string]any{"matches": []any{map[string]any{"item": itemID, "asin": "B0X"}}})
+	out, err := call("item_match_apply_batch", map[string]any{"confirm": true, "matches": []any{map[string]any{"item": itemID, "asin": "B0X"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -444,7 +444,7 @@ func TestAMatchThatCannotBeReadBackIsAnError(t *testing.T) {
 	f.json("PATCH /api/items/"+itemID+"/media", `{"updated":true,"libraryItem":`+item(itemID, "Dune", `"asin":"B0"`, "")+`}`)
 	call := toolCaller(t, f)
 
-	_, err := call("item_match_apply", map[string]any{"item": itemID, "asin": "B0", "provider": "audible"})
+	_, err := call("item_match_apply", map[string]any{"confirm": true, "item": itemID, "asin": "B0", "providers": []any{"audible"}})
 	wantErr(t, "a match whose read-back failed", err, "matched", "reading the item back", "500")
 }
 
@@ -573,14 +573,14 @@ func TestItemMatchApplyNeedsACandidate(t *testing.T) {
 	f.json("GET /api/libraries/"+libID, `{"id":"`+libID+`","name":"Books","mediaType":"book","provider":"audible"}`) // a row naming no provider takes the library's
 	call := toolCaller(t, f)
 
-	if _, err := call("item_match_apply", map[string]any{"item": itemID, "override_details": true}); err == nil {
+	if _, err := call("item_match_apply", map[string]any{"confirm": true, "item": itemID, "override_details": true}); err == nil {
 		t.Error("a match naming no candidate, asin or isbn was not refused")
 	}
 	if got := f.requests("/api/items/" + itemID + "/match"); len(got) != 0 {
 		t.Errorf("the match was sent anyway: %v", got)
 	}
 
-	out, err := call("item_match_apply", map[string]any{"item": itemID, "asin": "B0"})
+	out, err := call("item_match_apply", map[string]any{"confirm": true, "item": itemID, "asin": "B0"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -855,7 +855,7 @@ func TestItemMatchInSeconds(t *testing.T) {
 	f.json("GET /api/search/books", `[{"title":"Dune","author":"Frank Herbert","asin":"B0DUNE","duration":1260}]`)
 	call := toolCaller(t, f)
 
-	out, err := call("item_match", map[string]any{"item": itemID, "provider": "audible"})
+	out, err := call("item_match", map[string]any{"item": itemID, "providers": []any{"audible"}})
 	if err != nil {
 		t.Fatal(err)
 	}
