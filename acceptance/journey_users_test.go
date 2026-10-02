@@ -10,6 +10,7 @@ package acceptance
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
 	"os"
 	"slices"
 	"strings"
@@ -344,7 +345,7 @@ func TestJourneyWritesAnAccountMayNotMake(t *testing.T) {
 	refused := []writeCall{
 		{tool: "item_edit", args: map[string]any{"library": "Fiction", "item": "Foundation", "add_tags": []any{"zzyzx-refused"}}},
 		{tool: "item_edit", args: map[string]any{"item": racket, "add_tags": []any{"zzyzx-refused"}}},
-		{tool: "item_batch_edit", args: map[string]any{"library": "Fiction", "items": []any{"Foundation", "Second Foundation"}, "add_tags": []any{"zzyzx-refused"}}},
+		{tool: "item_edit", args: map[string]any{"library": "Fiction", "items": []any{"Foundation", "Second Foundation"}, "add_tags": []any{"zzyzx-refused"}}},
 		{tool: "item_chapters_set", args: map[string]any{"library": "Fiction", "item": "Foundation", "chapters": []any{map[string]any{"title": "Zzyzx", "start_s": 0}}}},
 		{tool: "item_cover_edit", args: map[string]any{"library": "Messy", "item": "Moving Pictures", "remove": true}},
 		// Foundation has no asin to look a cover up by
@@ -455,4 +456,68 @@ func TestJourneyWritesAnAccountMayNotMake(t *testing.T) {
 			}
 		}
 	})
+}
+
+// An admin without the delete permission, which is what a new admin is: the
+// server refuses its deletes, so the tools say it may not delete, and
+// item_delete refuses before it touches the account's bookmarks on the book,
+// which a refused delete would otherwise have cost it.
+func TestJourneyAnAdminWithoutDelete(t *testing.T) {
+	const book = "Zzyzx Kept Author/Zzyzx Kept Book"
+
+	s := newDiskShelf(t, "Zzyzx Kept Shelf", "zzyzx-kept")
+	s.write(t, book+"/01.mp3")
+	s.writeText(t, book+"/notes.txt", "notes\n")
+	s.open(t, 1)
+	id := s.ids(t)[book]
+
+	account := newUserWith(t, "zzyzx-admin-no-delete", abs.UserCreate{Type: "admin"}, tools.Options{EnableDelete: true})
+	for tool, out := range map[string]map[string]any{"user_get": account.call(t, "user_get", nil), "server_info": account.call(t, "server_info", nil)} {
+		if !isFalse(out["can_delete"]) || !truth(out["can_update"]) {
+			t.Errorf("%s = can_delete %v, can_update %v, want an admin that may update and may not delete", tool, out["can_delete"], out["can_update"])
+		}
+	}
+	if got := account.call(t, "user_get", nil); got["type"] != "admin" {
+		t.Fatalf("the account is a %v, want an admin", got["type"])
+	}
+	// the server is what refuses: asked directly, it does
+	if status, out, err := rawJSON(http.MethodDelete, "/api/items/"+id, account.Token, nil); err != nil || status != http.StatusForbidden {
+		t.Fatalf("the server answered the admin's delete HTTP %d %v %v, want it refused", status, out, err)
+	}
+
+	account.call(t, "user_bookmark_edit", map[string]any{"item": id, "action": "add", "time_s": 0.5, "title": "Zzyzx Kept Mark"})
+	marks := func() []string {
+		return valuesIn(t, account.call(t, "user_bookmarks", map[string]any{"item": id})["bookmarks"], "bookmarks", "title")
+	}
+	if got := marks(); !slices.Equal(got, []string{"Zzyzx Kept Mark"}) {
+		t.Fatalf("the admin's bookmarks = %v", got)
+	}
+
+	for what, args := range map[string]map[string]any{
+		"the book":           {"item": id, "confirm": true},
+		"the book and files": {"item": id, "confirm": true, "delete_files": true},
+		"one file":           {"item": id, "confirm": true, "file": "notes.txt"},
+	} {
+		if msg := account.callErr(t, "item_delete", args); !strings.Contains(msg, "lacks the delete permission") {
+			t.Errorf("deleting %s: %s", what, msg)
+		}
+	}
+	if got := marks(); !slices.Equal(got, []string{"Zzyzx Kept Mark"}) {
+		t.Errorf("after the refused deletes the admin's bookmarks = %v, want the one it made", got)
+	}
+	if got := call(t, "item_get", map[string]any{"item": id}); got["title"] != "Zzyzx Kept Book" {
+		t.Errorf("the book after the refused deletes = %v", got)
+	}
+	if got := s.onDisk(t); !slices.Contains(got, book+"/notes.txt") || !slices.Contains(got, book+"/01.mp3") {
+		t.Errorf("on disk after the refused deletes: %v", got)
+	}
+
+	// given the permission, the same call deletes, and takes the bookmark first
+	call(t, "user_edit", map[string]any{"user": account.Name, "can_delete": true})
+	if out := account.call(t, "item_delete", map[string]any{"item": id, "confirm": true}); num(t, out["bookmarks_removed"], "bookmarks_removed") != 1 || out["deleted"] != "Zzyzx Kept Book" {
+		t.Errorf("the delete once allowed = %v", out)
+	}
+	if got := rows(t, account.call(t, "user_bookmarks", nil)["bookmarks"], "bookmarks"); len(got) != 0 {
+		t.Errorf("bookmarks left on the deleted book: %v", got)
+	}
 }

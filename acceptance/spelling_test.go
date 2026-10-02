@@ -3,7 +3,9 @@
 package acceptance
 
 import (
+	"slices"
 	"testing"
+	"time"
 )
 
 // metadata_rename merges a group audit_spelling found, whichever field it is
@@ -60,6 +62,57 @@ func TestMetadataRenamePublisher(t *testing.T) {
 	// the item really carries the kept spelling now
 	if got := call(t, "item_get", map[string]any{"item": item})["publisher"]; got != "Round Table" {
 		t.Errorf("publisher = %v, want Round Table", got)
+	}
+}
+
+// A language two podcasts and a book carry, renamed in one sweep: the shows
+// change with the book. The server's batch update is written for books and
+// fails on a podcast, so the shows are sent on their own.
+func TestMetadataRenameLanguageOnPodcasts(t *testing.T) {
+	// a show subscribed from a feed beside the two laid out on disk: the
+	// server holds more about one it follows
+	feed := showServe(t, "zzyzx-tongue.test", "Zzyzx Tongue Show",
+		feedItem{guid: "zzyzx-tongue-1", title: "Zzyzx Tongue One", published: time.Now().Add(-24 * time.Hour)})
+	showSubscribe(t, feed, "Zzyzx Tongue Show", 1)
+	waitIdle(t)
+
+	shows := map[string]string{}
+	for _, show := range append(slices.Clone(podcasts), feed.title) {
+		shows[show] = text(call(t, "item_get", map[string]any{"library": "Podcasts", "item": show})["language"])
+	}
+	const book = "War Is a Racket"
+	was := text(call(t, "item_get", map[string]any{"item": book})["language"])
+	restore := func(item, library, language string) {
+		args := map[string]any{"item": item, "library": library, "language": language}
+		if language == "" {
+			args = map[string]any{"item": item, "library": library, "clear": []any{"language"}}
+		}
+		if _, err := invoke("item_edit", args); err != nil {
+			t.Errorf("putting %s's language back: %v", item, err)
+		}
+	}
+	t.Cleanup(func() {
+		for show, language := range shows {
+			restore(show, "Podcasts", language)
+		}
+		restore(book, "Non-Fiction", was)
+	})
+	for show := range shows {
+		call(t, "item_edit", map[string]any{"library": "Podcasts", "item": show, "language": "zzyzx-eng"})
+	}
+	call(t, "item_edit", map[string]any{"item": book, "language": "zzyzx-eng"})
+
+	out := call(t, "metadata_rename", map[string]any{"field": "languages", "from": "zzyzx-eng", "to": "Zzyzxish"})
+	if n := num(t, out["items_updated"], "items_updated"); n != len(shows)+1 {
+		t.Errorf("items_updated = %d, want the %d shows and the book: %v", n, len(shows), out)
+	}
+	for show := range shows {
+		if got := call(t, "item_get", map[string]any{"library": "Podcasts", "item": show})["language"]; got != "Zzyzxish" {
+			t.Errorf("%s's language = %v, want Zzyzxish", show, got)
+		}
+	}
+	if got := call(t, "item_get", map[string]any{"item": book})["language"]; got != "Zzyzxish" {
+		t.Errorf("the book's language = %v, want Zzyzxish", got)
 	}
 }
 

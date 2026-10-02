@@ -59,7 +59,7 @@ type auditSpec struct {
 var auditSpecs = []auditSpec{
 	{
 		"audit_unmatched", "unmatched",
-		"Find books never matched to a metadata provider: no asin and no isbn, so nothing else can be filled in automatically. Fix with item_match to see the candidates, then item_match_apply on the one that is actually the right book. A book that has been looked at and has nothing to match, a recording no provider sells, is given the provider tag's none value, zz-provider:none unless the server's --provider-tag changes the prefix (item_batch_edit add_tags), and is not reported again.",
+		"Find books never matched to a metadata provider: no asin and no isbn, so nothing else can be filled in automatically. Fix with item_match to see the candidates, then item_match_apply on the one that is actually the right book. A book that has been looked at and has nothing to match, a recording no provider sells, is given the provider tag's none value, zz-provider:none unless the server's --provider-tag changes the prefix (item_edit add_tags, with items for many), and is not reported again.",
 	},
 	{
 		"audit_issues", "issues",
@@ -143,7 +143,7 @@ func registerAuditTools(r *registry) {
 		Description: "Find items with a metadata field left empty: " + strings.Join(missingFields, ", ") + "; for description, also one that says nothing (under 120 characters, a short credit line such as 'Read by Paul Heck', or a bare url). " +
 			"chapters only reports books over two hours, where the absence actually hurts. " +
 			"Fix most of them with item_match_apply, covers with item_cover_search then item_cover_edit, chapters with item_chapters_set, " +
-			"and anything the providers cannot supply with item_edit or item_batch_edit.",
+			"and anything the providers cannot supply with item_edit, which takes items to change many at once.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in missingIn) (*mcp.CallToolResult, auditOut, error) {
 		field := strings.ToLower(strings.TrimSpace(in.Field))
 		if !slices.Contains(missingFields, field) {

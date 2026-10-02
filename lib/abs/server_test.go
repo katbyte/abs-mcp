@@ -76,3 +76,59 @@ func TestServerYearStatsShape(t *testing.T) {
 		t.Errorf("sent %v", got)
 	}
 }
+
+// The history of every account's listening, a page of it: who, the order and
+// the page go in the query, an option left out is not sent, and the sessions
+// come back with how many there are in all.
+func TestSessionsPages(t *testing.T) {
+	t.Parallel()
+
+	s := newJSONServer(t, always(http.StatusOK, `{"total":41,"sessions":[{"id":"s1","userId":"u1","displayTitle":"Dune","timeListening":90.5}]}`))
+	c := newClient(t, s)
+
+	sessions, total, err := c.Sessions(t.Context(), SessionsOptions{UserID: "u1", Sort: "timeListening", Desc: true, ItemsPerPage: 10, Page: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 41 || len(sessions) != 1 || sessions[0].ID != "s1" || sessions[0].DisplayTitle != "Dune" || sessions[0].TimeListening != 90.5 {
+		t.Errorf("answer = %+v of %d", sessions, total)
+	}
+	q := s.values(t)
+	if s.path != "/api/sessions" || q.Get("user") != "u1" || q.Get("sort") != "timeListening" || q.Get("desc") != "1" || q.Get("itemsPerPage") != "10" || q.Get("page") != "3" {
+		t.Errorf("asked %s?%s", s.path, s.query)
+	}
+
+	// nothing chosen: the first page, oldest order off, and no filter sent
+	if _, _, err := c.Sessions(t.Context(), SessionsOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	q = s.values(t)
+	if q.Has("user") || q.Has("sort") || q.Has("itemsPerPage") || q.Get("desc") != "0" || q.Get("page") != "0" {
+		t.Errorf("with no options asked ?%s", s.query)
+	}
+}
+
+// One account's listening, by the route that names the account, whose id is
+// escaped into the path.
+func TestUserSessionsPages(t *testing.T) {
+	t.Parallel()
+
+	s := newJSONServer(t, always(http.StatusOK, `{"total":2,"sessions":[{"id":"s1"},{"id":"s2"}]}`))
+	c := newClient(t, s)
+
+	sessions, total, err := c.UserSessions(t.Context(), "u/1", 25, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 2 || len(sessions) != 2 || sessions[1].ID != "s2" {
+		t.Errorf("answer = %+v of %d", sessions, total)
+	}
+	if q := s.values(t); s.path != "/api/users/u/1/listening-sessions" || q.Get("itemsPerPage") != "25" || q.Get("page") != "1" {
+		t.Errorf("asked %s?%s", s.path, s.query)
+	}
+
+	s = newJSONServer(t, always(http.StatusForbidden, "Forbidden"))
+	if _, _, err := newClient(t, s).UserSessions(t.Context(), "u1", 0, 0); !IsForbidden(err) {
+		t.Errorf("a refusal came back as %v", err)
+	}
+}

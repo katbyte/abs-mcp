@@ -220,23 +220,23 @@ func TestItemPodcastGuards(t *testing.T) {
 	}
 }
 
-// item_batch_edit sends one payload per item under mediaPayload; a flattened
-// entry crashes the server outright rather than erroring, so this is worth
-// exercising against the real thing.
-func TestItemBatchEdit(t *testing.T) {
+// item_edit with items sends one payload per item under mediaPayload; a
+// flattened entry crashes the server outright rather than erroring, so this
+// is worth exercising against the real thing.
+func TestItemEditMany(t *testing.T) {
 	titles := []any{"The Arms of Krupp", "A Brief History of Vice", "War Is a Racket"}
 
-	out := call(t, "item_batch_edit", map[string]any{
+	out := call(t, "item_edit", map[string]any{
 		"library": "Non-Fiction", "items": titles, "genres": []any{"Batch Genre"},
 	})
-	if n := num(t, out["items_updated"], "items_updated"); n != 3 {
-		t.Errorf("items_updated = %d, want 3", n)
+	if n := num(t, out["items_updated"], "items_updated"); n != 3 || !truth(out["updated"]) {
+		t.Errorf("items_updated = %d, want 3: %v", n, out)
 	}
 	if sent := strs(t, out["items"], "items"); len(sent) != 3 {
 		t.Errorf("items = %v, want the three titles", sent)
 	}
 	t.Cleanup(func() {
-		call(t, "item_batch_edit", map[string]any{
+		call(t, "item_edit", map[string]any{
 			"library": "Non-Fiction", "items": titles, "genres": []any{"History"},
 		})
 	})
@@ -244,7 +244,7 @@ func TestItemBatchEdit(t *testing.T) {
 	for _, title := range titles {
 		item := call(t, "item_get", map[string]any{"item": title})
 		if genres := strs(t, item["genres"], "genres"); !slices.Contains(genres, "Batch Genre") {
-			t.Errorf("%v genres = %v, want the batch edit applied", title, genres)
+			t.Errorf("%v genres = %v, want the edit applied", title, genres)
 		}
 	}
 
@@ -254,17 +254,55 @@ func TestItemBatchEdit(t *testing.T) {
 	}
 }
 
-func TestItemBatchEditValidation(t *testing.T) {
-	if msg := callErr(t, "item_batch_edit", map[string]any{"items": []any{}}); msg == "" {
+func TestItemEditManyValidation(t *testing.T) {
+	if msg := callErr(t, "item_edit", map[string]any{"items": []any{}}); msg == "" {
 		t.Error("an empty item list should be refused")
 	}
-	if msg := callErr(t, "item_batch_edit", map[string]any{"items": []any{"Foundation"}}); msg == "" {
-		t.Error("an edit with no fields should be refused")
+	if msg := callErr(t, "item_edit", map[string]any{"items": []any{"Foundation"}}); !strings.Contains(msg, "nothing to change") {
+		t.Errorf("an edit with no fields: %s", msg)
 	}
-	if msg := callErr(t, "item_batch_edit", map[string]any{
-		"items": []any{"Behind the Bastards"}, "genres": []any{"x"},
-	}); msg == "" {
-		t.Error("a podcast should be refused")
+	many := []any{"Foundation", "Second Foundation"}
+	if msg := callErr(t, "item_edit", map[string]any{"library": "Fiction", "items": many, "title": "Zzyzx One Title"}); !strings.Contains(msg, "title is one item's own") {
+		t.Errorf("one title on two books: %s", msg)
+	}
+	if msg := callErr(t, "item_edit", map[string]any{"library": "Fiction", "item": "Foundation", "items": many, "year": "1951"}); !strings.Contains(msg, "one or the other") {
+		t.Errorf("item beside items: %s", msg)
+	}
+	if got := call(t, "item_get", map[string]any{"library": "Fiction", "item": "Foundation"}); got["title"] != "Foundation" || got["year"] != "1951" {
+		t.Errorf("a refused edit changed Foundation: %v", got)
+	}
+}
+
+// One change on a book and two podcasts in a call: the shows change with the
+// book, each sent by the route an edit of one item uses, and a change they
+// already have changes nothing.
+func TestItemEditManyWithPodcasts(t *testing.T) {
+	titles := []any{"Behind the Bastards", "War Is a Racket", "Well There's Your Problem"}
+	tagged := func() int {
+		n := 0
+		for _, title := range titles {
+			// an item with no tags answers without the list
+			if slices.Contains(items(call(t, "item_get", map[string]any{"item": title})["tags"]), any("zzyzx-many")) {
+				n++
+			}
+		}
+		return n
+	}
+	t.Cleanup(func() {
+		_, _ = invoke("item_edit", map[string]any{"items": titles, "remove_tags": []any{"zzyzx-many"}})
+	})
+
+	out := call(t, "item_edit", map[string]any{"items": titles, "add_tags": []any{"zzyzx-many"}})
+	if n := num(t, out["items_updated"], "items_updated"); n != 3 || tagged() != 3 {
+		t.Errorf("add_tags = %v, and %d of the 3 carry the tag", out, tagged())
+	}
+	out = call(t, "item_edit", map[string]any{"items": titles, "add_tags": []any{"zzyzx-many"}})
+	if n := num(t, out["items_updated"], "items_updated"); n != 0 || truth(out["updated"]) {
+		t.Errorf("a tag they all carry, added again = %v", out)
+	}
+	out = call(t, "item_edit", map[string]any{"items": titles, "remove_tags": []any{"zzyzx-many"}})
+	if n := num(t, out["items_updated"], "items_updated"); n != 3 || tagged() != 0 {
+		t.Errorf("remove_tags = %v, and %d still carry the tag", out, tagged())
 	}
 }
 

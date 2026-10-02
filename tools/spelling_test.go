@@ -142,9 +142,10 @@ func TestMetadataRenameSaysHowFarItGotBeforeAFailure(t *testing.T) {
 		args map[string]any
 		want string
 	}{
-		// publishers go in batches of 100, genre splits in 50s
-		{map[string]any{"field": "publishers", "from": "Bantom", "to": "Bantam", "library": "A"}, "100 items were changed"},
-		{map[string]any{"field": "genres", "from": "SF & Fantasy", "into": []any{"Science Fiction", "Fantasy"}}, "50 items were changed"},
+		// publishers and genre splits both go in batches of 100, and say
+		// which batch failed and how many items went before it
+		{map[string]any{"field": "publishers", "from": "Bantom", "to": "Bantam", "library": "A"}, "items 101 to 150 of 150 failed and may have landed in part; 100 items before it were updated"},
+		{map[string]any{"field": "genres", "from": "SF & Fantasy", "into": []any{"Science Fiction", "Fantasy"}}, "items 101 to 150 of 150 failed and may have landed in part; 100 items before it were updated"},
 		// the first library renamed, the second failed
 		{map[string]any{"field": "narrators", "from": "jim dale", "to": "Jim Dale"}, "3 items were changed"},
 	} {
@@ -729,5 +730,37 @@ func TestVocabKeyEmpty(t *testing.T) {
 		if got := vocabKey(field, "   "); got != "" {
 			t.Errorf("%s: blank value gave key %q", field, got)
 		}
+	}
+}
+
+// A language renamed in a book library and a podcast library at once: the
+// book goes in the batch and the show by the route item_edit uses, which the
+// server took on a library where its batch route answered 502 for podcasts.
+func TestMetadataRenameSendsPodcastsOneAtATime(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	shelfRoutes(f)
+	show := `{"id":"` + podcastID + `","libraryId":"` + podLibID + `","mediaType":"podcast","media":{"metadata":{"title":"The Show","language":"eng"}}}`
+	f.json("GET /api/libraries/"+libID+"/items", page(item(bookB1, "First", `"language":"eng"`, "")))
+	f.json("GET /api/libraries/"+otherLibID+"/items", page())
+	f.json("GET /api/libraries/"+podLibID+"/items", page(show))
+	f.json("POST /api/items/batch/update", `{"updates":1}`)
+	f.json("PATCH /api/items/"+podcastID+"/media", `{"updated":true}`)
+	call := toolCaller(t, f)
+
+	out, err := call("metadata_rename", map[string]any{"field": "languages", "from": "eng", "to": "English"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if num(t, out["items_updated"]) != 2 {
+		t.Errorf("answer = %v, want the book and the show", out)
+	}
+	batch, single := f.requests("/api/items/batch/update"), f.requests("/api/items/"+podcastID+"/media")
+	if len(batch) != 1 || !strings.Contains(batch[0].Body, bookB1) || strings.Contains(batch[0].Body, podcastID) {
+		t.Errorf("the batch = %v, want the book alone", batch)
+	}
+	if len(single) != 1 || !strings.Contains(single[0].Body, `"language":"English"`) {
+		t.Errorf("the show was sent %v, want one edit of its own", single)
 	}
 }

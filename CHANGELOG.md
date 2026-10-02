@@ -2,6 +2,7 @@
 
 ### Breaking
 
+- `item_batch_edit` is gone: `item_edit` takes `items` to make the same change on many
 - `lib/abs`: `LoggerData` returns log lines, `ServerYearStats` returns `AdminYearStats`, and `DeleteItemFile` returns only an error
 
 ### Added
@@ -19,6 +20,8 @@
 - `user_stats` `server`: the whole server's year in review
 - `user_progress_set` `series` hides a series from Continue Series
 - `item_get` shows which ebook is the main one, and where a file sits in a disc folder
+- `item_edit` with `items` changes podcasts as well as books
+- `item_cover_edit` `file` takes a filename, and finds an image added since the last scan
 
 ### Fixed
 
@@ -26,6 +29,8 @@
 - `user_get` and `server_info` no longer say an account can delete, update, download or upload without that permission
 - `item_delete` no longer removes an admin's bookmarks before the server refuses the delete
 - `server_tasks` no longer promises recently finished tasks, which the server never lists
+- `item_cover_edit` `file` works on Audiobookshelf 2.37, which refuses a file not yet on the book
+- `metadata_rename` changes podcasts one at a time, after the server failed on them in a batch
 - `lib/abs`: deleting one file of a book no longer reports a failure when it worked; listed feeds have their urls; the whole server's year keeps its fields
 
 ## 0.5.0 (2026-09-27)

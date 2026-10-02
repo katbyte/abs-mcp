@@ -182,3 +182,61 @@ func pngBytes(t *testing.T, w, h int) []byte {
 
 	return buf.Bytes()
 }
+
+// A cover search always carries the title; the store, the author and that it
+// is a podcast only when given. The answer is the image urls.
+func TestSearchCoversQuery(t *testing.T) {
+	t.Parallel()
+
+	s := newJSONServer(t, always(http.StatusOK, `{"results":["https://img.test/a.jpg","https://img.test/b.jpg"]}`))
+	c := newClient(t, s)
+
+	covers, err := c.SearchCovers(t.Context(), "audible", "Dune & Co", "Frank Herbert", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(covers, []string{"https://img.test/a.jpg", "https://img.test/b.jpg"}) {
+		t.Errorf("answer = %v", covers)
+	}
+	q := s.values(t)
+	if s.path != "/api/search/covers" || q.Get("title") != "Dune & Co" || q.Get("provider") != "audible" || q.Get("author") != "Frank Herbert" || q.Has("podcast") {
+		t.Errorf("a book asked %s?%s", s.path, s.query)
+	}
+
+	if _, err := c.SearchCovers(t.Context(), "", "The Show", "", true); err != nil {
+		t.Fatal(err)
+	}
+	if q = s.values(t); q.Get("title") != "The Show" || q.Get("podcast") != "1" || q.Has("provider") || q.Has("author") {
+		t.Errorf("a podcast asked ?%s", s.query)
+	}
+}
+
+// A store search answers a bare list, not an object, and the item the search
+// is for is sent as id. A year comes as a number from one store and as text
+// from another.
+func TestSearchBooksQuery(t *testing.T) {
+	t.Parallel()
+
+	s := newJSONServer(t, always(http.StatusOK, `[{"title":"Dune","author":"Frank Herbert","asin":"B002V1OF70","publishedYear":1965},{"title":"Dune","publishedYear":"2007"}]`))
+	c := newClient(t, s)
+
+	results, err := c.SearchBooks(t.Context(), "audible.ca", "Dune", "Frank Herbert", "i1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 2 || results[0].ASIN != "B002V1OF70" || results[0].PublishedYear.String() != "1965" || results[1].PublishedYear.String() != "2007" {
+		t.Errorf("answer = %+v", results)
+	}
+	q := s.values(t)
+	if s.path != "/api/search/books" || q.Get("provider") != "audible.ca" || q.Get("title") != "Dune" || q.Get("author") != "Frank Herbert" || q.Get("id") != "i1" {
+		t.Errorf("asked %s?%s", s.path, s.query)
+	}
+
+	// the title alone: the server's own store, and nothing else sent
+	if _, err := c.SearchBooks(t.Context(), "", "Dune", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if q = s.values(t); q.Get("title") != "Dune" || q.Has("provider") || q.Has("author") || q.Has("id") {
+		t.Errorf("a title alone asked ?%s", s.query)
+	}
+}

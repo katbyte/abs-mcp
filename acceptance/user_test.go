@@ -383,3 +383,103 @@ func TestUserStatsServerYear(t *testing.T) {
 		t.Errorf("a year the server refuses: %s", msg)
 	}
 }
+
+// An account of another type that sees only some books: a guest kept to
+// the books carrying a tag, then kept from them, then shown every book
+// again, each as the account itself then finds the library; and made an
+// admin, which gives it no right to delete.
+func TestUserCreateTagsAndType(t *testing.T) {
+	const name = "zzyzx-guest"
+	admin := adminClient(t)
+	existing, err := admin.Users(ctx, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range existing {
+		if u.Username == name { // left by a run that died
+			_ = admin.DeleteUser(ctx, u.ID)
+		}
+	}
+
+	for _, c := range []struct {
+		args map[string]any
+		says string
+	}{
+		{map[string]any{"type": "owner"}, "user, guest or admin"},
+		{map[string]any{"tags": []any{"classic"}, "denied_tags": []any{"sf"}}, "one or the other"},
+		{map[string]any{"all_tags": true}, "all_tags is for user_edit"},
+	} {
+		if msg := callErr(t, "user_create", withArgs(map[string]any{"username": name}, c.args)); !strings.Contains(msg, c.says) {
+			t.Errorf("user_create %v: %s", c.args, msg)
+		}
+	}
+
+	out := call(t, "user_create", map[string]any{"username": name, "password": name + "-password", "type": "guest", "tags": []any{"classic"}})
+	id := text(out["id"])
+	t.Cleanup(func() {
+		eventually(t, "deleting "+name, func() error { return admin.DeleteUser(context.WithoutCancel(ctx), id) })
+	})
+	if out["type"] != "guest" || !isFalse(out["all_tags"]) || !slices.Equal(strs(t, out["tags"], "tags"), []string{"classic"}) || out["denied_tags"] != nil || out["password"] != nil {
+		t.Fatalf("user_create = %v, want a guest seeing only classic, its password not repeated", out)
+	}
+
+	// the library as the account finds it
+	if err := login(name, name+"-password"); err != nil {
+		t.Fatalf("the guest signing in: %v", err)
+	}
+	key, err := admin.CreateAPIKey(ctx, name, id, 0, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = admin.DeleteAPIKey(context.WithoutCancel(ctx), key.ID) })
+	own, err := abs.New(os.Getenv("ABS_SERVER"), key.Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fiction := libraryID(t, "Fiction")
+	sees := func() []string {
+		t.Helper()
+		page, err := own.Items(ctx, fiction, abs.ItemsOptions{Limit: 50})
+		if err != nil {
+			t.Fatal(err)
+		}
+		titles := make([]string, 0, len(page.Results))
+		for i := range page.Results {
+			titles = append(titles, page.Results[i].Title())
+		}
+		slices.Sort(titles)
+		return titles
+	}
+	classic := []string{"Foundation", "Foundation and Empire", "Second Foundation"}
+	others := []string{"Abaddon's Gate", "City of Golden Shadow", "Leviathan Wakes", "Sea of Silver Light"}
+	if got := sees(); !slices.Equal(got, classic) {
+		t.Errorf("kept to classic, the guest sees %v, want %v", got, classic)
+	}
+
+	out = call(t, "user_edit", map[string]any{"user": name, "denied_tags": []any{"classic"}})
+	if !isFalse(out["all_tags"]) || !slices.Equal(strs(t, out["denied_tags"], "denied_tags"), []string{"classic"}) || out["tags"] != nil {
+		t.Errorf("user_edit denied_tags = %v", out)
+	}
+	if got := sees(); !slices.Equal(got, others) {
+		t.Errorf("kept from classic, the guest sees %v, want %v", got, others)
+	}
+
+	out = call(t, "user_edit", map[string]any{"user": name, "all_tags": true})
+	if !truth(out["all_tags"]) || out["tags"] != nil || out["denied_tags"] != nil {
+		t.Errorf("user_edit all_tags = %v", out)
+	}
+	if got := sees(); len(got) != len(classic)+len(others) {
+		t.Errorf("shown every book again, the guest sees %v", got)
+	}
+
+	out = call(t, "user_edit", map[string]any{"user": name, "type": "admin"})
+	if out["type"] != "admin" || truth(out["can_delete"]) {
+		t.Errorf("user_edit type admin = %v, want an admin that may not delete", out)
+	}
+	if got, err := admin.User(ctx, id); err != nil || got.Type != "admin" || got.Permissions.Delete {
+		t.Errorf("the server holds %+v (%v)", got, err)
+	}
+	if msg := callErr(t, "user_edit", map[string]any{"user": "root", "type": "user"}); !strings.Contains(msg, "root account") {
+		t.Errorf("changing the root account's type: %s", msg)
+	}
+}

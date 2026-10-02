@@ -275,6 +275,46 @@ func fileToDelete(it *abs.Item, name string) (*abs.LibraryFile, error) {
 	return f, nil
 }
 
+// coverFile is the image of an item's a caller named as its cover: by its
+// full path, its path in the item's folder, or its filename. The server
+// takes only a file it already holds for the item (Audiobookshelf 2.37.0 on;
+// before, any image in the folder), so one put in the folder since the last
+// scan is scanned in first.
+func coverFile(ctx context.Context, client *abs.Client, it *abs.Item, name string) (*abs.LibraryFile, error) {
+	held := func(it *abs.Item) bool {
+		return slices.ContainsFunc(it.LibraryFiles, func(f abs.LibraryFile) bool {
+			return f.Metadata.Path == name || f.Metadata.RelPath == name || f.Metadata.Filename == name
+		})
+	}
+	if !held(it) {
+		if _, err := client.ScanItem(ctx, it.ID); err != nil {
+			return nil, fmt.Errorf("%q has no file %q, and the rescan that would find one new to its folder failed: %w", it.Title(), name, err)
+		}
+		after, err := client.Item(ctx, it.ID)
+		if err != nil {
+			return nil, fmt.Errorf("%q was rescanned to find %q, but reading it back failed: %w", it.Title(), name, err)
+		}
+		it = after
+	}
+
+	metas := make([]abs.FileMetadata, len(it.LibraryFiles))
+	for i := range it.LibraryFiles {
+		metas[i] = it.LibraryFiles[i].Metadata
+	}
+	i := slices.IndexFunc(metas, func(m abs.FileMetadata) bool { return m.Path == name })
+	if i < 0 {
+		var err error
+		if i, err = fileNamed("file", name, metas); err != nil {
+			return nil, fmt.Errorf("%w, after a rescan: the server takes as a cover only a file in the item's folder", err)
+		}
+	}
+	f := &it.LibraryFiles[i]
+	if f.FileType != "image" {
+		return nil, fmt.Errorf("%q is not an image: the server lists it as %s", cmp.Or(f.Metadata.RelPath, f.Metadata.Filename), cmp.Or(f.FileType, "unknown"))
+	}
+	return f, nil
+}
+
 // fileGone asks the server whether a file it was told to delete is off the
 // disk: the delete route takes the file out of the book even when removing
 // it from disk fails. The path check answers exists for a missing path inside

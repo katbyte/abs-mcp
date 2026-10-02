@@ -210,3 +210,79 @@ func TestVocabularyPathsAreBase64(t *testing.T) {
 		t.Errorf("DeleteGenre: %v via %s", err, s.path)
 	}
 }
+
+// A library's series, a page of them: the sort, order and filter go in the
+// query only when chosen, and the count is of every series, not the page.
+func TestSeriesListPages(t *testing.T) {
+	t.Parallel()
+
+	s := newJSONServer(t, always(http.StatusOK, `{"results":[{"id":"se1","name":"Dune","books":[{"id":"i1"},{"id":"i2"}]}],"total":120}`))
+	c := newClient(t, s)
+
+	series, total, err := c.SeriesList(t.Context(), "lib1", ListOptions{Limit: 50, Page: 2, Sort: "name", Desc: true, Filter: "progress.ZmluaXNoZWQ="})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 120 || len(series) != 1 || series[0].Name != "Dune" || len(series[0].Books) != 2 {
+		t.Errorf("answer = %+v of %d", series, total)
+	}
+	q := s.values(t)
+	if s.path != "/api/libraries/lib1/series" || q.Get("limit") != "50" || q.Get("page") != "2" || q.Get("sort") != "name" || q.Get("desc") != "1" || q.Get("filter") != "progress.ZmluaXNoZWQ=" {
+		t.Errorf("asked %s?%s", s.path, s.query)
+	}
+
+	if _, _, err := c.SeriesList(t.Context(), "lib1", ListOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if q = s.values(t); q.Has("limit") || q.Has("sort") || q.Has("desc") || q.Has("filter") || q.Get("page") != "0" {
+		t.Errorf("with no options asked ?%s", s.query)
+	}
+}
+
+// The libraries' order is sent as each id with its place, counted from one,
+// and the answer is the libraries in their new order.
+func TestReorderLibrariesNumbersFromOne(t *testing.T) {
+	t.Parallel()
+
+	s := newJSONServer(t, always(http.StatusOK, `{"libraries":[{"id":"b","name":"Second"},{"id":"a","name":"First"}]}`))
+	c := newClient(t, s)
+
+	libs, err := c.ReorderLibraries(t.Context(), []string{"b", "a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(libs) != 2 || libs[0].ID != "b" || libs[1].Name != "First" {
+		t.Errorf("answer = %+v", libs)
+	}
+	if s.method != http.MethodPost || s.path != "/api/libraries/order" || string(s.body) != `[{"id":"b","newOrder":1},{"id":"a","newOrder":2}]` {
+		t.Errorf("sent %s %s %s", s.method, s.path, s.body)
+	}
+
+	// no libraries is an empty list, which the server reads, not null
+	if _, err := c.ReorderLibraries(t.Context(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if string(s.body) != `[]` {
+		t.Errorf("no libraries sent %s, want an empty list", s.body)
+	}
+}
+
+// The newest episodes across a podcast library, a page of them.
+func TestRecentEpisodesPages(t *testing.T) {
+	t.Parallel()
+
+	s := newJSONServer(t, always(http.StatusOK, `{"episodes":[{"id":"e1","libraryItemId":"i1","title":"Pilot","season":2,"episode":"7"}]}`))
+	c := newClient(t, s)
+
+	episodes, err := c.RecentEpisodes(t.Context(), "pod lib", 5, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the season comes as a number or as text, show by show
+	if len(episodes) != 1 || episodes[0].LibraryItemID != "i1" || episodes[0].Title != "Pilot" || episodes[0].Season.String() != "2" || episodes[0].Episode.String() != "7" {
+		t.Errorf("answer = %+v", episodes)
+	}
+	if q := s.values(t); s.path != "/api/libraries/pod lib/recent-episodes" || q.Get("limit") != "5" || q.Get("page") != "4" {
+		t.Errorf("asked %s?%s", s.path, s.query)
+	}
+}

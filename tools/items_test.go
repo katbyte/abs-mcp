@@ -212,9 +212,9 @@ func TestItemChaptersSetChecksTheList(t *testing.T) {
 	}
 }
 
-// item_batch_edit sends a hundred at a time, as the sweeps do, and a failure
-// part way says how many had already gone.
-func TestItemBatchEditSendsInPages(t *testing.T) {
+// item_edit with many items sends a hundred at a time, as the sweeps do, and
+// a failure part way says how many had already gone.
+func TestItemEditManySendsInPages(t *testing.T) {
 	t.Parallel()
 
 	ids := make([]string, 0, sweepBatchSize+5)
@@ -247,7 +247,7 @@ func TestItemBatchEditSendsInPages(t *testing.T) {
 		_, _ = fmt.Fprintf(w, `{"updates":%d}`, len(entries))
 	})
 	call := toolCaller(t, f)
-	out, err := call("item_batch_edit", map[string]any{"items": ids, "genres": []any{"Fiction"}})
+	out, err := call("item_edit", map[string]any{"items": ids, "genres": []any{"Fiction"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,10 +266,67 @@ func TestItemBatchEditSendsInPages(t *testing.T) {
 		_, _ = fmt.Fprintf(w, `{"updates":%d}`, sweepBatchSize)
 	})
 	call = toolCaller(t, f)
-	_, err = call("item_batch_edit", map[string]any{"items": ids, "genres": []any{"Fiction"}})
+	_, err = call("item_edit", map[string]any{"items": ids, "genres": []any{"Fiction"}})
 	if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("items %d to %d of %d failed", sweepBatchSize+1, sweepBatchSize+5, sweepBatchSize+5)) ||
 		!strings.Contains(err.Error(), fmt.Sprintf("%d items before it were updated", sweepBatchSize)) {
 		t.Errorf("error = %v, want the batch that failed and the ones before it named", err)
+	}
+}
+
+// item_edit with items makes one change on many: what is one item's own is
+// refused, and so is item beside items, before anything is sent.
+func TestItemEditManyRefusesWhatIsOneItemsOwn(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	shelfRoutes(f)
+	call := toolCaller(t, f)
+
+	for _, c := range []struct {
+		args map[string]any
+		says string
+	}{
+		{map[string]any{"title": "One Title"}, "title is one item's own"},
+		{map[string]any{"description": "One description."}, "description is one item's own"},
+		{map[string]any{"asin": "B000000000"}, "asin is one item's own"},
+		{map[string]any{"tracks": []any{"01.mp3"}}, "tracks is one item's own"},
+		{map[string]any{"ebook": "one.epub"}, "ebook is one item's own"},
+		{map[string]any{"item": bookB3, "genres": []any{"Fiction"}}, "one or the other"},
+		{map[string]any{}, "nothing to change"},
+	} {
+		c.args["items"] = []any{bookB1, bookB2}
+		_, err := call("item_edit", c.args)
+		wantErr(t, fmt.Sprint(c.args), err, c.says)
+	}
+	if got := f.changes(); len(got) != 0 {
+		t.Errorf("sent %v", got)
+	}
+}
+
+// The books of a many-item edit go in one batch and a podcast by the route
+// an edit of one item uses; an item named twice is changed once.
+func TestItemEditManySendsPodcastsOneAtATime(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	shelfRoutes(f)
+	f.json("POST /api/items/batch/update", `{"updates":2}`)
+	f.json("PATCH /api/items/"+podcastID+"/media", `{"updated":true}`)
+	call := toolCaller(t, f)
+
+	out, err := call("item_edit", map[string]any{"items": []any{bookB1, podcastID, bookB2, bookB1}, "language": "English"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if num(t, out["items_updated"]) != 3 || !isTrue(out["updated"]) || !slices.Equal(strs(t, out["items"]), []string{"First", "The Show", "Second"}) {
+		t.Errorf("answer = %v, want the three items, each once", out)
+	}
+	batch, single := f.requests("/api/items/batch/update"), f.requests("/api/items/"+podcastID+"/media")
+	if len(batch) != 1 || strings.Count(batch[0].Body, bookB1) != 1 || !strings.Contains(batch[0].Body, bookB2) || strings.Contains(batch[0].Body, podcastID) {
+		t.Errorf("the batch = %v, want the two books, once each, and no podcast", batch)
+	}
+	if len(single) != 1 || !strings.Contains(single[0].Body, `"language":"English"`) {
+		t.Errorf("the podcast was sent %v, want one edit of its own", single)
 	}
 }
 
@@ -402,7 +459,7 @@ func TestABookLeftOutOfABatchReadIsNotEdited(t *testing.T) {
 	f.json("POST /api/items/batch/update", `{"updates":1}`)
 	call := toolCaller(t, f)
 
-	_, err := call("item_batch_edit", map[string]any{"items": []any{bookB1}, "add_tags": []any{"x"}})
+	_, err := call("item_edit", map[string]any{"items": []any{bookB1}, "add_tags": []any{"x"}})
 	wantErr(t, "a book left out of the read before the edit", err, "not in the server's reply", "nothing was changed")
 	if got := f.requests("/api/items/batch/update"); len(got) != 0 {
 		t.Errorf("edited anyway: %v", got)
@@ -540,7 +597,7 @@ func TestItemMatchApplyNeedsACandidate(t *testing.T) {
 	}
 }
 
-// item_edit edits the tag list the way item_batch_edit does.
+// item_edit edits one item's tag list as it edits each of many.
 func TestItemEditAddsAndRemovesTags(t *testing.T) {
 	t.Parallel()
 
@@ -717,7 +774,7 @@ func TestItemBatchEditAddsSeries(t *testing.T) {
 	f.json("POST /api/items/batch/update", `{"updates":1}`)
 	call := toolCaller(t, f)
 
-	out, err := call("item_batch_edit", map[string]any{"items": []any{itemID}, "add_series": []any{"Cosmere"}})
+	out, err := call("item_edit", map[string]any{"items": []any{itemID}, "add_series": []any{"Cosmere"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1031,6 +1088,72 @@ func TestItemDeleteFile(t *testing.T) {
 	f.json("POST /api/filesystem/pathexists", `{"exists":true}`)
 	_, err = call("item_delete", map[string]any{"item": itemID, "file": "notes .txt", "confirm": true})
 	wantErr(t, "a file left on disk", err, "taken out of the book but is still on disk", "the next scan puts it back")
+}
+
+// item_cover_edit file names an image of the book's by its filename or by its
+// full path, and the server is sent the full path of a file it holds for the
+// book. A file that is not an image is refused before anything is sent.
+func TestItemCoverEditFile(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	trimmable(f)
+	f.json("PATCH /api/items/"+itemID+"/cover", `{"success":true}`)
+	call := toolCaller(t, f)
+
+	const cover = "/audiobooks/Frank Herbert/Dune/cover.jpg"
+	for n, name := range []string{"cover.jpg", cover} {
+		out, err := call("item_cover_edit", map[string]any{"item": itemID, "file": name})
+		if err != nil {
+			t.Fatal(err)
+		}
+		sent := f.requests("/api/items/" + itemID + "/cover")
+		if len(sent) != n+1 || !strings.Contains(sent[n].Body, `"cover":"`+cover+`"`) || out["cover"] != cover {
+			t.Errorf("file %q sent %v and answered %v, want the file's full path", name, sent, out)
+		}
+	}
+	if got := f.requests("/api/items/" + itemID + "/scan"); len(got) != 0 {
+		t.Errorf("a file already on the book was rescanned for: %v", got)
+	}
+
+	_, err := call("item_cover_edit", map[string]any{"item": itemID, "file": "notes .txt"})
+	wantErr(t, "a file that is no image", err, `"notes .txt"`, "not an image")
+	if got := f.requests("/api/items/" + itemID + "/cover"); len(got) != 2 {
+		t.Errorf("a file that is no image was sent: %v", got)
+	}
+}
+
+// An image put in the folder since the last scan is not on the book's record,
+// and the server takes only a file that is: the book is rescanned, and the
+// file sent once it is found. One that is still not there is refused with
+// the files the book has, and nothing is sent.
+func TestItemCoverEditFileNewToTheFolder(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	trimmable(f)
+	scanned := f.bodies["GET /api/items/"+itemID].body
+	withNew := strings.Replace(scanned, `"libraryFiles":[`, `"libraryFiles":[{"ino":"i2","fileType":"image","metadata":{"filename":"new.jpg","relPath":"new.jpg","path":"/audiobooks/Frank Herbert/Dune/new.jpg"}},`, 1)
+	f.mux.HandleFunc("POST /api/items/"+itemID+"/scan", func(w http.ResponseWriter, _ *http.Request) {
+		f.json("GET /api/items/"+itemID, withNew)
+		_, _ = io.WriteString(w, `{"result":"UPDATED"}`)
+	})
+	f.json("PATCH /api/items/"+itemID+"/cover", `{"success":true}`)
+	call := toolCaller(t, f)
+
+	if _, err := call("item_cover_edit", map[string]any{"item": itemID, "file": "new.jpg"}); err != nil {
+		t.Fatal(err)
+	}
+	scans, sent := f.requests("/api/items/"+itemID+"/scan"), f.requests("/api/items/"+itemID+"/cover")
+	if len(scans) != 1 || len(sent) != 1 || !strings.Contains(sent[0].Body, `"cover":"/audiobooks/Frank Herbert/Dune/new.jpg"`) {
+		t.Errorf("scans %v, sent %v, want one rescan and then the new file", scans, sent)
+	}
+
+	_, err := call("item_cover_edit", map[string]any{"item": itemID, "file": "gone.jpg"})
+	wantErr(t, "a file not in the folder", err, `"gone.jpg"`, `"cover.jpg"`, "rescan")
+	if got := f.requests("/api/items/" + itemID + "/cover"); len(got) != 1 {
+		t.Errorf("a file not in the folder was sent: %v", got)
+	}
 }
 
 // The audio, the cover, a podcast's files and a whole-folder delete beside a

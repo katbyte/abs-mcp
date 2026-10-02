@@ -58,6 +58,9 @@ Found by the acceptance journeys against Audiobookshelf 2.36; each has a unit te
 - A permission is granted by the permission alone and only while the account is active, not by the account's type: an admin without `delete` may not delete.
 - `GET /api/stats/year/:year` (the whole server) answers a shape of its own, not `/api/me/stats/year/:year`'s, and refuses a year before 2000.
 - `GET /api/logger-data` answers today's log, its last 5,000 lines, and an empty string rather than a list before the day's first line.
+- `PATCH /api/items/:id/cover` takes, from 2.37.0, only the path of a file already on the item's record, and answers 500 `Invalid cover path` for an image put in the folder since the last scan; before, any image in the folder.
+- `GET /public/share/:slug/download` answers 404 `Share session not set` to a visitor who has not opened `/public/share/:slug` first, which sets the cookie it knows them by; then 403 unless the link allows downloads.
+- `POST /api/items/batch/update` answered 502 behind a reverse proxy for two podcasts of a real library on 2.36.0, where `PATCH /api/items/:id/media` took the same change. Neither 2.36.0 nor 2.37.1 in a container reproduces it, with a show laid out on disk or one subscribed from a feed.
 - `DELETE /api/sessions/:id` needs the delete permission and deletes any account's session; `POST /api/sessions/batch/delete` needs an admin.
 
 `ROADMAP.md` records the tool design rules and what is deliberately not wrapped.

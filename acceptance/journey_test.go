@@ -773,9 +773,9 @@ func TestJourneyWritesDoneTwice(t *testing.T) {
 		if countOf(tags, "zzyzx-twice") != 1 || countOf(series, "Zzyzx Twice Saga #1") != 1 {
 			t.Errorf("tags %v, series %v: want each once", tags, series)
 		}
-		out := call(t, "item_batch_edit", map[string]any{"library": "Fiction", "items": []any{"Foundation"}, "add_tags": []any{"zzyzx-twice"}})
+		out := call(t, "item_edit", map[string]any{"library": "Fiction", "items": []any{"Foundation"}, "add_tags": []any{"zzyzx-twice"}})
 		if n := num(t, out["items_updated"], "items_updated"); n != 0 {
-			t.Errorf("item_batch_edit add_tags of a held tag updated %d", n)
+			t.Errorf("item_edit items add_tags of a held tag updated %d", n)
 		}
 	})
 

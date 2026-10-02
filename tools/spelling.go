@@ -709,7 +709,9 @@ func carrying(ctx context.Context, client *abs.Client, libs []abs.Library, field
 // before the error stay written, and a caller told only of the error would
 // take the whole change as not made.
 func partly(changed int, err error) error {
-	if changed == 0 {
+	// a send to many items says how far it got itself
+	var sent *sendError
+	if changed == 0 || errors.As(err, &sent) {
 		return err
 	}
 	return fmt.Errorf("%d items were changed before this, and stay changed; the rest were not: %w", changed, err)
@@ -758,6 +760,7 @@ func splitVocabulary(ctx context.Context, client *abs.Client, field, from string
 		}
 	}
 	var updates []abs.BatchMediaUpdate
+	shows := map[string]bool{}
 	for i := range libs {
 		if err := client.ItemsAll(ctx, libs[i].ID, abs.ItemsOptions{}, func(items []abs.Item) bool {
 			for j := range items {
@@ -780,21 +783,14 @@ func splitVocabulary(ctx context.Context, client *abs.Client, field, from string
 					tags = []string{}
 				}
 				updates = append(updates, abs.BatchMediaUpdate{ID: it.ID, MediaPayload: abs.MediaUpdate{Tags: tags, Metadata: &abs.MetadataUpdate{Genres: genres}}})
+				shows[it.ID] = it.IsPodcast()
 			}
 			return true
 		}); err != nil {
 			return 0, err
 		}
 	}
-	updated := 0
-	for chunk := range slices.Chunk(updates, 50) {
-		n, err := client.BatchUpdate(ctx, chunk)
-		if err != nil {
-			return updated, err
-		}
-		updated += n
-	}
-	return updated, nil
+	return updateMany(ctx, client, updates, shows)
 }
 
 // renameBySweep replaces a language or publisher on every item that carries
@@ -810,6 +806,7 @@ func renameBySweep(ctx context.Context, client *abs.Client, library, field, from
 	}
 
 	var updates []abs.BatchMediaUpdate
+	shows := map[string]bool{}
 	titles = []string{}
 	for i := range libs {
 		if err := client.ItemsAll(ctx, libs[i].ID, abs.ItemsOptions{}, func(items []abs.Item) bool {
@@ -836,6 +833,7 @@ func renameBySweep(ctx context.Context, client *abs.Client, library, field, from
 				updates = append(updates, abs.BatchMediaUpdate{
 					ID: it.ID, MediaPayload: abs.MediaUpdate{Metadata: &md},
 				})
+				shows[it.ID] = it.IsPodcast()
 				if len(titles) < 50 {
 					titles = append(titles, it.Title())
 				}
@@ -853,17 +851,9 @@ func renameBySweep(ctx context.Context, client *abs.Client, library, field, from
 		return len(updates), titles, nil
 	}
 
-	// in pages: one request carrying hundreds of items is what a reverse
-	// proxy times out on
-	for start := 0; start < len(updates); start += sweepBatchSize {
-		n, err := client.BatchUpdate(ctx, updates[start:min(start+sweepBatchSize, len(updates))])
-		if err != nil {
-			return updated, titles, err
-		}
-		updated += n
-	}
+	updated, err = updateMany(ctx, client, updates, shows)
 
-	return updated, titles, nil
+	return updated, titles, err
 }
 
 // sweepBatchSize is how many items one batch update carries.

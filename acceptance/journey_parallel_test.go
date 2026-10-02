@@ -69,14 +69,14 @@ func TestJourneyCallsAtOnce(t *testing.T) {
 		}
 	})
 
-	t.Run("one book's tags from item_edit and item_batch_edit together", func(t *testing.T) {
+	t.Run("one book's tags from item_edit by item and by items together", func(t *testing.T) {
 		t.Cleanup(func() { restoreBook(t, "Abaddon's Gate") })
 		atOnce(t, 2*n, func(i int) (string, map[string]any) {
 			tag := fmt.Sprintf("zzyzx-mixed-%d", i)
 			if i%2 == 0 {
 				return "item_edit", map[string]any{"library": "Fiction", "item": "Abaddon's Gate", "add_tags": []any{tag}}
 			}
-			return "item_batch_edit", map[string]any{"library": "Fiction", "items": []any{"Abaddon's Gate"}, "add_tags": []any{tag}}
+			return "item_edit", map[string]any{"library": "Fiction", "items": []any{"Abaddon's Gate"}, "add_tags": []any{tag}}
 		})
 		tags := strs(t, call(t, "item_get", map[string]any{"library": "Fiction", "item": "Abaddon's Gate"})["tags"], "tags")
 		for i := range 2 * n {

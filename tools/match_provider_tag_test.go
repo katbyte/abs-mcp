@@ -402,7 +402,7 @@ func TestProviderTagTextSaysItIsTheDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, tool := range res.Tools {
-		if !slices.Contains([]string{"item_match_tag", "item_match_batch", "item_batch_edit"}, tool.Name) {
+		if !slices.Contains([]string{"item_match_tag", "item_match_batch", "item_edit"}, tool.Name) {
 			continue
 		}
 		raw, err := json.Marshal(tool)

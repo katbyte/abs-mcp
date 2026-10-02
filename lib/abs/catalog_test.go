@@ -97,3 +97,37 @@ func TestFeedsFillTheURL(t *testing.T) {
 		t.Errorf("feeds = %+v", feeds)
 	}
 }
+
+// An author is matched by asin when there is one and by name when there is
+// not, never both: the server would search the name and ignore the asin.
+func TestMatchAuthorByASINOrName(t *testing.T) {
+	t.Parallel()
+
+	s := newJSONServer(t, always(http.StatusOK, `{"updated":true,"author":{"id":"a1","name":"Frank Herbert","asin":"B000AP9A6K"}}`))
+	c := newClient(t, s)
+
+	author, updated, err := c.MatchAuthor(t.Context(), "a1", "Frank Herbert", "B000AP9A6K", "ca")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !updated || author.ASIN != "B000AP9A6K" || author.Name != "Frank Herbert" {
+		t.Errorf("answer = %+v, updated %v", author, updated)
+	}
+	body := s.sent(t)
+	if s.method != http.MethodPost || s.path != "/api/authors/a1/match" || body["asin"] != "B000AP9A6K" || body["region"] != "ca" || body["q"] != nil {
+		t.Errorf("by asin sent %s %s %v", s.method, s.path, body)
+	}
+
+	if _, _, err := c.MatchAuthor(t.Context(), "a1", "Frank Herbert", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if body = s.sent(t); body["q"] != "Frank Herbert" || body["asin"] != nil || body["region"] != nil {
+		t.Errorf("by name sent %v", body)
+	}
+
+	// nothing found is an answer: not updated, and no error
+	s = newJSONServer(t, always(http.StatusOK, `{"updated":false,"author":{"id":"a1","name":"Frank Herbert"}}`))
+	if author, updated, err = newClient(t, s).MatchAuthor(t.Context(), "a1", "Frank Herbert", "", ""); err != nil || updated || author.ID != "a1" {
+		t.Errorf("nothing found = %+v, %v, %v", author, updated, err)
+	}
+}

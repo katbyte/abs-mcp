@@ -70,7 +70,7 @@ func TestJourneyADeletedBookLeavesNothingBehind(t *testing.T) {
 	}
 	one, two, three := ids[titles[0]], ids[titles[1]], ids[titles[2]]
 
-	call(t, "item_batch_edit", map[string]any{"library": library, "items": []any{one, two, three}, "authors": []any{author}})
+	call(t, "item_edit", map[string]any{"library": library, "items": []any{one, two, three}, "authors": []any{author}})
 	for id, series := range map[string]string{one: "Zzyzx Gone Saga #1", two: "Zzyzx Gone Saga #2", three: "Zzyzx Lone Saga #1"} {
 		call(t, "item_edit", map[string]any{"item": id, "narrators": []any{reader}, "series": []any{series}})
 	}

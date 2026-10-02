@@ -13,6 +13,7 @@ import (
 	"archive/zip"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -679,7 +680,7 @@ func TestJourneyEditsSurviveAForcedScan(t *testing.T) {
 		})
 		call(t, "item_edit", map[string]any{"item": other, "series": toAny(wantList[other]["series"])})
 		both := []any{book, other}
-		call(t, "item_batch_edit", map[string]any{
+		call(t, "item_edit", map[string]any{
 			"library": s.name, "items": both, "tags": []any{"zzyzx-keep", "zzyzx-drop"},
 			"year": "1999", "publisher": "Zzyzx Press", "language": "English", "add_series": []any{"Zzyzx Rescan Omnibus"},
 		})
@@ -688,7 +689,7 @@ func TestJourneyEditsSurviveAForcedScan(t *testing.T) {
 				t.Errorf("series after add_series = %v, want the omnibus beside the book's own", series)
 			}
 		}
-		out := call(t, "item_batch_edit", map[string]any{"library": s.name, "items": both, "remove_tags": []any{"zzyzx-drop"}, "remove_series": []any{"Zzyzx Rescan Omnibus"}})
+		out := call(t, "item_edit", map[string]any{"library": s.name, "items": both, "remove_tags": []any{"zzyzx-drop"}, "remove_series": []any{"Zzyzx Rescan Omnibus"}})
 		if n := num(t, out["items_updated"], "items_updated"); n != 2 {
 			t.Errorf("items_updated = %d, want 2", n)
 		}
@@ -1209,5 +1210,241 @@ func TestJourneyMergedIntoOneM4B(t *testing.T) {
 	}
 	if msg := callErr(t, "item_embed_metadata", map[string]any{"item": id, "m4b": true}); !strings.Contains(msg, "already one m4b") {
 		t.Errorf("merging it again: %s", msg)
+	}
+}
+
+// A book kept in disc folders, two of whose files share a name: item_get
+// says which folder each file is in, and item_edit takes the play order by
+// those paths, refusing a name two files carry.
+func TestJourneyDiscFolders(t *testing.T) {
+	const book = "Zzyzx Disc Author/Zzyzx Disc Book"
+
+	s := newDiskShelf(t, "Zzyzx Disc Shelf", "zzyzx-discs")
+	for rel, secs := range map[string]int{"Disc 1/01.mp3": 2, "Disc 1/02.mp3": 3, "Disc 2/01.mp3": 4} {
+		diskSilence(t, filepath.Join(s.root, book, rel), secs)
+	}
+	s.open(t, 1)
+	id := s.ids(t)[book]
+
+	paths := func() []string {
+		return valuesIn(t, call(t, "item_get", map[string]any{"item": id, "files": true})["track_list"], "track_list", "path")
+	}
+	if got := paths(); !slices.Equal(got, []string{"Disc 1/01.mp3", "Disc 1/02.mp3", "Disc 2/01.mp3"}) {
+		t.Fatalf("the scan plays %v, want each disc's files by their folder", got)
+	}
+	if got := chapterSpans(t, id); !slices.Equal(got, []string{"01 0-2", "02 2-5", "01 5-9"}) {
+		t.Fatalf("the scan chaptered it %v, want one chapter to a file", got)
+	}
+
+	msg := callErr(t, "item_edit", map[string]any{"item": id, "tracks": []any{"01.mp3", "02.mp3", "01.mp3"}})
+	if !strings.Contains(msg, `2 audio files are named "01.mp3"`) || !strings.Contains(msg, `"Disc 1/01.mp3"`) || !strings.Contains(msg, `"Disc 2/01.mp3"`) {
+		t.Errorf("a name two files carry: %s", msg)
+	}
+	if got := paths(); !slices.Equal(got, []string{"Disc 1/01.mp3", "Disc 1/02.mp3", "Disc 2/01.mp3"}) {
+		t.Fatalf("a refused list changed the order to %v", got)
+	}
+
+	// by path, and by name alone where only one file has it
+	out := call(t, "item_edit", map[string]any{"item": id, "tracks": []any{"Disc 2/01.mp3", "Disc 1/01.mp3", "02.mp3"}})
+	want := []string{"Disc 2/01.mp3", "Disc 1/01.mp3", "Disc 1/02.mp3"}
+	if out["chapters"] != "moved" || !slices.Equal(strs(t, out["tracks"], "tracks"), want) {
+		t.Errorf("item_edit tracks = %v", out)
+	}
+	if got := paths(); !slices.Equal(got, want) {
+		t.Errorf("plays %v", got)
+	}
+	if got := chapterSpans(t, id); !slices.Equal(got, []string{"01 0-4", "01 4-6", "02 6-9"}) {
+		t.Errorf("chapters %v, want each with its file", got)
+	}
+}
+
+// Chapters that are not cut along the files, one running out of the first
+// file into the second, cannot follow the files to a new order: the files
+// are reordered, the chapters are left where they were, and the answer says
+// so.
+func TestJourneyChaptersAcrossFilesAreLeft(t *testing.T) {
+	const book = "Zzyzx Span Author/Zzyzx Span Book"
+
+	s := newDiskShelf(t, "Zzyzx Span Shelf", "zzyzx-span")
+	for i, secs := range []int{2, 3, 4} {
+		diskSilence(t, filepath.Join(s.root, book, fmt.Sprintf("0%d.mp3", i+1)), secs)
+	}
+	s.open(t, 1)
+	id := s.ids(t)[book]
+
+	call(t, "item_chapters_set", map[string]any{"item": id, "chapters": []any{
+		map[string]any{"title": "Zzyzx One", "start_s": 0},
+		map[string]any{"title": "Zzyzx Two", "start_s": 3},
+	}})
+	across := []string{"Zzyzx One 0-3", "Zzyzx Two 3-9"}
+	if got := chapterSpans(t, id); !slices.Equal(got, across) {
+		t.Fatalf("the chapters set = %v, want %v", got, across)
+	}
+
+	out := call(t, "item_edit", map[string]any{"item": id, "tracks": []any{"03.mp3", "01.mp3", "02.mp3"}})
+	if out["chapters"] != "left" || !slices.Equal(strs(t, out["tracks"], "tracks"), []string{"03.mp3", "01.mp3", "02.mp3"}) {
+		t.Errorf("item_edit tracks = %v, want the chapters left", out)
+	}
+	if got := trackOrder(t, id); !slices.Equal(got, []string{"03.mp3", "01.mp3", "02.mp3"}) {
+		t.Errorf("plays %v", got)
+	}
+	if got := chapterSpans(t, id); !slices.Equal(got, across) {
+		t.Errorf("chapters %v, want them as they were, %v", got, across)
+	}
+
+	// the order it already has moves nothing, chapters across files or not
+	out = call(t, "item_edit", map[string]any{"item": id, "tracks": []any{"03.mp3", "01.mp3", "02.mp3"}})
+	if out["chapters"] != "unchanged" || truth(out["updated"]) {
+		t.Errorf("the same order again = %v", out)
+	}
+}
+
+// A book merged at a quality chosen for it and not its own: the preview
+// says what was asked, a quality no audiobook has is refused, and the m4b
+// made is at what was asked.
+func TestJourneyMergedAtAChosenQuality(t *testing.T) {
+	const book = "Zzyzx Quality Author/Zzyzx Quality Book"
+
+	s := newDiskShelf(t, "Zzyzx Quality Shelf", "zzyzx-quality")
+	// a reading, not silence: silence encodes to next to nothing at any bitrate
+	for i, seed := range []uint64{11, 12} {
+		encode(t, voice(t, seed, 20), filepath.Join(s.root, book, fmt.Sprintf("0%d.mp3", i+1)), nil, []string{"-c:a", "libmp3lame", "-b:a", "64k"})
+	}
+	s.open(t, 1)
+	id := s.ids(t)[book]
+
+	own := object(call(t, "item_embed_metadata", map[string]any{"item": id, "m4b": true})["would_merge"])
+	if number(own["bitrate_kbps"]) != 64 || number(own["channels"]) != 1 {
+		t.Fatalf("the book's own quality = %v, want 64k mono", own)
+	}
+	chosen := object(call(t, "item_embed_metadata", map[string]any{"item": id, "m4b": true, "bitrate_kbps": 32, "channels": 2})["would_merge"])
+	if number(chosen["bitrate_kbps"]) != 32 || number(chosen["channels"]) != 2 {
+		t.Fatalf("the preview = %v, want 32k stereo", chosen)
+	}
+	for _, c := range []struct {
+		args map[string]any
+		says string
+	}{
+		{map[string]any{"bitrate_kbps": 8}, "outside 16 to 320"},
+		{map[string]any{"bitrate_kbps": 400}, "outside 16 to 320"},
+		{map[string]any{"channels": 6}, "1 or 2"},
+	} {
+		args := map[string]any{"item": id, "m4b": true, "confirm": true}
+		maps.Copy(args, c.args)
+		if msg := callErr(t, "item_embed_metadata", args); !strings.Contains(msg, c.says) {
+			t.Errorf("merging with %v: %s", c.args, msg)
+		}
+	}
+	if msg := callErr(t, "item_embed_metadata", map[string]any{"item": id, "bitrate_kbps": 32}); !strings.Contains(msg, "are for m4b") {
+		t.Errorf("a bitrate without m4b: %s", msg)
+	}
+	if got := s.onDisk(t); !slices.Contains(got, book+"/01.mp3") || slices.Contains(got, book+"/Zzyzx Quality Book.m4b") {
+		t.Fatalf("a preview or a refusal merged: %v", got)
+	}
+
+	out := call(t, "item_embed_metadata", map[string]any{"item": id, "m4b": true, "confirm": true, "bitrate_kbps": 32, "channels": 2})
+	if truth(out["running"]) {
+		diskUntil(t, "the merge", func() (bool, string) {
+			tasks := rows(t, call(t, "server_tasks", nil)["tasks"], "tasks")
+			return len(tasks) == 0, fmt.Sprint(tasks)
+		})
+		call(t, "item_rescan", map[string]any{"item": id})
+	} else if merged := object(out["merged"]); number(merged["bitrate_kbps"]) != 32 || number(merged["channels"]) != 2 {
+		t.Fatalf("the merge = %v", out)
+	}
+	tracks := rows(t, call(t, "item_get", map[string]any{"item": id, "files": true})["track_list"], "track_list")
+	if len(tracks) != 1 || tracks[0]["codec"] != "aac" || number(tracks[0]["channels"]) != 2 {
+		t.Fatalf("plays %v, want one stereo m4b", tracks)
+	}
+	// an encoder keeps near what it is asked, not to it
+	if kbps := number(tracks[0]["bitrate_kbps"]); kbps < 24 || kbps > 40 {
+		t.Errorf("the m4b is %vk, want about the 32k asked for, not the book's own 64k", kbps)
+	}
+}
+
+// A merge stopped while it runs: the book is long enough that the server is
+// still encoding when the cancel lands. The call that started the merge says
+// it made no m4b, and the book and its folder are as they were.
+func TestJourneyMergeCancelled(t *testing.T) {
+	const book = "Zzyzx Halt Author/Zzyzx Halt Book"
+	// an uncancelled merge of three files of eight hours took the server 52
+	// seconds; the cancel lands inside the first
+	const hours = 4
+
+	s := newDiskShelf(t, "Zzyzx Halt Shelf", "zzyzx-halt")
+	files := []string{"01.m4b", "02.m4b", "03.m4b"}
+	for _, f := range files {
+		diskSilence(t, filepath.Join(s.root, book, f), hours*3600)
+	}
+	s.open(t, 1)
+	id := s.ids(t)[book]
+	onDisk := s.onDisk(t)
+	// silence is stored at next to no bitrate, under what an m4b is made at,
+	// so the merge is told one
+	merge64 := map[string]any{"item": id, "m4b": true, "confirm": true, "bitrate_kbps": 64}
+	if msg := callErr(t, "item_embed_metadata", map[string]any{"item": id, "m4b": true}); !strings.Contains(msg, "pass bitrate_kbps") {
+		t.Errorf("a book stored under 16k, merged at its own bitrate: %s", msg)
+	}
+
+	if msg := callErr(t, "item_embed_metadata", map[string]any{"item": id, "m4b": true, "cancel": true}); !strings.Contains(msg, "no merge of") {
+		t.Errorf("cancelling with nothing running: %s", msg)
+	}
+
+	type result struct {
+		out map[string]any
+		err error
+	}
+	merged := make(chan result, 1)
+	go func() {
+		out, err := invoke("item_embed_metadata", merge64)
+		merged <- result{out, err}
+	}()
+	// however the test ends, no merge is left running under the next one
+	t.Cleanup(func() {
+		_, _ = invoke("item_embed_metadata", map[string]any{"item": id, "m4b": true, "cancel": true})
+		waitIdle(t)
+	})
+
+	var ended *result
+	diskUntil(t, "the merge starting", func() (bool, string) {
+		select {
+		case r := <-merged:
+			ended = &r
+			return true, ""
+		default:
+		}
+		tasks := rows(t, call(t, "server_tasks", nil)["tasks"], "tasks")
+		return len(tasks) > 0, "no task is running"
+	})
+	if ended != nil {
+		t.Fatalf("the merge ended before it could be cancelled: %v %v; the book has to be longer", ended.out, ended.err)
+	}
+	// asked about while it runs, it is running, and is not started twice
+	if out := call(t, "item_embed_metadata", merge64); !truth(out["running"]) {
+		t.Errorf("a second merge of a book being merged = %v", out)
+	}
+
+	out := call(t, "item_embed_metadata", map[string]any{"item": id, "m4b": true, "cancel": true})
+	if !truth(out["cancelled"]) {
+		t.Errorf("cancel = %v", out)
+	}
+	select {
+	case r := <-merged:
+		if r.err == nil || !strings.Contains(r.err.Error(), "without making the book one m4b") {
+			t.Errorf("the merge that was cancelled answered %v %v, want that it made no m4b", r.out, r.err)
+		}
+	case <-time.After(time.Minute):
+		t.Fatal("the call that started the merge never came back after the cancel")
+	}
+
+	waitIdle(t)
+	if got := s.onDisk(t); !slices.Equal(got, onDisk) {
+		t.Errorf("on disk after the cancel: %v, want it as it was, %v", got, onDisk)
+	}
+	if got := trackOrder(t, id); !slices.Equal(got, files) {
+		t.Errorf("plays %v after the cancel, want %v", got, files)
+	}
+	if msg := callErr(t, "item_embed_metadata", map[string]any{"item": id, "m4b": true, "cancel": true}); !strings.Contains(msg, "no merge of") {
+		t.Errorf("cancelling it twice: %s", msg)
 	}
 }

@@ -6,10 +6,12 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"net/http/cookiejar"
 	"os"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // fetch gets a url as a listener would, with no account: the status and the
@@ -28,6 +30,33 @@ func fetch(t *testing.T, url string) (status int, body string) {
 	defer func() { _ = res.Body.Close() }()
 	head, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
 	return res.StatusCode, string(head)
+}
+
+// download opens a link as a visitor's browser does and then asks for the
+// book's files: the server gives the download only to a visitor it has given
+// the link's page, whom it knows by a cookie.
+func download(t *testing.T, server, slug string) (status int, body string) {
+	t.Helper()
+
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	visitor := &http.Client{Jar: jar}
+	for _, path := range []string{"/public/share/" + slug, "/public/share/" + slug + "/download"} {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, server+path, http.NoBody)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := visitor.Do(req)
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		head, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
+		_ = res.Body.Close()
+		status, body = res.StatusCode, string(head)
+	}
+	return status, body
 }
 
 // Feeds of a book, a series and a collection: each opens at a url a podcast
@@ -109,5 +138,69 @@ func TestFeedEditLink(t *testing.T) {
 	}
 	if msg := callErr(t, "feed_edit", map[string]any{"item": "Behind the Bastards", "library": "Podcasts", "link": true}); !strings.Contains(msg, "podcast") {
 		t.Errorf("a link to a podcast: %s", msg)
+	}
+}
+
+// A link that closes on its own and lets whoever holds it download the
+// book: the server keeps both as asked, and the download answers. Opened
+// again with other settings it is handed back as it is. A link opened with
+// neither never closes and refuses the download.
+func TestFeedEditLinkExpiresAndDownloads(t *testing.T) {
+	server := strings.TrimRight(os.Getenv("ABS_SERVER"), "/")
+	admin := adminClient(t)
+	book := map[string]any{"item": "Abaddon's Gate", "library": "Fiction", "link": true}
+	id := itemID(t, "Fiction", "Abaddon's Gate")
+	t.Cleanup(func() { _, _ = invoke("feed_edit", withArgs(book, map[string]any{"close": true})) })
+
+	asked := time.Now()
+	out := call(t, "feed_edit", withArgs(book, map[string]any{"slug": "zzyzx-lent", "expires_days": 2, "downloadable": true}))
+	if !truth(out["opened"]) || out["url"] != server+"/share/zzyzx-lent" {
+		t.Fatalf("feed_edit link = %v", out)
+	}
+	expires, err := time.Parse(time.RFC3339, text(out["expires"]))
+	if err != nil || expires.Before(asked.Add(48*time.Hour-time.Minute)) || expires.After(time.Now().Add(48*time.Hour+time.Minute)) {
+		t.Errorf("expires = %v (%v), want two days from now", out["expires"], err)
+	}
+	share, err := admin.ItemShare(ctx, id)
+	if err != nil || share == nil {
+		t.Fatalf("the book's link, as the server holds it: %v %v", share, err)
+	}
+	if share.Slug != "zzyzx-lent" || !share.IsDownloadable || share.ExpiresAt != text(out["expires"]) {
+		t.Errorf("the server holds %+v, want it downloadable and closing %v", share, out["expires"])
+	}
+	if status, body := download(t, server, "zzyzx-lent"); status != http.StatusOK {
+		t.Errorf("the download answers %d: %.200s", status, body)
+	}
+
+	// one link to a book: asked for again, it is the one open, as it is
+	again := call(t, "feed_edit", withArgs(book, map[string]any{"slug": "zzyzx-other", "expires_days": 9}))
+	if !truth(again["already"]) || again["url"] != out["url"] || again["expires"] != out["expires"] {
+		t.Errorf("a second link = %v, want the one open", again)
+	}
+	call(t, "feed_edit", withArgs(book, map[string]any{"close": true}))
+
+	out = call(t, "feed_edit", withArgs(book, map[string]any{"slug": "zzyzx-kept"}))
+	if !truth(out["opened"]) || out["expires"] != nil {
+		t.Fatalf("a link with no end = %v", out)
+	}
+	if share, err = admin.ItemShare(ctx, id); err != nil || share == nil || share.IsDownloadable || share.ExpiresAt != "" {
+		t.Errorf("the server holds %+v (%v), want it neither downloadable nor closing", share, err)
+	}
+	if status, body := download(t, server, "zzyzx-kept"); status != http.StatusForbidden {
+		t.Errorf("the download of a link that allows none answers %d: %.200s", status, body)
+	}
+
+	for _, c := range []struct {
+		args map[string]any
+		says string
+	}{
+		{map[string]any{"item": "Foundation", "library": "Fiction", "expires_days": 2}, "pass link"},
+		{map[string]any{"item": "Foundation", "library": "Fiction", "downloadable": true}, "pass link"},
+		{map[string]any{"item": "Foundation", "library": "Fiction", "link": true, "expires_days": -1}, "in the past"},
+		{map[string]any{"item": "Foundation", "library": "Fiction", "link": true, "close": true, "downloadable": true}, "only what to close"},
+	} {
+		if msg := callErr(t, "feed_edit", c.args); !strings.Contains(msg, c.says) {
+			t.Errorf("feed_edit %v: %s", c.args, msg)
+		}
 	}
 }

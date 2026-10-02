@@ -14,7 +14,7 @@ Design rules, in priority order:
 | Area | Tools | Answers |
 |---|---|---|
 | know the library | `server_info`, `library_list`, `library_get`, `library_create`, `library_edit`, `narrator_list`, `library_search`, `library_items`, `library_filters`, `library_recent`, `item_get` | "what do I have, and what shape is it in" |
-| curation | `audit_all` + `audit_missing` + 7 per-item audits, `audit_duplicates`, `item_match` → `item_match_apply`, `item_match_batch` → `item_match_apply_batch`, `item_cover_search` → `item_cover_edit`, `item_chapters_set`, `item_edit` (with track order and the main ebook), `author_match` → `author_match_apply`, `author_edit` (merge), `author_image_set`, `metadata_rename` (merge a tag, genre, narrator, author, language or publisher), `item_batch_edit`, `series_merge`, `audit_series`, `audit_spelling`, `audit_authors`, `audit_narrators`, `audit_unembedded`, `audit_covers`, `audit_matched`, `audit_path` (with a year earlier than the folder's) | "what is wrong, and fix it" |
+| curation | `audit_all` + `audit_missing` + 7 per-item audits, `audit_duplicates`, `item_match` → `item_match_apply`, `item_match_batch` → `item_match_apply_batch`, `item_cover_search` → `item_cover_edit`, `item_chapters_set`, `item_edit` (with track order and the main ebook, and `items` for the same change on many), `author_match` → `author_match_apply`, `author_edit` (merge), `author_image_set`, `metadata_rename` (merge a tag, genre, narrator, author, language or publisher), `series_merge`, `audit_series`, `audit_spelling`, `audit_authors`, `audit_narrators`, `audit_unembedded`, `audit_covers`, `audit_matched`, `audit_path` (with a year earlier than the folder's) | "what is wrong, and fix it" |
 | maintenance | `library_scan`, `item_rescan`, `item_embed_metadata` (or `m4b` to merge into one file), `item_delete` (or one `file` of a book), `server_tasks` (with today's `log`), `server_backups`, `server_tags` → `metadata_rename` | "keep it healthy" |
 | listening | `user_in_progress`, `user_progress_*` (and a whole series off Continue Series), `user_bookmark*`, `user_history` → `user_history_remove`, `user_stats` (and the whole server's year), `user_list`, `server_sessions`, `item_send_ebook` | "what am I / are they listening to" |
 | accounts | `user_create`, `user_edit` | "let someone in" |
@@ -25,7 +25,6 @@ Design rules, in priority order:
 
 | Tool | Endpoints | Answers |
 |---|---|---|
-| `metadata_rename` sweep for podcasts | `PATCH /api/items/:id/media` per podcast item | the batch update answered 502 for two podcasts carrying language `eng` while the same change through `item_edit` went through; the sweep should send podcast items one at a time or with a podcast-shaped payload |
 | `author_match` photo fallback * | Wikipedia `pageimages` when Audnexus has no image | "give the 88 photo-less authors a photo" |
 | podcast episode matching | `POST /api/podcasts/:id/match-episodes` | "match the downloaded episodes to their feed" |
 | podcast OPML | `/api/podcasts/opml/*`, `/api/libraries/:id/opml` | "import my subscriptions from another app", "export them" |

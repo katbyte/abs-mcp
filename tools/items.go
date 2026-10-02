@@ -162,7 +162,9 @@ func registerItemTools(r *registry) {
 	})
 
 	type editIn struct {
-		itemRef
+		Item          string   `json:"item,omitempty"           jsonschema:"library item id, or its whole title; or items, for the same change on many"`
+		Library       string   `json:"library,omitempty"        jsonschema:"narrow a title lookup to one library by name or id"`
+		Items         []string `json:"items,omitempty"          jsonschema:"instead of item: the items to make the same change on, by id or whole title - a genre on forty titles, a publisher on a series. Every field given is set on each of them; add_tags, remove_tags, add_series and remove_series edit each item's own list. title, subtitle, description, isbn, asin, podcast_author, feed_url, tracks and ebook are one item's own, and take item"`
 		Title         string   `json:"title,omitempty"`
 		Subtitle      string   `json:"subtitle,omitempty"`
 		Authors       []string `json:"authors,omitempty"        jsonschema:"replacement author list (books); new names are created"`
@@ -172,7 +174,7 @@ func registerItemTools(r *registry) {
 		RemoveSeries  []string `json:"remove_series,omitempty"  jsonschema:"series to take the item out of, by name, keeping the rest"`
 		Genres        []string `json:"genres,omitempty"         jsonschema:"replacement genre list"`
 		Tags          []string `json:"tags,omitempty"           jsonschema:"replacement tag list"`
-		AddTags       []string `json:"add_tags,omitempty"       jsonschema:"tags to add to the item's own, keeping the rest"`
+		AddTags       []string `json:"add_tags,omitempty"       jsonschema:"tags to add to the item's own, keeping the rest; the provider tag set to none (zz-provider:none by default) marks a book as checked with nothing to match"`
 		RemoveTags    []string `json:"remove_tags,omitempty"    jsonschema:"tags to take off the item, keeping the rest"`
 		Year          string   `json:"year,omitempty"           jsonschema:"published year"`
 		Publisher     string   `json:"publisher,omitempty"`
@@ -189,27 +191,87 @@ func registerItemTools(r *registry) {
 		Ebook         string   `json:"ebook,omitempty"          jsonschema:"books: the ebook file readers open, by filename; the book's other ebooks become supplementary. none leaves it with no main ebook"`
 	}
 	type editOut struct {
-		Updated  bool     `json:"updated"`
-		Fields   []string `json:"fields_sent"`
-		Tracks   []string `json:"tracks,omitempty"   jsonschema:"with tracks: the play order now, read back from the server"`
-		Chapters string   `json:"chapters,omitempty" jsonschema:"with tracks: moved (each chapter went with its track), unchanged (the order was already so, or the book has none), or left (a chapter runs across two tracks, so they could not follow the files; audit_chapters and item_chapters_set)"`
-		Ebook    string   `json:"ebook,omitempty"    jsonschema:"with ebook: the main ebook now, read back from the server, or none"`
+		Updated      bool     `json:"updated"`
+		Fields       []string `json:"fields_sent"`
+		ItemsUpdated *int     `json:"items_updated,omitempty" jsonschema:"with items: how many the server changed; one already as asked is not counted"`
+		Items        []string `json:"items,omitempty"         jsonschema:"with items: the titles that were sent"`
+		Tracks       []string `json:"tracks,omitempty"        jsonschema:"with tracks: the play order now, read back from the server"`
+		Chapters     string   `json:"chapters,omitempty"      jsonschema:"with tracks: moved (each chapter went with its track), unchanged (the order was already so, or the book has none), or left (a chapter runs across two tracks, so they could not follow the files; audit_chapters and item_chapters_set)"`
+		Ebook        string   `json:"ebook,omitempty"         jsonschema:"with ebook: the main ebook now, read back from the server, or none"`
 	}
 	add(r, writeTool, &mcp.Tool{
 		Name:        "item_edit",
-		Description: "Edit an item's metadata: title, authors, narrators, series, genres, tags, year, publisher, description, isbn, asin, language, explicit/abridged flags; and a book's track order and main ebook. Only provided fields change; list a field in clear to blank it. series and tags replace the list, add_series, remove_series, add_tags and remove_tags edit it. Changes server state.",
+		Description: "Edit an item's metadata: title, authors, narrators, series, genres, tags, year, publisher, description, isbn, asin, language, explicit/abridged flags; and a book's track order and main ebook. Or with items, make the same change on many in one call: a genre on forty titles, a publisher on a series. Only provided fields change; list a field in clear to blank it. series and tags replace the list, add_series, remove_series, add_tags and remove_tags edit it. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in editIn) (*mcp.CallToolResult, editOut, error) {
-		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
-		if err != nil {
-			return nil, editOut{}, err
+		many := len(in.Items) > 0
+		if many {
+			if strings.TrimSpace(in.Item) != "" {
+				return nil, editOut{}, errors.New("item is one item and items is many; pass one or the other")
+			}
+			own := []struct {
+				name  string
+				given bool
+			}{
+				{"title", in.Title != ""},
+				{"subtitle", in.Subtitle != ""},
+				{"description", in.Description != ""},
+				{"isbn", in.ISBN != ""},
+				{"asin", in.ASIN != ""},
+				{"podcast_author", in.PodcastAuthor != ""},
+				{"feed_url", in.FeedURL != ""},
+				{"tracks", len(in.Tracks) > 0},
+				{"ebook", in.Ebook != ""},
+			}
+			for _, f := range own {
+				if f.given {
+					return nil, editOut{}, fmt.Errorf("%s is one item's own: set it with item, not items", f.name)
+				}
+			}
 		}
+		refs := in.Items
+		if !many {
+			refs = []string{in.Item}
+		}
+		var (
+			items []*abs.Item
+			ids   []string
+		)
+		for _, ref := range refs {
+			found, err := resolveItemToChange(ctx, client, in.Library, ref)
+			if err != nil {
+				return nil, editOut{}, err
+			}
+			// named twice, it is changed once
+			if !slices.Contains(ids, found.ID) {
+				items, ids = append(items, found), append(ids, found.ID)
+			}
+		}
+		it := items[0] // the item, when there is one
 		if (len(in.Tracks) > 0 || in.Ebook != "") && it.IsPodcast() {
 			return nil, editOut{}, errors.New("tracks and ebook are a book's; this item is a podcast")
 		}
-		defer r.locks.hold(itemKeys(it.ID)...)()
-		// the lists are edited from the item as it is once held, not as the
-		// lookup found it: a call running alongside may have changed them
-		if len(in.AddSeries)+len(in.RemoveSeries)+len(in.AddTags)+len(in.RemoveTags)+len(in.Tracks) > 0 || in.Ebook != "" {
+		defer r.locks.hold(itemKeys(ids...)...)()
+		// the lists are edited from the items as they are once held, not as
+		// the lookup found them: a call running alongside may have changed them
+		editSeries := len(in.AddSeries) > 0 || len(in.RemoveSeries) > 0
+		editTags := len(in.AddTags) > 0 || len(in.RemoveTags) > 0
+		var err error
+		switch {
+		case many && (editSeries || editTags):
+			var fresh []abs.Item
+			if fresh, err = client.ItemsBatch(ctx, ids); err != nil {
+				return nil, editOut{}, err
+			}
+			for i := range items {
+				j := slices.IndexFunc(fresh, func(f abs.Item) bool { return f.ID == items[i].ID })
+				if j < 0 {
+					// the batch leaves out what is gone: its tags and series
+					// from before the hold are not the ones to edit
+					return nil, editOut{}, fmt.Errorf("%q (%s) was not in the server's reply when read again to edit: deleted meanwhile? nothing was changed", items[i].Title(), items[i].ID)
+				}
+				items[i] = &fresh[j]
+			}
+		case !many && (editSeries || editTags || len(in.Tracks) > 0 || in.Ebook != ""):
 			if it, err = client.Item(ctx, it.ID); err != nil {
 				return nil, editOut{}, err
 			}
@@ -258,15 +320,10 @@ func registerItemTools(r *registry) {
 			}
 			fields = append(fields, "series")
 		}
-		if len(in.AddSeries) > 0 || len(in.RemoveSeries) > 0 {
+		if editSeries {
 			if len(in.Series) > 0 || slices.ContainsFunc(in.Clear, func(c string) bool { return strings.EqualFold(c, "series") }) {
 				return nil, editOut{}, errors.New("series replaces the list; add_series and remove_series edit it. One or the other")
 			}
-			refs, serr := editSeriesList(it.Media.Metadata.Series, in.AddSeries, in.RemoveSeries)
-			if serr != nil {
-				return nil, editOut{}, serr
-			}
-			md.Series = refs
 			fields = append(fields, "series")
 		}
 		if len(in.Genres) > 0 {
@@ -277,11 +334,10 @@ func registerItemTools(r *registry) {
 			upd.Tags = in.Tags
 			fields = append(fields, "tags")
 		}
-		if len(in.AddTags) > 0 || len(in.RemoveTags) > 0 {
+		if editTags {
 			if len(in.Tags) > 0 || slices.ContainsFunc(in.Clear, func(c string) bool { return strings.EqualFold(c, "tags") }) {
 				return nil, editOut{}, errors.New("tags replaces the list; add_tags and remove_tags edit it. One or the other")
 			}
-			upd.Tags = editTagList(it.Media.Tags, in.AddTags, in.RemoveTags)
 			fields = append(fields, "tags")
 		}
 
@@ -327,6 +383,55 @@ func registerItemTools(r *registry) {
 			}
 		}
 		metadata := len(fields) > 0
+
+		// one item's update: the change given, with the lists that are edited
+		// worked out from the item's own
+		tagsOnly := !slices.ContainsFunc(fields, func(f string) bool { return f != "tags" && f != "clear:tags" })
+		updateFor := func(it *abs.Item) (abs.MediaUpdate, error) {
+			u, m := upd, md
+			if editSeries {
+				refs, serr := editSeriesList(it.Media.Metadata.Series, in.AddSeries, in.RemoveSeries)
+				if serr != nil {
+					return u, serr
+				}
+				m.Series = refs
+			}
+			if editTags {
+				u.Tags = editTagList(it.Media.Tags, in.AddTags, in.RemoveTags)
+			}
+			// empty slices must survive JSON encoding to clear server-side
+			if !many || !tagsOnly {
+				u.Metadata = &m
+			}
+			return u, nil
+		}
+		if many {
+			if !metadata {
+				return nil, editOut{}, errors.New("nothing to change: pass at least one field")
+			}
+			out := editOut{Fields: fields, Items: make([]string, 0, len(items))}
+			updates := make([]abs.BatchMediaUpdate, 0, len(items))
+			shows := map[string]bool{}
+			for _, it := range items {
+				var u abs.MediaUpdate
+				if u, err = updateFor(it); err != nil {
+					return nil, editOut{}, err
+				}
+				updates = append(updates, abs.BatchMediaUpdate{ID: it.ID, MediaPayload: u})
+				out.Items = append(out.Items, it.Title())
+				shows[it.ID] = it.IsPodcast()
+			}
+			var n int
+			if n, err = updateMany(ctx, client, updates, shows); err != nil {
+				return nil, editOut{}, err
+			}
+			out.ItemsUpdated, out.Updated = &n, n > 0
+			return nil, out, nil
+		}
+		one, err := updateFor(it)
+		if err != nil {
+			return nil, editOut{}, err
+		}
 
 		// the files are planned before anything is sent, so a list that names
 		// a file wrongly changes nothing at all
@@ -384,9 +489,7 @@ func registerItemTools(r *registry) {
 			return fmt.Errorf("%s changed, but %s failed: %w", strings.Join(done, " and "), what, err)
 		}
 		if metadata {
-			// empty slices must survive JSON encoding to clear server-side
-			upd.Metadata = &md
-			if out.Updated, err = client.UpdateMedia(ctx, it.ID, upd); err != nil {
+			if out.Updated, err = client.UpdateMedia(ctx, it.ID, one); err != nil {
 				return nil, editOut{}, err
 			}
 			done = append(done, "the metadata")
@@ -688,134 +791,6 @@ func registerItemTools(r *registry) {
 		return nil, out, nil
 	})
 
-	type batchEditIn struct {
-		Library string   `json:"library,omitempty"       jsonschema:"library name or id, for resolving titles"`
-		Items   []string `json:"items"                   jsonschema:"the books to change, by id or exact title"`
-		Genres  []string `json:"genres,omitempty"        jsonschema:"replacement genre list, applied to every item"`
-		Tags    []string `json:"tags,omitempty"          jsonschema:"replacement tag list, applied to every item"`
-		AddTags []string `json:"add_tags,omitempty"      jsonschema:"tags to add to each item's own, keeping the rest; the provider tag set to none (zz-provider:none by default) marks a book as checked with nothing to match"`
-		DropTag []string `json:"remove_tags,omitempty"   jsonschema:"tags to remove from each item, keeping the rest"`
-		AddSer  []string `json:"add_series,omitempty"    jsonschema:"series to add to each item's own as 'Name' or 'Name #2', keeping the rest: 'Cosmere' on every Sanderson book"`
-		DropSer []string `json:"remove_series,omitempty" jsonschema:"series to take each item out of, by name, keeping the rest"`
-		Authors []string `json:"authors,omitempty"       jsonschema:"replacement author list"`
-		Year    string   `json:"year,omitempty"`
-		Publish string   `json:"publisher,omitempty"`
-		Lang    string   `json:"language,omitempty"`
-	}
-	type batchEditOut struct {
-		Updated int      `json:"items_updated"`
-		Items   []string `json:"items"         jsonschema:"the titles that were sent"`
-	}
-	add(r, writeTool, &mcp.Tool{
-		Name:        "item_batch_edit",
-		Description: "Apply the same metadata to many books in one call - a genre on forty titles, a publisher on a series. Every field given replaces that field on every item listed, except add_tags, remove_tags, add_series and remove_series, which edit each item's own list; fields left out are untouched. Use item_edit for one item, or for fields that differ per item. Changes server state.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in batchEditIn) (*mcp.CallToolResult, batchEditOut, error) {
-		if len(in.Items) == 0 {
-			return nil, batchEditOut{}, errors.New("at least one item is required")
-		}
-
-		md := abs.MetadataUpdate{}
-		var hasMeta bool
-		if len(in.Genres) > 0 {
-			md.Genres, hasMeta = in.Genres, true
-		}
-		if len(in.Authors) > 0 {
-			for _, a := range in.Authors {
-				md.Authors = append(md.Authors, abs.NameRef{Name: a})
-			}
-			hasMeta = true
-		}
-		for _, f := range []struct {
-			dst **string
-			val string
-		}{{&md.PublishedYear, in.Year}, {&md.Publisher, in.Publish}, {&md.Language, in.Lang}} {
-			if f.val != "" {
-				*f.dst = new(f.val)
-				hasMeta = true
-			}
-		}
-		editSeries := len(in.AddSer) > 0 || len(in.DropSer) > 0
-		if len(in.Tags) == 0 && len(in.AddTags) == 0 && len(in.DropTag) == 0 && !hasMeta && !editSeries {
-			return nil, batchEditOut{}, errors.New("nothing to change: pass genres, tags, add_tags, remove_tags, add_series, remove_series, authors, year, publisher or language")
-		}
-		if len(in.Tags) > 0 && (len(in.AddTags) > 0 || len(in.DropTag) > 0) {
-			return nil, batchEditOut{}, errors.New("tags replaces the list; add_tags and remove_tags edit it. One or the other")
-		}
-
-		items := make([]*abs.Item, 0, len(in.Items))
-		ids := make([]string, 0, len(in.Items))
-		for _, ref := range in.Items {
-			it, err := resolveItemToChange(ctx, client, in.Library, ref)
-			if err != nil {
-				return nil, batchEditOut{}, err
-			}
-			if it.IsPodcast() {
-				return nil, batchEditOut{}, fmt.Errorf("%s is a podcast; item_batch_edit is for books", it.Title())
-			}
-			items = append(items, it)
-			ids = append(ids, it.ID)
-		}
-		defer r.locks.hold(itemKeys(ids...)...)()
-		// the lists are edited from the items as they are once held
-		if len(in.AddTags) > 0 || len(in.DropTag) > 0 || editSeries {
-			fresh, err := client.ItemsBatch(ctx, ids)
-			if err != nil {
-				return nil, batchEditOut{}, err
-			}
-			for i := range items {
-				j := slices.IndexFunc(fresh, func(f abs.Item) bool { return f.ID == items[i].ID })
-				if j < 0 {
-					// the batch leaves out what is gone: its tags and series
-					// from before the hold are not the ones to edit
-					return nil, batchEditOut{}, fmt.Errorf("%q (%s) was not in the server's reply when read again to edit: deleted meanwhile? nothing was changed", items[i].Title(), items[i].ID)
-				}
-				items[i] = &fresh[j]
-			}
-		}
-
-		out := batchEditOut{Items: make([]string, 0, len(in.Items))}
-		updates := make([]abs.BatchMediaUpdate, 0, len(in.Items))
-		for _, it := range items {
-			upd := abs.MediaUpdate{}
-			if len(in.Tags) > 0 {
-				upd.Tags = in.Tags // an explicit empty list would clear them
-			}
-			if len(in.AddTags) > 0 || len(in.DropTag) > 0 {
-				upd.Tags = editTagList(it.Media.Tags, in.AddTags, in.DropTag)
-			}
-			if hasMeta || editSeries {
-				upd.Metadata = new(md)
-			}
-			if editSeries {
-				refs, err := editSeriesList(it.Media.Metadata.Series, in.AddSer, in.DropSer)
-				if err != nil {
-					return nil, batchEditOut{}, err
-				}
-				upd.Metadata.Series = refs
-			}
-			updates = append(updates, abs.BatchMediaUpdate{ID: it.ID, MediaPayload: upd})
-			out.Items = append(out.Items, it.Title())
-		}
-
-		// in pages: one request carrying hundreds of items is what a reverse
-		// proxy times out on, and a timeout after part of it landed would
-		// read as nothing done
-		for start := 0; start < len(updates); start += sweepBatchSize {
-			end := min(start+sweepBatchSize, len(updates))
-			n, err := client.BatchUpdate(ctx, updates[start:end])
-			if err != nil && len(updates) <= sweepBatchSize {
-				return nil, batchEditOut{}, err
-			}
-			if err != nil {
-				return nil, batchEditOut{}, fmt.Errorf("the batch of items %d to %d of %d failed and may have landed in part; %d items before it were updated, and the %d after it were not sent: %w",
-					start+1, end, len(updates), out.Updated, len(updates)-end, err)
-			}
-			out.Updated += n
-		}
-
-		return nil, out, nil
-	})
-
 	type rescanOut struct {
 		Result string `json:"result" jsonschema:"NOTHING, ADDED, UPDATED, REMOVED or UPTODATE"`
 	}
@@ -881,7 +856,7 @@ func registerItemTools(r *registry) {
 	type coverEditIn struct {
 		itemRef
 		URL    string `json:"url,omitempty"    jsonschema:"image url to download as the cover"`
-		File   string `json:"file,omitempty"   jsonschema:"instead of a url: the path of an image already in the item's folder (item_get with files lists them)"`
+		File   string `json:"file,omitempty"   jsonschema:"instead of a url: an image in the item's folder, by its filename, its path in the folder or its full path (item_get files=true lists them); one put there since the last scan is scanned in first"`
 		Remove bool   `json:"remove,omitempty" jsonschema:"instead of setting one: delete the current cover"`
 	}
 	add(r, writeTool, &mcp.Tool{
@@ -912,7 +887,10 @@ func registerItemTools(r *registry) {
 		case in.URL != "":
 			err = client.SetCoverFromURL(ctx, it.ID, in.URL)
 		case in.File != "":
-			err = client.SetCoverFromFile(ctx, it.ID, in.File)
+			var f *abs.LibraryFile
+			if f, err = coverFile(ctx, client, it, in.File); err == nil {
+				err = client.SetCoverFromFile(ctx, it.ID, f.Metadata.Path)
+			}
 		default:
 			err = client.RemoveCover(ctx, it.ID)
 		}
@@ -1424,6 +1402,66 @@ func parseSeriesRef(s string) abs.SeriesRef {
 // Stormlight books lost their Cosmere link to a replacement built from a
 // listing that showed one series per book. An added series the book is
 // already in takes the number given, or keeps its own when none is.
+// sendError is a change to many items that failed part way: the requests
+// before the one that failed stay made, and a caller told only of the error
+// would take the whole change as not made.
+type sendError struct {
+	from, to, of, updated int
+	err                   error
+}
+
+func (e *sendError) Error() string {
+	return fmt.Sprintf("the batch of items %d to %d of %d failed and may have landed in part; %d items before it were updated, and the %d after it were not sent: %v",
+		e.from, e.to, e.of, e.updated, e.of-e.to, e.err)
+}
+
+func (e *sendError) Unwrap() error { return e.err }
+
+// updateMany sends media updates for many items and answers how many the
+// server changed. Books go through the server's batch route, a hundred at a
+// time: one request carrying hundreds of items is what a reverse proxy times
+// out on, and a timeout after part of it landed would read as nothing done.
+// Podcasts, those shows names, go one at a time through the route item_edit
+// uses: the batch route answered 502 for two podcasts of a real library
+// where that route took the same change. No test server has reproduced it,
+// so they go the way that is known to work.
+func updateMany(ctx context.Context, client *abs.Client, updates []abs.BatchMediaUpdate, shows map[string]bool) (int, error) {
+	var books, podcasts []abs.BatchMediaUpdate
+	for _, u := range updates {
+		if shows[u.ID] {
+			podcasts = append(podcasts, u)
+		} else {
+			books = append(books, u)
+		}
+	}
+	updated, sent := 0, 0
+	failed := func(n int, err error) error {
+		// the only request there was: nothing came before it, nothing after
+		if sent == 0 && n == len(updates) {
+			return err
+		}
+		return &sendError{from: sent + 1, to: sent + n, of: len(updates), updated: updated, err: err}
+	}
+	for chunk := range slices.Chunk(books, sweepBatchSize) {
+		n, err := client.BatchUpdate(ctx, chunk)
+		if err != nil {
+			return updated, failed(len(chunk), err)
+		}
+		updated, sent = updated+n, sent+len(chunk)
+	}
+	for _, u := range podcasts {
+		changed, err := client.UpdateMedia(ctx, u.ID, u.MediaPayload)
+		if err != nil {
+			return updated, failed(1, err)
+		}
+		if changed {
+			updated++
+		}
+		sent++
+	}
+	return updated, nil
+}
+
 // editTagList adds and removes tags on a list, keeping the rest: a tag already
 // there, in any case, is not added twice. The result is never nil, so an edit
 // that removes the last tag reaches the server as an empty list.
