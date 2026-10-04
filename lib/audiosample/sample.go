@@ -114,6 +114,7 @@ type Sampler struct {
 	served chan error // what Serve returned, once the proxy has stopped
 	read   atomic.Int64
 	reads  atomic.Int64 // numbers each decode, so the proxy can say which one a failure hit
+	local  bool         // files on this machine, by path, with no proxy
 
 	mu      sync.Mutex
 	items   map[string]bool  // the items Read and Stream have been asked for
@@ -175,8 +176,50 @@ func (l smallBuffers) Accept() (net.Conn, error) {
 	return c, err
 }
 
+// NewFiles is a sampler over files on this machine rather than a server's:
+// each Track's FileID is a path. It is what the calibration reads a corpus
+// through, and what reads a book before it is on a server. It fails with
+// ErrNoFFmpeg when ffmpeg is not installed.
+func NewFiles() (*Sampler, error) {
+	bin, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		return nil, ErrNoFFmpeg
+	}
+	return &Sampler{ffmpeg: bin, items: map[string]bool{}, failed: map[string]error{}, local: true}, nil
+}
+
+// BookFromFiles is a book made of audio files on this machine, in the order
+// given, for a sampler from NewFiles: each file's length comes from ffprobe.
+func BookFromFiles(ctx context.Context, id string, paths []string) (*Book, error) {
+	probe, err := exec.LookPath("ffprobe")
+	if err != nil {
+		return nil, errors.New("ffprobe is not installed or not on the PATH: reading a book from files needs it")
+	}
+	b := &Book{ItemID: id}
+	start := 0.0
+	for _, p := range paths {
+		out, err := exec.CommandContext(ctx, probe, "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", p).Output() //nolint:gosec // ffprobe from the PATH over a path the caller chose
+		if err != nil {
+			return nil, fmt.Errorf("ffprobe %s: %w", p, err)
+		}
+		d, err := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
+		if err != nil || d <= 0 {
+			return nil, fmt.Errorf("ffprobe gives %s no length: %q", p, strings.TrimSpace(string(out)))
+		}
+		b.Tracks = append(b.Tracks, Track{FileID: p, Start: start, Duration: d})
+		start += d
+	}
+	if len(b.Tracks) == 0 {
+		return nil, fmt.Errorf("%q has no audio to read", id)
+	}
+	return b, nil
+}
+
 // Close stops the proxy, and says why it had stopped if it stopped early.
 func (s *Sampler) Close() error {
+	if s.local {
+		return nil
+	}
 	err := s.srv.Close()
 	if serr := <-s.served; !errors.Is(serr, http.ErrServerClosed) {
 		err = errors.Join(err, fmt.Errorf("the local proxy ffmpeg reads through had stopped: %w", serr))
@@ -282,6 +325,9 @@ func (s *Sampler) decode(ctx context.Context, itemID, fileID string, off, n floa
 	// file is this decode's to report
 	read := strconv.FormatInt(s.reads.Add(1), 10)
 	src := s.base + "/" + itemID + "/" + fileID + "?read=" + read
+	if s.local {
+		src = fileID
+	}
 	// -nostdin: ffmpeg otherwise reads the caller's stdin for keystrokes,
 	// which in stdio mode is the MCP session itself. fastseek: without it
 	// ffmpeg reaches a point in an mp3 by reading the file up to it, the whole
@@ -341,7 +387,10 @@ func (s *Sampler) decode(ctx context.Context, itemID, fileID string, off, n floa
 	fetch, stopped := s.failed[read], s.stopped
 	delete(s.failed, read)
 	s.mu.Unlock()
-	msg := strings.TrimSpace(strings.ReplaceAll(stderr.String(), s.base, ""))
+	msg := strings.TrimSpace(stderr.String())
+	if s.base != "" {
+		msg = strings.ReplaceAll(msg, s.base, "")
+	}
 	if h != nil {
 		switch {
 		case waitErr != nil && ctx.Err() != nil:

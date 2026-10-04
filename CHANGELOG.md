@@ -37,6 +37,9 @@
 - `library_filters` `fields` asks for only some of its lists
 - a match with no provider named asks each of `--providers` in turn, the book's recorded store first
 - `item_cover_edit` `file` takes a filename, and finds an image added since the last scan
+- `item_compare_audio` checks the voice as well as the rhythm where two copies line up, so the same words in another voice are `different` however alike the pacing; each point reports `spectral`, and the answer says how many were `found` and how fast the other copy plays
+- `item_compare_audio` takes `points`, `stretch_s`, `reach_s` and `speed_pct` to listen harder, and steps past a stretch that is mostly silence
+- `scripts/calibration-fetch.py` and a `calibration` test: the by-ear check measured against LibriVox readings of one text by different readers, and copies of one reading re-encoded, resampled, cut and split
 
 ### Fixed
 

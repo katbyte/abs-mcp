@@ -11,34 +11,43 @@ import (
 	"time"
 )
 
-// The verdict on the zbooks sort's own scores: the same recordings it found,
-// including the anniversary copy whose extra material sinks the last point,
-// and the other narrators it found, including the one pair with a single
-// point over 0.7; and between them, unsure.
+// The verdict on the zbooks sort's own scores and the calibration corpus's:
+// the same recordings, including the anniversary copy whose extra material
+// sinks the last point and the copy under noise, and the other narrators,
+// including the one pair with a single point over 0.7 and the two closest
+// readers of Alice; and between them, unsure.
 func TestCompareVerdictReadsTheCalibration(t *testing.T) {
 	t.Parallel()
 
+	voice := func(xs ...float64) []float64 { return xs }
 	for _, c := range []struct {
-		name   string
-		scores []float64
-		want   string
+		name     string
+		scores   []float64
+		spectral []float64
+		want     string
 	}{
-		{"Redemption of Time, split and single file", []float64{0.98, 0.98, 0.99, 1.00, 0.98}, "same"},
-		{"Ender's Game and the 20th Anniversary copy", []float64{0.94, 0.89, 0.93, 0.71, 0.48}, "same"},
-		{"A Planet Called Treason and Treason", []float64{0.75, 0.76, 0.84, 0.80, 0.77}, "same"},
-		{"Heartfire and Heartfire (Nana Visitor)", []float64{0.38, 0.35, 0.42, 0.37, 0.40}, "different"},
-		{"A Gift from Earth, Braun and Ganser", []float64{0.71, 0.44, 0.44, 0.51, 0.50}, "different"},
-		{"Lucifer's Hammer, Braun and Vietor", []float64{0.52, 0.62, 0.53, 0.59, 0.60}, "different"},
-		{"two points found", []float64{0.9, 0.85, 0.5, 0.45, 0.4}, "unsure"},
-		{"three points found", []float64{0.9, 0.85, 0.8, 0.45, 0.4}, "unsure"},
-		{"none found but every one close", []float64{0.68, 0.67, 0.69, 0.66, 0.68}, "unsure"},
+		{"Redemption of Time, split and single file", voice(0.98, 0.98, 0.99, 1.00, 0.98), voice(0.9, 0.9, 0.9, 0.9, 0.9), "same"},
+		{"Ender's Game and the 20th Anniversary copy", voice(0.94, 0.89, 0.93, 0.71, 0.48), voice(0.8, 0.8, 0.8, 0.7, 0.1), "same"},
+		{"A Planet Called Treason and Treason", voice(0.75, 0.76, 0.84, 0.80, 0.77), voice(0.7, 0.7, 0.7, 0.7, 0.7), "same"},
+		{"Heartfire and Heartfire (Nana Visitor)", voice(0.38, 0.35, 0.42, 0.37, 0.40), voice(0.1, 0.1, 0.1, 0.1, 0.1), "different"},
+		{"A Gift from Earth, Braun and Ganser", voice(0.71, 0.44, 0.44, 0.51, 0.50), voice(0.2, 0.1, 0.1, 0.1, 0.1), "different"},
+		{"Lucifer's Hammer, Braun and Vietor", voice(0.52, 0.62, 0.53, 0.59, 0.60), voice(0.1, 0.1, 0.1, 0.1, 0.1), "different"},
+		{"Alice, Yearsley against a copy with noise mixed in", voice(0.95, 0.86, 0.86, 0.91, 0.88), voice(0.94, 0.88, 0.87, 0.88, 0.85), "same"},
+		{"Alice, Shallenberg against Leach, the closest two readers", voice(0.39, 0.39, 0.66, 0.43, 0.44), voice(0.33, 0.34, 0.53, 0.30, 0.32), "different"},
+		{"Alice, Yearsley against the abridged Ferreri", voice(0.28, 0.28, 0.31, 0.34, 0.34), voice(0.18, 0.16, 0.21, 0.26, 0.26), "different"},
+		{"the rhythm of every stretch but never the voice", voice(0.8, 0.85, 0.8, 0.9, 0.8), voice(0.2, 0.1, 0.1, 0.2, 0.1), "different"},
+		{"the rhythm and the voice of four, the fifth voice short", voice(0.9, 0.9, 0.9, 0.9, 0.9), voice(0.9, 0.9, 0.9, 0.9, 0.55), "same"},
+		{"two points found", voice(0.9, 0.85, 0.5, 0.45, 0.4), voice(0.9, 0.9, 0.1, 0.1, 0.1), "unsure"},
+		{"three points found", voice(0.9, 0.85, 0.8, 0.45, 0.4), voice(0.9, 0.9, 0.9, 0.1, 0.1), "unsure"},
+		{"none found but every one close", voice(0.68, 0.67, 0.69, 0.66, 0.68), voice(0.4, 0.4, 0.4, 0.4, 0.4), "unsure"},
 	} {
-		verdict, meaning := compareVerdict(c.scores)
+		res := compareResult{Scores: c.scores, Spectral: c.spectral}
+		verdict, meaning := compareVerdict(res)
 		if verdict != c.want || meaning == "" {
-			t.Errorf("%s %v = %s (%q), want %s", c.name, c.scores, verdict, meaning, c.want)
+			t.Errorf("%s %v %v = %s (%q), want %s", c.name, c.scores, c.spectral, verdict, meaning, c.want)
 		}
 	}
-	if _, meaning := compareVerdict([]float64{0.4, 0.4, 0.4, 0.4, 0.4}); !strings.Contains(meaning, "none of the 5") {
+	if _, meaning := compareVerdict(compareResult{Scores: voice(0.4, 0.4, 0.4, 0.4, 0.4), Spectral: voice(0, 0, 0, 0, 0)}); !strings.Contains(meaning, "none of the 5") {
 		t.Errorf("no point found reads %q, want it said as none", meaning)
 	}
 }

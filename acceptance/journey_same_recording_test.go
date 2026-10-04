@@ -115,9 +115,17 @@ func TestJourneySameRecording(t *testing.T) {
 		} {
 			began := time.Now()
 			out := call(t, "item_compare_audio", map[string]any{"item": ids[original], "other": ids[c.other]})
-			t.Logf("%s: %v %v, median %v, %vs of audio, %v bytes, %v", c.name, out["verdict"], out["scores"], out["median"], out["audio_read_s"], out["bytes_read"], time.Since(began).Round(10*time.Millisecond))
+			t.Logf("%s: %v %v spectral %v, medians %v %v, speed %v, found %v, %vs of audio, %v bytes, %v", c.name, out["verdict"], out["scores"], out["spectral"], out["median"], out["spectral_median"], out["speed"], out["found"], out["audio_read_s"], out["bytes_read"], time.Since(began).Round(10*time.Millisecond))
 			if out["verdict"] != c.want || text(out["meaning"]) == "" {
 				t.Errorf("%s: %v, want %s", c.name, out, c.want)
+			}
+			spectral, ok := out["spectral"].([]any)
+			at, ok2 := out["at_s"].([]any)
+			if !ok || !ok2 || len(spectral) != 5 || len(at) != 5 {
+				t.Errorf("%s: spectral %v at %v, want five of each", c.name, out["spectral"], out["at_s"])
+			}
+			if c.want == "same" && (num(t, out["found"], "found") < 4 || number(out["spectral_median"]) < 0.5) {
+				t.Errorf("%s: found %v with spectral median %v, want at least 4 found, with the same voice", c.name, out["found"], out["spectral_median"])
 			}
 			if num(t, out["audio_read_s"], "audio_read_s") < 5*20 || num(t, out["bytes_read"], "bytes_read") == 0 {
 				t.Errorf("%s read %vs, %v bytes: want what it read said", c.name, out["audio_read_s"], out["bytes_read"])

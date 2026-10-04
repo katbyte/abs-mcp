@@ -88,14 +88,16 @@ linters:
       - path: '(tools|lib/abs|acceptance|integration)/.*\.go'
         linters:
           - goconst
-      # the live suites share one server and its seeded libraries, so their tests run one after another
-      - path: '(acceptance|integration)/.*_test\.go'
+      # the live suites share one server and its seeded libraries, so their tests run one after another;
+      # the calibration is one long run over a corpus on disk
+      - path: '(acceptance|integration)/.*_test\.go|tools/calibration_test\.go'
         linters:
           - paralleltest
           - tparallel
-      # the live suites write the audio a container reads, run ffmpeg over it and call the test server:
-      # world-readable files, and paths and commands built from test values, are what they are for
-      - path: '(acceptance|integration)/.*_test\.go'
+      # the live suites write the audio a container reads, run ffmpeg over it and call the test server, and
+      # the calibration writes copies of a corpus for ffmpeg to make: world-readable files, and paths and
+      # commands built from test values, are what they are for
+      - path: '(acceptance|integration)/.*_test\.go|tools/calibration_test\.go'
         linters:
           - gosec
       # the steps of the fix journey take t and are not helpers: marked as helpers, a failure would
