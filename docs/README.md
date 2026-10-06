@@ -2,7 +2,7 @@
 
 ## API reference
 
-Audiobookshelf's public API docs (<https://api.audiobookshelf.org>) state that they are out of date and no longer maintained. The reference for `lib/abs` is the server source:
+Audiobookshelf's public API docs (<https://api.audiobookshelf.org>) state that they are out of date and no longer maintained. The reference for `sdk/abs` is the server source:
 
 | What | Where in <https://github.com/advplyr/audiobookshelf> |
 |---|---|

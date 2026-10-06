@@ -34,7 +34,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // ErrNoFFmpeg is returned by New when ffmpeg is not on the PATH.

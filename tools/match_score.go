@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // The comparator behind item_match_batch and audit_matched: does a provider's

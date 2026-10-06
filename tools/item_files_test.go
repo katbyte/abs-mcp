@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // track is an audio file of a book at a place in its play order.

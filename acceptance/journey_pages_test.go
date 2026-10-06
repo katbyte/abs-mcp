@@ -18,7 +18,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // pageWalk reads a listing that pages by offset from one offset to its end,

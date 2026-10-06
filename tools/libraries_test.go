@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // A share not mounted during a scan marks every book on it missing, and one

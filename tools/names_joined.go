@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // The item listing carries a book's authors and narrators as one string each,

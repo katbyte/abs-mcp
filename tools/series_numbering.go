@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // The numbering section of audit_series: does each book's series number agree

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // chaptered is a whole book with its chapters, each running to the next's

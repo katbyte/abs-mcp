@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

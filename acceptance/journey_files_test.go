@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // diskShelf is a library a journey owns, over a folder of its own under

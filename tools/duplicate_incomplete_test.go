@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // A copy with files missing beside the whole one is not a duplicate but a

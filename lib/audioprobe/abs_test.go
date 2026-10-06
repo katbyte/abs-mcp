@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 func serve(t *testing.T, h http.HandlerFunc) *abs.Client {

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/abs-mcp/tools"
 	"github.com/katbyte/go-kt/clog"
 	"github.com/spf13/cobra"

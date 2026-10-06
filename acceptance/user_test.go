@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // there is only the root account, which is also the account the API key acts

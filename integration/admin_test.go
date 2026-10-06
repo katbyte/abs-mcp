@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // User administration: the whole account lifecycle against a real server,

@@ -2,7 +2,7 @@
 
 // The server-administration surface: notifications, email, API keys, custom
 // providers, settings, sharing, sessions and the filesystem browser. None of
-// this is wrapped as an MCP tool, but lib/abs is a general Audiobookshelf
+// this is wrapped as an MCP tool, but sdk/abs is a general Audiobookshelf
 // client, so it is covered here like everything else.
 package integration
 
@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 func TestNotifications(t *testing.T) {

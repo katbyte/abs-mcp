@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Report how much of the Audiobookshelf API lib/abs covers.
+"""Report how much of the Audiobookshelf API sdk/abs covers.
 
 Audiobookshelf publishes no OpenAPI spec and its public docs say outright that
 they are unmaintained, so the route table in the server source is the only
-reference there is. This reads it, reads the paths lib/abs builds, and prints
+reference there is. This reads it, reads the paths sdk/abs builds, and prints
 what is covered, what is deliberately out of scope, and what is simply missing.
 
     scripts/apicheck.py              # against the pinned ABS version
@@ -19,7 +19,7 @@ import urllib.request
 
 ROUTER = "https://raw.githubusercontent.com/advplyr/audiobookshelf/{ref}/server/routers/ApiRouter.js"
 
-# lib/abs is a general Audiobookshelf client, so it covers the whole API. The
+# sdk/abs is a general Audiobookshelf client, so it covers the whole API. The
 # "not wrapping, ever" list in docs/ROADMAP.md is about which endpoints get an
 # MCP *tool* - an AI curating a library has no business changing auth settings
 # or streaming audio - which is a separate question from what the SDK exposes.
@@ -52,7 +52,7 @@ VERBS = {"get": "GET", "post": "POST", "patch": "PATCH", "del": "DELETE"}
 
 def our_paths():
     ours = set()
-    for f in glob.glob("lib/abs/*.go"):
+    for f in glob.glob("sdk/abs/*.go"):
         if f.endswith("_test.go"):
             continue
         s = open(f).read()
@@ -98,7 +98,7 @@ def main():
         (covered if hit else uncovered).append((verb, path))
 
     print(f"Audiobookshelf {args.ref}: {len(routes)} routes")
-    print(f"  covered by lib/abs   {len(covered):3}   {round(100 * len(covered) / len(routes))}%")
+    print(f"  covered by sdk/abs   {len(covered):3}   {round(100 * len(covered) / len(routes))}%")
     print(f"  not implemented      {len(uncovered):3}")
 
     if uncovered and args.list:

@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // A match applied the default way fills only the empty fields, so what the

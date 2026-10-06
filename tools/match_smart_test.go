@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 func TestCleanPeople(t *testing.T) {

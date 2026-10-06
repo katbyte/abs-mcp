@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // A ranged read is what lets the audits look at a few kilobytes of a file

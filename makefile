@@ -165,7 +165,7 @@ depscheck: ## Check that go.mod/go.sum and vendor/ are in sync
 test: build ## Run the unit tests, with the race detector
 	go test -race ./... -timeout ${TEST_TIMEOUT}
 
-test-integration: ## Run the SDK tests (lib/abs shapes) against an already-running server
+test-integration: ## Run the SDK tests (sdk/abs shapes) against an already-running server
 	@[ -n "${ABS_SERVER}" ] && [ -n "${ABS_TOKEN}" ] || \
 		(echo 'ABS_SERVER and ABS_TOKEN must be set; or use "make testacc"'; exit 1)
 	go test -tags integration -count=1 ./integration/... -timeout ${TEST_TIMEOUT} -v
@@ -206,13 +206,13 @@ testacc: testacc-integration testacc-acceptance ## Run both live suites, each in
 # directory and covdata merges them, which is stdlib tooling rather than a
 # third-party merger.
 COVERDIR?=.coverage
-COVERPKG=./tools/...,./lib/...,./cli/...
+COVERPKG=./tools/...,./lib/...,./sdk/...,./cli/...
 
 cover: ## Run every suite with coverage and report the total
 	@rm -rf $(COVERDIR)
 	@mkdir -p $(COVERDIR)/unit $(COVERDIR)/integration $(COVERDIR)/acceptance
 	@echo "==> unit..."
-	@go test -count=1 -coverpkg=$(COVERPKG) ./tools/ ./cli/ ./lib/... \
+	@go test -count=1 -coverpkg=$(COVERPKG) ./tools/ ./cli/ ./lib/... ./sdk/... \
 		-args -test.gocoverdir=$(CURDIR)/$(COVERDIR)/unit >/dev/null
 	@echo "==> integration (SDK) with coverage..."
 	@set -e; \
@@ -280,7 +280,7 @@ testenv-up: ## Start and seed a throwaway Audiobookshelf container
 testenv-down: ## Remove the throwaway Audiobookshelf container
 	@scripts/abs-testenv.sh down
 
-apicheck: ## Report how much of the Audiobookshelf API lib/abs covers
+apicheck: ## Report how much of the Audiobookshelf API sdk/abs covers
 	@python3 scripts/apicheck.py --list
 
 check-all: build test testacc lint actionlint yamllint shellcheck depscheck apicheck ## Run build + tests (incl. integration) + all linters + depscheck

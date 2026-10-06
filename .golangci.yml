@@ -85,7 +85,7 @@ linters:
           - goconst
       # tool schemas, filter groups, audit check names and API query keys repeat the same short
       # words (title, series, genres, include...) by design; constants would only add indirection
-      - path: '(tools|lib/abs|acceptance|integration)/.*\.go'
+      - path: '(tools|sdk/abs|acceptance|integration)/.*\.go'
         linters:
           - goconst
       # the live suites share one server and its seeded libraries, so their tests run one after another;

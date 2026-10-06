@@ -17,7 +17,7 @@ This is not a demo. It has been battle-tested on a real collection: a large libr
 ### What else is in the box
 
 - **The whole API, as tools.** 99 tools over all 202 Audiobookshelf routes, so everything an audit finds can be fixed from the same session: matching, covers, chapters, embedding, renaming a genre everywhere it is used, merging duplicate authors.
-- **A Go SDK.** `lib/abs` is a complete Audiobookshelf API client - 209 methods, no dependencies outside the standard library, no knowledge of MCP - useful on its own, whether or not you care about AI.
+- **A Go SDK.** `sdk/abs` is a complete Audiobookshelf API client - 209 methods, no dependencies outside the standard library, no knowledge of MCP - useful on its own, whether or not you care about AI.
 - **Tested against a real server.** Every tool and every client method runs against an actual Audiobookshelf in Docker, and the suites fail if a registered tool or a client method has no test. Seven response-shape bugs in this client were found that way and could not have been found any other way, because Audiobookshelf publishes no OpenAPI spec and its public API docs say they are unmaintained.
 
 ### The audits
@@ -223,10 +223,10 @@ A pattern that matches no tool aborts startup and names it, so a typo cannot sil
 
 ## Using the client on its own
 
-`lib/abs` is a plain Go client for the Audiobookshelf API with **no dependencies outside the standard library**, and no knowledge of MCP. If you only want to talk to Audiobookshelf from Go, take it and ignore the rest:
+`sdk/abs` is a plain Go client for the Audiobookshelf API with **no dependencies outside the standard library**, and no knowledge of MCP. If you only want to talk to Audiobookshelf from Go, take it and ignore the rest:
 
 ```go
-import "github.com/katbyte/abs-mcp/lib/abs"
+import "github.com/katbyte/abs-mcp/sdk/abs"
 
 client, err := abs.New("http://nas:13378", os.Getenv("ABS_TOKEN"))
 items, err := client.Items(ctx, libraryID, abs.ItemsOptions{Limit: 50})
@@ -245,13 +245,13 @@ make check-all  # build + unit tests + both live suites (needs docker) + every l
 
 ### Tests
 
-`make test` is hermetic and fast. It covers the pure logic - filter encoding, formatting, gap arithmetic, the audit heuristics, tool registration - and two things that need a server but not a real one: the `lib/abs` requests and answers that have gone wrong before, each pinned against a canned server (`lib/abs/fake_server_test.go`), and the tools end to end over an in-memory MCP session against a canned Audiobookshelf (`tools/fake_abs_test.go`). The first is not every method, about one in four: what proves every method is the live suite below. The second is where the cases the live fixtures cannot reach live: a library with covers, inconsistent spellings, tagged and untagged audio files, more findings than the limit.
+`make test` is hermetic and fast. It covers the pure logic - filter encoding, formatting, gap arithmetic, the audit heuristics, tool registration - and two things that need a server but not a real one: the `sdk/abs` requests and answers that have gone wrong before, each pinned against a canned server (`sdk/abs/fake_server_test.go`), and the tools end to end over an in-memory MCP session against a canned Audiobookshelf (`tools/fake_abs_test.go`). The first is not every method, about one in four: what proves every method is the live suite below. The second is where the cases the live fixtures cannot reach live: a library with covers, inconsistent spellings, tagged and untagged audio files, more findings than the limit.
 
 Everything else runs against **a real Audiobookshelf in Docker**, because a stub can only confirm what you already believed. Two suites, each in its own container:
 
 | | Covers | Command |
 |---|---|---|
-| `integration/` | the `lib/abs` client: that every response decodes with its fields populated | `make testacc-integration` |
+| `integration/` | the `sdk/abs` client: that every response decodes with its fields populated | `make testacc-integration` |
 | `acceptance/` | the tools: name resolution, projections, audits, provider flows, journeys, and a smoke test of the built binary | `make testacc-acceptance` |
 
 ```bash

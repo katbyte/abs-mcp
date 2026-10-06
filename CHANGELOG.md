@@ -1,3 +1,9 @@
+## Unreleased
+
+### Breaking
+
+- the Go client moves from `lib/abs` to `sdk/abs`, as in embyfin-mcp: change the import path; `lib` keeps the helpers (audioprobe, audiosample, providerproxy)
+
 ## 0.6.0 (2026-10-03)
 
 ### Breaking

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // A matched copy and the unmatched copy scanned in beside it share a title

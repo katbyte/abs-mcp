@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // A match is fill-only or override, and neither is what a collector wants

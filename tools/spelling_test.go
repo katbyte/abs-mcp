@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // A remove drops a value from every item that carries it, server-wide for a

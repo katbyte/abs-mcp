@@ -38,4 +38,4 @@ Design rules, in priority order:
 
 - `item_delete`, `podcast_episode_delete`, `author_delete`, `library_issues_remove`, `collection_delete`, `playlist_delete`, `user_history_remove`: only registered with `--enable-delete` (`ABS_ENABLE_DELETE`).
 - Deleting one audio file of a book is refused: the server takes it off the book but leaves the book's length as it was, and no scan corrects that. Taking it out on disk and rescanning does.
-- Not wrapping **as tools**, ever: audio streaming and playback sessions, cover/image byte delivery, uploads, server settings and auth settings, API key management, notification config, cache purges, the file system browser. `lib/abs` covers all of them - it is a general Audiobookshelf client - but none of it is judgment an AI should be making.
+- Not wrapping **as tools**, ever: audio streaming and playback sessions, cover/image byte delivery, uploads, server settings and auth settings, API key management, notification config, cache purges, the file system browser. `sdk/abs` covers all of them - it is a general Audiobookshelf client - but none of it is judgment an AI should be making.

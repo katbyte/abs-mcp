@@ -12,7 +12,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // Duplicate candidates: pairs audit_duplicates' keys do not join that are

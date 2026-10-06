@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // Every row is a folder seen on a real library on 2026-09-13, with what the

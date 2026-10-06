@@ -48,7 +48,7 @@ jobs:
   # the two live suites are separate jobs so a failure names which layer
   # broke: the client's view of the API, or the tools' behaviour on top of it
   integration:
-    name: integration (lib/abs against a real server)
+    name: integration (sdk/abs against a real server)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

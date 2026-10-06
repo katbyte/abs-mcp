@@ -7,7 +7,7 @@
 // assertions about projection, name resolution or worklists - those are the
 // tool layer's job and are covered in ../acceptance.
 //
-// The split matters because lib/abs is typed against an API with no OpenAPI
+// The split matters because sdk/abs is typed against an API with no OpenAPI
 // spec and no versioning (the published docs say outright that they are
 // unmaintained), so this is the layer that notices when the server changes
 // shape underneath us. Every bug found in the first pass of these suites was
@@ -27,8 +27,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
 	"github.com/katbyte/abs-mcp/lib/providerproxy"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 var (

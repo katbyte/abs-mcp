@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/lib/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // ItemFile is a Fetch over one file of an item, through the server's file
