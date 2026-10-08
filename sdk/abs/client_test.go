@@ -2,14 +2,20 @@ package abs
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -61,6 +67,27 @@ func TestHTTPErrorMessage(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q lacks %q", err, want)
 		}
+	}
+}
+
+// A dial the Mac refused with "no route to host" says what the Mac may be
+// doing, since no retry and no server fixes Local Network privacy; any other
+// transport error, and every dial elsewhere, is passed through as it is.
+func TestTransportErrorNamesLocalNetworkPrivacy(t *testing.T) {
+	t.Parallel()
+
+	refused := &net.OpError{Op: "dial", Net: "tcp", Err: &os.SyscallError{Syscall: "connect", Err: syscall.EHOSTUNREACH}}
+	got := transportError(refused)
+	if !errors.Is(got, syscall.EHOSTUNREACH) {
+		t.Errorf("transportError(%v) = %v, want the refusal kept", refused, got)
+	}
+	if hinted := strings.Contains(got.Error(), "Local Network"); hinted != (runtime.GOOS == "darwin") {
+		t.Errorf("transportError(%v) = %q on %s, want the hint only on macOS", refused, got, runtime.GOOS)
+	}
+
+	timedOut := &net.OpError{Op: "dial", Net: "tcp", Err: context.DeadlineExceeded}
+	if got := transportError(timedOut); got.Error() != timedOut.Error() {
+		t.Errorf("transportError(%v) = %v, want it unchanged", timedOut, got)
 	}
 }
 

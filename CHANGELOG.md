@@ -4,6 +4,10 @@
 
 - the Go client moves from `lib/abs` to `sdk/abs`, as in embyfin-mcp: change the import path; `lib` keeps the helpers (audioprobe, audiosample, providerproxy)
 
+### Added
+
+- on macOS, a connection the system refused with "no route to host" says that Local Network privacy may be blocking the process, and that a terminal app updated while running needs a restart
+
 ## 0.6.0 (2026-10-03)
 
 ### Breaking

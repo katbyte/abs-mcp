@@ -19,6 +19,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -149,6 +150,17 @@ func IsForbidden(err error) bool {
 	return errors.As(err, &he) && (he.Status == http.StatusForbidden || he.Status == http.StatusUnauthorized)
 }
 
+// transportError is a request that never got an answer, with what the
+// operating system may be doing about it where that is known: a dial a
+// Mac refused with "no route to host" is usually its Local Network privacy,
+// which no retry and no server fixes.
+func transportError(err error) error {
+	if localNetworkHint != "" && errors.Is(err, syscall.EHOSTUNREACH) {
+		return fmt.Errorf("%w%s", err, localNetworkHint)
+	}
+	return err
+}
+
 // errorBody is what a failed request's body says, for its error, or why it
 // could not be read: a body cut off is part of what went wrong.
 func errorBody(r io.Reader) string {
@@ -220,7 +232,7 @@ func (c *Client) doRaw(ctx context.Context, method, path string, query url.Value
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, transportError(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -280,7 +292,7 @@ func (c *Client) open(ctx context.Context, path string, query url.Values, rng st
 
 	resp, err := c.files.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, transportError(err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		body := errorBody(resp.Body)
@@ -313,7 +325,7 @@ func (c *Client) uploadMultipart(ctx context.Context, path, field, filename stri
 	resp, err := c.files.Do(req)
 	if err != nil {
 		_ = pr.CloseWithError(err)
-		return err
+		return transportError(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
