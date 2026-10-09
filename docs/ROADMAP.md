@@ -10,6 +10,7 @@ Design rules, in priority order:
 6. **Reads are cheap, writes are explicit, destructive is opt-in.** Every tool carries MCP annotations; anything that changes the server says so in its description; anything that deletes records or files is disabled unless the operator sets `--enable-delete`.
 7. **One way to say each thing.** Members of a list are added and removed with `add_x` and `remove_x` lists (`add_tags`, `add_items`, `add_entries`, `add_bookmarks`); a single thing is set by giving its value and taken away with `remove`. Stores are `providers`, an ordered list tried in turn, never one `provider`. Every list takes `limit` and `offset` and answers `total` and `next_offset`.
 8. **`confirm` before what cannot be put back.** A tool that erases, merges, or writes over what is there from a store changes nothing without `confirm`, and says what it would do: `would_delete`, `would_merge`, `would_remove`, `would_apply`, `would_upgrade`.
+9. **One collector's way by default, and a switch for the rest.** The audits hold a library to the way this one is kept (`Author/Series - 03 - Title`, a store tag on every match). A rule that is a way of filing rather than a mistake is on by default and can be left out by name with `--audit-skip`; a new rule of that kind is added to `AuditRules` so it can be.
 
 ## Done
 

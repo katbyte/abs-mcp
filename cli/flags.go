@@ -2,8 +2,10 @@ package cli
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/katbyte/abs-mcp/sdk/abs"
@@ -26,6 +28,7 @@ type FlagData struct {
 	AllowNoAuth  bool     `mapstructure:"allow-no-auth"`
 	ProviderTag  string   `mapstructure:"provider-tag"`
 	Providers    []string `mapstructure:"providers"`
+	AuditSkip    []string `mapstructure:"audit-skip"`
 }
 
 func configureFlags(root *cobra.Command) error {
@@ -42,6 +45,7 @@ func configureFlags(root *cobra.Command) error {
 	pflags.String("auth-token", "", "bearer token required on the HTTP endpoint (consider exporting to ABS_AUTH_TOKEN instead)")
 	pflags.Bool("allow-no-auth", false, "serve HTTP with no bearer token: anyone who can reach the port can use every tool")
 	pflags.StringSlice("providers", nil, "metadata providers to ask in order when a call names none, the store the books were bought from first: audible.ca,audible (default: the library's own provider)")
+	pflags.StringSlice("audit-skip", nil, "audit rules to leave out, for a library filed another way: "+auditRulesHelp())
 	pflags.String("provider-tag", "zz-provider:", "prefix of the tag that records which store a match came from (zz-provider:audible.ca, sorted last in the tag list); off writes none")
 
 	// binding map for viper/pflag -> env
@@ -58,6 +62,7 @@ func configureFlags(root *cobra.Command) error {
 		"allow-no-auth": "ABS_ALLOW_NO_AUTH",
 		"provider-tag":  "ABS_PROVIDER_TAG",
 		"providers":     "ABS_PROVIDERS",
+		"audit-skip":    "ABS_AUDIT_SKIP",
 	}
 
 	for name, env := range m {
@@ -165,5 +170,16 @@ func (f *FlagData) ToolOptions() tools.Options {
 		Deny:         f.DenyTools,
 		ProviderTag:  f.ProviderTag,
 		Providers:    f.Providers,
+		AuditSkip:    f.AuditSkip,
 	}
+}
+
+// auditRulesHelp lists the audit rules --audit-skip takes, each with what it
+// reports.
+func auditRulesHelp() string {
+	rules := make([]string, 0, len(tools.AuditRules))
+	for _, name := range slices.Sorted(maps.Keys(tools.AuditRules)) {
+		rules = append(rules, name+" ("+tools.AuditRules[name]+")")
+	}
+	return strings.Join(rules, "; ")
 }

@@ -6,6 +6,8 @@
 package acceptance
 
 import (
+	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -131,13 +133,25 @@ func TestAuditMissingChapters(t *testing.T) {
 	}
 }
 
-// The folders are laid out <author>/<title>, so the path heuristic must clear
-// every one of them.
+// The folders are laid out <author>/<title>, so every one names its book and
+// its author and none is flagged for those. A book the fixtures place in a
+// series is flagged for a folder that does not say so: every one of them,
+// Foundation too, though its series is named after it.
 func TestAuditPath(t *testing.T) {
 	out := call(t, "audit_path", map[string]any{"library": "Fiction"})
 
-	if found := num(t, out["total_findings"], "total_findings"); found != 0 {
-		t.Errorf("total_findings = %d, want 0: %v", found, out["findings"])
+	want := map[string]string{}
+	for _, b := range books {
+		for _, s := range b.Series {
+			want[b.Title] = fmt.Sprintf("folder %q does not say it is %q", b.Title, s)
+		}
+	}
+	got := map[string]string{}
+	for _, f := range rows(t, out["findings"], "findings") {
+		got[text(f["title"])] = text(f["detail"])
+	}
+	if !maps.Equal(got, want) || num(t, out["total_findings"], "total_findings") != len(want) {
+		t.Errorf("audit_path = %v (%v in all), want the %d books in a series their folder does not say: %v", got, out["total_findings"], len(want), want)
 	}
 }
 

@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/tools"
 )
 
 // diskShelf is a library a journey owns, over a folder of its own under
@@ -1012,6 +1013,34 @@ func TestJourneyFoldersNameTheirBooks(t *testing.T) {
 		call(t, "item_edit", map[string]any{"item": ids[dated], "year": "2007"})
 		if got := diskFindingIDs(t, call(t, "audit_path", map[string]any{"library": s.name})); len(got) != 0 {
 			t.Errorf("audit_path = %v for a recording later than the folder's year", got)
+		}
+	})
+
+	// a book the record places in a series is filed where the series shows:
+	// the three voyages are, under the saga's own folder, and a book filed by
+	// its title alone is not
+	t.Run("a series the folder does not say", func(t *testing.T) {
+		call(t, "item_edit", map[string]any{"item": ids[institute], "series": []any{saga + " #4"}})
+		found := rows(t, call(t, "audit_path", map[string]any{"library": s.name})["findings"], "findings")
+		if len(found) != 1 || found[0]["id"] != ids[institute] || !strings.Contains(text(found[0]["detail"]), `does not say it is "`+saga+` #4"`) {
+			t.Fatalf("audit_path = %v, want the institute alone, placed in the saga by its record and not by its folder", found)
+		}
+
+		// filing by series is one collector's way, and a server told to leave
+		// the rule out says nothing of it, here or in audit_all's count
+		other := newUserWith(t, "zzyzx-files-another-way", abs.UserCreate{}, tools.Options{AuditSkip: []string{"path-series"}})
+		if got := diskFindingIDs(t, other.call(t, "audit_path", map[string]any{"library": s.name})); len(got) != 0 {
+			t.Errorf("audit_path = %v on a server that leaves the series rule out", got)
+		}
+		counts := rows(t, other.call(t, "audit_all", map[string]any{"library": s.name})["audits"], "audits")
+		if slices.ContainsFunc(counts, func(r map[string]any) bool { return r["audit"] == "audit_path" }) {
+			t.Errorf("audit_all = %v on a server that leaves the series rule out", counts)
+		}
+
+		// a series with no place in it is a collection, which nobody files by
+		call(t, "item_edit", map[string]any{"item": ids[institute], "series": []any{saga}})
+		if got := diskFindingIDs(t, call(t, "audit_path", map[string]any{"library": s.name})); len(got) != 0 {
+			t.Errorf("audit_path = %v for a series the record gives no place in", got)
 		}
 	})
 }

@@ -1,6 +1,8 @@
 package tools
 
 import (
+	"maps"
+	"slices"
 	"strings"
 	"testing"
 
@@ -131,6 +133,205 @@ func TestCheckPathYear(t *testing.T) {
 		}
 		if !strings.Contains(detail, "earlier than the folder allows") {
 			t.Errorf("%s dated %q: flagged for something else: %s", r.rel, r.year, detail)
+		}
+	}
+}
+
+// A book the record places in a series is in a path that says so, the book
+// the series is named after included. Most rows are folders seen on a real
+// library on 2026-10-09 with the series its records gave, written the way a
+// listing writes them.
+func TestCheckPathSeries(t *testing.T) {
+	t.Parallel()
+
+	type row struct{ rel, title, author, series string }
+	fine := []row{
+		// a place between dashes, whatever the series is called there
+		{"Peter F. Hamilton/Salvation Sequence - 03 - The Saints of Salvation", "The Saints of Salvation", "Peter F. Hamilton", "The Salvation Sequence #3"},
+		{"Peter F. Hamilton/Void Trilogy - 02 - The Temporal Void", "The Temporal Void", "Peter F. Hamilton", "Void Trilogy #2"},
+		{"Britney Jackson/Lesbians, Pirates, and Dragons - 01 - Pirates of Aletharia", "Pirates of Aletharia", "Britney Jackson", "Lesbians, Pirates, and Dragons #1"},
+		// a place closing the series' short name
+		{"Terry Pratchett/Bromeliad 1 - Truckers", "Truckers", "Terry Pratchett", "The Bromeliad Trilogy #1"},
+		{"Aliette de Bodard/Dominion of Fallen 2 - The House of Binding Thorns", "The House of Binding Thorns", "Aliette de Bodard", "Dominion of the Fallen #2"},
+		{"Neal Stephenson/Baroque 2 - The Confusion (V)", "The Confusion", "Neal Stephenson", "The Baroque Cycle #4"},
+		{"Orson Scott Card/Laddertop 2", "Laddertop 2", "Orson Scott Card", "The Laddertop Series #2"},
+		// the series' name and a number, in brackets
+		{"Terry Pratchett/Sourcery (Discworld 5)", "Sourcery", "Terry Pratchett", "Discworld #5"},
+		// a folder above the book that is the series'
+		{"Konosuba/Konosuba, Vol. 01 - Oh! My Useless Goddess!", "Konosuba: God's Blessing on This Wonderful World!, Vol. 01: Oh! My Useless Goddess!", "Natsume Akatsuki", "Konosuba: God's Blessing on This Wonderful World! #1"},
+		{"Terry Pratchett/Discworld/Mort", "Mort", "Terry Pratchett", "Discworld #4"},
+		{"Terry Pratchett/The Discworld/Mort", "Mort", "Terry Pratchett", "Discworld #4"},
+		{"Larry Niven/Ringworld - 01 - Ringworld", "Ringworld", "Larry Niven", "Ringworld #1"},
+		// no place on the record: a collection, not a shelf order
+		{"Jane Austen/Pride and Prejudice", "Pride and Prejudice", "Jane Austen", "Jane Austen's Novels"},
+		{"Jane Austen/Pride and Prejudice", "Pride and Prejudice", "Jane Austen", ""},
+	}
+	bad := []row{
+		{"Peter F. Hamilton/Salvation Lost", "Salvation Lost", "Peter F. Hamilton", "The Salvation Sequence #2"},
+		{"Peter F. Hamilton/Salvation", "Salvation", "Peter F. Hamilton", "The Salvation Sequence #1"},
+		{"Peter F. Hamilton/The Dreaming Void", "The Dreaming Void", "Peter F. Hamilton", "Void Trilogy #1"},
+		{"Margaret Atwood/MaddAddam", "MaddAddam", "Margaret Atwood", "The MaddAddam Trilogy #3"},
+		// the book a series is named after does not sort beside the rest of it
+		{"Alastair Reynolds/Revelation Space", "Revelation Space", "Alastair Reynolds", "Revelation Space #1"},
+		{"Stephen King/The Shining", "The Shining", "Stephen King", "The Shining #1"},
+		{"Your Name", "your name.", "Makoto Shinkai", "your name. #01"},
+		// the series' name in the title is not a place in it
+		{"J. K. Rowling/Harry Potter and the Deathly Hallows", "Harry Potter and the Deathly Hallows", "J.K. Rowling", "Harry Potter (Narrated by Stephen Fry) #7"},
+		// a number that is the title is not one either
+		{"Arthur C. Clarke/2001", "2001: A Space Odyssey", "Arthur C. Clarke", "Space Odyssey Series #1"},
+		// nor is a disc
+		{"Isaac Asimov/Foundation and Empire Disc 1", "Foundation and Empire", "Isaac Asimov", "Foundation #2"},
+		// a shelf is not a series' folder
+		{"feminism/Pleasure Activism", "Pleasure Activism", "adrienne maree brown", "Emergent Strategy #2"},
+		// nor is the author's, though the series carries the author's name
+		{"Terry Pratchett/Mort", "Mort", "Terry Pratchett", "Terry Pratchett Discworld #4"},
+		// every series the record places it in is named, a comma in a name kept
+		{"Orson Scott Card/Children of the Mind (Unabridged)", "Children of the Mind", "Orson Scott Card", "The Ender Saga #4, The Enderverse #14"},
+		{"Britney Jackson/Pirates of Aletharia", "Pirates of Aletharia", "Britney Jackson", "Lesbians, Pirates, and Dragons #1"},
+	}
+	item := func(r row) *abs.Item {
+		return &abs.Item{MediaType: "book", RelPath: r.rel, Media: abs.Media{Metadata: abs.Metadata{Title: r.title, AuthorName: r.author, SeriesName: r.series}}}
+	}
+	for _, r := range fine {
+		if detail, flagged := checkPath(item(r)); flagged {
+			t.Errorf("%s in %q: flagged: %s", r.rel, r.series, detail)
+		}
+	}
+	for _, r := range bad {
+		detail, flagged := checkPath(item(r))
+		if !flagged {
+			t.Errorf("%s in %q: not flagged", r.rel, r.series)
+			continue
+		}
+		for _, s := range placedSeries(item(r).Media.Metadata) {
+			if !strings.Contains(detail, "does not say it is") || !strings.Contains(detail, `"`+s+`"`) {
+				t.Errorf("%s in %q: flagged without %q: %s", r.rel, r.series, s, detail)
+			}
+		}
+	}
+
+	// one item read whole carries its series apart, and is judged the same
+	whole := item(bad[0])
+	whole.Media.Metadata.SeriesName = ""
+	whole.Media.Metadata.Series = abs.SeriesRefs{{Name: "The Salvation Sequence", Sequence: "2"}, {Name: "Tantor Collection"}}
+	if detail, flagged := checkPath(whole); !flagged || !strings.HasSuffix(detail, `does not say it is "The Salvation Sequence #2"`) {
+		t.Errorf("read whole: %v %q, want the one series it has a place in", flagged, detail)
+	}
+}
+
+// A server told to leave the series rule out reports none of it, and still
+// reports what is a mistake under any way of filing.
+func TestPathRulesLeaveSeriesOut(t *testing.T) {
+	t.Parallel()
+
+	off := pathRules{}
+	book := func(rel, title, year string) *abs.Item {
+		it := &abs.Item{MediaType: "book", RelPath: rel, Media: abs.Media{Metadata: abs.Metadata{Title: title, AuthorName: "Peter F. Hamilton", SeriesName: "The Salvation Sequence #2"}}}
+		it.Media.Metadata.PublishedYear = abs.FlexString(year)
+		return it
+	}
+	lost := book("Peter F. Hamilton/Salvation Lost", "Salvation Lost", "")
+	if _, flagged := checkPath(lost); !flagged {
+		t.Fatal("with every rule on, the folder that does not say its series is not flagged")
+	}
+	if detail, flagged := off.check(lost); flagged {
+		t.Errorf("with the series rule left out: %s", detail)
+	}
+	for what, it := range map[string]*abs.Item{
+		"another title":   book("Peter F. Hamilton/Salvation Lost", "Pandora's Star", ""),
+		"another author":  book("Philip K. Dick/Salvation Lost", "Salvation Lost", ""),
+		"an earlier year": book("Peter F. Hamilton/Salvation Lost (2019)", "Salvation Lost", "2001"),
+	} {
+		if detail, flagged := off.check(it); !flagged || strings.Contains(detail, "does not say it is") {
+			t.Errorf("%s with the series rule left out: %v %q, want it flagged for itself", what, flagged, detail)
+		}
+	}
+}
+
+// The setting reaches both tools that run the check, and audit_path's own
+// account of itself.
+func TestAuditPathSeriesRuleIsTheServers(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	oneLibrary(f)
+	f.json("GET /api/libraries/"+libID+"/items", page(
+		shelved("b1", "Peter F. Hamilton/Salvation Lost", "Salvation Lost", "Peter F. Hamilton", 3600, `"seriesName":"The Salvation Sequence #2"`, ""),
+		shelved("b2", "Peter F. Hamilton/Salvation Sequence - 03 - The Saints of Salvation", "The Saints of Salvation", "Peter F. Hamilton", 3600, `"seriesName":"The Salvation Sequence #3"`, ""),
+		shelved("b3", "Larry Niven/Ringworld", "Ringworld", "Larry Niven", 3600, `"seriesName":"Ringworld #1"`, ""),
+	))
+	f.json("GET /api/libraries/"+libID+"/series", `{"results":[],"total":0}`)
+	f.json("GET /api/libraries/"+libID+"/authors", `{"results":[],"total":0}`)
+
+	pathCount := func(all map[string]any) int {
+		for _, row := range list(t, all["audits"]) {
+			if str(t, row["audit"]) == "audit_path" {
+				return num(t, row["found"])
+			}
+		}
+		return 0
+	}
+	for _, tc := range []struct {
+		opts Options
+		want map[string]string
+	}{
+		{Options{}, map[string]string{
+			"b1": `folder "Salvation Lost" does not say it is "The Salvation Sequence #2"`,
+			"b3": `folder "Ringworld" does not say it is "Ringworld #1"`,
+		}},
+		{Options{AuditSkip: []string{" Path-Series "}}, map[string]string{}},
+	} {
+		call := callerWith(t, f, tc.opts)
+		out, err := call("audit_path", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := map[string]string{}
+		for _, row := range list(t, out["findings"]) {
+			got[str(t, row["id"])] = str(t, row["detail"])
+		}
+		if !maps.Equal(got, tc.want) || num(t, out["total_findings"]) != len(tc.want) {
+			t.Errorf("skipping %q: audit_path = %v, want %v", tc.opts.AuditSkip, got, tc.want)
+		}
+		all, err := call("audit_all", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n := pathCount(all); n != len(tc.want) {
+			t.Errorf("skipping %q: audit_all counts %d for audit_path, want %d", tc.opts.AuditSkip, n, len(tc.want))
+		}
+
+		r := &registry{opts: tc.opts}
+		r.opts.AuditSkip, _ = auditSkips(tc.opts.AuditSkip)
+		queueTools(r)
+		for _, p := range r.pending {
+			if p.name != "audit_path" {
+				continue
+			}
+			if says := strings.Contains(p.description, "--audit-skip "+rulePathSeries); says != (len(tc.want) > 0) {
+				t.Errorf("skipping %q: audit_path's description says the series rule: %v", tc.opts.AuditSkip, says)
+			}
+		}
+	}
+}
+
+// A listing writes a book's series on one line, and only the ones with a
+// place in them are wanted.
+func TestPlacedSeries(t *testing.T) {
+	t.Parallel()
+
+	for line, want := range map[string][]string{
+		"":                                      nil,
+		"Jane Austen's Novels":                  nil,
+		"Discworld #17":                         {"Discworld #17"},
+		"Discworld #17, Penguin Classics":       {"Discworld #17"},
+		"The Ender Saga #4, The Enderverse #14": {"The Ender Saga #4", "The Enderverse #14"},
+		"Lesbians, Pirates, and Dragons #1":     {"Lesbians, Pirates, and Dragons #1"},
+		// a name with no place cannot be told from the start of the next
+		"The Cosmere, The Mistborn Saga #1": {"The Cosmere, The Mistborn Saga #1"},
+	} {
+		if got := placedSeries(abs.Metadata{SeriesName: line}); !slices.Equal(got, want) {
+			t.Errorf("placedSeries(%q) = %q, want %q", line, got, want)
 		}
 	}
 }

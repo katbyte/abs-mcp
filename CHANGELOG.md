@@ -6,6 +6,8 @@
 
 ### Added
 
+- `audit_path` reports a book the record places in a series when its folder does not say so
+- `--audit-skip` / `ABS_AUDIT_SKIP` leaves out an audit rule that is a way of filing rather than a mistake: `path-series`
 - on macOS, a connection the system refused with "no route to host" says that Local Network privacy may be blocking the process, and that a terminal app updated while running needs a restart
 
 ## 0.6.0 (2026-10-03)

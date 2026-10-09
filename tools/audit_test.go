@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // A podcast library's listing ignores the missing filters and answers with
@@ -177,6 +178,38 @@ func TestAuditOrderIsStable(t *testing.T) {
 	}
 	if !slices.Equal(ids, []string{"a", "z"}) {
 		t.Errorf("padding rows %v, want by id", ids)
+	}
+}
+
+// A rule to leave out is named as it is listed, give or take case and
+// spaces, and a name that is no rule stops the server: left on in silence, a
+// typo would look like a switch that does nothing.
+func TestAuditSkips(t *testing.T) {
+	t.Parallel()
+
+	if got, err := auditSkips([]string{" Path-Series ", ""}); err != nil || !slices.Equal(got, []string{rulePathSeries}) {
+		t.Errorf("auditSkips = %v, %v", got, err)
+	}
+	if got, err := auditSkips(nil); err != nil || len(got) != 0 {
+		t.Errorf("auditSkips(nil) = %v, %v", got, err)
+	}
+	for name := range AuditRules {
+		if _, err := auditSkips([]string{name}); err != nil {
+			t.Errorf("the listed rule %q is refused: %v", name, err)
+		}
+	}
+
+	typo := Options{AuditSkip: []string{"path-serie"}}
+	_, err := auditSkips(typo.AuditSkip)
+	if err == nil || !strings.Contains(err.Error(), `"path-serie"`) || !strings.Contains(err.Error(), rulePathSeries) {
+		t.Errorf("auditSkips(a typo) = %v, want the name refused and the rules listed", err)
+	}
+	f := newFakeABS(t)
+	if _, err := RegisterAll(mcp.NewServer(&mcp.Implementation{Name: "t", Version: "0"}, nil), f.client(t), typo); err == nil {
+		t.Error("a server starts with an audit rule that does not exist")
+	}
+	if _, err := Describe(typo); err == nil {
+		t.Error("the tools are described with an audit rule that does not exist")
 	}
 }
 

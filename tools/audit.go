@@ -95,9 +95,51 @@ var missingFields = []string{
 // auditCheck returns (detail, true) when the item is suspect.
 type auditCheck func(it *abs.Item) (string, bool)
 
+// rulePathSeries is audit_path holding a book to the series its record
+// places it in.
+const rulePathSeries = "path-series"
+
+// AuditRules are the audit rules a server can leave out (Options.AuditSkip),
+// each with what it reports. The audits hold a library to one collector's way
+// of keeping it, and every rule is on unless it is named: the ones here are
+// that collector's taste, where the rest find mistakes.
+var AuditRules = map[string]string{
+	rulePathSeries: "audit_path: a book the record places in a series, in a folder that does not say so",
+}
+
+// auditSkips is the rules a server was asked to leave out, as they are
+// named, or an error for one that is no rule: a typo would otherwise leave
+// the rule on and say nothing.
+func auditSkips(asked []string) ([]string, error) {
+	var out []string
+	for _, a := range asked {
+		rule := strings.ToLower(strings.TrimSpace(a))
+		if rule == "" {
+			continue
+		}
+		if _, ok := AuditRules[rule]; !ok {
+			return nil, fmt.Errorf("unknown audit rule %q: the rules that can be left out are %s", a, strings.Join(slices.Sorted(maps.Keys(AuditRules)), ", "))
+		}
+		out = append(out, rule)
+	}
+	return out, nil
+}
+
+// skips reports whether this server leaves the named audit rule out.
+func (r *registry) skips(rule string) bool {
+	return slices.Contains(r.opts.AuditSkip, rule)
+}
+
 func registerAuditTools(r *registry) {
 	client := r.client
 	prov := r.providerConfig()
+	// the checks as this server runs them
+	checkFor := func(name string) auditCheck {
+		if name == "path" {
+			return r.pathRules().check
+		}
+		return prov.auditCheck(name)
+	}
 
 	// One tool per audit rather than one tool with eighteen switches: a model
 	// picks "find the books with no cover" far more reliably than it picks
@@ -283,7 +325,7 @@ func registerAuditTools(r *registry) {
 					it := &items[j]
 					out.Scanned++
 					for _, spec := range auditSpecs {
-						if _, suspect := prov.auditCheck(spec.Check)(it); suspect {
+						if _, suspect := checkFor(spec.Check)(it); suspect {
 							found[spec.Tool]++
 						}
 					}

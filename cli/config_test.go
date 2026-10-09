@@ -131,6 +131,7 @@ func TestEnvironmentBindings(t *testing.T) {
 		{"ABS_DENY_TOOLS", denyDeletes, func(f *FlagData) bool { return len(f.DenyTools) == 1 && f.DenyTools[0] == denyDeletes }},
 		{"ABS_PROVIDERS", "audible.ca,audible", func(f *FlagData) bool { return len(f.Providers) == 2 && f.Providers[0] == "audible.ca" }},
 		{"ABS_PROVIDER_TAG", tagOff, func(f *FlagData) bool { return f.ProviderTag == tagOff }},
+		{"ABS_AUDIT_SKIP", "path-series", func(f *FlagData) bool { return len(f.AuditSkip) == 1 && f.AuditSkip[0] == "path-series" }},
 	} {
 		t.Setenv(env.key, env.value)
 		if f := load(t, dir, dir); !env.check(f) {

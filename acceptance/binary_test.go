@@ -542,6 +542,11 @@ func TestBinaryRefusesAStartItCannotMake(t *testing.T) {
 			args: []string{"--allow-tools", "zzyzx_*"},
 			says: "zzyzx_*",
 		},
+		{
+			name: "an audit rule that does not exist",
+			args: []string{"--audit-skip", "zzyzx-series"},
+			says: "path-series",
+		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			env := c.env

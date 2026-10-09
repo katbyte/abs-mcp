@@ -6,6 +6,7 @@ import (
 	"path"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -140,8 +141,28 @@ func containsWords(whole, part string) bool {
 // checkPath flags items whose folder name does not name their title, or
 // whose parent folder names neither an author, nor the book's series, nor a
 // genre it carries: a sign of a wrong match or a misfiled folder in an
-// Author/Title, Author/Series/Title or Series/Title layout.
+// Author/Title, Author/Series/Title or Series/Title layout. A folder that
+// passes is then held to its year and to the series the record places it in.
+// This is the check with every rule on; a server runs registry.pathRules.
 func checkPath(it *abs.Item) (string, bool) {
+	return pathRules{series: true}.check(it)
+}
+
+// pathRules is the path check as one server runs it. Most of it finds
+// mistakes; a rule that is one collector's way of filing can be left out
+// (Options.AuditSkip).
+type pathRules struct {
+	// series reports a book the record places in a series when its folder
+	// does not say so
+	series bool
+}
+
+// pathRules is the path check as this server runs it.
+func (r *registry) pathRules() pathRules {
+	return pathRules{series: !r.skips(rulePathSeries)}
+}
+
+func (p pathRules) check(it *abs.Item) (string, bool) {
 	if it.IsPodcast() || it.RelPath == "" || it.IsFile {
 		return "", false
 	}
@@ -207,7 +228,128 @@ func checkPath(it *abs.Item) (string, bool) {
 		return fmt.Sprintf("parent folder %q does not name author %q", path.Dir(rel), m.AuthorDisplay()), true
 	}
 
-	return checkPathYear(base, m)
+	if detail, suspect := checkPathYear(base, m); suspect || !p.series {
+		return detail, suspect
+	}
+	return checkPathSeries(rel, m)
+}
+
+var (
+	// a book's place in its series, alone between dashes or closing what is
+	// there: "03", "4", "07.5", "Bromeliad 1", "Vol. 11". Three digits or
+	// more is a title or a year, and so is a number joined to a word
+	// ("Catch-22")
+	pathPlace = regexp.MustCompile(`(^|\s)\d{1,2}(\.\d+)?$`)
+	// the same as a word anywhere among a folder's words
+	pathPlaceWord = regexp.MustCompile(`(^| )\d{1,2}( |$)`)
+	// "The Void Trilogy" is "Void Trilogy"
+	pathArticle = regexp.MustCompile(`^(the|a|an) `)
+)
+
+// checkPathSeries flags a book its record places in a series when nothing in
+// its path says so: "Salvation Lost" beside "Salvation Sequence - 03 - The
+// Saints of Salvation". A path says so with a place in the folder's name,
+// whatever the series is called there ("Void Trilogy - 02 - ...", "Bromeliad
+// 1 - Truckers", "Konosuba, Vol. 01"); with the series' name and a number
+// anywhere in it ("Sourcery (Discworld 5)"); or with a folder above the book
+// that is the series' and not the author's. The book a series is named after
+// is held to it too, as "Ringworld" does not sort beside "Ringworld - 02 -
+// The Ringworld Engineers". A series the record gives no place in is left
+// alone: the stores list collections and imprints as series, and nobody
+// files by those.
+func checkPathSeries(rel string, m abs.Metadata) (string, bool) {
+	placed := placedSeries(m)
+	if len(placed) == 0 {
+		return "", false
+	}
+	names := make([]string, 0, len(placed))
+	for _, s := range placed {
+		names = append(names, pathSeriesName(pathParen.ReplaceAllString(s[:strings.LastIndex(s, " #")], "")))
+	}
+
+	base := path.Base(rel)
+	// "Foundation and Empire Disc 1": a disc is not a place in a series
+	for _, seg := range pathSegment.Split(pathTrailer.ReplaceAllString(pathParen.ReplaceAllString(base, ""), ""), -1) {
+		if pathPlace.MatchString(strings.TrimSpace(seg)) {
+			return "", false
+		}
+	}
+	words := pathWords(pathTrailer.ReplaceAllString(base, ""))
+	if pathPlaceWord.MatchString(words) && slices.ContainsFunc(names, func(n string) bool { return n != "" && containsWords(words, n) }) {
+		return "", false
+	}
+	if parent := path.Dir(rel); parent != "." && parent != "/" {
+		for p := range strings.SplitSeq(parent, "/") {
+			if p == strings.ToLower(p) || pathNamesAuthor(p, m) {
+				continue
+			}
+			for _, np := range parentNames(p) {
+				if np = pathArticle.ReplaceAllString(np, ""); np == "" {
+					continue
+				}
+				// "DragonLance/DragonLance Chronicles 1 - ...": a folder its
+				// children repeat is a series' whatever the record calls it
+				if strings.HasPrefix(pathArticle.ReplaceAllString(words, "")+" ", np+" ") {
+					return "", false
+				}
+				if slices.ContainsFunc(names, func(n string) bool { return n != "" && (containsWords(np, n) || containsWords(n, np)) }) {
+					return "", false
+				}
+			}
+		}
+	}
+
+	for i, s := range placed {
+		placed[i] = strconv.Quote(s)
+	}
+	return fmt.Sprintf("folder %q does not say it is %s", base, strings.Join(placed, ", ")), true
+}
+
+// pathSeriesName is a series' name as comparable words, without the article
+// folders drop.
+func pathSeriesName(s string) string {
+	return pathArticle.ReplaceAllString(pathWords(s), "")
+}
+
+// placedSeries are the series a record gives the book a place in, written as
+// the record shows them ("Discworld #17"). A listing writes a book's series
+// on one line with commas between, and a name may hold a comma of its own
+// ("Creatures, Crystals and Dragons #1"), so a part with no place is taken
+// for the start of the name after it.
+func placedSeries(m abs.Metadata) []string {
+	var out []string
+	if len(m.Series) > 0 {
+		for _, s := range m.Series {
+			if strings.TrimSpace(s.Name) != "" && s.Sequence != "" {
+				out = append(out, s.Name+" #"+s.Sequence)
+			}
+		}
+		return out
+	}
+
+	var open []string
+	for part := range strings.SplitSeq(m.SeriesName, ", ") {
+		open = append(open, part)
+		if i := strings.LastIndex(part, " #"); i >= 0 && i+2 < len(part) {
+			if s := strings.Join(open, ", "); strings.LastIndex(s, " #") > 0 {
+				out = append(out, s)
+			}
+			open = nil
+		}
+	}
+	return out
+}
+
+// pathNamesAuthor reports whether a folder above a book is one of its
+// authors', written either way round.
+func pathNamesAuthor(folder string, m abs.Metadata) bool {
+	np := pathWords(folder)
+	for a := range strings.SplitSeq(m.AuthorDisplay(), ",") {
+		if na := pathWords(a); na != "" && np != "" && (strings.Contains(np, na) || strings.Contains(na, np) || lastFirstMatch(np, na)) {
+			return true
+		}
+	}
+	return false
 }
 
 var (
@@ -279,6 +421,15 @@ func parentNames(folder string) []string {
 	return out
 }
 
+// pathSeriesText is what audit_path's description says of the series rule:
+// nothing on a server that leaves it out.
+func pathSeriesText(rules pathRules) string {
+	if !rules.series {
+		return ""
+	}
+	return " A book the record places in a series is reported too when its folder does not say so ('Salvation Lost' for 'The Salvation Sequence #2', or 'Ringworld' for 'Ringworld #1'): that is a rename on disk, or a wrong series to take off the record. It is one way of filing, and a server started with --audit-skip " + rulePathSeries + " leaves it out."
+}
+
 // pathIn is auditIn plus the switch for the filename check, which is off by
 // default: filenames are the least curated part of a library, and looking at
 // them means fetching every book's file list.
@@ -291,11 +442,12 @@ type pathIn struct {
 // its files option.
 func registerPathAudit(r *registry) {
 	client := r.client
+	rules := r.pathRules()
 	spec := auditSpecs[slices.IndexFunc(auditSpecs, func(s auditSpec) bool { return s.Tool == "audit_path" })]
 
 	add(r, readTool, &mcp.Tool{
 		Name:        spec.Tool,
-		Description: spec.Description + " With files, the audio filenames are compared too.",
+		Description: spec.Description + pathSeriesText(rules) + " With files, the audio filenames are compared too.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in pathIn) (*mcp.CallToolResult, auditOut, error) {
 		libs, err := resolveLibraries(ctx, client, in.Library)
 		if err != nil {
@@ -305,7 +457,7 @@ func registerPathAudit(r *registry) {
 		out := auditOut{Check: spec.Check, Findings: []auditFinding{}}
 		limit := auditLimit(in.Limit, 100)
 		for i := range libs {
-			if err := sweepPath(ctx, client, &libs[i], in.Files, limit, &out); err != nil {
+			if err := sweepPath(ctx, client, &libs[i], rules.check, in.Files, limit, &out); err != nil {
 				return nil, auditOut{}, err
 			}
 		}
@@ -317,7 +469,7 @@ func registerPathAudit(r *registry) {
 // sweepPath runs the folder check over a library and, with files, the
 // filename check over every book the folder check cleared: a book already
 // reported for its folder is not reported again for its files.
-func sweepPath(ctx context.Context, client *abs.Client, lib *abs.Library, files bool, limit int, out *auditOut) error {
+func sweepPath(ctx context.Context, client *abs.Client, lib *abs.Library, check auditCheck, files bool, limit int, out *auditOut) error {
 	if lib.IsPodcast() {
 		return nil
 	}
@@ -333,7 +485,7 @@ func sweepPath(ctx context.Context, client *abs.Client, lib *abs.Library, files 
 		for j := range items {
 			it := &items[j]
 			out.Scanned++
-			if detail, suspect := checkPath(it); suspect {
+			if detail, suspect := check(it); suspect {
 				report(it, detail)
 				continue
 			}

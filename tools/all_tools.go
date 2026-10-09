@@ -45,6 +45,10 @@ type Options struct {
 	// names none: the store the books were bought from first, then the rest,
 	// [audible.ca, audible]. Empty means the library's own provider alone.
 	Providers []string
+	// AuditSkip names the audit rules to leave out (see AuditRules). Every
+	// rule is on by default; one that is a way of filing rather than a
+	// mistake can be switched off for a library kept another way.
+	AuditSkip []string
 }
 
 // Toolsets group the tools by the job someone is doing, so a client can load a
@@ -270,6 +274,10 @@ func (r *registry) logError(format string, args ...any) {
 // so a typo cannot silently hide one.
 func RegisterAll(server *mcp.Server, client *abs.Client, opts Options) ([]string, error) {
 	opts.Providers = slices.Clone(opts.Providers) // the server's own, whatever the caller does with its slice
+	var err error
+	if opts.AuditSkip, err = auditSkips(opts.AuditSkip); err != nil {
+		return nil, err
+	}
 	r := &registry{server: server, client: client, opts: opts}
 	queueTools(r)
 
@@ -498,6 +506,9 @@ func Describe(opts Options) ([]ToolInfo, error) {
 	}
 	server := mcp.NewServer(&mcp.Implementation{Name: "abs-mcp", Version: "describe"}, nil)
 
+	if opts.AuditSkip, err = auditSkips(opts.AuditSkip); err != nil {
+		return nil, err
+	}
 	r := &registry{server: server, client: client, opts: opts}
 	queueTools(r)
 
