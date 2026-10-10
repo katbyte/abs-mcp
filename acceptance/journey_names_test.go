@@ -4,6 +4,8 @@ package acceptance
 
 import (
 	"testing"
+
+	acc "github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // A session clearing a stray "Ph.D." off the narrators, on a shelf where one
@@ -30,15 +32,15 @@ func TestJourneyANarratorWithACommaInTheName(t *testing.T) {
 	s.open(t, len(books))
 	ids := s.ids(t)
 	for path, narrators := range books {
-		call(t, "item_edit", map[string]any{"item": ids[path], "narrators": narrators})
+		suite.Call(t, "item_edit", map[string]any{"item": ids[path], "narrators": narrators})
 	}
 
 	fragment := func(t *testing.T) (items int, found bool) {
 		t.Helper()
-		for _, g := range rows(t, call(t, "audit_narrators", map[string]any{"library": s.name})["names"], "names") {
-			for _, sp := range rows(t, g["spellings"], "spellings") {
+		for _, g := range acc.Rows(t, suite.Call(t, "audit_narrators", map[string]any{"library": s.name})["names"], "names") {
+			for _, sp := range acc.Rows(t, g["spellings"], "spellings") {
 				if sp["value"] == "Ph.D." && g["kind"] == "fragment" {
-					return num(t, sp["items"], "items"), true
+					return acc.Num(t, sp["items"], "items"), true
 				}
 			}
 		}
@@ -49,8 +51,8 @@ func TestJourneyANarratorWithACommaInTheName(t *testing.T) {
 		t.Fatalf("audit_narrators finds the Ph.D. fragment on %d books (found %v), want the two that carry it, not the four whose joined names hold it", n, found)
 	}
 
-	out := call(t, "metadata_rename", map[string]any{"library": s.name, "field": "narrators", "from": "Ph.D.", "remove": true, "confirm": true})
-	if n := num(t, out["items_updated"], "items_updated"); n != 2 {
+	out := suite.Call(t, "metadata_rename", map[string]any{"library": s.name, "field": "narrators", "from": "Ph.D.", "remove": true, "confirm": true})
+	if n := acc.Num(t, out["items_updated"], "items_updated"); n != 2 {
 		t.Errorf("metadata_rename remove = %v, want the two books changed", out)
 	}
 	if _, found := fragment(t); found {
@@ -62,7 +64,7 @@ func TestJourneyANarratorWithACommaInTheName(t *testing.T) {
 		author + "/Zzyzx Comma Three": "Zzyzx Kim Reader",
 		author + "/Zzyzx Comma Four":  "Zzyzx Jane Doe",
 	} {
-		if got := call(t, "item_get", map[string]any{"item": ids[path]})["narrator"]; got != want {
+		if got := suite.Call(t, "item_get", map[string]any{"item": ids[path]})["narrator"]; got != want {
 			t.Errorf("%s reads %v, want %q", path, got, want)
 		}
 	}

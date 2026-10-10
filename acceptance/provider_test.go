@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	acc "github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // requireProviders skips when the proxy is not up, so these fail for a real
@@ -25,8 +27,8 @@ import (
 func requireProviders(t *testing.T) {
 	t.Helper()
 
-	if !ready {
-		t.Skip("ABS_SERVER and ABS_TOKEN are not set; run: eval \"$(scripts/abs-testenv.sh up)\"")
+	if !suite.Ready {
+		t.Skip(suite.NotReady)
 	}
 	if !providersReady() {
 		t.Skip("the provider proxy is not running")
@@ -55,17 +57,17 @@ func restoreBook(t *testing.T, title string) {
 		if len(b.Series) > 0 {
 			args["series"] = toAny(b.Series)
 		}
-		call(t, "item_edit", args)
+		suite.Call(t, "item_edit", args)
 
 		// a match fetches the store's cover too: fiction's fixtures have
 		// none, and non-fiction's is the cover.jpg in the book's folder
-		got := call(t, "item_get", map[string]any{"item": title})
+		got := suite.Call(t, "item_get", map[string]any{"item": title})
 		switch fiction := i < libraries[0].Items; {
 		case fiction && got["no_cover"] == nil:
-			call(t, "item_cover_edit", map[string]any{"item": title, "remove": true})
+			suite.Call(t, "item_cover_edit", map[string]any{"item": title, "remove": true})
 		case !fiction:
-			if folder := text(got["full_path"]); folder != "" {
-				call(t, "item_cover_edit", map[string]any{"item": title, "file": folder + "/cover.jpg"})
+			if folder := acc.Str(got["full_path"]); folder != "" {
+				suite.Call(t, "item_cover_edit", map[string]any{"item": title, "file": folder + "/cover.jpg"})
 			}
 		}
 
@@ -83,39 +85,39 @@ func TestItemMatchAndApply(t *testing.T) {
 	var asin string
 
 	t.Run("item_match", func(t *testing.T) {
-		out := call(t, "item_match", map[string]any{
+		out := suite.Call(t, "item_match", map[string]any{
 			"item": book, "providers": []any{"audible"}, "title": "Second Foundation", "author": "Isaac Asimov",
 		})
 		if out["provider"] != "audible" {
 			t.Errorf("provider = %v, want audible", out["provider"])
 		}
 
-		candidates := rows(t, out["candidates"], "candidates")
+		candidates := acc.Rows(t, out["candidates"], "candidates")
 		if len(candidates) == 0 {
 			t.Fatal("audible returned no candidates for Second Foundation")
 		}
 		// a real catalogue entry, not just a well-formed empty shell
 		first := candidates[0]
-		title := text(first["title"])
+		title := acc.Str(first["title"])
 		if !strings.Contains(strings.ToLower(title), "foundation") {
 			t.Errorf("first candidate title = %q, want it to mention Foundation", title)
 		}
-		if idx := num(t, first["index"], "index"); idx != 0 {
+		if idx := acc.Num(t, first["index"], "index"); idx != 0 {
 			t.Errorf("first candidate index = %d, want 0", idx)
 		}
-		asin = text(first["asin"])
+		asin = acc.Str(first["asin"])
 		if asin == "" {
 			t.Error("no asin on the first candidate; item_match_apply has nothing to match on")
 		}
 
 		// nothing may have changed yet: these are suggestions
-		if item := call(t, "item_get", map[string]any{"item": book}); item["asin"] != nil {
+		if item := suite.Call(t, "item_get", map[string]any{"item": book}); item["asin"] != nil {
 			t.Errorf("item_match set an asin (%v); it must only suggest", item["asin"])
 		}
 	})
 
 	t.Run("item_match_apply needs a candidate", func(t *testing.T) {
-		msg := callErr(t, "item_match_apply", map[string]any{"confirm": true, "item": book, "providers": []any{"audible"}, "override_details": true})
+		msg := suite.CallErr(t, "item_match_apply", map[string]any{"confirm": true, "item": book, "providers": []any{"audible"}, "override_details": true})
 		if !strings.Contains(msg, "candidate") {
 			t.Errorf("a match naming no candidate, asin or isbn was not refused: %s", msg)
 		}
@@ -127,16 +129,16 @@ func TestItemMatchAndApply(t *testing.T) {
 		}
 		t.Cleanup(func() { restoreBook(t, book) })
 
-		out := call(t, "item_match_apply", map[string]any{
+		out := suite.Call(t, "item_match_apply", map[string]any{
 			"confirm": true,
 			"item":    book, "providers": []any{"audible"}, "asin": asin, "override_details": true,
 		})
-		if updated := truth(out["updated"]); !updated {
+		if updated := acc.BoolOf(out["updated"]); !updated {
 			t.Errorf("item_match_apply reported no update: %v", out)
 		}
 
-		item := call(t, "item_get", map[string]any{"item": book})
-		if got := text(item["asin"]); got != asin {
+		item := suite.Call(t, "item_get", map[string]any{"item": book})
+		if got := acc.Str(item["asin"]); got != asin {
 			t.Errorf("asin = %q, want the matched %q", got, asin)
 		}
 	})
@@ -149,56 +151,56 @@ func TestItemMatchAndApply(t *testing.T) {
 		}
 		t.Cleanup(func() { restoreBook(t, book) })
 
-		if msg := callErr(t, "item_match_apply_batch", map[string]any{"confirm": true, "providers": []any{"audible"}}); msg == "" {
+		if msg := suite.CallErr(t, "item_match_apply_batch", map[string]any{"confirm": true, "providers": []any{"audible"}}); msg == "" {
 			t.Error("a batch with no matches should be refused")
 		}
 
-		out := call(t, "item_match_apply_batch", map[string]any{
+		out := suite.Call(t, "item_match_apply_batch", map[string]any{
 			"confirm": true,
 			"matches": []any{map[string]any{"item": book, "asin": asin}}, "providers": []any{"audible"}, "override_details": true,
 		})
-		if applied := num(t, out["applied"], "applied"); applied != 1 {
+		if applied := acc.Num(t, out["applied"], "applied"); applied != 1 {
 			t.Errorf("applied = %d, want 1: %v", applied, out)
 		}
-		results := rows(t, out["results"], "results")
+		results := acc.Rows(t, out["results"], "results")
 		if len(results) != 1 {
 			t.Fatalf("results = %v, want one row", results)
 		}
-		if updated := truth(results[0]["updated"]); !updated {
+		if updated := acc.BoolOf(results[0]["updated"]); !updated {
 			t.Errorf("the row reports no update: %v", results[0])
 		}
-		if msg := text(results[0]["error"]); msg != "" {
+		if msg := acc.Str(results[0]["error"]); msg != "" {
 			t.Errorf("the row failed: %s", msg)
 		}
 
-		item := call(t, "item_get", map[string]any{"item": book})
-		if got := text(item["asin"]); got != asin {
+		item := suite.Call(t, "item_get", map[string]any{"item": book})
+		if got := acc.Str(item["asin"]); got != asin {
 			t.Errorf("asin = %q, want %q", got, asin)
 		}
-		if tags := strs(t, item["tags"], "tags"); !slices.Contains(tags, "zz-provider:audible") {
+		if tags := acc.Strs(t, item["tags"], "tags"); !slices.Contains(tags, "zz-provider:audible") {
 			t.Errorf("tags = %v, want the store recorded as zz-provider:audible", tags)
 		}
 
 		// item_match_tag backfills that tag: a book that already carries it
 		// is counted and left alone, and overwrite looks the asin up again
 		t.Run("item_match_tag", func(t *testing.T) {
-			out := call(t, "item_match_tag", map[string]any{"library": "Fiction", "providers": []any{"audible"}})
-			if already := num(t, out["already_tagged"], "already_tagged"); already != 1 {
+			out := suite.Call(t, "item_match_tag", map[string]any{"library": "Fiction", "providers": []any{"audible"}})
+			if already := acc.Num(t, out["already_tagged"], "already_tagged"); already != 1 {
 				t.Errorf("already_tagged = %d, want the one matched book: %v", already, out)
 			}
-			if tagged := num(t, out["tagged"], "tagged"); tagged != 0 {
+			if tagged := acc.Num(t, out["tagged"], "tagged"); tagged != 0 {
 				t.Errorf("tagged = %d, want 0 without overwrite", tagged)
 			}
 
-			out = call(t, "item_match_tag", map[string]any{"library": "Fiction", "providers": []any{"audible"}, "overwrite": true})
-			if tagged := num(t, out["tagged"], "tagged"); tagged != 1 {
+			out = suite.Call(t, "item_match_tag", map[string]any{"library": "Fiction", "providers": []any{"audible"}, "overwrite": true})
+			if tagged := acc.Num(t, out["tagged"], "tagged"); tagged != 1 {
 				t.Errorf("tagged = %d, want 1 with overwrite: %v", tagged, out)
 			}
-			tagRows := rows(t, out["rows"], "rows")
+			tagRows := acc.Rows(t, out["rows"], "rows")
 			if len(tagRows) != 1 {
 				t.Fatalf("rows = %v, want the one book", tagRows)
 			}
-			if provider := text(tagRows[0]["provider"]); provider != "audible" {
+			if provider := acc.Str(tagRows[0]["provider"]); provider != "audible" {
 				t.Errorf("provider = %q, want audible, the store that has the asin", provider)
 			}
 		})
@@ -213,7 +215,7 @@ func TestItemCoverSearchAndSet(t *testing.T) {
 	var coverURL string
 
 	t.Run("item_cover_search", func(t *testing.T) {
-		out := call(t, "item_cover_search", map[string]any{
+		out := suite.Call(t, "item_cover_search", map[string]any{
 			"item": book, "providers": []any{"audible"},
 			"title": "Foundation and Empire", "author": "Isaac Asimov",
 		})
@@ -221,7 +223,7 @@ func TestItemCoverSearchAndSet(t *testing.T) {
 			t.Errorf("item = %v", out["item"])
 		}
 
-		covers := strs(t, out["covers"], "covers")
+		covers := acc.Strs(t, out["covers"], "covers")
 		if len(covers) == 0 {
 			t.Fatal("no cover candidates returned")
 		}
@@ -235,15 +237,15 @@ func TestItemCoverSearchAndSet(t *testing.T) {
 		if coverURL == "" {
 			t.Skip("item_cover_search produced no url")
 		}
-		t.Cleanup(func() { call(t, "item_cover_edit", map[string]any{"item": book, "remove": true}) })
+		t.Cleanup(func() { suite.Call(t, "item_cover_edit", map[string]any{"item": book, "remove": true}) })
 
-		out := call(t, "item_cover_edit", map[string]any{"item": book, "url": coverURL})
-		if cover := text(out["cover"]); cover == "" {
+		out := suite.Call(t, "item_cover_edit", map[string]any{"item": book, "url": coverURL})
+		if cover := acc.Str(out["cover"]); cover == "" {
 			t.Errorf("item_cover_edit cover = %v, want the one it set, read back", out["cover"])
 		}
 
 		// the fixtures start with no cover, so this is visible on the item
-		if item := call(t, "item_get", map[string]any{"item": book}); item["no_cover"] != nil {
+		if item := suite.Call(t, "item_get", map[string]any{"item": book}); item["no_cover"] != nil {
 			t.Errorf("no_cover = %v, want the cover to have been set", item["no_cover"])
 		}
 	})
@@ -259,24 +261,24 @@ func TestItemChaptersSetFromASIN(t *testing.T) {
 
 	const book = "Foundation"
 
-	match := call(t, "item_match", map[string]any{
+	match := suite.Call(t, "item_match", map[string]any{
 		"item": book, "providers": []any{"audible"}, "title": "Foundation", "author": "Isaac Asimov",
 	})
-	candidates := rows(t, match["candidates"], "candidates")
+	candidates := acc.Rows(t, match["candidates"], "candidates")
 	if len(candidates) == 0 {
 		t.Skip("no audible candidate to take an asin from")
 	}
-	asin := text(candidates[0]["asin"])
+	asin := acc.Str(candidates[0]["asin"])
 	if asin == "" {
 		t.Skip("no asin on the candidate")
 	}
 
-	before := call(t, "item_get", map[string]any{"item": book, "chapters": true})["chapter_list"]
-	msg := callErr(t, "item_chapters_set", map[string]any{"item": book, "from_asin": asin, "region": "us"})
+	before := suite.Call(t, "item_get", map[string]any{"item": book, "chapters": true})["chapter_list"]
+	msg := suite.CallErr(t, "item_chapters_set", map[string]any{"item": book, "from_asin": asin, "region": "us"})
 	if !strings.Contains(msg, "another recording") || !strings.Contains(msg, asin) {
 		t.Errorf("a recording's chapters past the end of the audio: %s", msg)
 	}
-	if after := call(t, "item_get", map[string]any{"item": book, "chapters": true})["chapter_list"]; !sameJSON(before, after) {
+	if after := suite.Call(t, "item_get", map[string]any{"item": book, "chapters": true})["chapter_list"]; !sameJSON(before, after) {
 		t.Errorf("the refused chapters were written: %v, was %v", after, before)
 	}
 }
@@ -287,47 +289,47 @@ func TestAuthorMatchAndApply(t *testing.T) {
 	requireProviders(t)
 
 	t.Cleanup(func() {
-		call(t, "author_edit", map[string]any{
+		suite.Call(t, "author_edit", map[string]any{
 			"library": "Fiction", "author": "Isaac Asimov", "clear": []any{"description", "asin", "image"},
 		})
 	})
 
-	out := call(t, "author_match", map[string]any{
+	out := suite.Call(t, "author_match", map[string]any{
 		"library": "Fiction", "author": "Isaac Asimov", "query": "Isaac Asimov",
 	})
 	cand, ok := out["candidate"].(map[string]any)
 	if !ok {
 		t.Fatalf("candidate = %T, want who Audible has for Isaac Asimov", out["candidate"])
 	}
-	if name := text(cand["name"]); name != "Isaac Asimov" {
+	if name := acc.Str(cand["name"]); name != "Isaac Asimov" {
 		t.Errorf("candidate name = %q", name)
 	}
-	if matches := truth(cand["name_matches"]); !matches {
+	if matches := acc.BoolOf(cand["name_matches"]); !matches {
 		t.Errorf("the author's own name was not flagged as matching: %v", cand)
 	}
-	asin := text(cand["asin"])
+	asin := acc.Str(cand["asin"])
 	if asin == "" {
 		t.Fatal("candidate has no asin")
 	}
 	// nothing applied by the lookup
-	if got := call(t, "author_get", map[string]any{"library": "Fiction", "author": "Isaac Asimov"}); got["asin"] != nil && got["asin"] != "" {
+	if got := suite.Call(t, "author_get", map[string]any{"library": "Fiction", "author": "Isaac Asimov"}); got["asin"] != nil && got["asin"] != "" {
 		t.Errorf("author_match changed the record: asin = %v", got["asin"])
 	}
 
-	out = call(t, "author_match_apply", map[string]any{
+	out = suite.Call(t, "author_match_apply", map[string]any{
 		"library": "Fiction", "author": "Isaac Asimov", "asin": asin, "region": "us",
 	})
-	if updated := truth(out["updated"]); !updated {
+	if updated := acc.BoolOf(out["updated"]); !updated {
 		t.Errorf("author_match_apply reported no update: %v", out)
 	}
 	author, ok := out["author"].(map[string]any)
 	if !ok {
 		t.Fatalf("author = %T", out["author"])
 	}
-	if got := text(author["asin"]); got != asin {
+	if got := acc.Str(author["asin"]); got != asin {
 		t.Errorf("asin = %q, want %s", got, asin)
 	}
-	if desc := text(author["description"]); desc == "" {
+	if desc := acc.Str(author["description"]); desc == "" {
 		t.Error("author_match_apply set no description")
 	}
 }
@@ -338,39 +340,39 @@ func TestAuthorMatchFlagsADifferentName(t *testing.T) {
 	requireProviders(t)
 
 	t.Cleanup(func() {
-		call(t, "author_edit", map[string]any{
+		suite.Call(t, "author_edit", map[string]any{
 			"library": "Fiction", "author": "Tad Williams", "clear": []any{"description", "asin", "image"},
 		})
 	})
 
 	// a query that finds a real author who is not this one
-	out := call(t, "author_match", map[string]any{
+	out := suite.Call(t, "author_match", map[string]any{
 		"library": "Fiction", "author": "Tad Williams", "query": "Isaac Asimov",
 	})
 	cand, ok := out["candidate"].(map[string]any)
 	if !ok {
 		t.Fatalf("candidate = %T, want the author Audible found", out["candidate"])
 	}
-	if name := text(cand["name"]); name != "Isaac Asimov" {
+	if name := acc.Str(cand["name"]); name != "Isaac Asimov" {
 		t.Errorf("candidate name = %q", name)
 	}
-	if matches := truth(cand["name_matches"]); matches {
+	if matches := acc.BoolOf(cand["name_matches"]); matches {
 		t.Errorf("Isaac Asimov was flagged as Tad Williams's own name: %v", cand)
 	}
-	asin := text(cand["asin"])
+	asin := acc.Str(cand["asin"])
 	if asin == "" {
 		t.Fatal("candidate has no asin to apply")
 	}
 
 	// the asin applies whoever it names, on purpose
-	out = call(t, "author_match_apply", map[string]any{
+	out = suite.Call(t, "author_match_apply", map[string]any{
 		"library": "Fiction", "author": "Tad Williams", "asin": asin,
 	})
-	if updated := truth(out["updated"]); !updated {
+	if updated := acc.BoolOf(out["updated"]); !updated {
 		t.Errorf("applying by asin reported no update: %v", out)
 	}
 	author := object(out["author"])
-	if got := text(author["asin"]); got != asin {
+	if got := acc.Str(author["asin"]); got != asin {
 		t.Errorf("asin after apply = %q, want %s", got, asin)
 	}
 }
@@ -381,7 +383,7 @@ func TestAuthorEditImage(t *testing.T) {
 
 	// a cover url is a real image the proxy already has to serve; reusing one
 	// keeps this test from depending on a second provider
-	covers := strs(t, call(t, "item_cover_search", map[string]any{
+	covers := acc.Strs(t, suite.Call(t, "item_cover_search", map[string]any{
 		"item": "Leviathan Wakes", "providers": []any{"audible"},
 		"title": "Leviathan Wakes", "author": "James S. A. Corey",
 	})["covers"], "covers")
@@ -391,23 +393,23 @@ func TestAuthorEditImage(t *testing.T) {
 
 	// the fixture's authors have no photo, which audit_authors counts
 	t.Cleanup(func() {
-		call(t, "author_edit", map[string]any{"library": "Fiction", "author": "James S. A. Corey", "clear": []any{"image"}})
+		suite.Call(t, "author_edit", map[string]any{"library": "Fiction", "author": "James S. A. Corey", "clear": []any{"image"}})
 	})
-	out := call(t, "author_edit", map[string]any{
+	out := suite.Call(t, "author_edit", map[string]any{
 		"library": "Fiction", "author": "James S. A. Corey", "image_url": covers[0],
 	})
 	author, ok := out["author"].(map[string]any)
 	if !ok {
 		t.Fatalf("author = %T", out["author"])
 	}
-	if name := text(author["name"]); name != "James S. A. Corey" {
+	if name := acc.Str(author["name"]); name != "James S. A. Corey" {
 		t.Errorf("name = %q", name)
 	}
-	if img := truth(author["has_image"]); !img {
+	if img := acc.BoolOf(author["has_image"]); !img {
 		t.Errorf("has_image = %v, want the downloaded image to be reported: %v", author["has_image"], author)
 	}
 	// and read back, not only the answer's word for it
-	if got := call(t, "author_get", map[string]any{"library": "Fiction", "author": "James S. A. Corey"}); !truth(got["has_image"]) {
+	if got := suite.Call(t, "author_get", map[string]any{"library": "Fiction", "author": "James S. A. Corey"}); !acc.BoolOf(got["has_image"]) {
 		t.Errorf("author_get has_image = %v after the photo was set", got["has_image"])
 	}
 }
@@ -415,12 +417,12 @@ func TestAuthorEditImage(t *testing.T) {
 func TestAuthorEditImageValidation(t *testing.T) {
 	requireProviders(t)
 
-	if msg := callErr(t, "author_edit", map[string]any{
+	if msg := suite.CallErr(t, "author_edit", map[string]any{
 		"library": "Fiction", "author": "Isaac Asimov", "image_url": "  ",
 	}); !strings.Contains(msg, "nothing to change") {
 		t.Errorf("a blank url: %s", msg)
 	}
-	if msg := callErr(t, "author_edit", map[string]any{
+	if msg := suite.CallErr(t, "author_edit", map[string]any{
 		"library": "Fiction", "author": "Isaac Asimov", "image_url": "https://img.zzyzx.test/a.jpg", "clear": []any{"image"},
 	}); !strings.Contains(msg, "one or the other") {
 		t.Errorf("a photo set and cleared in one call: %s", msg)
@@ -441,14 +443,14 @@ func TestPodcastProviderFlow(t *testing.T) {
 	var feedURL, podcastID string
 
 	t.Run("podcast_search", func(t *testing.T) {
-		out := call(t, "podcast_search", map[string]any{"query": show, "limit": 5})
+		out := suite.Call(t, "podcast_search", map[string]any{"query": show, "limit": 5})
 
-		results := rows(t, out["results"], "results")
+		results := acc.Rows(t, out["results"], "results")
 		if len(results) == 0 {
 			t.Fatalf("iTunes returned nothing for %q", show)
 		}
 		for _, r := range results {
-			if u := text(r["feed_url"]); strings.HasPrefix(u, "http") {
+			if u := acc.Str(r["feed_url"]); strings.HasPrefix(u, "http") {
 				feedURL = u
 				break
 			}
@@ -463,18 +465,18 @@ func TestPodcastProviderFlow(t *testing.T) {
 			t.Skip("podcast_search produced no feed url")
 		}
 
-		out := call(t, "podcast_add", map[string]any{
+		out := suite.Call(t, "podcast_add", map[string]any{
 			"feed_url": feedURL, "library": "Podcasts", "folder": "Provider Test Podcast",
 			"auto_download": false,
 		})
-		podcastID = text(out["id"])
+		podcastID = acc.Str(out["id"])
 		if podcastID == "" {
 			t.Fatalf("podcast_add returned no id: %v", out)
 		}
-		if episodes := num(t, out["feed_episodes"], "feed_episodes"); episodes == 0 {
+		if episodes := acc.Num(t, out["feed_episodes"], "feed_episodes"); episodes == 0 {
 			t.Error("the feed reported no episodes")
 		}
-		if title := text(out["title"]); title == "" {
+		if title := acc.Str(out["title"]); title == "" {
 			t.Error("the new podcast has no title")
 		}
 	})
@@ -483,7 +485,7 @@ func TestPodcastProviderFlow(t *testing.T) {
 	// keeping the Podcasts library at the two shows the rest of the suite counts on
 	t.Cleanup(func() {
 		if podcastID != "" {
-			call(t, "item_delete", map[string]any{"confirm": true, "item": podcastID, "delete_files": true})
+			suite.Call(t, "item_delete", map[string]any{"confirm": true, "item": podcastID, "delete_files": true})
 		}
 	})
 
@@ -491,16 +493,16 @@ func TestPodcastProviderFlow(t *testing.T) {
 		if podcastID == "" {
 			t.Skip("nothing subscribed")
 		}
-		out := call(t, "podcast_feed_episodes", map[string]any{"item": podcastID, "limit": 5})
+		out := suite.Call(t, "podcast_feed_episodes", map[string]any{"item": podcastID, "limit": 5})
 
-		episodes := rows(t, out["episodes"], "episodes")
+		episodes := acc.Rows(t, out["episodes"], "episodes")
 		if len(episodes) == 0 {
 			t.Fatal("the feed listed no episodes")
 		}
-		if title := text(episodes[0]["title"]); title == "" {
+		if title := acc.Str(episodes[0]["title"]); title == "" {
 			t.Error("the first feed episode has no title")
 		}
-		if total := num(t, out["total"], "total"); total == 0 {
+		if total := acc.Num(t, out["total"], "total"); total == 0 {
 			t.Error("total = 0")
 		}
 	})
@@ -509,12 +511,12 @@ func TestPodcastProviderFlow(t *testing.T) {
 		if podcastID == "" {
 			t.Skip("nothing subscribed")
 		}
-		out := call(t, "podcast_edit", map[string]any{
+		out := suite.Call(t, "podcast_edit", map[string]any{
 			"item": podcastID, "auto_download": true,
 			"schedule": "0 * * * *", "keep_episodes": 3, "new_per_check": 1,
 		})
 		// the settings as the server now has them, not as they were asked
-		if !truth(out["auto_download"]) || out["schedule"] != "0 * * * *" || num(t, out["keep_episodes"], "keep_episodes") != 3 || num(t, out["new_per_check"], "new_per_check") != 1 {
+		if !acc.BoolOf(out["auto_download"]) || out["schedule"] != "0 * * * *" || acc.Num(t, out["keep_episodes"], "keep_episodes") != 3 || acc.Num(t, out["new_per_check"], "new_per_check") != 1 {
 			t.Errorf("podcast_edit = %v, want the settings read back", out)
 		}
 	})
@@ -525,10 +527,10 @@ func TestPodcastProviderFlow(t *testing.T) {
 		}
 		// the download runs in the background; the tool returns once queued,
 		// which is what is asserted here
-		out := call(t, "podcast_episode_download", map[string]any{
+		out := suite.Call(t, "podcast_episode_download", map[string]any{
 			"item": podcastID, "indexes": []any{0},
 		})
-		if queued := strs(t, out["queued"], "queued"); len(queued) != 1 {
+		if queued := acc.Strs(t, out["queued"], "queued"); len(queued) != 1 {
 			t.Errorf("queued = %v, want one episode", queued)
 		}
 	})
@@ -537,12 +539,12 @@ func TestPodcastProviderFlow(t *testing.T) {
 		if podcastID == "" {
 			t.Skip("nothing subscribed")
 		}
-		out := call(t, "podcast_check_new", map[string]any{"item": podcastID, "limit": 1})
+		out := suite.Call(t, "podcast_check_new", map[string]any{"item": podcastID, "limit": 1})
 		if out["podcast"] == nil {
 			t.Errorf("podcast_check_new returned no podcast: %v", out)
 		}
 		// queued may legitimately be empty when the episode is already held
-		rows(t, out["queued"], "queued")
+		acc.Rows(t, out["queued"], "queued")
 	})
 }
 
@@ -569,25 +571,25 @@ func TestProvidersAreAskedInOrder(t *testing.T) {
 	}
 	book := map[string]any{"item": "Second Foundation", "title": "Second Foundation", "author": "Isaac Asimov"}
 
-	out := call(t, "item_match", withArgs(book, map[string]any{"providers": []any{"audible.ca", "audible"}}))
-	if out["provider"] != "audible" || len(rows(t, out["candidates"], "candidates")) == 0 || canadaAsked() == 0 {
-		t.Errorf("item_match, the Canadian store first: provider %v, %d candidates, the Canadian store asked %d times", out["provider"], len(rows(t, out["candidates"], "candidates")), canadaAsked())
+	out := suite.Call(t, "item_match", withArgs(book, map[string]any{"providers": []any{"audible.ca", "audible"}}))
+	if out["provider"] != "audible" || len(acc.Rows(t, out["candidates"], "candidates")) == 0 || canadaAsked() == 0 {
+		t.Errorf("item_match, the Canadian store first: provider %v, %d candidates, the Canadian store asked %d times", out["provider"], len(acc.Rows(t, out["candidates"], "candidates")), canadaAsked())
 	}
 	// the store with nothing, alone: an answer with no candidates, naming it
-	if out = call(t, "item_match", withArgs(book, map[string]any{"providers": []any{"audible.ca"}})); out["provider"] != "audible.ca" || len(rows(t, out["candidates"], "candidates")) != 0 {
+	if out = suite.Call(t, "item_match", withArgs(book, map[string]any{"providers": []any{"audible.ca"}})); out["provider"] != "audible.ca" || len(acc.Rows(t, out["candidates"], "candidates")) != 0 {
 		t.Errorf("item_match at the Canadian store alone = %v", out)
 	}
 
 	before := canadaAsked()
-	out = call(t, "item_match", withArgs(book, map[string]any{"providers": []any{"audible", "audible.ca"}}))
+	out = suite.Call(t, "item_match", withArgs(book, map[string]any{"providers": []any{"audible", "audible.ca"}}))
 	if out["provider"] != "audible" || canadaAsked() != before {
 		t.Errorf("item_match, the US store first: provider %v, and the Canadian store was asked %d more times", out["provider"], canadaAsked()-before)
 	}
 
-	covers := call(t, "item_cover_search", map[string]any{
+	covers := suite.Call(t, "item_cover_search", map[string]any{
 		"item": "Foundation and Empire", "title": "Foundation and Empire", "author": "Isaac Asimov", "providers": []any{"audible.ca", "audible"},
 	})
-	if covers["provider"] != "audible" || len(strs(t, covers["covers"], "covers")) == 0 || canadaAsked() == before {
+	if covers["provider"] != "audible" || len(acc.Strs(t, covers["covers"], "covers")) == 0 || canadaAsked() == before {
 		t.Errorf("item_cover_search, the Canadian store first = %v", covers)
 	}
 }

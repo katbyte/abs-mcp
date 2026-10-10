@@ -14,13 +14,14 @@ import (
 
 	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/abs-mcp/tools"
+	acc "github.com/katbyte/go-kt/mcp/acctest"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func TestServerInfo(t *testing.T) {
-	info := call(t, "server_info", nil)
+	info := suite.Call(t, "server_info", nil)
 
-	if v := text(info["version"]); v == "" {
+	if v := acc.Str(info["version"]); v == "" {
 		t.Errorf("no server version: %v", info)
 	}
 	if info["user"] != "root" {
@@ -30,12 +31,12 @@ func TestServerInfo(t *testing.T) {
 		t.Errorf("user_type = %v, want root", info["user_type"])
 	}
 	for _, perm := range []string{"can_update", "can_delete"} {
-		if ok := truth(info[perm]); !ok {
+		if ok := acc.BoolOf(info[perm]); !ok {
 			t.Errorf("root should have %s", perm)
 		}
 	}
 	// the providers the key can match against
-	if providers := strs(t, info["book_providers"], "book_providers"); !slices.Contains(providers, "audible") {
+	if providers := acc.Strs(t, info["book_providers"], "book_providers"); !slices.Contains(providers, "audible") {
 		t.Errorf("book_providers = %v, want audible among them", providers)
 	}
 }
@@ -43,24 +44,24 @@ func TestServerInfo(t *testing.T) {
 // the server-wide totals server_info absorbed from the former server_stats.
 // They are admin-only and best-effort, so an admin key must actually see them.
 func TestServerInfoTotals(t *testing.T) {
-	out := call(t, "server_info", nil)
+	out := suite.Call(t, "server_info", nil)
 
 	totals, ok := out["totals"].(map[string]any)
 	if !ok {
 		t.Fatalf("totals = %T, want an object for an admin key: %v", out["totals"], out["note"])
 	}
-	if got := num(t, totals["books"], "books"); got != len(books)+len(messyBooks) {
+	if got := acc.Num(t, totals["books"], "books"); got != len(books)+len(messyBooks) {
 		t.Errorf("books = %d, want %d", got, len(books)+len(messyBooks))
 	}
-	if podcasts := num(t, totals["podcasts"], "podcasts"); podcasts != 2 {
+	if podcasts := acc.Num(t, totals["podcasts"], "podcasts"); podcasts != 2 {
 		t.Errorf("podcasts = %d, want 2", podcasts)
 	}
-	if users := num(t, totals["users"], "users"); users != 1 {
+	if users := acc.Num(t, totals["users"], "users"); users != 1 {
 		t.Errorf("users = %d, want 1", users)
 	}
-	num(t, totals["audio_files"], "audio_files")
+	acc.Num(t, totals["audio_files"], "audio_files")
 	// in bytes: a few hundred one-second files were 0 in whole gigabytes
-	if size := num(t, totals["total_size"], "total_size"); size <= 0 || size < num(t, totals["books_size"], "books_size") {
+	if size := acc.Num(t, totals["total_size"], "total_size"); size <= 0 || size < acc.Num(t, totals["books_size"], "books_size") {
 		t.Errorf("total_size = %d bytes, want the books' %v and more", size, totals["books_size"])
 	}
 
@@ -76,28 +77,28 @@ func TestServerInfoTotals(t *testing.T) {
 
 func TestServerTasks(t *testing.T) {
 	// the scans in setup ran as tasks; the field must at least decode
-	out := call(t, "server_tasks", nil)
-	rows(t, out["tasks"], "tasks")
+	out := suite.Call(t, "server_tasks", nil)
+	acc.Rows(t, out["tasks"], "tasks")
 }
 
 // nothing is playing, so this is the empty case - which still has to come back
 // as a well-formed list rather than null.
 func TestServerSessions(t *testing.T) {
-	out := call(t, "server_sessions", nil)
+	out := suite.Call(t, "server_sessions", nil)
 
-	if sessions := rows(t, out["sessions"], "sessions"); len(sessions) != 0 {
+	if sessions := acc.Rows(t, out["sessions"], "sessions"); len(sessions) != 0 {
 		t.Errorf("sessions = %v, want none open", sessions)
 	}
 }
 
 func TestServerBackups(t *testing.T) {
-	before := call(t, "server_backups", nil)
+	before := suite.Call(t, "server_backups", nil)
 
 	// the backup made, by name: a count of the list cannot say, as a backup
 	// made in the minute of another replaces it and the oldest are pruned
-	after := call(t, "server_backup_create", nil)
+	after := suite.Call(t, "server_backup_create", nil)
 	created := object(after["created"])
-	id := text(created["id"])
+	id := acc.Str(created["id"])
 	if id == "" {
 		t.Fatalf("server_backup_create named no backup: %v", after)
 	}
@@ -105,20 +106,20 @@ func TestServerBackups(t *testing.T) {
 		eventually(t, "deleting the backup", func() error { _, err := adminClient(t).DeleteBackup(ctx, id); return err })
 	})
 	var listed bool
-	for _, b := range rows(t, after["backups"], "backups") {
+	for _, b := range acc.Rows(t, after["backups"], "backups") {
 		listed = listed || b["id"] == id
 	}
 	if !listed {
 		t.Errorf("the backup made, %s, is not in the list: %v", id, after["backups"])
 	}
-	for _, b := range rows(t, after["backups"], "backups") {
-		if num(t, b["size"], "size") <= 0 {
+	for _, b := range acc.Rows(t, after["backups"], "backups") {
+		if acc.Num(t, b["size"], "size") <= 0 {
 			t.Errorf("backup %v has no size in bytes", b)
 		}
 	}
 	// the create response carries only the list; the location comes from the
 	// list endpoint
-	if loc := text(before["location"]); loc == "" {
+	if loc := acc.Str(before["location"]); loc == "" {
 		t.Error("server_backups reported no location")
 	}
 }
@@ -126,9 +127,9 @@ func TestServerBackups(t *testing.T) {
 // server_tags is server-wide, so it must see tags from every library at
 // once - which is what library_filters, being per-library, cannot do.
 func TestServerTags(t *testing.T) {
-	out := call(t, "server_tags", nil)
-	tags := strs(t, out["tags"], "tags")
-	genres := strs(t, out["genres"], "genres")
+	out := suite.Call(t, "server_tags", nil)
+	tags := acc.Strs(t, out["tags"], "tags")
+	genres := acc.Strs(t, out["genres"], "genres")
 
 	// sf and cyberpunk are Fiction's, history and politics Non-Fiction's
 	for _, want := range []string{"sf", "classic", "cyberpunk", "space-opera", "history", "industry", "humour", "war", "politics"} {
@@ -142,10 +143,10 @@ func TestServerTags(t *testing.T) {
 		}
 	}
 
-	if only := call(t, "server_tags", map[string]any{"kind": "genres"}); only["tags"] != nil {
+	if only := suite.Call(t, "server_tags", map[string]any{"kind": "genres"}); only["tags"] != nil {
 		t.Errorf("kind=genres returned tags: %v", only["tags"])
 	}
-	if only := call(t, "server_tags", map[string]any{"kind": "tags"}); only["genres"] != nil {
+	if only := suite.Call(t, "server_tags", map[string]any{"kind": "tags"}); only["genres"] != nil {
 		t.Errorf("kind=tags returned genres: %v", only["genres"])
 	}
 }
@@ -154,15 +155,15 @@ func TestServerTags(t *testing.T) {
 // Tags are server-wide, which is why the rename lives in metadata_rename
 // rather than under server_.
 func TestServerRenameTag(t *testing.T) {
-	out := call(t, "metadata_rename", map[string]any{"field": "tags", "from": "humour", "to": "humor"})
-	if n := num(t, out["items_updated"], "items_updated"); n != 1 {
+	out := suite.Call(t, "metadata_rename", map[string]any{"field": "tags", "from": "humour", "to": "humor"})
+	if n := acc.Num(t, out["items_updated"], "items_updated"); n != 1 {
 		t.Errorf("items_updated = %d, want 1", n)
 	}
 	t.Cleanup(func() {
-		call(t, "metadata_rename", map[string]any{"field": "tags", "from": "humor", "to": "humour"})
+		suite.Call(t, "metadata_rename", map[string]any{"field": "tags", "from": "humor", "to": "humour"})
 	})
 
-	if tags := strs(t, call(t, "server_tags", map[string]any{"kind": "tags"})["tags"], "tags"); !slices.Contains(tags, "humor") {
+	if tags := acc.Strs(t, suite.Call(t, "server_tags", map[string]any{"kind": "tags"})["tags"], "tags"); !slices.Contains(tags, "humor") {
 		t.Errorf("tags %v missing the renamed humor", tags)
 	}
 }
@@ -171,8 +172,8 @@ func TestServerRenameTag(t *testing.T) {
 // account cannot read the server-wide totals, and has to be told so. A missing
 // count read as zero would have the model report an empty server.
 func TestServerInfoNonAdmin(t *testing.T) {
-	if !ready {
-		t.Skip("ABS_SERVER and ABS_TOKEN are not set")
+	if !suite.Ready {
+		t.Skip(suite.NotReady)
 	}
 
 	admin, err := abs.New(os.Getenv("ABS_SERVER"), os.Getenv("ABS_TOKEN"))
@@ -255,7 +256,7 @@ func TestServerInfoNonAdmin(t *testing.T) {
 	if out["totals"] != nil {
 		t.Errorf("totals = %v, want none for a non-admin key", out["totals"])
 	}
-	note := text(out["note"])
+	note := acc.Str(out["note"])
 	if note == "" {
 		t.Fatal("no note: a non-admin key is told nothing about why the totals are missing")
 	}
@@ -296,8 +297,8 @@ func login(username, password string) error {
 // never executed by any test. This opens a real playback session so both are
 // asserted against actual data.
 func TestServerSessionsWithAPlaybackSession(t *testing.T) {
-	if !ready {
-		t.Skip("ABS_SERVER and ABS_TOKEN are not set")
+	if !suite.Ready {
+		t.Skip(suite.NotReady)
 	}
 
 	client, err := abs.New(os.Getenv("ABS_SERVER"), os.Getenv("ABS_TOKEN"))
@@ -308,8 +309,8 @@ func TestServerSessionsWithAPlaybackSession(t *testing.T) {
 	// against it writes progress, which would knock it off another test's
 	// continue-listening shelf
 	const book = "City of Golden Shadow"
-	item := call(t, "item_get", map[string]any{"item": book})
-	id := text(item["id"])
+	item := suite.Call(t, "item_get", map[string]any{"item": book})
+	id := acc.Str(item["id"])
 	if id == "" {
 		t.Fatalf("no id for %s: %v", book, item)
 	}
@@ -328,11 +329,11 @@ func TestServerSessionsWithAPlaybackSession(t *testing.T) {
 		if err := client.CloseSession(ctx, session.ID, nil); err != nil {
 			t.Errorf("closing the session: %v", err)
 		}
-		call(t, "user_progress_set", map[string]any{"remove": true, "item": book})
+		suite.Call(t, "user_progress_set", map[string]any{"remove": true, "item": book})
 	})
 
 	// it is open, so server_sessions must project it rather than return nothing
-	rows := rows(t, call(t, "server_sessions", nil)["sessions"], "sessions")
+	rows := acc.Rows(t, suite.Call(t, "server_sessions", nil)["sessions"], "sessions")
 	if len(rows) == 0 {
 		t.Fatal("server_sessions is empty while a session is open")
 	}
@@ -350,14 +351,14 @@ func TestServerSessionsWithAPlaybackSession(t *testing.T) {
 	}
 	// an open session carries userId but not the expanded user object; the
 	// tool looks the name up
-	if uid := text(found["user_id"]); uid == "" {
+	if uid := acc.Str(found["user_id"]); uid == "" {
 		t.Errorf("no user_id on the open session: %v", found)
 	}
 	if found["user"] != "root" {
 		t.Errorf("user = %v, want root named on the open session", found["user"])
 	}
 	// DeviceInfo.Describe builds this from clientName and deviceName
-	if device := text(found["device"]); !strings.Contains(device, "abs-mcp tests") {
+	if device := acc.Str(found["device"]); !strings.Contains(device, "abs-mcp tests") {
 		t.Errorf("device = %q, want the client name in it", device)
 	}
 
@@ -369,8 +370,8 @@ func TestServerSessionsWithAPlaybackSession(t *testing.T) {
 	}
 
 	// and it reaches the history, which reads a different endpoint
-	history := call(t, "user_history", nil)
-	if num(t, history["total_sessions"], "total_sessions") == 0 {
+	history := suite.Call(t, "user_history", nil)
+	if acc.Num(t, history["total_sessions"], "total_sessions") == 0 {
 		t.Error("user_history reports no sessions after one was opened")
 	}
 	var inHistory bool
@@ -392,7 +393,7 @@ func TestServerSessionsWithAPlaybackSession(t *testing.T) {
 func rows2(t *testing.T, v any) []map[string]any {
 	t.Helper()
 
-	list := items(v)
+	list := acc.RowsOfAny(v)
 	out := make([]map[string]any, 0, len(list))
 	for _, e := range list {
 		if m, ok := e.(map[string]any); ok {
@@ -406,21 +407,21 @@ func rows2(t *testing.T, v any) []map[string]any {
 // Today's log, newest first: the server logs every scan, and a match picks
 // lines out of it.
 func TestServerTasksLog(t *testing.T) {
-	out := call(t, "server_tasks", map[string]any{"log": true, "level": "info", "limit": 5})
-	lines := rows(t, out["log"], "log")
-	if len(lines) == 0 || len(lines) > 5 || number(out["log_matched"]) < float64(len(lines)) {
+	out := suite.Call(t, "server_tasks", map[string]any{"log": true, "level": "info", "limit": 5})
+	lines := acc.Rows(t, out["log"], "log")
+	if len(lines) == 0 || len(lines) > 5 || acc.DecimalOr0(out["log_matched"]) < float64(len(lines)) {
 		t.Fatalf("server_tasks log = %v", out)
 	}
-	if lines[0]["time"] == nil || lines[0]["level"] == nil || lines[0]["message"] == nil || text(lines[0]["time"]) < text(lines[len(lines)-1]["time"]) {
+	if lines[0]["time"] == nil || lines[0]["level"] == nil || lines[0]["message"] == nil || acc.Str(lines[0]["time"]) < acc.Str(lines[len(lines)-1]["time"]) {
 		t.Errorf("lines = %v, want time, level and message, newest first", lines)
 	}
-	out = call(t, "server_tasks", map[string]any{"log": true, "level": "info", "match": "scan"})
-	for _, l := range rows(t, out["log"], "log") {
-		if !strings.Contains(strings.ToLower(text(l["message"])+" "+text(l["source"])), "scan") {
+	out = suite.Call(t, "server_tasks", map[string]any{"log": true, "level": "info", "match": "scan"})
+	for _, l := range acc.Rows(t, out["log"], "log") {
+		if !strings.Contains(strings.ToLower(acc.Str(l["message"])+" "+acc.Str(l["source"])), "scan") {
 			t.Errorf("a line that does not match: %v", l)
 		}
 	}
-	if number(out["log_matched"]) == 0 {
+	if acc.DecimalOr0(out["log_matched"]) == 0 {
 		t.Error("no line of today's log mentions a scan, though the fixtures were scanned")
 	}
 }

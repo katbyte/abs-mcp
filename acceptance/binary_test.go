@@ -30,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	acc "github.com/katbyte/go-kt/mcp/acctest"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -53,8 +54,8 @@ func removeBinary() {
 func binary(t *testing.T) string {
 	t.Helper()
 
-	if !ready {
-		t.Skip("ABS_SERVER and ABS_TOKEN are not set")
+	if !suite.Ready {
+		t.Skip(suite.NotReady)
 	}
 	binOnce.Do(func() {
 		// not t.TempDir: the binary is built once and outlives the test that built it
@@ -199,10 +200,10 @@ func librariesThrough(t *testing.T, session *mcp.ClientSession) []string {
 		t.Fatalf("library_list through the binary: %v", res.Content)
 	}
 	out := object(res.StructuredContent)
-	libs := rows(t, out["libraries"], "libraries")
+	libs := acc.Rows(t, out["libraries"], "libraries")
 	names := make([]string, 0, len(libs))
 	for _, l := range libs {
-		names = append(names, text(l["name"]))
+		names = append(names, acc.Str(l["name"]))
 	}
 	slices.Sort(names)
 

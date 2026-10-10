@@ -20,6 +20,7 @@ github.com/inconshreveable/mousetrap
 github.com/katbyte/go-kt/chttp
 github.com/katbyte/go-kt/clog
 github.com/katbyte/go-kt/lock
+github.com/katbyte/go-kt/mcp/acctest
 github.com/katbyte/go-kt/mcp/registry
 github.com/katbyte/go-kt/mcp/server
 github.com/katbyte/go-kt/parallel

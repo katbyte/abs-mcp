@@ -19,6 +19,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	acc "github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // voiceRate is the made-up readings' sample rate: speech's own, near enough.
@@ -102,7 +104,7 @@ func TestJourneySameRecording(t *testing.T) {
 		other:    {"title": "Zzyzx Echo", "narrators": []any{"Zzyzx Reader Two"}},
 	} {
 		edit["item"], edit["authors"] = ids[path], []any{author}
-		call(t, "item_edit", edit)
+		suite.Call(t, "item_edit", edit)
 	}
 
 	t.Run("item_compare_audio hears the copies and the other reading", func(t *testing.T) {
@@ -114,9 +116,9 @@ func TestJourneySameRecording(t *testing.T) {
 			{"another reading", other, "different"},
 		} {
 			began := time.Now()
-			out := call(t, "item_compare_audio", map[string]any{"item": ids[original], "other": ids[c.other]})
+			out := suite.Call(t, "item_compare_audio", map[string]any{"item": ids[original], "other": ids[c.other]})
 			t.Logf("%s: %v %v spectral %v, medians %v %v, speed %v, found %v, %vs of audio, %v bytes, %v", c.name, out["verdict"], out["scores"], out["spectral"], out["median"], out["spectral_median"], out["speed"], out["found"], out["audio_read_s"], out["bytes_read"], time.Since(began).Round(10*time.Millisecond))
-			if out["verdict"] != c.want || text(out["meaning"]) == "" {
+			if out["verdict"] != c.want || acc.Str(out["meaning"]) == "" {
 				t.Errorf("%s: %v, want %s", c.name, out, c.want)
 			}
 			spectral, ok := out["spectral"].([]any)
@@ -124,40 +126,40 @@ func TestJourneySameRecording(t *testing.T) {
 			if !ok || !ok2 || len(spectral) != 5 || len(at) != 5 {
 				t.Errorf("%s: spectral %v at %v, want five of each", c.name, out["spectral"], out["at_s"])
 			}
-			if c.want == "same" && (num(t, out["found"], "found") < 4 || number(out["spectral_median"]) < 0.5) {
+			if c.want == "same" && (acc.Num(t, out["found"], "found") < 4 || acc.DecimalOr0(out["spectral_median"]) < 0.5) {
 				t.Errorf("%s: found %v with spectral median %v, want at least 4 found, with the same voice", c.name, out["found"], out["spectral_median"])
 			}
-			if num(t, out["audio_read_s"], "audio_read_s") < 5*20 || num(t, out["bytes_read"], "bytes_read") == 0 {
+			if acc.Num(t, out["audio_read_s"], "audio_read_s") < 5*20 || acc.Num(t, out["bytes_read"], "bytes_read") == 0 {
 				t.Errorf("%s read %vs, %v bytes: want what it read said", c.name, out["audio_read_s"], out["bytes_read"])
 			}
 		}
 	})
 
 	t.Run("audit_duplicates offers the copies and not the other reading", func(t *testing.T) {
-		out := call(t, "audit_duplicates", map[string]any{"library": s.name})
+		out := suite.Call(t, "audit_duplicates", map[string]any{"library": s.name})
 		// the exact title and author do not make a group of two readings
 		// naming different narrators: those are two recordings of one book,
 		// kept on purpose, not one held twice
-		if groups := rows(t, out["groups"], "groups"); len(groups) != 0 || num(t, out["total_findings"], "total_findings") != 0 {
+		if groups := acc.Rows(t, out["groups"], "groups"); len(groups) != 0 || acc.Num(t, out["total_findings"], "total_findings") != 0 {
 			t.Fatalf("groups = %v, want none: the one pair sharing a title is two readings", groups)
 		}
 
 		name := map[string]string{ids[original]: "original", ids[faster]: "faster", ids[split]: "split", ids[other]: "other"}
 		got := map[string]string{}
-		for _, c := range rows(t, out["candidates"], "candidates") {
+		for _, c := range acc.Rows(t, out["candidates"], "candidates") {
 			var pair []string
-			for _, it := range rows(t, c["items"], "items") {
-				pair = append(pair, name[text(it["id"])])
+			for _, it := range acc.Rows(t, c["items"], "items") {
+				pair = append(pair, name[acc.Str(it["id"])])
 			}
 			slices.Sort(pair)
-			got[strings.Join(pair, "+")] = text(c["why"])
+			got[strings.Join(pair, "+")] = acc.Str(c["why"])
 		}
 		want := map[string]string{
 			"faster+original": "the same title, \"Zzyzx Echo\", and author; lengths 2.", // atempo 1.02, and the encoders' padding
 			"original+split":  "one is a single file, the other 3",
 			"faster+split":    "one is a single file, the other 3",
 		}
-		if len(got) != len(want) || num(t, out["total_candidates"], "total_candidates") != len(want) {
+		if len(got) != len(want) || acc.Num(t, out["total_candidates"], "total_candidates") != len(want) {
 			t.Errorf("candidates = %v, want %v", got, want)
 		}
 		for pair, w := range want {

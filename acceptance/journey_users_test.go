@@ -18,6 +18,7 @@ import (
 
 	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/abs-mcp/tools"
+	acc "github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // A non-admin account plays a book the way an app does - open a session,
@@ -59,7 +60,7 @@ func TestJourneyPlaybackReachesEveryListeningTool(t *testing.T) {
 	t.Run("while it plays", func(t *testing.T) {
 		// server_sessions is an admin's view of everyone, with who is listening
 		var open map[string]any
-		for _, s := range rows(t, call(t, "server_sessions", nil)["sessions"], "sessions") {
+		for _, s := range acc.Rows(t, suite.Call(t, "server_sessions", nil)["sessions"], "sessions") {
 			if s["id"] == session.ID {
 				open = s
 			}
@@ -70,7 +71,7 @@ func TestJourneyPlaybackReachesEveryListeningTool(t *testing.T) {
 		if open["user"] != listener.Name || open["user_id"] != listener.ID || open["title"] != book || open["item_id"] != bookID {
 			t.Errorf("open session = %v, want %s playing %s", open, listener.Name, book)
 		}
-		if device := text(open["device"]); !strings.Contains(device, "Zzyzx Client") {
+		if device := acc.Str(open["device"]); !strings.Contains(device, "Zzyzx Client") {
 			t.Errorf("device = %q", device)
 		}
 		if msg := listener.callErr(t, "server_sessions", nil); !strings.Contains(msg, "admin only") {
@@ -78,32 +79,32 @@ func TestJourneyPlaybackReachesEveryListeningTool(t *testing.T) {
 		}
 
 		// the continue-listening shelf, from both sides, with a position
-		self := rows(t, listener.call(t, "user_in_progress", nil)["items"], "items")
-		other := rows(t, call(t, "user_in_progress", named)["items"], "items")
+		self := acc.Rows(t, listener.call(t, "user_in_progress", nil)["items"], "items")
+		other := acc.Rows(t, suite.Call(t, "user_in_progress", named)["items"], "items")
 		for who, shelf := range map[string][]map[string]any{"self": self, "admin": other} {
 			if len(shelf) != 1 || shelf[0]["id"] != bookID {
 				t.Errorf("%s: shelf = %v, want only %s", who, shelf, book)
 				continue
 			}
 			progress, ok := shelf[0]["progress"].(map[string]any)
-			if !ok || num(t, progress["percent"], "percent") != 50 {
+			if !ok || acc.Num(t, progress["percent"], "percent") != 50 {
 				t.Errorf("%s: shelf progress = %v, want 50 percent", who, shelf[0]["progress"])
 			}
 		}
 
 		selfProgress := listener.call(t, "user_progress_get", map[string]any{"library": "Fiction", "item": book})["progress"]
-		adminProgress := call(t, "user_progress_get", map[string]any{"user": listener.Name, "library": "Fiction", "item": book})["progress"]
+		adminProgress := suite.Call(t, "user_progress_get", map[string]any{"user": listener.Name, "library": "Fiction", "item": book})["progress"]
 		if !sameJSON(selfProgress, adminProgress) || selfProgress == nil {
 			t.Errorf("progress: the listener sees %v, an admin sees %v", selfProgress, adminProgress)
 		}
 
-		selfUser, adminUser := listener.call(t, "user_get", nil), call(t, "user_get", named)
+		selfUser, adminUser := listener.call(t, "user_get", nil), suite.Call(t, "user_get", named)
 		for _, key := range []string{"items_in_progress", "items_finished", "recent_progress"} {
 			if !sameJSON(selfUser[key], adminUser[key]) {
 				t.Errorf("user_get %s: the listener sees %v, an admin sees %v", key, selfUser[key], adminUser[key])
 			}
 		}
-		if num(t, selfUser["items_in_progress"], "items_in_progress") != 1 {
+		if acc.Num(t, selfUser["items_in_progress"], "items_in_progress") != 1 {
 			t.Errorf("items_in_progress = %v, want 1", selfUser["items_in_progress"])
 		}
 	})
@@ -114,16 +115,16 @@ func TestJourneyPlaybackReachesEveryListeningTool(t *testing.T) {
 	closed = true
 
 	t.Run("after it closes", func(t *testing.T) {
-		for _, s := range rows(t, call(t, "server_sessions", nil)["sessions"], "sessions") {
+		for _, s := range acc.Rows(t, suite.Call(t, "server_sessions", nil)["sessions"], "sessions") {
 			if s["id"] == session.ID {
 				t.Errorf("the closed session is still open: %v", s)
 			}
 		}
 
 		// the history, from both sides, naming the listener on every row
-		for who, history := range map[string]map[string]any{"self": listener.call(t, "user_history", nil), "admin": call(t, "user_history", named)} {
-			sessions := rows(t, history["sessions"], "sessions")
-			if num(t, history["total_sessions"], "total_sessions") != 1 || len(sessions) != 1 {
+		for who, history := range map[string]map[string]any{"self": listener.call(t, "user_history", nil), "admin": suite.Call(t, "user_history", named)} {
+			sessions := acc.Rows(t, history["sessions"], "sessions")
+			if acc.Num(t, history["total_sessions"], "total_sessions") != 1 || len(sessions) != 1 {
 				t.Errorf("%s: history = %v, want the one session", who, history)
 				continue
 			}
@@ -134,34 +135,34 @@ func TestJourneyPlaybackReachesEveryListeningTool(t *testing.T) {
 		}
 
 		// the stats, from both sides
-		selfStats, adminStats := listener.call(t, "user_stats", nil), call(t, "user_stats", named)
+		selfStats, adminStats := listener.call(t, "user_stats", nil), suite.Call(t, "user_stats", named)
 		for _, key := range []string{"total_listened_s", "items_listened", "top_items"} {
 			if !sameJSON(selfStats[key], adminStats[key]) || selfStats[key] == nil {
 				t.Errorf("user_stats %s: the listener sees %v, an admin sees %v", key, selfStats[key], adminStats[key])
 			}
 		}
 		year := listener.call(t, "user_stats", map[string]any{"year": 2026})
-		if num(t, year["sessions"], "sessions") != 1 || num(t, year["books_listened"], "books_listened") != 1 {
+		if acc.Num(t, year["sessions"], "sessions") != 1 || acc.Num(t, year["books_listened"], "books_listened") != 1 {
 			t.Errorf("year in review = %v, want one session of one book", year)
 		}
 		// the server keeps a year in review only for the caller, so an admin
 		// asking for the listener's is told so rather than handed their own
-		if msg := callErr(t, "user_stats", map[string]any{"user": listener.Name, "year": 2026}); !strings.Contains(msg, "only available") {
+		if msg := suite.CallErr(t, "user_stats", map[string]any{"user": listener.Name, "year": 2026}); !strings.Contains(msg, "only available") {
 			t.Errorf("an admin asking for the listener's year in review: %q", msg)
 		}
 
 		// closing a session a second from the end of a one-second book marks
 		// it finished: off the shelf, and counted
-		if shelf := rows(t, listener.call(t, "user_in_progress", nil)["items"], "items"); len(shelf) != 0 {
+		if shelf := acc.Rows(t, listener.call(t, "user_in_progress", nil)["items"], "items"); len(shelf) != 0 {
 			t.Errorf("a finished book is still on the shelf: %v", shelf)
 		}
-		selfUser, adminUser := listener.call(t, "user_get", nil), call(t, "user_get", named)
-		if num(t, selfUser["items_finished"], "items_finished") != 1 || !sameJSON(selfUser["recent_progress"], adminUser["recent_progress"]) {
+		selfUser, adminUser := listener.call(t, "user_get", nil), suite.Call(t, "user_get", named)
+		if acc.Num(t, selfUser["items_finished"], "items_finished") != 1 || !sameJSON(selfUser["recent_progress"], adminUser["recent_progress"]) {
 			t.Errorf("user_get after finishing: the listener sees %v, an admin sees %v", selfUser, adminUser)
 		}
 
 		// user_list says what they last listened to
-		for _, u := range rows(t, call(t, "user_list", nil)["users"], "users") {
+		for _, u := range acc.Rows(t, suite.Call(t, "user_list", nil)["users"], "users") {
 			if u["username"] == listener.Name && u["last_listened"] != book {
 				t.Errorf("user_list last_listened = %v, want %s", u["last_listened"], book)
 			}
@@ -180,14 +181,14 @@ func sameJSON(a, b any) bool {
 // carrying one tag. user_get says so, and every tool that reads a library on
 // their behalf shows them only what they may see.
 func TestJourneyRestrictedAccounts(t *testing.T) {
-	if !ready {
-		t.Skip("ABS_SERVER and ABS_TOKEN are not set")
+	if !suite.Ready {
+		t.Skip(suite.NotReady)
 	}
 
 	fiction := libraryID(t, "Fiction")
 	// something in Non-Fiction a Fiction-only account must not see
-	nf := call(t, "collection_create", map[string]any{"library": "Non-Fiction", "name": "Zzyzx Hidden Shelf", "items": []any{"War Is a Racket"}})
-	t.Cleanup(func() { call(t, "collection_delete", map[string]any{"collection": nf["id"]}) })
+	nf := suite.Call(t, "collection_create", map[string]any{"library": "Non-Fiction", "name": "Zzyzx Hidden Shelf", "items": []any{"War Is a Racket"}})
+	t.Cleanup(func() { suite.Call(t, "collection_delete", map[string]any{"collection": nf["id"]}) })
 	racket := itemID(t, "Non-Fiction", "War Is a Racket")
 
 	t.Run("one library", func(t *testing.T) {
@@ -197,16 +198,16 @@ func TestJourneyRestrictedAccounts(t *testing.T) {
 			LibrariesAccessible: []string{fiction},
 		})
 
-		for who, u := range map[string]map[string]any{"self": shelf.call(t, "user_get", nil), "admin": call(t, "user_get", map[string]any{"user": shelf.Name})} {
-			if all := truth(u["all_libraries"]); all {
+		for who, u := range map[string]map[string]any{"self": shelf.call(t, "user_get", nil), "admin": suite.Call(t, "user_get", map[string]any{"user": shelf.Name})} {
+			if all := acc.BoolOf(u["all_libraries"]); all {
 				t.Errorf("%s: all_libraries = true for an account limited to Fiction", who)
 			}
-			if libs := strs(t, u["libraries"], "libraries"); !slices.Equal(libs, []string{fiction}) {
+			if libs := acc.Strs(t, u["libraries"], "libraries"); !slices.Equal(libs, []string{fiction}) {
 				t.Errorf("%s: libraries = %v, want only Fiction", who, libs)
 			}
 		}
 
-		libs := rows(t, shelf.call(t, "library_list", nil)["libraries"], "libraries")
+		libs := acc.Rows(t, shelf.call(t, "library_list", nil)["libraries"], "libraries")
 		if len(libs) != 1 || libs[0]["name"] != "Fiction" {
 			t.Errorf("library_list = %v, want only Fiction", libs)
 		}
@@ -224,20 +225,20 @@ func TestJourneyRestrictedAccounts(t *testing.T) {
 		} {
 			shelf.callErr(t, tc.tool, tc.args)
 		}
-		if items := rows(t, shelf.call(t, "library_search", map[string]any{"query": "War"})["items"], "items"); len(items) != 0 {
+		if items := acc.Rows(t, shelf.call(t, "library_search", map[string]any{"query": "War"})["items"], "items"); len(items) != 0 {
 			t.Errorf("library_search War = %v, want nothing from Non-Fiction", items)
 		}
-		for _, row := range rows(t, shelf.call(t, "collection_list", nil)["collections"], "collections") {
+		for _, row := range acc.Rows(t, shelf.call(t, "collection_list", nil)["collections"], "collections") {
 			if row["name"] == "Zzyzx Hidden Shelf" {
 				t.Errorf("collection_list shows a Non-Fiction collection: %v", row)
 			}
 		}
-		for _, it := range rows(t, shelf.call(t, "library_recent", nil)["items"], "items") {
+		for _, it := range acc.Rows(t, shelf.call(t, "library_recent", nil)["items"], "items") {
 			if it["id"] == racket {
 				t.Error("library_recent shows a Non-Fiction book")
 			}
 		}
-		if scanned := num(t, shelf.call(t, "audit_all", nil)["items_scanned"], "items_scanned"); scanned != 7 {
+		if scanned := acc.Num(t, shelf.call(t, "audit_all", nil)["items_scanned"], "items_scanned"); scanned != 7 {
 			t.Errorf("audit_all scanned %d, want Fiction's 7", scanned)
 		}
 	})
@@ -252,10 +253,10 @@ func TestJourneyRestrictedAccounts(t *testing.T) {
 		visible := []string{"City of Golden Shadow", "Sea of Silver Light"}
 
 		u := tagged.call(t, "user_get", nil)
-		if all := truth(u["all_tags"]); all {
+		if all := acc.BoolOf(u["all_tags"]); all {
 			t.Error("all_tags = true for an account limited to one tag")
 		}
-		if tags := strs(t, u["tags"], "tags"); !slices.Equal(tags, []string{"cyberpunk"}) {
+		if tags := acc.Strs(t, u["tags"], "tags"); !slices.Equal(tags, []string{"cyberpunk"}) {
 			t.Errorf("tags = %v, want [cyberpunk]", tags)
 		}
 
@@ -292,14 +293,14 @@ func TestJourneyRestrictedAccounts(t *testing.T) {
 			}
 		}
 		get := tagged.call(t, "library_get", map[string]any{"library": "Fiction"})
-		if num(t, get["items"], "items") != 2 || num(t, get["authors"], "authors") != 1 {
+		if acc.Num(t, get["items"], "items") != 2 || acc.Num(t, get["authors"], "authors") != 1 {
 			t.Errorf("library_get Fiction = %v, want 2 items by 1 author", get)
 		}
-		if narrators := rows(t, tagged.call(t, "narrator_list", map[string]any{"library": "Fiction"})["narrators"], "narrators"); len(narrators) != 1 || narrators[0]["name"] != "George Newbern" || num(t, narrators[0]["books"], "books") != 2 {
+		if narrators := acc.Rows(t, tagged.call(t, "narrator_list", map[string]any{"library": "Fiction"})["narrators"], "narrators"); len(narrators) != 1 || narrators[0]["name"] != "George Newbern" || acc.Num(t, narrators[0]["books"], "books") != 2 {
 			t.Errorf("narrator_list = %v, want George Newbern on 2", narrators)
 		}
 		tagged.callErr(t, "item_get", map[string]any{"library": "Fiction", "item": "Foundation"})
-		if scanned := num(t, tagged.call(t, "audit_all", map[string]any{"library": "Fiction"})["items_scanned"], "items_scanned"); scanned != 2 {
+		if scanned := acc.Num(t, tagged.call(t, "audit_all", map[string]any{"library": "Fiction"})["items_scanned"], "items_scanned"); scanned != 2 {
 			t.Errorf("audit_all scanned %d, want the 2 visible books", scanned)
 		}
 	})
@@ -336,11 +337,11 @@ func TestJourneyWritesAnAccountMayNotMake(t *testing.T) {
 	}, tools.Options{EnableDelete: true})
 
 	racket := itemID(t, "Non-Fiction", "War Is a Racket")
-	shelf := text(call(t, "collection_create", map[string]any{"library": "Fiction", "name": "Zzyzx Rights Shelf", "items": []any{"Foundation"}})["id"])
-	t.Cleanup(func() { call(t, "collection_delete", map[string]any{"collection": shelf}) })
-	episode := text(rows(t, call(t, "podcast_episodes", map[string]any{"item": "Behind the Bastards"})["episodes"], "episodes")[0]["id"])
-	noneApplied := func(out map[string]any) bool { return num(t, out["applied"], "applied") == 0 }
-	noneTagged := func(out map[string]any) bool { return num(t, out["tagged"], "tagged") == 0 }
+	shelf := acc.Str(suite.Call(t, "collection_create", map[string]any{"library": "Fiction", "name": "Zzyzx Rights Shelf", "items": []any{"Foundation"}})["id"])
+	t.Cleanup(func() { suite.Call(t, "collection_delete", map[string]any{"collection": shelf}) })
+	episode := acc.Str(acc.Rows(t, suite.Call(t, "podcast_episodes", map[string]any{"item": "Behind the Bastards"})["episodes"], "episodes")[0]["id"])
+	noneApplied := func(out map[string]any) bool { return acc.Num(t, out["applied"], "applied") == 0 }
+	noneTagged := func(out map[string]any) bool { return acc.Num(t, out["tagged"], "tagged") == 0 }
 
 	refused := []writeCall{
 		{tool: "item_edit", args: map[string]any{"library": "Fiction", "item": "Foundation", "add_tags": []any{"zzyzx-refused"}}},
@@ -398,7 +399,7 @@ func TestJourneyWritesAnAccountMayNotMake(t *testing.T) {
 	// what any account may do with its own listening, in its own libraries
 	own := []string{"user_progress_set", "user_bookmark_edit", "playlist_create", "playlist_edit", "playlist_delete"}
 
-	res, err := account.session.ListTools(ctx, nil)
+	res, err := account.suite.Session.ListTools(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -414,7 +415,7 @@ func TestJourneyWritesAnAccountMayNotMake(t *testing.T) {
 	waitIdle(t)
 	before := snapshot(t)
 	for _, c := range refused {
-		out, err := account.invoke(c.tool, c.args)
+		out, err := account.suite.Invoke(c.tool, c.args)
 		switch {
 		case err != nil:
 		case c.refused != nil && c.refused(out):
@@ -430,28 +431,28 @@ func TestJourneyWritesAnAccountMayNotMake(t *testing.T) {
 
 	t.Run("its own listening and playlists", func(t *testing.T) {
 		t.Cleanup(func() {
-			_, _ = account.invoke("user_progress_set", map[string]any{"remove": true, "library": "Fiction", "item": "Foundation"})
-			_, _ = account.invoke("user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Foundation", "remove_bookmarks": []any{0.5}})
-			_, _ = account.invoke("playlist_delete", map[string]any{"playlist": "Zzyzx Own Queue"})
+			_, _ = account.suite.Invoke("user_progress_set", map[string]any{"remove": true, "library": "Fiction", "item": "Foundation"})
+			_, _ = account.suite.Invoke("user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Foundation", "remove_bookmarks": []any{0.5}})
+			_, _ = account.suite.Invoke("playlist_delete", map[string]any{"playlist": "Zzyzx Own Queue"})
 		})
 		account.call(t, "user_progress_set", map[string]any{"library": "Fiction", "item": "Foundation", "percent": 50})
 		account.call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Foundation", "add_bookmarks": []any{map[string]any{"time_s": 0.5, "title": "Zzyzx Own Mark"}}})
 		account.call(t, "playlist_create", map[string]any{"library": "Fiction", "name": "Zzyzx Own Queue", "entries": []any{map[string]any{"item": "Foundation"}}})
 		account.call(t, "playlist_edit", map[string]any{"playlist": "Zzyzx Own Queue", "add_entries": []any{map[string]any{"item": "Second Foundation"}}})
 		account.call(t, "playlist_edit", map[string]any{"playlist": "Zzyzx Own Queue", "description": "Zzyzx: the account's own"})
-		if got := account.call(t, "playlist_get", map[string]any{"playlist": "Zzyzx Own Queue"}); len(rows(t, got["entries"], "entries")) != 2 || got["description"] != "Zzyzx: the account's own" {
+		if got := account.call(t, "playlist_get", map[string]any{"playlist": "Zzyzx Own Queue"}); len(acc.Rows(t, got["entries"], "entries")) != 2 || got["description"] != "Zzyzx: the account's own" {
 			t.Errorf("the account's playlist = %v", got)
 		}
-		if p := object(account.call(t, "user_progress_get", map[string]any{"library": "Fiction", "item": "Foundation"})["progress"]); p == nil || num(t, p["percent"], "percent") != 50 {
+		if p := object(account.call(t, "user_progress_get", map[string]any{"library": "Fiction", "item": "Foundation"})["progress"]); p == nil || acc.Num(t, p["percent"], "percent") != 50 {
 			t.Errorf("the account's progress = %v", p)
 		}
 		account.call(t, "playlist_delete", map[string]any{"playlist": "Zzyzx Own Queue"})
-		if done := truth(account.call(t, "user_progress_set", map[string]any{"remove": true, "library": "Fiction", "item": "Foundation"})["removed"]); !done {
+		if done := acc.BoolOf(account.call(t, "user_progress_set", map[string]any{"remove": true, "library": "Fiction", "item": "Foundation"})["removed"]); !done {
 			t.Error("the account's progress was not removed")
 		}
 		account.call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Foundation", "remove_bookmarks": []any{0.5}})
 		// and none of it is the admin's
-		for _, p := range rows(t, call(t, "playlist_list", nil)["playlists"], "playlists") {
+		for _, p := range acc.Rows(t, suite.Call(t, "playlist_list", nil)["playlists"], "playlists") {
 			if p["name"] == "Zzyzx Own Queue" {
 				t.Errorf("the account's playlist is in the admin's list: %v", p)
 			}
@@ -474,7 +475,7 @@ func TestJourneyAnAdminWithoutDelete(t *testing.T) {
 
 	account := newUserWith(t, "zzyzx-admin-no-delete", abs.UserCreate{Type: "admin"}, tools.Options{EnableDelete: true})
 	for tool, out := range map[string]map[string]any{"user_get": account.call(t, "user_get", nil), "server_info": account.call(t, "server_info", nil)} {
-		if !isFalse(out["can_delete"]) || !truth(out["can_update"]) {
+		if !acc.IsBool(out["can_delete"], false) || !acc.BoolOf(out["can_update"]) {
 			t.Errorf("%s = can_delete %v, can_update %v, want an admin that may update and may not delete", tool, out["can_delete"], out["can_update"])
 		}
 	}
@@ -506,7 +507,7 @@ func TestJourneyAnAdminWithoutDelete(t *testing.T) {
 	if got := marks(); !slices.Equal(got, []string{"Zzyzx Kept Mark"}) {
 		t.Errorf("after the refused deletes the admin's bookmarks = %v, want the one it made", got)
 	}
-	if got := call(t, "item_get", map[string]any{"item": id}); got["title"] != "Zzyzx Kept Book" {
+	if got := suite.Call(t, "item_get", map[string]any{"item": id}); got["title"] != "Zzyzx Kept Book" {
 		t.Errorf("the book after the refused deletes = %v", got)
 	}
 	if got := s.onDisk(t); !slices.Contains(got, book+"/notes.txt") || !slices.Contains(got, book+"/01.mp3") {
@@ -514,11 +515,11 @@ func TestJourneyAnAdminWithoutDelete(t *testing.T) {
 	}
 
 	// given the permission, the same call deletes, and takes the bookmark first
-	call(t, "user_edit", map[string]any{"user": account.Name, "can_delete": true})
-	if out := account.call(t, "item_delete", map[string]any{"item": id, "confirm": true}); num(t, out["bookmarks_removed"], "bookmarks_removed") != 1 || out["deleted"] != "Zzyzx Kept Book" {
+	suite.Call(t, "user_edit", map[string]any{"user": account.Name, "can_delete": true})
+	if out := account.call(t, "item_delete", map[string]any{"item": id, "confirm": true}); acc.Num(t, out["bookmarks_removed"], "bookmarks_removed") != 1 || out["deleted"] != "Zzyzx Kept Book" {
 		t.Errorf("the delete once allowed = %v", out)
 	}
-	if got := rows(t, account.call(t, "user_bookmarks", nil)["bookmarks"], "bookmarks"); len(got) != 0 {
+	if got := acc.Rows(t, account.call(t, "user_bookmarks", nil)["bookmarks"], "bookmarks"); len(got) != 0 {
 		t.Errorf("bookmarks left on the deleted book: %v", got)
 	}
 }

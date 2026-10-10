@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/katbyte/abs-mcp/sdk/abs"
+	acc "github.com/katbyte/go-kt/mcp/acctest"
 )
 
 func TestJourneyLibraryLife(t *testing.T) {
@@ -39,10 +40,10 @@ func TestJourneyLibraryLife(t *testing.T) {
 		}
 	}
 	titles := func(library string) (all, missing []string) {
-		for _, it := range rows(t, call(t, "library_items", map[string]any{"library": library, "limit": 50})["items"], "items") {
-			title := text(it["title"])
+		for _, it := range acc.Rows(t, suite.Call(t, "library_items", map[string]any{"library": library, "limit": 50})["items"], "items") {
+			title := acc.Str(it["title"])
 			all = append(all, title)
-			if m := truth(it["missing"]); m {
+			if m := acc.BoolOf(it["missing"]); m {
 				missing = append(missing, title)
 			}
 		}
@@ -67,13 +68,13 @@ func TestJourneyLibraryLife(t *testing.T) {
 	})
 
 	t.Run("create", func(t *testing.T) {
-		out := call(t, "library_create", map[string]any{"name": name, "folders": []any{"/scratch/zzyzx-life"}, "media_type": "book"})
+		out := suite.Call(t, "library_create", map[string]any{"name": name, "folders": []any{"/scratch/zzyzx-life"}, "media_type": "book"})
 		lib := object(out["library"])
-		libID = text(lib["id"])
+		libID = acc.Str(lib["id"])
 		if libID == "" {
 			t.Fatalf("no id: %v", out)
 		}
-		if got := call(t, "library_get", map[string]any{"library": name}); got["id"] != libID || num(t, got["items"], "items") != 0 {
+		if got := suite.Call(t, "library_get", map[string]any{"library": name}); got["id"] != libID || acc.Num(t, got["items"], "items") != 0 {
 			t.Errorf("library_get after create = %v, want it empty", got)
 		}
 	})
@@ -82,7 +83,7 @@ func TestJourneyLibraryLife(t *testing.T) {
 	}
 
 	t.Run("scan", func(t *testing.T) {
-		call(t, "library_scan", map[string]any{"library": name})
+		suite.Call(t, "library_scan", map[string]any{"library": name})
 		if err := waitForItems(name, 1); err != nil {
 			t.Fatal(err)
 		}
@@ -93,7 +94,7 @@ func TestJourneyLibraryLife(t *testing.T) {
 
 	t.Run("a folder added, scanned", func(t *testing.T) {
 		addBook("Zzyzx Second Book")
-		call(t, "library_scan", map[string]any{"library": name})
+		suite.Call(t, "library_scan", map[string]any{"library": name})
 		if err := waitForItems(name, 2); err != nil {
 			t.Fatal(err)
 		}
@@ -106,7 +107,7 @@ func TestJourneyLibraryLife(t *testing.T) {
 		if err := os.RemoveAll(filepath.Join(root, "Zzyzx Author", "Zzyzx First Book")); err != nil {
 			t.Fatal(err)
 		}
-		call(t, "library_scan", map[string]any{"library": name})
+		suite.Call(t, "library_scan", map[string]any{"library": name})
 		// a scan keeps the record of a vanished folder and marks it missing
 		var missing []string
 		for range 30 {
@@ -118,11 +119,11 @@ func TestJourneyLibraryLife(t *testing.T) {
 		if !slices.Equal(missing, []string{"Zzyzx First Book"}) {
 			t.Fatalf("missing = %v, want the removed book", missing)
 		}
-		issues := titlesIn(t, call(t, "audit_issues", map[string]any{"library": name})["findings"], "findings")
+		issues := titlesIn(t, suite.Call(t, "audit_issues", map[string]any{"library": name})["findings"], "findings")
 		if !slices.Equal(issues, []string{"Zzyzx First Book"}) {
 			t.Errorf("audit_issues = %v", issues)
 		}
-		if removed := num(t, call(t, "library_issues_remove", map[string]any{"library": name, "confirm": true})["removed"], "removed"); removed != 1 {
+		if removed := acc.Num(t, suite.Call(t, "library_issues_remove", map[string]any{"library": name, "confirm": true})["removed"], "removed"); removed != 1 {
 			t.Errorf("removed = %d, want 1", removed)
 		}
 		if err := waitForItems(name, 1); err != nil {
@@ -134,24 +135,24 @@ func TestJourneyLibraryLife(t *testing.T) {
 	})
 
 	t.Run("renamed", func(t *testing.T) {
-		call(t, "library_edit", map[string]any{"library": name, "name": renamed})
-		if msg := callErr(t, "library_get", map[string]any{"library": name}); msg == "" {
+		suite.Call(t, "library_edit", map[string]any{"library": name, "name": renamed})
+		if msg := suite.CallErr(t, "library_get", map[string]any{"library": name}); msg == "" {
 			t.Error("the old name still resolves")
 		}
-		if got := call(t, "library_get", map[string]any{"library": renamed}); got["id"] != libID || num(t, got["items"], "items") != 1 {
+		if got := suite.Call(t, "library_get", map[string]any{"library": renamed}); got["id"] != libID || acc.Num(t, got["items"], "items") != 1 {
 			t.Errorf("by the new name = %v", got)
 		}
-		if msg := callErr(t, "library_edit", map[string]any{"library": renamed, "name": "Fiction"}); msg == "" {
+		if msg := suite.CallErr(t, "library_edit", map[string]any{"library": renamed, "name": "Fiction"}); msg == "" {
 			t.Error("renaming onto Fiction was not refused")
 		}
-		if msg := callErr(t, "library_create", map[string]any{"name": renamed, "folders": []any{"/scratch/zzyzx-life"}}); msg == "" {
+		if msg := suite.CallErr(t, "library_create", map[string]any{"name": renamed, "folders": []any{"/scratch/zzyzx-life"}}); msg == "" {
 			t.Error("a second library by the same name was not refused")
 		}
 	})
 
 	t.Run("a folder that is not there", func(t *testing.T) {
 		missingDir := filepath.Join(data, "scratch", "zzyzx-nowhere")
-		if msg := callErr(t, "library_create", map[string]any{"name": "Zzyzx Nowhere", "folders": []any{"/scratch/zzyzx-nowhere"}}); msg == "" {
+		if msg := suite.CallErr(t, "library_create", map[string]any{"name": "Zzyzx Nowhere", "folders": []any{"/scratch/zzyzx-nowhere"}}); msg == "" {
 			t.Error("a library over a folder that is not there was created")
 		}
 		// the server would have made the folder; nothing was sent, so it did not
@@ -167,12 +168,12 @@ func TestJourneyLibraryLife(t *testing.T) {
 		if err := admin.DeleteLibrary(ctx, libID); err != nil {
 			t.Fatal(err)
 		}
-		for _, l := range rows(t, call(t, "library_list", nil)["libraries"], "libraries") {
+		for _, l := range acc.Rows(t, suite.Call(t, "library_list", nil)["libraries"], "libraries") {
 			if l["id"] == libID {
 				t.Errorf("the deleted library is still listed: %v", l)
 			}
 		}
-		if msg := callErr(t, "library_get", map[string]any{"library": libID}); msg == "" {
+		if msg := suite.CallErr(t, "library_get", map[string]any{"library": libID}); msg == "" {
 			t.Error("the deleted library still resolves by id")
 		}
 		libID = ""

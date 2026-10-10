@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/katbyte/abs-mcp/sdk/abs"
+	acc "github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // pageWalk reads a listing that pages by offset from one offset to its end,
@@ -32,16 +33,16 @@ func pageWalk(t *testing.T, tool, key string, args map[string]any, from, limit i
 	var ids []string
 	total := -1
 	for offset := from; ; {
-		out := call(t, tool, withArgs(args, map[string]any{"limit": limit, "offset": offset}))
-		if got := num(t, out["offset"], "offset"); got != offset {
+		out := suite.Call(t, tool, withArgs(args, map[string]any{"limit": limit, "offset": offset}))
+		if got := acc.Num(t, out["offset"], "offset"); got != offset {
 			t.Fatalf("%s %v from %d answers offset %d", tool, args, offset, got)
 		}
-		n := num(t, out["total"], "total")
+		n := acc.Num(t, out["total"], "total")
 		if total >= 0 && n != total {
 			t.Errorf("%s %v: the total moved from %d to %d at offset %d", tool, args, total, n, offset)
 		}
 		total = n
-		page := rows(t, out[key], key)
+		page := acc.Rows(t, out[key], key)
 		ids = append(ids, valuesIn(t, out[key], key, "id")...)
 		next, more := out["next_offset"]
 		if !more {
@@ -53,7 +54,7 @@ func pageWalk(t *testing.T, tool, key string, args map[string]any, from, limit i
 		if len(page) != limit {
 			t.Errorf("%s %v: a page of %d at offset %d is short of the limit %d and not the last", tool, args, len(page), offset, limit)
 		}
-		if got := num(t, next, "next_offset"); got != offset+len(page) {
+		if got := acc.Num(t, next, "next_offset"); got != offset+len(page) {
 			t.Fatalf("%s %v: next_offset %d after %d rows from %d", tool, args, got, len(page), offset)
 		}
 		offset += len(page)
@@ -71,10 +72,10 @@ func pageWalk(t *testing.T, tool, key string, args map[string]any, from, limit i
 func everyPageOnce(t *testing.T, tool, key string, args map[string]any, limit int) []map[string]any {
 	t.Helper()
 
-	whole := call(t, tool, withArgs(args, map[string]any{"limit": 1000}))
-	all := rows(t, whole[key], key)
+	whole := suite.Call(t, tool, withArgs(args, map[string]any{"limit": 1000}))
+	all := acc.Rows(t, whole[key], key)
 	ids := valuesIn(t, whole[key], key, "id")
-	if total := num(t, whole["total"], "total"); total != len(all) || whole["next_offset"] != nil {
+	if total := acc.Num(t, whole["total"], "total"); total != len(all) || whole["next_offset"] != nil {
 		t.Fatalf("%s %v unpaged: %d rows of %d, next_offset %v", tool, args, len(all), total, whole["next_offset"])
 	}
 	if len(all) <= 2*limit {
@@ -92,8 +93,8 @@ func everyPageOnce(t *testing.T, tool, key string, args map[string]any, limit in
 			t.Errorf("%s %v by %d from %d read\n  %v\nwant\n  %v", tool, args, limit, from, got, ids[from:])
 		}
 	}
-	past := call(t, tool, withArgs(args, map[string]any{"limit": limit, "offset": len(all) + 2}))
-	if got := rows(t, past[key], key); len(got) != 0 || past["next_offset"] != nil {
+	past := suite.Call(t, tool, withArgs(args, map[string]any{"limit": limit, "offset": len(all) + 2}))
+	if got := acc.Rows(t, past[key], key); len(got) != 0 || past["next_offset"] != nil {
 		t.Errorf("%s %v past the end: %d rows, next_offset %v", tool, args, len(got), past["next_offset"])
 	}
 	return all
@@ -109,7 +110,7 @@ func ordered(t *testing.T, what string, all []map[string]any, key string, desc b
 		var cmp int
 		switch av := a.(type) {
 		case float64:
-			bv := number(b)
+			bv := acc.DecimalOr0(b)
 			cmp = int(av - bv)
 		default:
 			cmp = strings.Compare(strings.ToLower(fmt.Sprint(a)), strings.ToLower(fmt.Sprint(b)))
@@ -129,8 +130,8 @@ func ordered(t *testing.T, what string, all []map[string]any, key string, desc b
 // groups the server would silently ignore - and answer with every book in no
 // order - by name, and takes the ones it knows in any case.
 func TestJourneyEveryPageReadOnce(t *testing.T) {
-	if !ready {
-		t.Skip("ABS_SERVER and ABS_TOKEN are not set")
+	if !suite.Ready {
+		t.Skip(suite.NotReady)
 	}
 
 	t.Run("library_items", func(t *testing.T) {
@@ -150,19 +151,19 @@ func TestJourneyEveryPageReadOnce(t *testing.T) {
 		ordered(t, "author", everyPageOnce(t, "library_items", "items", withMessy(map[string]any{"sort": "author"}), 5), "author", false)
 
 		// the sort and the filter group are read in any case
-		title := valuesIn(t, call(t, "library_items", withMessy(map[string]any{"sort": "title", "limit": 100}))["items"], "items", "id")
-		if got := valuesIn(t, call(t, "library_items", withMessy(map[string]any{"sort": "Title", "limit": 100}))["items"], "items", "id"); !slices.Equal(got, title) {
+		title := valuesIn(t, suite.Call(t, "library_items", withMessy(map[string]any{"sort": "title", "limit": 100}))["items"], "items", "id")
+		if got := valuesIn(t, suite.Call(t, "library_items", withMessy(map[string]any{"sort": "Title", "limit": 100}))["items"], "items", "id"); !slices.Equal(got, title) {
 			t.Errorf("sort Title = %v, want sort title's %v", got, title)
 		}
 		for _, pair := range [][2]string{{"genres:Fantasy", "GENRES:Fantasy"}, {"missing:asin", "Missing:ASIN"}, {"narrators:Nigel Planer", "narrator:Nigel Planer"}} {
-			a := num(t, call(t, "library_items", withMessy(map[string]any{"filter": pair[0]}))["total"], "total")
-			b := num(t, call(t, "library_items", withMessy(map[string]any{"filter": pair[1]}))["total"], "total")
+			a := acc.Num(t, suite.Call(t, "library_items", withMessy(map[string]any{"filter": pair[0]}))["total"], "total")
+			b := acc.Num(t, suite.Call(t, "library_items", withMessy(map[string]any{"filter": pair[1]}))["total"], "total")
 			if a == 0 || a == len(messyBooks) || a != b {
 				t.Errorf("%s finds %d, %s finds %d: want the same few books", pair[0], a, pair[1], b)
 			}
 		}
 		// a limit past the cap is taken, not refused
-		if got := rows(t, call(t, "library_items", withMessy(map[string]any{"limit": 5000}))["items"], "items"); len(got) != len(messyBooks) {
+		if got := acc.Rows(t, suite.Call(t, "library_items", withMessy(map[string]any{"limit": 5000}))["items"], "items"); len(got) != len(messyBooks) {
 			t.Errorf("limit 5000 answered %d rows, want all %d", len(got), len(messyBooks))
 		}
 
@@ -176,11 +177,11 @@ func TestJourneyEveryPageReadOnce(t *testing.T) {
 			{map[string]any{"filter": "recent:yes"}, "filter recent takes no value"},
 			{map[string]any{"filter": "genres"}, "filter genres needs a value"},
 		} {
-			if msg := callErr(t, "library_items", withMessy(bad.args)); !strings.Contains(msg, bad.want) {
+			if msg := suite.CallErr(t, "library_items", withMessy(bad.args)); !strings.Contains(msg, bad.want) {
 				t.Errorf("%v: %s, want %q", bad.args, msg, bad.want)
 			}
 		}
-		if msg := callErr(t, "library_items", map[string]any{"library": "Podcasts", "filter": "authors:Robert Evans"}); !strings.Contains(msg, "a podcast library cannot be filtered by authors") {
+		if msg := suite.CallErr(t, "library_items", map[string]any{"library": "Podcasts", "filter": "authors:Robert Evans"}); !strings.Contains(msg, "a podcast library cannot be filtered by authors") {
 			t.Errorf("a podcast library by author: %s", msg)
 		}
 	})
@@ -189,7 +190,7 @@ func TestJourneyEveryPageReadOnce(t *testing.T) {
 		ordered(t, "name", everyPageOnce(t, "author_list", "authors", withMessy(map[string]any{"sort": "name"}), 2), "name", false)
 		ordered(t, "name descending", everyPageOnce(t, "author_list", "authors", withMessy(map[string]any{"sort": "name", "desc": true}), 2), "name", true)
 		ordered(t, "books descending", everyPageOnce(t, "author_list", "authors", withMessy(map[string]any{"sort": "Books", "desc": true}), 2), "books", true)
-		if msg := callErr(t, "author_list", withMessy(map[string]any{"sort": "surname"})); !strings.Contains(msg, `unknown sort "surname"`) {
+		if msg := suite.CallErr(t, "author_list", withMessy(map[string]any{"sort": "surname"})); !strings.Contains(msg, `unknown sort "surname"`) {
 			t.Errorf("an unknown author sort: %s", msg)
 		}
 	})
@@ -198,7 +199,7 @@ func TestJourneyEveryPageReadOnce(t *testing.T) {
 		ordered(t, "name", everyPageOnce(t, "series_list", "series", withMessy(map[string]any{"sort": "name"}), 2), "name", false)
 		ordered(t, "books descending", everyPageOnce(t, "series_list", "series", withMessy(map[string]any{"sort": "books", "desc": true}), 2), "books", true)
 		everyPageOnce(t, "series_list", "series", withMessy(map[string]any{"sort": "added"}), 2)
-		if msg := callErr(t, "series_list", withMessy(map[string]any{"sort": "length"})); !strings.Contains(msg, `unknown sort "length"`) {
+		if msg := suite.CallErr(t, "series_list", withMessy(map[string]any{"sort": "length"})); !strings.Contains(msg, `unknown sort "length"`) {
 			t.Errorf("an unknown series sort: %s", msg)
 		}
 	})
@@ -244,19 +245,19 @@ func TestJourneyMatchedBooksPageInTheOrderAdded(t *testing.T) {
 		}
 	})
 	for _, id := range ids[1:] {
-		call(t, "item_edit", map[string]any{"item": id, "asin": foundationASIN})
+		suite.Call(t, "item_edit", map[string]any{"item": id, "asin": foundationASIN})
 	}
 
 	var added []string
-	for _, id := range valuesIn(t, call(t, "library_items", withMessy(map[string]any{"sort": "added", "limit": 100}))["items"], "items", "id") {
+	for _, id := range valuesIn(t, suite.Call(t, "library_items", withMessy(map[string]any{"sort": "added", "limit": 100}))["items"], "items", "id") {
 		if slices.Contains(ids, id) {
 			added = append(added, id)
 		}
 	}
 	auditFrom := func(t *testing.T, offset int, extra map[string]any) ([]string, int, any) {
 		t.Helper()
-		out := call(t, "audit_matched", withMessy(withArgs(map[string]any{"providers": []any{"audible"}, "limit": 2, "offset": offset}, extra)))
-		return valuesIn(t, out["findings"], "findings", "id"), num(t, out["items_scanned"], "items_scanned"), out["next_offset"]
+		out := suite.Call(t, "audit_matched", withMessy(withArgs(map[string]any{"providers": []any{"audible"}, "limit": 2, "offset": offset}, extra)))
+		return valuesIn(t, out["findings"], "findings", "id"), acc.Num(t, out["items_scanned"], "items_scanned"), out["next_offset"]
 	}
 
 	found, scanned, next := auditFrom(t, 0, nil)
@@ -265,7 +266,7 @@ func TestJourneyMatchedBooksPageInTheOrderAdded(t *testing.T) {
 	}
 	// the first book fixed between calls: a new title puts it last by title,
 	// and not anywhere else in the order added
-	call(t, "item_edit", map[string]any{"item": added[0], "title": "Zzyzx Retitled Mid-Audit"})
+	suite.Call(t, "item_edit", map[string]any{"item": added[0], "title": "Zzyzx Retitled Mid-Audit"})
 	found, scanned, next = auditFrom(t, 2, nil)
 	if !slices.Equal(found, added[2:4]) || scanned != 2 || fmt.Sprint(next) != "4" {
 		t.Errorf("offset 2 = %v (%d scanned, next %v), want %v", found, scanned, next, added[2:4])
@@ -299,13 +300,13 @@ func TestJourneyMatchedBooksPageInTheOrderAdded(t *testing.T) {
 	// that is not windowed
 	var tagged []string
 	for offset, calls := 0, 0; calls < 10; calls++ {
-		out := call(t, "item_match_tag", map[string]any{"library": "Messy", "providers": []any{"audible"}, "limit": 2, "offset": offset})
-		got := rows(t, out["rows"], "rows")
-		if num(t, out["tagged"], "tagged") != len(got) || num(t, out["checked"], "checked") != len(got) {
+		out := suite.Call(t, "item_match_tag", map[string]any{"library": "Messy", "providers": []any{"audible"}, "limit": 2, "offset": offset})
+		got := acc.Rows(t, out["rows"], "rows")
+		if acc.Num(t, out["tagged"], "tagged") != len(got) || acc.Num(t, out["checked"], "checked") != len(got) {
 			t.Errorf("offset %d: %v, want each book checked and tagged", offset, out)
 		}
 		for _, r := range got {
-			tagged = append(tagged, text(r["id"]))
+			tagged = append(tagged, acc.Str(r["id"]))
 			if r["provider"] != "audible" {
 				t.Errorf("%v was tagged %v", r["title"], r["provider"])
 			}
@@ -313,10 +314,10 @@ func TestJourneyMatchedBooksPageInTheOrderAdded(t *testing.T) {
 		if out["next_offset"] == nil {
 			break
 		}
-		if n := num(t, out["next_offset"], "next_offset"); n != offset+len(got) {
+		if n := acc.Num(t, out["next_offset"], "next_offset"); n != offset+len(got) {
 			t.Fatalf("offset %d says next_offset %d after %d books", offset, n, len(got))
 		}
-		offset = num(t, out["next_offset"], "next_offset")
+		offset = acc.Num(t, out["next_offset"], "next_offset")
 	}
 	slices.Sort(tagged)
 	want := slices.Clone(ids)
@@ -324,8 +325,8 @@ func TestJourneyMatchedBooksPageInTheOrderAdded(t *testing.T) {
 	if !slices.Equal(tagged, want) {
 		t.Errorf("tagged %v, want each of %v once", tagged, want)
 	}
-	rest := call(t, "item_match_tag", map[string]any{"library": "Messy", "providers": []any{"audible"}, "limit": 100})
-	if num(t, rest["already_tagged"], "already_tagged") != len(ids) || num(t, rest["tagged"], "tagged") != 0 {
+	rest := suite.Call(t, "item_match_tag", map[string]any{"library": "Messy", "providers": []any{"audible"}, "limit": 100})
+	if acc.Num(t, rest["already_tagged"], "already_tagged") != len(ids) || acc.Num(t, rest["tagged"], "tagged") != 0 {
 		t.Errorf("after the pages: %v, want all %d already tagged", rest, len(ids))
 	}
 	for _, id := range ids {
@@ -347,34 +348,34 @@ func readExpanse(t *testing.T) expanseShelf {
 	t.Helper()
 
 	var s expanseShelf
-	s.Items = num(t, call(t, "library_get", map[string]any{"library": "Fiction"})["items"], "items")
-	for _, row := range rows(t, call(t, "series_list", map[string]any{"library": "Fiction"})["series"], "series") {
+	s.Items = acc.Num(t, suite.Call(t, "library_get", map[string]any{"library": "Fiction"})["items"], "items")
+	for _, row := range acc.Rows(t, suite.Call(t, "series_list", map[string]any{"library": "Fiction"})["series"], "series") {
 		if row["name"] == "The Expanse" {
-			s.SeriesBooks = num(t, row["books"], "books")
+			s.SeriesBooks = acc.Num(t, row["books"], "books")
 			s.Sequence = listOrNone(t, row["sequence"], "sequence")
 			slices.Sort(s.Sequence)
 		}
 	}
-	for _, gap := range rows(t, call(t, "audit_series", map[string]any{"library": "Fiction"})["gaps"], "gaps") {
+	for _, gap := range acc.Rows(t, suite.Call(t, "audit_series", map[string]any{"library": "Fiction"})["gaps"], "gaps") {
 		if gap["name"] == "The Expanse" {
 			s.Missing = listOrNone(t, gap["missing"], "missing")
 		}
 	}
-	s.AuthorBooks = len(rows(t, call(t, "author_get", map[string]any{"library": "Fiction", "author": "James S. A. Corey"})["books"], "books"))
-	for _, n := range rows(t, call(t, "narrator_list", map[string]any{"library": "Fiction"})["narrators"], "narrators") {
+	s.AuthorBooks = len(acc.Rows(t, suite.Call(t, "author_get", map[string]any{"library": "Fiction", "author": "James S. A. Corey"})["books"], "books"))
+	for _, n := range acc.Rows(t, suite.Call(t, "narrator_list", map[string]any{"library": "Fiction"})["narrators"], "narrators") {
 		if n["name"] == "Jefferson Mays" {
-			s.NarratorBooks = num(t, n["books"], "books")
+			s.NarratorBooks = acc.Num(t, n["books"], "books")
 		}
 	}
-	filters := call(t, "library_filters", map[string]any{"library": "Fiction"})
-	for _, r := range rows(t, filters["series"], "series") {
+	filters := suite.Call(t, "library_filters", map[string]any{"library": "Fiction"})
+	for _, r := range acc.Rows(t, filters["series"], "series") {
 		if r["name"] == "The Expanse" {
-			s.SeriesIDs = append(s.SeriesIDs, text(r["id"]))
+			s.SeriesIDs = append(s.SeriesIDs, acc.Str(r["id"]))
 		}
 	}
-	for _, r := range rows(t, filters["authors"], "authors") {
+	for _, r := range acc.Rows(t, filters["authors"], "authors") {
 		if r["name"] == "James S. A. Corey" {
-			s.AuthorIDs = append(s.AuthorIDs, text(r["id"]))
+			s.AuthorIDs = append(s.AuthorIDs, acc.Str(r["id"]))
 		}
 	}
 	return s
@@ -415,8 +416,8 @@ func TestJourneyAMissingBookJoinsItsSeries(t *testing.T) {
 	t.Cleanup(func() {
 		// only what a failure left: the journey itself deletes both
 		if id != "" {
-			if _, err := invoke("item_get", map[string]any{"item": id}); err == nil {
-				call(t, "item_delete", map[string]any{"item": id, "confirm": true, "delete_files": true})
+			if _, err := suite.Invoke("item_get", map[string]any{"item": id}); err == nil {
+				suite.Call(t, "item_delete", map[string]any{"item": id, "confirm": true, "delete_files": true})
 			}
 		}
 		if err := os.RemoveAll(dir); err != nil {
@@ -427,7 +428,7 @@ func TestJourneyAMissingBookJoinsItsSeries(t *testing.T) {
 		}
 	})
 
-	call(t, "library_scan", map[string]any{"library": "Fiction"})
+	suite.Call(t, "library_scan", map[string]any{"library": "Fiction"})
 	if err := waitForItems("Fiction", 8); err != nil {
 		t.Fatal(err)
 	}
@@ -435,33 +436,33 @@ func TestJourneyAMissingBookJoinsItsSeries(t *testing.T) {
 	id = itemID(t, "Fiction", "Caliban's War")
 
 	// the newest thing on the server, in every library and in its own
-	if got := valuesIn(t, call(t, "library_recent", map[string]any{"limit": 1})["items"], "items", "id"); !slices.Equal(got, []string{id}) {
+	if got := valuesIn(t, suite.Call(t, "library_recent", map[string]any{"limit": 1})["items"], "items", "id"); !slices.Equal(got, []string{id}) {
 		t.Errorf("library_recent's newest = %v, want Caliban's War", got)
 	}
-	if got := valuesIn(t, call(t, "library_items", map[string]any{"library": "Fiction", "sort": "added", "desc": true, "limit": 1})["items"], "items", "id"); !slices.Equal(got, []string{id}) {
+	if got := valuesIn(t, suite.Call(t, "library_items", map[string]any{"library": "Fiction", "sort": "added", "desc": true, "limit": 1})["items"], "items", "id"); !slices.Equal(got, []string{id}) {
 		t.Errorf("Fiction's newest = %v, want Caliban's War", got)
 	}
 
-	call(t, "item_edit", map[string]any{"library": "Fiction", "item": "Caliban's War", "add_series": []any{"The Expanse #2"}, "narrators": []any{"Jefferson Mays"}})
+	suite.Call(t, "item_edit", map[string]any{"library": "Fiction", "item": "Caliban's War", "add_series": []any{"The Expanse #2"}, "narrators": []any{"Jefferson Mays"}})
 	linked := readExpanse(t)
 	if linked.Items != 8 || linked.SeriesBooks != 3 || !slices.Equal(linked.Sequence, []string{"1", "2", "3"}) || linked.Missing != nil ||
 		linked.AuthorBooks != 3 || linked.NarratorBooks != 3 || !slices.Equal(linked.SeriesIDs, begin.SeriesIDs) || !slices.Equal(linked.AuthorIDs, begin.AuthorIDs) {
 		t.Errorf("with the book linked: %+v, want 8 items, the series whole at 3 books with no gap, 3 each for the author and the narrator, and the same records", linked)
 	}
-	if got := titlesIn(t, call(t, "series_get", map[string]any{"library": "Fiction", "series": "The Expanse"})["books"], "books"); !slices.Equal(got, []string{"Leviathan Wakes", "Caliban's War", "Abaddon's Gate"}) {
+	if got := titlesIn(t, suite.Call(t, "series_get", map[string]any{"library": "Fiction", "series": "The Expanse"})["books"], "books"); !slices.Equal(got, []string{"Leviathan Wakes", "Caliban's War", "Abaddon's Gate"}) {
 		t.Errorf("The Expanse in order = %v", got)
 	}
 
 	// deleted with its folder: asked first, which changes nothing
-	preview := call(t, "item_delete", map[string]any{"library": "Fiction", "item": "Caliban's War", "delete_files": true})
-	if preview["would_delete"] != "Caliban's War" || !strings.Contains(text(preview["files"]), "Caliban's War") || preview["deleted"] != nil {
+	preview := suite.Call(t, "item_delete", map[string]any{"library": "Fiction", "item": "Caliban's War", "delete_files": true})
+	if preview["would_delete"] != "Caliban's War" || !strings.Contains(acc.Str(preview["files"]), "Caliban's War") || preview["deleted"] != nil {
 		t.Errorf("the unconfirmed delete = %v, want what it would remove", preview)
 	}
 	if _, err := os.Stat(dir); err != nil {
 		t.Fatalf("the unconfirmed delete touched the folder: %v", err)
 	}
-	gone := call(t, "item_delete", map[string]any{"library": "Fiction", "item": "Caliban's War", "delete_files": true, "confirm": true})
-	if gone["deleted"] != "Caliban's War" || !truth(gone["files_removed"]) {
+	gone := suite.Call(t, "item_delete", map[string]any{"library": "Fiction", "item": "Caliban's War", "delete_files": true, "confirm": true})
+	if gone["deleted"] != "Caliban's War" || !acc.BoolOf(gone["files_removed"]) {
 		t.Errorf("the delete = %v", gone)
 	}
 	eventually(t, "the folder going", func() error {
@@ -485,8 +486,8 @@ func TestJourneyAMissingBookJoinsItsSeries(t *testing.T) {
 // that holds the right rows in the wrong order, which every count-only test
 // passes.
 func TestJourneyReadsAnswerWhatWasAsked(t *testing.T) {
-	if !ready {
-		t.Skip("ABS_SERVER and ABS_TOKEN are not set")
+	if !suite.Ready {
+		t.Skip(suite.NotReady)
 	}
 
 	t.Run("a title searched for comes first", func(t *testing.T) {
@@ -503,7 +504,7 @@ func TestJourneyReadsAnswerWhatWasAsked(t *testing.T) {
 			if c.library != "" {
 				args["library"] = c.library
 			}
-			if got := titlesIn(t, call(t, "library_search", args)["items"], "items"); len(got) == 0 || got[0] != c.want {
+			if got := titlesIn(t, suite.Call(t, "library_search", args)["items"], "items"); len(got) == 0 || got[0] != c.want {
 				t.Errorf("library_search %q in %q = %v, want %s first", c.query, c.library, got, c.want)
 			}
 		}
@@ -514,13 +515,13 @@ func TestJourneyReadsAnswerWhatWasAsked(t *testing.T) {
 		addedAt := map[string]float64{}
 		for _, l := range libraries {
 			listing := object(adminGet(t, "/api/libraries/"+libraryID(t, l.Name)+"/items?limit=500"))
-			results := items(listing["results"])
+			results := acc.RowsOfAny(listing["results"])
 			for _, r := range results {
 				row := object(r)
-				addedAt[text(row["id"])] = number(row["addedAt"])
+				addedAt[acc.Str(row["id"])] = acc.DecimalOr0(row["addedAt"])
 			}
 		}
-		recent := valuesIn(t, call(t, "library_recent", map[string]any{"limit": 1000})["items"], "items", "id")
+		recent := valuesIn(t, suite.Call(t, "library_recent", map[string]any{"limit": 1000})["items"], "items", "id")
 		if len(recent) != len(addedAt) {
 			t.Errorf("library_recent listed %d items, the server has %d", len(recent), len(addedAt))
 		}
@@ -529,13 +530,13 @@ func TestJourneyReadsAnswerWhatWasAsked(t *testing.T) {
 				t.Errorf("%s (added %.0f) comes after %s (added %.0f)", recent[i], addedAt[recent[i]], recent[i-1], addedAt[recent[i-1]])
 			}
 		}
-		if top := valuesIn(t, call(t, "library_recent", map[string]any{"limit": 3})["items"], "items", "id"); !slices.Equal(top, recent[:3]) {
+		if top := valuesIn(t, suite.Call(t, "library_recent", map[string]any{"limit": 3})["items"], "items", "id"); !slices.Equal(top, recent[:3]) {
 			t.Errorf("limit 3 = %v, want the first three of %v", top, recent[:3])
 		}
 		// one library is library_items newest first
 		for _, lib := range []string{"Fiction", "Messy"} {
-			got := valuesIn(t, call(t, "library_recent", map[string]any{"library": lib, "limit": 100})["items"], "items", "id")
-			want := valuesIn(t, call(t, "library_items", map[string]any{"library": lib, "sort": "added", "desc": true, "limit": 100})["items"], "items", "id")
+			got := valuesIn(t, suite.Call(t, "library_recent", map[string]any{"library": lib, "limit": 100})["items"], "items", "id")
+			want := valuesIn(t, suite.Call(t, "library_items", map[string]any{"library": lib, "sort": "added", "desc": true, "limit": 100})["items"], "items", "id")
 			if !slices.Equal(got, want) {
 				t.Errorf("library_recent in %s = %v, want library_items newest first %v", lib, got, want)
 			}
@@ -546,18 +547,18 @@ func TestJourneyReadsAnswerWhatWasAsked(t *testing.T) {
 		titles := []string{"Foundation", "Foundation and Empire", "Second Foundation"}
 		t.Cleanup(func() {
 			for _, title := range titles {
-				_, _ = invoke("user_progress_set", map[string]any{"remove": true, "library": "Fiction", "item": title})
+				_, _ = suite.Invoke("user_progress_set", map[string]any{"remove": true, "library": "Fiction", "item": title})
 			}
 		})
 		finished := func(t *testing.T) (map[string]bool, int, bool) {
 			t.Helper()
-			out := call(t, "series_get", map[string]any{"library": "Fiction", "series": "Foundation"})
+			out := suite.Call(t, "series_get", map[string]any{"library": "Fiction", "series": "Foundation"})
 			books := map[string]bool{}
-			for _, b := range rows(t, out["books"], "books") {
-				books[text(b["title"])] = truth(b["finished"])
+			for _, b := range acc.Rows(t, out["books"], "books") {
+				books[acc.Str(b["title"])] = acc.BoolOf(b["finished"])
 			}
-			complete := truth(out["complete"])
-			return books, num(t, out["finished"], "finished"), complete
+			complete := acc.BoolOf(out["complete"])
+			return books, acc.Num(t, out["finished"], "finished"), complete
 		}
 		check := func(t *testing.T, when string, done ...string) {
 			t.Helper()
@@ -573,16 +574,16 @@ func TestJourneyReadsAnswerWhatWasAsked(t *testing.T) {
 		}
 
 		check(t, "before")
-		call(t, "user_progress_set", map[string]any{"library": "Fiction", "item": "Foundation and Empire", "finished": true})
+		suite.Call(t, "user_progress_set", map[string]any{"library": "Fiction", "item": "Foundation and Empire", "finished": true})
 		check(t, "one finished", "Foundation and Empire")
 		for _, title := range []string{"Foundation", "Second Foundation"} {
-			call(t, "user_progress_set", map[string]any{"library": "Fiction", "item": title, "finished": true})
+			suite.Call(t, "user_progress_set", map[string]any{"library": "Fiction", "item": title, "finished": true})
 		}
 		check(t, "all finished", titles...)
-		call(t, "user_progress_set", map[string]any{"library": "Fiction", "item": "Foundation and Empire", "finished": false})
+		suite.Call(t, "user_progress_set", map[string]any{"library": "Fiction", "item": "Foundation and Empire", "finished": false})
 		check(t, "one unfinished again", "Foundation", "Second Foundation")
 		for _, title := range titles {
-			call(t, "user_progress_set", map[string]any{"remove": true, "library": "Fiction", "item": title})
+			suite.Call(t, "user_progress_set", map[string]any{"remove": true, "library": "Fiction", "item": title})
 		}
 		check(t, "progress removed")
 	})
@@ -599,8 +600,8 @@ func TestJourneyListsHeldWholeArePaged(t *testing.T) {
 	t.Run("collection_list", func(t *testing.T) {
 		for _, title := range titles {
 			name := "Zzyzx Paged Shelf " + title
-			call(t, "collection_create", map[string]any{"library": "Fiction", "name": name, "items": []any{title}})
-			t.Cleanup(func() { _, _ = invoke("collection_delete", map[string]any{"collection": name}) })
+			suite.Call(t, "collection_create", map[string]any{"library": "Fiction", "name": name, "items": []any{title}})
+			t.Cleanup(func() { _, _ = suite.Invoke("collection_delete", map[string]any{"collection": name}) })
 		}
 		all := everyPageOnce(t, "collection_list", "collections", map[string]any{"library": "Fiction"}, 1)
 		if len(all) < len(titles) {
@@ -611,8 +612,8 @@ func TestJourneyListsHeldWholeArePaged(t *testing.T) {
 	t.Run("playlist_list", func(t *testing.T) {
 		for _, title := range titles {
 			name := "Zzyzx Paged Queue " + title
-			call(t, "playlist_create", map[string]any{"library": "Fiction", "name": name, "entries": []any{map[string]any{"item": title}}})
-			t.Cleanup(func() { _, _ = invoke("playlist_delete", map[string]any{"playlist": name}) })
+			suite.Call(t, "playlist_create", map[string]any{"library": "Fiction", "name": name, "entries": []any{map[string]any{"item": title}}})
+			t.Cleanup(func() { _, _ = suite.Invoke("playlist_delete", map[string]any{"playlist": name}) })
 		}
 		everyPageOnce(t, "playlist_list", "playlists", map[string]any{"library": "Fiction"}, 2)
 	})
@@ -634,16 +635,16 @@ func TestJourneyListsHeldWholeArePaged(t *testing.T) {
 	t.Run("feed_list", func(t *testing.T) {
 		for _, title := range titles {
 			book := map[string]any{"library": "Fiction", "item": title}
-			call(t, "feed_edit", book)
-			t.Cleanup(func() { _, _ = invoke("feed_edit", withArgs(book, map[string]any{"close": true})) })
+			suite.Call(t, "feed_edit", book)
+			t.Cleanup(func() { _, _ = suite.Invoke("feed_edit", withArgs(book, map[string]any{"close": true})) })
 		}
 		everyPageOnce(t, "feed_list", "feeds", nil, 1)
 	})
 
 	t.Run("narrator_list", func(t *testing.T) {
-		whole := call(t, "narrator_list", withMessy(map[string]any{"limit": 1000}))
+		whole := suite.Call(t, "narrator_list", withMessy(map[string]any{"limit": 1000}))
 		names := valuesIn(t, whole["narrators"], "narrators", "name")
-		if num(t, whole["total"], "total") != len(names) || whole["next_offset"] != nil || len(names) < 5 {
+		if acc.Num(t, whole["total"], "total") != len(names) || whole["next_offset"] != nil || len(names) < 5 {
 			t.Fatalf("narrator_list whole: %d names of %v, next %v", len(names), whole["total"], whole["next_offset"])
 		}
 		if !slices.IsSorted(names) {
@@ -651,13 +652,13 @@ func TestJourneyListsHeldWholeArePaged(t *testing.T) {
 		}
 		var walked []string
 		for offset := 0; ; {
-			out := call(t, "narrator_list", withMessy(map[string]any{"limit": 2, "offset": offset}))
+			out := suite.Call(t, "narrator_list", withMessy(map[string]any{"limit": 2, "offset": offset}))
 			page := valuesIn(t, out["narrators"], "narrators", "name")
 			walked = append(walked, page...)
 			if out["next_offset"] == nil {
 				break
 			}
-			if len(page) != 2 || num(t, out["next_offset"], "next_offset") != offset+2 {
+			if len(page) != 2 || acc.Num(t, out["next_offset"], "next_offset") != offset+2 {
 				t.Fatalf("a page of %d at %d, next %v", len(page), offset, out["next_offset"])
 			}
 			offset += 2
@@ -668,10 +669,10 @@ func TestJourneyListsHeldWholeArePaged(t *testing.T) {
 	})
 
 	t.Run("library_filters", func(t *testing.T) {
-		whole := call(t, "library_filters", withMessy(map[string]any{"limit": 1000}))
+		whole := suite.Call(t, "library_filters", withMessy(map[string]any{"limit": 1000}))
 		authors := valuesIn(t, whole["authors"], "authors", "name")
 		totals := object(whole["totals"])
-		if num(t, totals["authors"], "totals.authors") != len(authors) || whole["next_offset"] != nil || len(authors) < 5 {
+		if acc.Num(t, totals["authors"], "totals.authors") != len(authors) || whole["next_offset"] != nil || len(authors) < 5 {
 			t.Fatalf("library_filters whole: %d authors, totals %v, next %v", len(authors), totals, whole["next_offset"])
 		}
 		for _, list := range []string{"genres", "tags", "narrators", "languages", "publishers", "published_decades", "authors", "series"} {
@@ -682,18 +683,18 @@ func TestJourneyListsHeldWholeArePaged(t *testing.T) {
 		// only the lists asked for, a page of each at a time
 		var walked []string
 		for offset := 0; ; {
-			out := call(t, "library_filters", withMessy(map[string]any{"fields": []any{"authors", "genres"}, "limit": 2, "offset": offset}))
+			out := suite.Call(t, "library_filters", withMessy(map[string]any{"fields": []any{"authors", "genres"}, "limit": 2, "offset": offset}))
 			if out["series"] != nil || out["tags"] != nil || out["narrators"] != nil || len(object(out["totals"])) != 2 {
 				t.Fatalf("lists not asked for came back at offset %d: %v", offset, out)
 			}
-			walked = append(walked, valuesIn(t, items(out["authors"]), "authors", "name")...)
-			if got := len(items(out["genres"])); got > 2 {
+			walked = append(walked, valuesIn(t, acc.RowsOfAny(out["authors"]), "authors", "name")...)
+			if got := len(acc.RowsOfAny(out["genres"])); got > 2 {
 				t.Errorf("a page of %d genres, want at most 2", got)
 			}
 			if out["next_offset"] == nil {
 				break
 			}
-			offset = num(t, out["next_offset"], "next_offset")
+			offset = acc.Num(t, out["next_offset"], "next_offset")
 			if offset > 1000 {
 				t.Fatal("library_filters never reached its last page")
 			}
@@ -701,7 +702,7 @@ func TestJourneyListsHeldWholeArePaged(t *testing.T) {
 		if !slices.Equal(walked, authors) {
 			t.Errorf("paged by 2 read\n  %v\nwant\n  %v", walked, authors)
 		}
-		if msg := callErr(t, "library_filters", withMessy(map[string]any{"fields": []any{"genre"}})); !strings.Contains(msg, "genres") {
+		if msg := suite.CallErr(t, "library_filters", withMessy(map[string]any{"fields": []any{"genre"}})); !strings.Contains(msg, "genres") {
 			t.Errorf("a list that does not exist: %s", msg)
 		}
 	})

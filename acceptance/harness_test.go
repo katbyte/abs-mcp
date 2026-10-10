@@ -8,19 +8,16 @@ package acceptance
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strconv"
-	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/abs-mcp/tools"
+	acc "github.com/katbyte/go-kt/mcp/acctest"
 	"github.com/katbyte/go-kt/test/env"
 	"github.com/katbyte/go-kt/test/replayproxy"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -144,11 +141,17 @@ var messyBooks = []messyBook{
 }
 
 var (
-	ctx     context.Context
-	session *mcp.ClientSession
-	ready   bool
-	proxy   *replayproxy.Proxy
+	ctx   context.Context
+	proxy *replayproxy.Proxy
 )
+
+// notReady is what a test says as it skips because no container is up.
+const notReady = "ABS_SERVER and ABS_TOKEN are not set; run: eval \"$(scripts/abs-testenv.sh up)\""
+
+// suite drives the tools as a client does, through go-kt's live-suite
+// helpers, and keeps count of what each tool was asked. Until start connects
+// it, every call skips.
+var suite = &acc.Suite{NotReady: notReady}
 
 // providersReady reports whether the provider proxy came up, so the tests that
 // need it can skip rather than fail confusingly when it did not.
@@ -196,20 +199,17 @@ func runSuite(m *testing.M) {
 		}
 	}
 
-	// every registered tool must have been called by something above. Only a
-	// whole-suite run can say that, so a -run filter skips the check.
-	if f := flag.Lookup("test.run"); f == nil || f.Value.String() == "" {
-		missing, err := uncovered()
-		switch {
-		case err != nil:
-			fmt.Fprintln(os.Stderr, "\ntool coverage: could not list tools:", err)
+	// every registered tool must have answered something above, not only
+	// refused it. Only a whole-suite run can say that, so a -run or -skip
+	// filter skips the check.
+	if acc.WholeRun() {
+		report, err := suite.CoverageReport()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "\n"+err.Error())
 			code = 1
-		case len(missing) > 0:
-			fmt.Fprintf(os.Stderr, "\n%d registered tool(s) are never called by this suite:\n", len(missing))
-			for _, name := range missing {
-				fmt.Fprintln(os.Stderr, "  "+name)
-			}
-			fmt.Fprintln(os.Stderr, "every tool needs a test; add one or remove the tool")
+		}
+		if report != "" {
+			fmt.Fprint(os.Stderr, report)
 			code = 1
 		}
 	}
@@ -234,34 +234,6 @@ var (
 	proxyMisses []string
 	proxyDrifts []replayproxy.Drift
 )
-
-var (
-	calledMu sync.Mutex
-	called   = map[string]bool{}
-)
-
-// uncovered names the registered tools no test called. A tool that is only
-// listed is not tested, so adding one without a test fails the suite rather
-// than quietly widening the untested surface.
-func uncovered() ([]string, error) {
-	res, err := session.ListTools(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	calledMu.Lock()
-	defer calledMu.Unlock()
-
-	var missing []string
-	for _, tool := range res.Tools {
-		if !called[tool.Name] {
-			missing = append(missing, tool.Name)
-		}
-	}
-	slices.Sort(missing)
-
-	return missing, nil
-}
 
 // suiteEnv is the environment scripts/abs-testenv.sh exports for a live
 // suite, read the way go-kt's test plumbing reads it for every tool.
@@ -315,14 +287,12 @@ func start() error {
 	if _, err := tools.RegisterAll(srv, client, tools.Options{EnableDelete: true}); err != nil {
 		return err
 	}
-	st, ct := mcp.NewInMemoryTransports()
-	if _, err := srv.Connect(ctx, st, nil); err != nil {
+	connected, err := acc.Connect(ctx, srv)
+	if err != nil {
 		return err
 	}
-	if session, err = mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).Connect(ctx, ct, nil); err != nil {
-		return err
-	}
-	ready = true
+	connected.NotReady = notReady
+	suite = connected
 
 	return seed()
 }
@@ -330,18 +300,14 @@ func start() error {
 // seed builds the fixtures through the tools. It is idempotent: a library that
 // already exists is left alone, so either suite can run first.
 func seed() error {
-	existing, err := invoke("library_list", nil)
+	existing, err := suite.Invoke("library_list", nil)
 	if err != nil {
 		return err
 	}
 	have := map[string]bool{}
-	if rows, ok := existing["libraries"].([]any); ok {
-		for _, r := range rows {
-			if row, ok := r.(map[string]any); ok {
-				if name, ok := row["name"].(string); ok {
-					have[name] = true
-				}
-			}
+	for _, row := range acc.RowsOf(existing["libraries"]) {
+		if name, ok := row["name"].(string); ok {
+			have[name] = true
 		}
 	}
 
@@ -354,7 +320,7 @@ func seed() error {
 		if l.Provider != "" {
 			args["provider"] = l.Provider
 		}
-		if _, err := invoke("library_create", args); err != nil {
+		if _, err := suite.Invoke("library_create", args); err != nil {
 			return err
 		}
 		created = true
@@ -364,7 +330,7 @@ func seed() error {
 	}
 
 	for _, l := range libraries {
-		if _, err := invoke("library_scan", map[string]any{"library": l.Name}); err != nil {
+		if _, err := suite.Invoke("library_scan", map[string]any{"library": l.Name}); err != nil {
 			return err
 		}
 	}
@@ -387,7 +353,7 @@ func seed() error {
 		if len(b.Series) > 0 {
 			args["series"] = toAny(b.Series)
 		}
-		if _, err := invoke("item_edit", args); err != nil {
+		if _, err := suite.Invoke("item_edit", args); err != nil {
 			return fmt.Errorf("seeding %s: %w", b.Title, err)
 		}
 	}
@@ -401,19 +367,19 @@ func seed() error {
 func seedMessy() error {
 	ids := map[string]string{}
 	for offset := 0; ; offset += 50 {
-		out, err := invoke("library_items", map[string]any{"library": "Messy", "limit": 50, "offset": offset})
+		out, err := suite.Invoke("library_items", map[string]any{"library": "Messy", "limit": 50, "offset": offset})
 		if err != nil {
 			return err
 		}
-		items := items(out["items"])
+		items := acc.RowsOfAny(out["items"])
 		for _, r := range items {
 			row := object(r)
-			id := text(row["id"])
-			got, err := invoke("item_get", map[string]any{"item": id})
+			id := acc.Str(row["id"])
+			got, err := suite.Invoke("item_get", map[string]any{"item": id})
 			if err != nil {
 				return err
 			}
-			path := text(got["path"])
+			path := acc.Str(got["path"])
 			ids[path] = id
 		}
 		if len(items) < 50 {
@@ -444,7 +410,7 @@ func seedMessy() error {
 		if b.ASIN != "" {
 			args["asin"] = b.ASIN
 		}
-		if _, err := invoke("item_edit", args); err != nil {
+		if _, err := suite.Invoke("item_edit", args); err != nil {
 			return fmt.Errorf("seeding %s: %w", b.Path, err)
 		}
 	}
@@ -465,7 +431,7 @@ func toAny(s []string) []any {
 func waitForItems(library string, want int) error {
 	var last string
 	for range 60 {
-		out, err := invoke("library_items", map[string]any{"library": library, "limit": 1})
+		out, err := suite.Invoke("library_items", map[string]any{"library": library, "limit": 1})
 		switch {
 		case err != nil:
 			last = err.Error()
@@ -483,185 +449,12 @@ func waitForItems(library string, want int) error {
 	return fmt.Errorf("library %s never reached %d items (%s)", library, want, last)
 }
 
-// invoke calls a tool and returns its structured result. Every tool call in
-// the suite comes through here, so this is also where coverage is recorded.
-func invoke(name string, args map[string]any) (map[string]any, error) {
-	calledMu.Lock()
-	called[name] = true
-	calledMu.Unlock()
-
-	res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", name, err)
-	}
-	if res.IsError {
-		var msgs []string
-		for _, c := range res.Content {
-			if tc, ok := c.(*mcp.TextContent); ok {
-				msgs = append(msgs, tc.Text)
-			}
-		}
-		return nil, fmt.Errorf("%s: %s", name, strings.Join(msgs, "; "))
-	}
-	out, ok := res.StructuredContent.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("%s: structured content is %T", name, res.StructuredContent)
-	}
-
-	return out, nil
-}
-
-// call invokes a tool, skipping the test when the container is not configured
-// and failing it when the tool errors.
-func call(t *testing.T, name string, args map[string]any) map[string]any {
-	t.Helper()
-
-	if !ready {
-		t.Skip("ABS_SERVER and ABS_TOKEN are not set; run: eval \"$(scripts/abs-testenv.sh up)\"")
-	}
-	out, err := invoke(name, args)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return out
-}
-
-// callErr invokes a tool expecting it to fail, and returns the error message.
-func callErr(t *testing.T, name string, args map[string]any) string {
-	t.Helper()
-
-	if !ready {
-		t.Skip("ABS_SERVER and ABS_TOKEN are not set")
-	}
-	out, err := invoke(name, args)
-	if err == nil {
-		t.Fatalf("%s unexpectedly succeeded: %v", name, out)
-	}
-
-	return err.Error()
-}
-
-// toolNames lists every tool the server registered, so a test can assert that
-// a family is complete rather than only that the tools it knows about work.
-func toolNames(t *testing.T) []string {
-	t.Helper()
-
-	if !ready {
-		t.Skip("ABS_SERVER and ABS_TOKEN are not set")
-	}
-	res, err := session.ListTools(ctx, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	out := make([]string, 0, len(res.Tools))
-	for _, tool := range res.Tools {
-		out = append(out, tool.Name)
-	}
-
-	return out
-}
-
-// strs pulls a []string out of a decoded JSON field.
-func strs(t *testing.T, v any, field string) []string {
-	t.Helper()
-
-	raw, ok := v.([]any)
-	if !ok {
-		t.Fatalf("%s is %T, want a list", field, v)
-	}
-	out := make([]string, 0, len(raw))
-	for _, e := range raw {
-		s, ok := e.(string)
-		if !ok {
-			t.Fatalf("%s contains %T, want strings", field, e)
-		}
-		out = append(out, s)
-	}
-
-	return out
-}
-
-// rows pulls a list of objects out of a decoded JSON field.
-func rows(t *testing.T, v any, field string) []map[string]any {
-	t.Helper()
-
-	raw, ok := v.([]any)
-	if !ok {
-		t.Fatalf("%s is %T, want a list", field, v)
-	}
-	out := make([]map[string]any, 0, len(raw))
-	for _, e := range raw {
-		row, ok := e.(map[string]any)
-		if !ok {
-			t.Fatalf("%s contains %T, want objects", field, e)
-		}
-		out = append(out, row)
-	}
-
-	return out
-}
-
-// num pulls a JSON number out of a decoded field.
-func num(t *testing.T, v any, field string) int {
-	t.Helper()
-
-	f, ok := v.(float64)
-	if !ok {
-		t.Fatalf("%s is %T, want a number", field, v)
-	}
-
-	return int(f)
-}
-
-// text reads a decoded JSON string, empty when it is anything else. Like
-// truth, object, items and number it is for a value a test goes on to
-// compare, where a value of the wrong kind fails the comparison.
-func text(v any) string {
-	if s, ok := v.(string); ok {
-		return s
-	}
-
-	return ""
-}
-
-// truth reads a decoded JSON boolean, false when it is anything else.
-func truth(v any) bool {
-	b, ok := v.(bool)
-
-	return ok && b
-}
-
-// isFalse reports whether a decoded JSON value is the boolean false, which an
-// absent one is not.
-func isFalse(v any) bool {
-	b, ok := v.(bool)
-
-	return ok && !b
-}
-
-// number reads a decoded JSON number, zero when it is anything else.
-func number(v any) float64 {
-	if f, ok := v.(float64); ok {
-		return f
-	}
-
-	return 0
-}
-
-// object reads a decoded JSON object, nil when it is anything else.
+// object reads a decoded JSON object, nil when it is anything else: for a
+// value a test goes on to compare, where one of the wrong kind fails the
+// comparison. go-kt's acc.Object is the strict one, which fails the test.
 func object(v any) map[string]any {
 	if m, ok := v.(map[string]any); ok {
 		return m
-	}
-
-	return nil
-}
-
-// items reads a decoded JSON list, nil when it is anything else.
-func items(v any) []any {
-	if l, ok := v.([]any); ok {
-		return l
 	}
 
 	return nil

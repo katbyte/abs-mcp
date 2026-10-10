@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	acc "github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // A shelf of books that will not play, laid out on disk the way they turn
@@ -87,13 +89,13 @@ func TestJourneyBooksThatWillNotPlay(t *testing.T) {
 
 	byPath := func(out map[string]any) map[string]map[string]any {
 		got := map[string]map[string]any{}
-		for _, r := range rows(t, out["findings"], "findings") {
-			got[text(r["path"])+" "+text(r["problem"])] = r
+		for _, r := range acc.Rows(t, out["findings"], "findings") {
+			got[acc.Str(r["path"])+" "+acc.Str(r["problem"])] = r
 		}
 		return got
 	}
 
-	out := call(t, "audit_unplayable", map[string]any{"library": s.name})
+	out := suite.Call(t, "audit_unplayable", map[string]any{"library": s.name})
 	got := byPath(out)
 	for key, words := range map[string]string{
 		locked + " locked":            "Apple FairPlay (drms)",
@@ -106,17 +108,17 @@ func TestJourneyBooksThatWillNotPlay(t *testing.T) {
 			t.Errorf("no finding %q in %v", key, out["findings"])
 			continue
 		}
-		if !strings.Contains(text(r["detail"]), words) {
+		if !strings.Contains(acc.Str(r["detail"]), words) {
 			t.Errorf("%s says %q, want %q in it", key, r["detail"], words)
 		}
-		if plays := truth(r["plays"]); plays != strings.HasSuffix(key, "wrong_extension") {
+		if plays := acc.BoolOf(r["plays"]); plays != strings.HasSuffix(key, "wrong_extension") {
 			t.Errorf("%s says plays=%v", key, r["plays"])
 		}
 	}
 	if len(got) != 4 {
 		t.Errorf("findings = %v, want the four above and nothing for the good or the damaged book without decode", out["findings"])
 	}
-	if n := num(t, out["files_read"], "files_read"); n != 5 {
+	if n := acc.Num(t, out["files_read"], "files_read"); n != 5 {
 		t.Errorf("files_read = %d, want the five m4b files", n)
 	}
 	if out["unchecked_count"] != nil {
@@ -125,7 +127,7 @@ func TestJourneyBooksThatWillNotPlay(t *testing.T) {
 
 	// with decode the damaged book is heard; the good one, and the locked
 	// and cut ones already found, are not reported for it
-	out = call(t, "audit_unplayable", map[string]any{"library": s.name, "decode": true})
+	out = suite.Call(t, "audit_unplayable", map[string]any{"library": s.name, "decode": true})
 	got = byPath(out)
 	if _, ok := got[damaged+" damaged"]; !ok {
 		t.Errorf("decode did not find the damaged book: %v", out["findings"])
@@ -135,7 +137,7 @@ func TestJourneyBooksThatWillNotPlay(t *testing.T) {
 			t.Errorf("decode reported %s", key)
 		}
 	}
-	if n := num(t, out["files_played"], "files_played"); n != 3 {
+	if n := acc.Num(t, out["files_played"], "files_played"); n != 3 {
 		t.Errorf("files_played = %d, want the good, the misnamed and the damaged book's files", n)
 	}
 }

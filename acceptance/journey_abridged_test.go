@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	acc "github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // abridgedStore plays Audible's catalog search and Audnexus's book records
@@ -62,7 +64,7 @@ func (s *abridgedStore) audnex(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, editions := range s.editions {
 		for _, e := range editions {
-			if r.URL.Path == "/books/"+text(e["asin"]) {
+			if r.URL.Path == "/books/"+acc.Str(e["asin"]) {
 				_ = json.NewEncoder(w).Encode(e)
 				return
 			}
@@ -114,7 +116,7 @@ func TestJourneyAbridgedNotMarked(t *testing.T) {
 		t.Helper()
 		args := map[string]any{"library": s.name, "providers": []any{"audible"}}
 		maps.Copy(args, extra)
-		return call(t, "audit_abridged", args)
+		return suite.Call(t, "audit_abridged", args)
 	}
 
 	store := &abridgedStore{editions: map[string][]map[string]any{
@@ -130,7 +132,7 @@ func TestJourneyAbridgedNotMarked(t *testing.T) {
 	t.Cleanup(proxy.Serve("api.audnex.us", http.HandlerFunc(store.audnex)))
 
 	t.Run("a library on google is refused, and no store asked", func(t *testing.T) {
-		if msg := callErr(t, "audit_abridged", map[string]any{"library": s.name}); !strings.Contains(msg, `library "Zzyzx Abridged Shelf" is on the google provider`) || !strings.Contains(msg, "--providers") {
+		if msg := suite.CallErr(t, "audit_abridged", map[string]any{"library": s.name}); !strings.Contains(msg, `library "Zzyzx Abridged Shelf" is on the google provider`) || !strings.Contains(msg, "--providers") {
 			t.Errorf("audit_abridged on google = %q, want the library, its provider and the fix", msg)
 		}
 		if asked := store.searched(); len(asked) != 0 {
@@ -149,21 +151,21 @@ func TestJourneyAbridgedNotMarked(t *testing.T) {
 		}
 		return out
 	}
-	call(t, "item_chapters_set", map[string]any{"item": id("Zzyzx Gods (Brick)"), "chapters": chapters(300, 240, 360, 280, 320, 300)})
-	call(t, "item_chapters_set", map[string]any{"item": id("Zzyzx Gods (Leclercq)"), "chapters": chapters(255, 210, 300, 240, 270, 255)})
-	call(t, "item_chapters_set", map[string]any{"item": id("Zzyzx Gods (Morgan)"), "chapters": chapters(200, 100, 300, 120, 250, 150)})
-	call(t, "item_edit", map[string]any{"item": id("Zzyzx Flagged"), "abridged": true})
+	suite.Call(t, "item_chapters_set", map[string]any{"item": id("Zzyzx Gods (Brick)"), "chapters": chapters(300, 240, 360, 280, 320, 300)})
+	suite.Call(t, "item_chapters_set", map[string]any{"item": id("Zzyzx Gods (Leclercq)"), "chapters": chapters(255, 210, 300, 240, 270, 255)})
+	suite.Call(t, "item_chapters_set", map[string]any{"item": id("Zzyzx Gods (Morgan)"), "chapters": chapters(200, 100, 300, 120, 250, 150)})
+	suite.Call(t, "item_edit", map[string]any{"item": id("Zzyzx Flagged"), "abridged": true})
 
 	var found []map[string]any
 	t.Run("the store's abridged edition, a book far shorter, a reading cut unevenly", func(t *testing.T) {
 		out := audit(t, nil)
-		if num(t, out["items_scanned"], "items_scanned") != 8 || num(t, out["store_checked"], "store_checked") != 6 || num(t, out["readings_compared"], "readings_compared") != 3 {
+		if acc.Num(t, out["items_scanned"], "items_scanned") != 8 || acc.Num(t, out["store_checked"], "store_checked") != 6 || acc.Num(t, out["readings_compared"], "readings_compared") != 3 {
 			t.Errorf("scanned %v, searched %v, compared %v; want 8 books, 6 searched, 3 pairs", out["items_scanned"], out["store_checked"], out["readings_compared"])
 		}
-		found = rows(t, out["findings"], "findings")
+		found = acc.Rows(t, out["findings"], "findings")
 		got := make([]string, 0, len(found))
 		for _, f := range found {
-			got = append(got, text(f["problem"])+" "+text(f["title"]))
+			got = append(got, acc.Str(f["problem"])+" "+acc.Str(f["title"]))
 		}
 		want := []string{"abridged_length Zzyzx Heartfire", "uneven_chapters Zzyzx Gods (Morgan)", "far_shorter Zzyzx Enchantment"}
 		if !slices.Equal(got, want) {
@@ -175,24 +177,24 @@ func TestJourneyAbridgedNotMarked(t *testing.T) {
 		}
 
 		heartfire := object(found[0]["edition"])
-		if heartfire["asin"] != "B0ZZYZXA01" || !truth(heartfire["abridged"]) || heartfire["provider"] != "audible" || num(t, heartfire["duration_s"], "duration_s") != 1200 || !near(found[0]["duration_s"], 1200) {
+		if heartfire["asin"] != "B0ZZYZXA01" || !acc.BoolOf(heartfire["abridged"]) || heartfire["provider"] != "audible" || acc.Num(t, heartfire["duration_s"], "duration_s") != 1200 || !near(found[0]["duration_s"], 1200) {
 			t.Errorf("Heartfire = %v, want the abridged edition of its length", found[0])
 		}
 		// the steady reading cut against is Leclercq's: their chapters differ
 		// most, 2.18 by section_ratio.py
 		other := object(found[1]["other_reading"])
-		spread := number(found[1]["spread"])
-		if other["id"] != id("Zzyzx Gods (Leclercq)") || spread < 2.1 || spread > 2.3 || num(t, found[1]["chapters_compared"], "chapters_compared") != 6 || !near(found[1]["duration_s"], 1120) {
+		spread := acc.DecimalOr0(found[1]["spread"])
+		if other["id"] != id("Zzyzx Gods (Leclercq)") || spread < 2.1 || spread > 2.3 || acc.Num(t, found[1]["chapters_compared"], "chapters_compared") != 6 || !near(found[1]["duration_s"], 1120) {
 			t.Errorf("Morgan = %v, want against Leclercq, spread about 2.18 over 6 chapters", found[1])
 		}
 		enchantment := object(found[2]["edition"])
-		if enchantment["asin"] != "B0ZZYZXU02" || !isFalse(enchantment["abridged"]) || num(t, enchantment["duration_s"], "duration_s") != 2400 || !regexp.MustCompile(`37\.[45]% of the shortest unabridged edition`).MatchString(text(found[2]["detail"])) {
+		if enchantment["asin"] != "B0ZZYZXU02" || !acc.IsBool(enchantment["abridged"], false) || acc.Num(t, enchantment["duration_s"], "duration_s") != 2400 || !regexp.MustCompile(`37\.[45]% of the shortest unabridged edition`).MatchString(acc.Str(found[2]["detail"])) {
 			// 900 s of silence against 40 minutes, shown rounded down to a
 			// tenth; the encoded silence can land a hair under 900 s
 			t.Errorf("Enchantment = %v, want 37.5%% of the unabridged edition", found[2])
 		}
 		for _, f := range found {
-			if !strings.HasPrefix(text(f["fix"]), "item_edit abridged=true") {
+			if !strings.HasPrefix(acc.Str(f["fix"]), "item_edit abridged=true") {
 				t.Errorf("%s fix = %q", f["title"], f["fix"])
 			}
 		}
@@ -212,16 +214,16 @@ func TestJourneyAbridgedNotMarked(t *testing.T) {
 			t.Skip("nothing was found to fix")
 		}
 		for _, f := range found {
-			call(t, "item_edit", map[string]any{"item": text(f["id"]), "abridged": true})
+			suite.Call(t, "item_edit", map[string]any{"item": acc.Str(f["id"]), "abridged": true})
 		}
 		before := len(store.searched())
 		out := audit(t, nil)
-		if n := num(t, out["total_findings"], "total_findings"); n != 0 {
+		if n := acc.Num(t, out["total_findings"], "total_findings"); n != 0 {
 			t.Errorf("after the fixes %d findings: %v", n, out["findings"])
 		}
 		// Heartfire, Enchantment and Morgan are marked now: Destroyer, Brick
 		// and Leclercq are all that is left to search
-		if n := num(t, out["store_checked"], "store_checked"); n != 3 {
+		if n := acc.Num(t, out["store_checked"], "store_checked"); n != 3 {
 			t.Errorf("store_checked = %d, want the three unmarked books", n)
 		}
 		for _, title := range store.searched()[before:] {
@@ -238,14 +240,14 @@ func TestJourneyAbridgedNotMarked(t *testing.T) {
 				t.Fatal("the windows never end")
 			}
 			out := audit(t, map[string]any{"limit": 3, "offset": offset})
-			scanned += num(t, out["items_scanned"], "items_scanned")
-			if compared := num(t, out["readings_compared"], "readings_compared"); (offset == 0) != (compared == 3) {
+			scanned += acc.Num(t, out["items_scanned"], "items_scanned")
+			if compared := acc.Num(t, out["readings_compared"], "readings_compared"); (offset == 0) != (compared == 3) {
 				t.Errorf("offset %d compared %d readings, want 3 at offset 0 and none after", offset, compared)
 			}
 			if out["next_offset"] == nil {
 				break
 			}
-			offset = num(t, out["next_offset"], "next_offset")
+			offset = acc.Num(t, out["next_offset"], "next_offset")
 		}
 		if scanned != len(seconds) {
 			t.Errorf("the windows scanned %d books, want %d", scanned, len(seconds))
