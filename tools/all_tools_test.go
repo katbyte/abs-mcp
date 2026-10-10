@@ -63,7 +63,7 @@ func TestAnnotationsSayWhatAToolCanDo(t *testing.T) {
 			t.Errorf("%s has no destructive or open world hint", tool.Name)
 			continue
 		}
-		if *a.OpenWorldHint != toolHints[tool.Name].OpenWorld {
+		if *a.OpenWorldHint != toolHints[tool.Name].SendsOut {
 			t.Errorf("%s: open world %v", tool.Name, *a.OpenWorldHint)
 		}
 		if a.IdempotentHint {

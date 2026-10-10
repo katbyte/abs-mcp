@@ -68,9 +68,12 @@ type Hints struct {
 	// Idempotent is for a write tool that changes nothing more when called
 	// again with the same arguments.
 	Idempotent bool
-	// OpenWorld is for a tool that reaches past the server it works on:
-	// one that sends an email.
-	OpenWorld bool
+	// SendsOut is for a tool that itself sends something to a person or a
+	// service beyond the server it works on: an email, a notification. A
+	// tool that makes the server fetch from its own providers, or hand
+	// work to its own download client, does not. MCP's name for the hint
+	// is "open world".
+	SendsOut bool
 	// WritesHere is for a read tool that writes a file on the machine it
 	// runs on. The server is only read, so it stays a read tool and a
 	// read-only session keeps it, but it does not claim to change nothing.
@@ -151,11 +154,11 @@ func Add[In, Out any](r *Registry, kind Kind, t *mcp.Tool, h mcp.ToolHandlerFor[
 	hints := r.cfg.Hints[t.Name]
 	switch kind {
 	case Read:
-		t.Annotations = &mcp.ToolAnnotations{ReadOnlyHint: !hints.WritesHere, DestructiveHint: new(false), OpenWorldHint: new(hints.OpenWorld)}
+		t.Annotations = &mcp.ToolAnnotations{ReadOnlyHint: !hints.WritesHere, DestructiveHint: new(false), OpenWorldHint: new(hints.SendsOut)}
 	case Write:
-		t.Annotations = &mcp.ToolAnnotations{DestructiveHint: new(!hints.Additive), IdempotentHint: hints.Idempotent, OpenWorldHint: new(hints.OpenWorld)}
+		t.Annotations = &mcp.ToolAnnotations{DestructiveHint: new(!hints.Additive), IdempotentHint: hints.Idempotent, OpenWorldHint: new(hints.SendsOut)}
 	case Delete:
-		t.Annotations = &mcp.ToolAnnotations{DestructiveHint: new(true), OpenWorldHint: new(hints.OpenWorld)}
+		t.Annotations = &mcp.ToolAnnotations{DestructiveHint: new(true), OpenWorldHint: new(hints.SendsOut)}
 	}
 
 	wrapped := func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {

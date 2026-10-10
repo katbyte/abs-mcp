@@ -163,8 +163,9 @@ type registry struct {
 // something. A backup is not here: the server prunes the oldest past its
 // limit.
 //
-// One that is open world reaches past the server: sending an ebook emails it
-// out.
+// One that sends out itself sends something to a person or a service beyond
+// the server: sending an ebook emails it out. A tool that has the server ask
+// its own metadata providers is not one. It is what MCP calls open world.
 var toolHints = map[string]mcpregistry.Hints{
 	"library_create":           {Additive: true},
 	"collection_create":        {Additive: true},
@@ -172,7 +173,7 @@ var toolHints = map[string]mcpregistry.Hints{
 	"podcast_add":              {Additive: true},
 	"podcast_episode_download": {Additive: true},
 	"user_create":              {Additive: true},
-	"item_send_ebook":          {Additive: true, OpenWorld: true},
+	"item_send_ebook":          {Additive: true, SendsOut: true},
 }
 
 // queued is every tool queued so far, in go-kt's registry, which is made
