@@ -148,6 +148,17 @@ func (c *Client) UpdateCollection(ctx context.Context, id string, name, descript
 	return &col, nil
 }
 
+// OrderCollection puts a collection's books in the order given, each by its
+// library item id. The list is every book the collection holds: the server
+// sorts by where it finds each one, and one left out sorts first.
+func (c *Client) OrderCollection(ctx context.Context, id string, bookIDs []string) (*Collection, error) {
+	var col Collection
+	if err := c.patch(ctx, "/api/collections/"+url.PathEscape(id), map[string]any{"books": bookIDs}, &col); err != nil {
+		return nil, err
+	}
+	return &col, nil
+}
+
 // DeleteCollection deletes a collection (its books stay in the library).
 func (c *Client) DeleteCollection(ctx context.Context, id string) error {
 	return c.del(ctx, "/api/collections/"+url.PathEscape(id), nil)
@@ -223,6 +234,16 @@ func (c *Client) UpdatePlaylist(ctx context.Context, id string, name, descriptio
 	}
 	var p Playlist
 	if err := c.patch(ctx, "/api/playlists/"+url.PathEscape(id), body, &p); err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// OrderPlaylist puts a playlist's entries in the order given. The list is
+// every entry the playlist holds: the server refuses one of another length.
+func (c *Client) OrderPlaylist(ctx context.Context, id string, entries []PlaylistEntry) (*Playlist, error) {
+	var p Playlist
+	if err := c.patch(ctx, "/api/playlists/"+url.PathEscape(id), map[string]any{"items": entries}, &p); err != nil {
 		return nil, err
 	}
 	return &p, nil

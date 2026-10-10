@@ -33,6 +33,13 @@ type ProgressUpdate struct {
 	HideFromContinueListening *bool    `json:"hideFromContinueListening,omitempty"`
 	EbookLocation             *string  `json:"ebookLocation,omitempty"`
 	EbookProgress             *float64 `json:"ebookProgress,omitempty"`
+	// FinishedAt is when it was finished, in epoch milliseconds: the server
+	// takes it only in the call that turns IsFinished on, and stamps the
+	// moment of the call otherwise
+	FinishedAt *int64 `json:"finishedAt,omitempty"`
+	// LastUpdate is when it was last listened to, in epoch milliseconds,
+	// which is what orders the continue shelves; left out, it is now
+	LastUpdate *int64 `json:"lastUpdate,omitempty"`
 }
 
 // SetProgress creates or updates the API key user's progress on an item or

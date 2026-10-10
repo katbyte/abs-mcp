@@ -11,12 +11,15 @@ package acceptance
 
 import (
 	"archive/zip"
+	"bytes"
 	"fmt"
+	"io"
 	"io/fs"
 	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -385,9 +388,11 @@ func TestJourneyABookDeletedWithItsFiles(t *testing.T) {
 // A session acting on audit_path and audit_duplicates by moving files rather
 // than editing records. First a Messy book whose folder names another book
 // has its folder renamed to its title and the library scanned: the server
-// follows a moved folder by its inode, so the record has to come through
-// with the listening progress, the bookmark, the collection, the playlist
-// entry and the series it had. Then the copy of Mort filed outside the series
+// follows a moved folder by its inode, which a rename on this container's
+// own disk keeps, so the record has to come through with the listening
+// progress, the bookmark, the collection, the playlist entry and the series
+// it had. (Storage that gives a moved folder a new inode is not followed:
+// TestJourneyASeriesRenamedOnDiskIsPutBackTogether is that case.) Then the copy of Mort filed outside the series
 // has its file moved in beside the other and its empty folder removed: the
 // scan leaves its record behind as missing, audit_issues names it, and
 // library_issues_remove clears it, previewed first. It would catch a rename
@@ -926,6 +931,349 @@ func TestJourneyAnEbookOnlyFolder(t *testing.T) {
 	if got := s.ids(t); len(got) != 1 || got[audioPath] != ids[audioPath] {
 		t.Errorf("the library holds %v, want the audiobook alone", got)
 	}
+}
+
+// --- a series renamed where the server cannot follow it ---------------------------
+
+// The whole way round, as a session tidying a shelf goes it. Books are laid
+// out the way they often arrive, each under its bare title, then curated and
+// listened to: a series and a place in it, a store id, a tag, chapters, a
+// cover the server keeps, two accounts' progress and bookmarks, a collection
+// and a playlist of each account. audit_path says which folders do not carry
+// their series, and its findings give the new names. The folders are renamed
+// the way a server cannot follow - one on storage that hands a moved folder a
+// new inode sees what a copy and a delete make here - and another book is
+// deleted outright. Before a scan the server has noticed nothing; after it,
+// audit_issues holds the old records, the library holds each moved book
+// twice, and audit_path still complains of the old ones. library_issues_merge
+// has to pair each old record with its new one by their audio, carry nothing
+// in a preview, and confirmed leave every new record with all the old one
+// had, in the same place in its collection and playlists, the old records
+// gone and no key behind it; after which every audit is quiet but for the
+// book that really was deleted, which library_issues_remove takes. It would
+// catch a merge that deletes before it has carried, one that finishes a book
+// for someone part way through, one that pairs a record with the wrong book,
+// and audits that never agree the shelf is fixed.
+func TestJourneyASeriesRenamedOnDiskIsPutBackTogether(t *testing.T) {
+	const author, saga = "Zzyzx Mover", "Zzyzx Saga"
+	const first, second, third = author + "/Zzyzx First Voyage", author + "/Zzyzx Second Voyage", author + "/" + saga + " - 03 - Zzyzx Third Voyage"
+	const stays, deleted = author + "/Zzyzx Staying Book", author + "/Zzyzx Deleted Book"
+
+	s := newDiskShelf(t, "Zzyzx Moved Shelf", "zzyzx-moved")
+	// every book a length of its own, so that no two hold the same audio byte
+	// for byte, and the two that move long enough that a listener part way
+	// through is not in the last ten seconds, where the server finishes a
+	// book for them
+	for file, seconds := range map[string]int{
+		first + "/01.mp3": 20, first + "/02.mp3": 21, second + "/01.mp3": 30, third + "/01.mp3": 4, stays + "/01.mp3": 5, deleted + "/01.mp3": 3,
+	} {
+		diskSilence(t, filepath.Join(s.root, file), seconds)
+	}
+	s.open(t, 5)
+	ids := s.ids(t)
+	admin := adminClient(t)
+
+	// what a curator leaves on a record, none of it in the files
+	for n, rel := range []string{first, second, third} {
+		call(t, "item_edit", map[string]any{"item": ids[rel], "series": []any{fmt.Sprintf("%s #%d", saga, n+1)}, "asin": fmt.Sprintf("B0ZZYZX00%d", n+1), "add_tags": []any{"zzyzx-curated"}})
+	}
+	// the first book in a second series too, listed after the saga
+	call(t, "item_edit", map[string]any{"item": ids[first], "add_series": []any{"Zzyzx Annals #7"}})
+	inOrder := []string{saga + " #1", "Zzyzx Annals #7"}
+	call(t, "item_chapters_set", map[string]any{"item": ids[first], "chapters": []any{
+		map[string]any{"title": "Zzyzx Setting Out", "start_s": 0}, map[string]any{"title": "Zzyzx Coming Home", "start_s": 20},
+	}})
+	cover := filepath.Join(t.TempDir(), "cover.jpg")
+	writeJPEG(t, cover, 300)
+	picture, err := os.ReadFile(cover)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := admin.UploadCover(ctx, ids[first], "cover.jpg", bytes.NewReader(picture)); err != nil {
+		t.Fatal(err)
+	}
+
+	// and what its listeners leave: the first book finished some way short of
+	// its end, which a merge sending the place and the finish together would
+	// turn back into a book begun again, and the second part way through
+	call(t, "user_progress_set", map[string]any{"item": ids[first], "position_s": 5})
+	call(t, "user_progress_set", map[string]any{"item": ids[first], "finished": true})
+	call(t, "user_progress_set", map[string]any{"item": ids[second], "position_s": 5})
+	call(t, "user_bookmark_edit", map[string]any{"item": ids[first], "add_bookmarks": []any{map[string]any{"time_s": 0.5, "title": "Zzyzx Admin Mark"}}})
+	call(t, "collection_create", map[string]any{"library": s.name, "name": "Zzyzx Voyages", "items": []any{ids[first], ids[second], ids[third]}})
+	t.Cleanup(func() { call(t, "collection_delete", map[string]any{"collection": "Zzyzx Voyages"}) })
+	call(t, "playlist_create", map[string]any{"library": s.name, "name": "Zzyzx Admin Queue", "entries": []any{
+		map[string]any{"item": ids[first]}, map[string]any{"item": ids[second]}, map[string]any{"item": ids[third]},
+	}})
+	t.Cleanup(func() { call(t, "playlist_delete", map[string]any{"playlist": "Zzyzx Admin Queue"}) })
+	listener := newUser(t, "zzyzx-moved-listener", abs.UserCreate{})
+	listener.call(t, "user_progress_set", map[string]any{"item": ids[first], "position_s": 5})
+	listener.call(t, "user_bookmark_edit", map[string]any{"item": ids[second], "add_bookmarks": []any{map[string]any{"time_s": 1.5, "title": "Zzyzx Listener Mark"}}})
+	listener.call(t, "playlist_create", map[string]any{"library": s.name, "name": "Zzyzx Listener Queue", "entries": []any{
+		map[string]any{"item": ids[second]}, map[string]any{"item": ids[stays]},
+	}})
+	finished, err := admin.Progress(ctx, ids[first], "")
+	if err != nil || finished == nil || !finished.IsFinished || finished.FinishedAt == 0 {
+		t.Fatalf("the admin's progress on the first book before the move = %+v, %v", finished, err)
+	}
+	keysBefore, err := admin.APIKeys(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issues := func(t *testing.T) []string {
+		t.Helper()
+		return diskFindingIDs(t, call(t, "audit_issues", map[string]any{"library": s.name}))
+	}
+	pathFindings := func(t *testing.T) map[string]string {
+		t.Helper()
+		found := map[string]string{}
+		for _, f := range rows(t, call(t, "audit_path", map[string]any{"library": s.name})["findings"], "findings") {
+			found[text(f["id"])] = text(f["detail"])
+		}
+		return found
+	}
+
+	// the path audit names the two folders that do not carry their series,
+	// and each finding is enough to write the new name from
+	renamed := map[string]string{}
+	said := regexp.MustCompile(`^folder "(.+)" does not say it is "([^"]+) #(\d+)"`)
+	found := pathFindings(t)
+	for _, rel := range []string{first, second} {
+		m := said.FindStringSubmatch(found[ids[rel]])
+		if m == nil {
+			t.Fatalf("audit_path on %s = %q, want the series its folder does not say; all of it: %v", rel, found[ids[rel]], found)
+		}
+		place, _ := strconv.Atoi(m[3])
+		renamed[rel] = fmt.Sprintf("%s/%s - %02d - %s", author, m[2], place, m[1])
+	}
+	if len(found) != 2 || renamed[first] != author+"/Zzyzx Saga - 01 - Zzyzx First Voyage" || renamed[second] != author+"/Zzyzx Saga - 02 - Zzyzx Second Voyage" {
+		t.Fatalf("audit_path = %v and the names from it %v, want the two bare folders and their names with the series", found, renamed)
+	}
+
+	// renamed the way no server follows, and another book deleted outright
+	for was, now := range renamed {
+		if err := os.CopyFS(filepath.Join(s.root, now), os.DirFS(filepath.Join(s.root, was))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, gone := range []string{first, second, deleted} {
+		if err := os.RemoveAll(filepath.Join(s.root, gone)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// until it scans, the server has seen none of it
+	if missing := issues(t); len(missing) != 0 {
+		t.Errorf("audit_issues before a scan = %v, want nothing: the server has not looked", missing)
+	}
+	if got := call(t, "item_get", map[string]any{"item": ids[first]}); got["path"] != first {
+		t.Errorf("the first book before a scan is at %v, want still %s", got["path"], first)
+	}
+
+	s.scan(t, false)
+	fresh := map[string]string{}
+	diskUntil(t, "a new record for each renamed folder and the old ones flagged missing", func() (bool, string) {
+		now := s.ids(t)
+		fresh[first], fresh[second] = now[renamed[first]], now[renamed[second]]
+		missing := issues(t)
+		slices.Sort(missing)
+		want := []string{ids[first], ids[second], ids[deleted]}
+		slices.Sort(want)
+		return fresh[first] != "" && fresh[second] != "" && slices.Equal(missing, want), fmt.Sprintf("new records %v, missing %v", fresh, missing)
+	})
+	if fresh[first] == ids[first] || fresh[second] == ids[second] {
+		t.Fatalf("the server followed the folders (%v), so there is nothing to put back together", fresh)
+	}
+	if n := len(s.items(t)); n != 7 {
+		t.Errorf("the library holds %d records after the scan, want 7: each moved book twice", n)
+	}
+	// the new folders satisfy the path audit; the old records still do not
+	if found := pathFindings(t); len(found) != 2 || found[ids[first]] == "" || found[ids[second]] == "" {
+		t.Errorf("audit_path after the scan = %v, want the two old records alone", found)
+	}
+	if got := call(t, "item_get", map[string]any{"item": fresh[first]}); got["asin"] != nil || got["series"] != nil {
+		t.Fatalf("the new record already says what the old one did (%v), so there is nothing to carry", got)
+	}
+	// a server that keeps its metadata beside the audio reads both series
+	// back in one moment and may list them either way round; the server lists
+	// them as they were tied and no update of the same two reorders them, so
+	// the merge has to untie and tie them again
+	call(t, "item_edit", map[string]any{"item": fresh[first], "series": []any{"Zzyzx Annals #7"}})
+	call(t, "item_edit", map[string]any{"item": fresh[first], "add_series": []any{saga + " #1"}})
+	if got := strs(t, call(t, "item_get", map[string]any{"item": fresh[first]})["series"], "series"); !slices.Equal(got, []string{"Zzyzx Annals #7", saga + " #1"}) {
+		t.Fatalf("the new record's series = %v, want them the other way round from the old record's", got)
+	}
+
+	t.Run("the preview pairs them and carries nothing", func(t *testing.T) {
+		out := call(t, "library_issues_merge", map[string]any{"library": s.name})
+		pairs := rows(t, out["pairs"], "pairs")
+		if num(t, out["found"], "found") != 3 || num(t, out["merged"], "merged") != 0 || len(pairs) != 2 {
+			t.Fatalf("preview = %v, want three missing records, two of them paired", out)
+		}
+		same := map[string]string{ids[first]: "2 audio files of the same names and sizes", ids[second]: "one audio file of the same name and size"}
+		for _, pair := range pairs {
+			from := text(object(pair["from"])["id"])
+			rel := first
+			if from == ids[second] {
+				rel = second
+			}
+			if from != ids[rel] || object(pair["into"])["id"] != fresh[rel] || pair["same"] != same[from] || !isFalse(pair["merged"]) {
+				t.Errorf("the pair = %v, want %s into its new record", pair, rel)
+			}
+			carry := object(pair["carry"])
+			for _, want := range []string{"asin", "series", "tags"} {
+				if !slices.Contains(strs(t, carry["details"], "details"), want) {
+					t.Errorf("%s: would carry the details %v, want %s among them", rel, carry["details"], want)
+				}
+			}
+			want := map[string][]string{
+				"progress": {"root", listener.Name}, "bookmarks": {"root"}, "collections": {"Zzyzx Voyages"}, "playlists": {"Zzyzx Admin Queue (root)"},
+			}
+			if rel == second {
+				want["progress"], want["bookmarks"] = []string{"root"}, []string{listener.Name}
+			}
+			for field, names := range want {
+				got := strs(t, carry[field], field)
+				slices.Sort(got)
+				slices.Sort(names)
+				if !slices.Equal(got, names) {
+					t.Errorf("%s: would carry %s = %v, want %v", rel, field, got, names)
+				}
+			}
+			if truth(carry["chapters"]) != (rel == first) || truth(carry["cover"]) != (rel == first) {
+				t.Errorf("%s: would carry = %v, want the chapters and the cover of the first book alone", rel, carry)
+			}
+		}
+		unpaired := rows(t, out["unpaired"], "unpaired")
+		if len(unpaired) != 1 || unpaired[0]["path"] != deleted || !strings.Contains(text(unpaired[0]["why"]), "no record holds the same audio files") {
+			t.Errorf("unpaired = %v, want the book that was deleted", unpaired)
+		}
+
+		if got := call(t, "item_get", map[string]any{"item": fresh[first]}); got["asin"] != nil {
+			t.Errorf("the preview wrote to the new record: %v", got)
+		}
+		if missing := issues(t); len(missing) != 3 {
+			t.Errorf("audit_issues after a preview = %v, want all three still", missing)
+		}
+	})
+
+	t.Run("one book on its own first", func(t *testing.T) {
+		out := call(t, "library_issues_merge", map[string]any{"library": s.name, "items": []any{second}, "confirm": true})
+		if num(t, out["merged"], "merged") != 1 || num(t, out["remaining"], "remaining") != 2 {
+			t.Fatalf("the second book alone = %v, want it merged and two records still missing", out)
+		}
+		got := call(t, "item_get", map[string]any{"item": fresh[second]})
+		if got["asin"] != "B0ZZYZX002" || !slices.Equal(strs(t, got["series"], "series"), []string{saga + " #2"}) || got["path"] != renamed[second] {
+			t.Errorf("the second book's new record = %v, want its asin and series at the new path", got)
+		}
+		theirs := object(call(t, "user_progress_get", map[string]any{"item": fresh[second]})["progress"])
+		if theirs == nil || !isFalse(theirs["finished"]) || number(theirs["current_time_s"]) != 5 {
+			t.Errorf("the admin's progress on the second book = %v, want five seconds in and not finished", theirs)
+		}
+		if marks := titlesIn(t, listener.call(t, "user_bookmarks", map[string]any{"item": fresh[second]})["bookmarks"], "bookmarks"); !slices.Equal(marks, []string{"Zzyzx Listener Mark"}) {
+			t.Errorf("the listener's bookmarks on the second book = %v", marks)
+		}
+		if msg := callErr(t, "item_get", map[string]any{"item": ids[second]}); msg == "" {
+			t.Error("the second book's old record is still there")
+		}
+	})
+
+	t.Run("then the rest, and the new records have everything", func(t *testing.T) {
+		out := call(t, "library_issues_merge", map[string]any{"library": s.name, "confirm": true})
+		pairs := rows(t, out["pairs"], "pairs")
+		if num(t, out["merged"], "merged") != 1 || num(t, out["remaining"], "remaining") != 1 || len(pairs) != 1 || !truth(pairs[0]["merged"]) {
+			t.Fatalf("confirmed = %v, want the first book merged and the deleted one still missing", out)
+		}
+		if out["keys_left"] != nil || out["accounts_unreached"] != nil {
+			t.Errorf("confirmed = %v, want no key left and every account reached", out)
+		}
+
+		got := call(t, "item_get", map[string]any{"item": fresh[first], "chapters": true})
+		if got["title"] != "Zzyzx First Voyage" || got["asin"] != "B0ZZYZX001" || got["path"] != renamed[first] ||
+			!slices.Equal(strs(t, got["series"], "series"), inOrder) || !slices.Contains(strs(t, got["tags"], "tags"), "zzyzx-curated") {
+			t.Errorf("the first book's new record = %v, want the old record's title, asin, tag and both series in its order, %v, at the new path", got, inOrder)
+		}
+		if titles := valuesIn(t, got["chapter_list"], "chapter_list", "title"); !slices.Equal(titles, []string{"Zzyzx Setting Out", "Zzyzx Coming Home"}) {
+			t.Errorf("the first book's chapters = %v", titles)
+		}
+		body, err := admin.CoverFile(ctx, fresh[first])
+		if err != nil {
+			t.Fatal(err)
+		}
+		kept, err := io.ReadAll(body)
+		_ = body.Close()
+		if err != nil || !bytes.Equal(kept, picture) {
+			t.Errorf("the first book's cover is %d bytes (%v), want the %d the old record was given", len(kept), err, len(picture))
+		}
+
+		carried, err := admin.Progress(ctx, fresh[first], "")
+		if err != nil || carried == nil || !carried.IsFinished || carried.FinishedAt != finished.FinishedAt || carried.CurrentTime != finished.CurrentTime {
+			t.Errorf("the admin's progress on the first book = %+v, %v; want finished when it was (%d) and where it was (%v)", carried, err, finished.FinishedAt, finished.CurrentTime)
+		}
+		theirs := object(listener.call(t, "user_progress_get", map[string]any{"item": fresh[first]})["progress"])
+		if theirs == nil || !isFalse(theirs["finished"]) || number(theirs["current_time_s"]) != 5 {
+			t.Errorf("the listener's progress on the first book = %v, want five seconds in and not finished", theirs)
+		}
+		if marks := titlesIn(t, call(t, "user_bookmarks", map[string]any{"item": fresh[first]})["bookmarks"], "bookmarks"); !slices.Equal(marks, []string{"Zzyzx Admin Mark"}) {
+			t.Errorf("the admin's bookmarks on the first book = %v", marks)
+		}
+
+		// each book where it was in the collection, the playlists and the series
+		shelf := []string{fresh[first], fresh[second], ids[third]}
+		if held := valuesIn(t, call(t, "collection_get", map[string]any{"collection": "Zzyzx Voyages"})["items"], "items", "id"); !slices.Equal(held, shelf) {
+			t.Errorf("the collection holds %v, want the three voyages in their order, %v", held, shelf)
+		}
+		for who, c := range map[string]struct {
+			entries any
+			want    []string
+		}{
+			"admin":    {call(t, "playlist_get", map[string]any{"playlist": "Zzyzx Admin Queue"})["entries"], shelf},
+			"listener": {listener.call(t, "playlist_get", map[string]any{"playlist": "Zzyzx Listener Queue"})["entries"], []string{fresh[second], ids[stays]}},
+		} {
+			var queued []string
+			for _, e := range rows(t, c.entries, "entries") {
+				queued = append(queued, text(object(e["item"])["id"]))
+			}
+			if !slices.Equal(queued, c.want) {
+				t.Errorf("the %s's playlist holds %v, want %v", who, queued, c.want)
+			}
+		}
+		if books := valuesIn(t, call(t, "series_get", map[string]any{"library": s.name, "series": saga})["books"], "books", "id"); !slices.Equal(books, shelf) {
+			t.Errorf("the series holds %v, want the three voyages in order, %v", books, shelf)
+		}
+
+		keysAfter, err := admin.APIKeys(ctx)
+		if err != nil || len(keysAfter) != len(keysBefore) {
+			t.Errorf("%d keys before the merges and %d after (%v): one made to act as the listener was left", len(keysBefore), len(keysAfter), err)
+		}
+	})
+
+	t.Run("and the audits agree the shelf is fixed", func(t *testing.T) {
+		if found := pathFindings(t); len(found) != 0 {
+			t.Errorf("audit_path = %v, want nothing: every folder says its series now", found)
+		}
+		if groups := rows(t, call(t, "audit_duplicates", map[string]any{"library": s.name})["groups"], "groups"); len(groups) != 0 {
+			t.Errorf("audit_duplicates = %v, want no book held twice", groups)
+		}
+		if missing := rows(t, call(t, "audit_issues", map[string]any{"library": s.name})["findings"], "findings"); len(missing) != 1 || missing[0]["path"] != deleted {
+			t.Errorf("audit_issues = %v, want the deleted book alone", missing)
+		}
+		if again := call(t, "library_issues_merge", map[string]any{"library": s.name, "confirm": true}); num(t, again["merged"], "merged") != 0 || len(rows(t, again["unpaired"], "unpaired")) != 1 {
+			t.Errorf("a second run = %v, want nothing left to merge", again)
+		}
+
+		// what is really gone is removed, and nothing is left to report
+		if done := call(t, "library_issues_remove", map[string]any{"library": s.name, "confirm": true}); num(t, done["removed"], "removed") != 1 {
+			t.Errorf("library_issues_remove = %v, want the deleted book's record removed", done)
+		}
+		if missing := issues(t); len(missing) != 0 {
+			t.Errorf("audit_issues at the end = %v", missing)
+		}
+		have := s.ids(t)
+		if len(have) != 4 || have[renamed[first]] != fresh[first] || have[renamed[second]] != fresh[second] || have[third] != ids[third] || have[stays] != ids[stays] {
+			t.Errorf("the library at the end = %v, want the two renamed books, the third voyage and the one that stayed", have)
+		}
+	})
 }
 
 // --- folders that name their books ------------------------------------------------

@@ -361,6 +361,7 @@ func TestJourneyWritesAnAccountMayNotMake(t *testing.T) {
 		{tool: "library_scan", args: map[string]any{"library": "Fiction"}},
 		// Fiction has no missing books, so there is nothing to send
 		{tool: "library_issues_remove", args: map[string]any{"library": "Fiction", "confirm": true}, mayPass: true},
+		{tool: "library_issues_merge", args: map[string]any{"library": "Fiction", "confirm": true}, mayPass: true},
 		{tool: "metadata_rename", args: map[string]any{"field": "tags", "from": "sf", "to": "zzyzx-refused-sf"}},
 		{tool: "metadata_rename", args: map[string]any{"field": "publishers", "library": "Fiction", "from": "Bantam", "to": "Zzyzx Refused"}},
 		{tool: "series_edit", args: map[string]any{"library": "Fiction", "series": "Foundation", "description": "Zzyzx refused"}},

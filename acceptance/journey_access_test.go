@@ -236,7 +236,7 @@ func TestJourneyATagLimitedListenersOwnQueue(t *testing.T) {
 }
 
 // accessDeleteTools are the tools --enable-delete registers.
-var accessDeleteTools = []string{"author_delete", "collection_delete", "item_delete", "library_issues_remove", "playlist_delete", "podcast_episode_delete"}
+var accessDeleteTools = []string{"author_delete", "collection_delete", "item_delete", "library_issues_merge", "library_issues_remove", "playlist_delete", "podcast_episode_delete"}
 
 // A collection and a playlist deleted, and each list read back to see them
 // gone and their books still there; a playlist emptied by removing its last

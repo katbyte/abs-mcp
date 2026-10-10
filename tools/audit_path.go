@@ -427,7 +427,7 @@ func pathSeriesText(rules pathRules) string {
 	if !rules.series {
 		return ""
 	}
-	return " A book the record places in a series is reported too when its folder does not say so ('Salvation Lost' for 'The Salvation Sequence #2', or 'Ringworld' for 'Ringworld #1'): that is a rename on disk, or a wrong series to take off the record. It is one way of filing, and a server started with --audit-skip " + rulePathSeries + " leaves it out."
+	return " A book the record places in a series is reported too when its folder does not say so ('Salvation Lost' for 'The Salvation Sequence #2', or 'Ringworld' for 'Ringworld #1'): that is a rename on disk (and library_issues_merge after the next scan, on a server that makes a new record for a renamed folder), or a wrong series to take off the record. It is one way of filing, and a server started with --audit-skip " + rulePathSeries + " leaves it out."
 }
 
 // pathIn is auditIn plus the switch for the filename check, which is off by

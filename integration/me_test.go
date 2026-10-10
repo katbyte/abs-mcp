@@ -60,6 +60,34 @@ func TestProgressAndBookmarks(t *testing.T) {
 	}
 }
 
+// Progress carried from one record to another keeps when the book was
+// finished and when it was last listened to, which are otherwise stamped with
+// the moment of the call. The position goes first and the finish after it: in
+// one call the server takes a new position on a finished book for a restart.
+func TestProgressKeepsTheDatesItIsGiven(t *testing.T) {
+	ctx := skipUnlessLive(t)
+	id := library(t)
+
+	item := must(client.Items(ctx, id, abs.ItemsOptions{Limit: 1})).Results[0]
+	finished, listened := int64(1700000000000), int64(1700000500000)
+	at, duration, done := 0.5, 1.0, true
+	if err := client.SetProgress(ctx, item.ID, "", abs.ProgressUpdate{CurrentTime: &at, Duration: &duration}); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.SetProgress(ctx, item.ID, "", abs.ProgressUpdate{IsFinished: &done, FinishedAt: &finished, LastUpdate: &listened}); err != nil {
+		t.Fatal(err)
+	}
+	p := must(client.Progress(ctx, item.ID, ""))
+	if p == nil {
+		t.Fatal("no progress after setting it")
+	}
+	t.Cleanup(func() { _ = client.RemoveProgress(t.Context(), p.ID) })
+	if !p.IsFinished || p.FinishedAt != finished || p.LastUpdate != listened || p.CurrentTime != at {
+		t.Errorf("progress = finished %v at %d, last update %d, position %v; want finished at %d, last update %d, position %v",
+			p.IsFinished, p.FinishedAt, p.LastUpdate, p.CurrentTime, finished, listened, at)
+	}
+}
+
 func TestBookmarkUpdateAndGenreRename(t *testing.T) {
 	ctx := skipUnlessLive(t)
 	id := library(t)

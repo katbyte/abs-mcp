@@ -6,6 +6,8 @@
 
 ### Added
 
+- `library_issues_merge` puts a book back together after a folder rename or move left it with two records: what is on the old record goes to the new one, then the old one is deleted
+- the Go client can upload a cover, read a cover as the file it is, reorder a collection or a playlist, and keep the day a book was finished when it sets progress
 - `audit_path` reports a book the record places in a series when its folder does not say so
 - `--audit-skip` / `ABS_AUDIT_SKIP` leaves out an audit rule that is a way of filing rather than a mistake: `path-series`
 - on macOS, a connection the system refused with "no route to host" says that Local Network privacy may be blocking the process, and that a terminal app updated while running needs a restart

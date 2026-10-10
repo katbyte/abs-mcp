@@ -238,6 +238,22 @@ func (c *Client) SetCoverFromFile(ctx context.Context, id, path string) error {
 	return c.patch(ctx, "/api/items/"+url.PathEscape(id)+"/cover", map[string]string{"cover": path}, nil)
 }
 
+// UploadCover sets the item's cover from an image sent with the call. The
+// server goes by the file name's extension, so it has to be an image's.
+func (c *Client) UploadCover(ctx context.Context, id, filename string, picture io.Reader) error {
+	return c.uploadMultipart(ctx, "/api/items/"+url.PathEscape(id)+"/cover", "cover", filename, picture, nil)
+}
+
+// CoverFile streams the item's cover as the file it is, where Cover answers
+// from the server's cache of resized copies. ErrNoCover when it has none.
+func (c *Client) CoverFile(ctx context.Context, id string) (io.ReadCloser, error) {
+	body, err := c.stream(ctx, "/api/items/"+url.PathEscape(id)+"/cover", url.Values{"raw": {"1"}})
+	if IsNotFound(err) {
+		return nil, ErrNoCover
+	}
+	return body, err
+}
+
 // RemoveCover deletes the item's cover image.
 func (c *Client) RemoveCover(ctx context.Context, id string) error {
 	return c.del(ctx, "/api/items/"+url.PathEscape(id)+"/cover", nil)

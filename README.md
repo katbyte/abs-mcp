@@ -16,8 +16,8 @@ This is not a demo. It has been battle-tested on a real collection: a large libr
 
 ### What else is in the box
 
-- **The whole API, as tools.** 99 tools over all 202 Audiobookshelf routes, so everything an audit finds can be fixed from the same session: matching, covers, chapters, embedding, renaming a genre everywhere it is used, merging duplicate authors.
-- **A Go SDK.** `sdk/abs` is a complete Audiobookshelf API client - 209 methods, no dependencies outside the standard library, no knowledge of MCP - useful on its own, whether or not you care about AI.
+- **The whole API, as tools.** 100 tools over all 202 Audiobookshelf routes, so everything an audit finds can be fixed from the same session: matching, covers, chapters, embedding, renaming a genre everywhere it is used, merging duplicate authors.
+- **A Go SDK.** `sdk/abs` is a complete Audiobookshelf API client - 213 methods, no dependencies outside the standard library, no knowledge of MCP - useful on its own, whether or not you care about AI.
 - **Tested against a real server.** Every tool and every client method runs against an actual Audiobookshelf in Docker, and the suites fail if a registered tool or a client method has no test. Seven response-shape bugs in this client were found that way and could not have been found any other way, because Audiobookshelf publishes no OpenAPI spec and its public API docs say they are unmaintained.
 
 ### The audits
@@ -150,7 +150,7 @@ Tools are named resource-first (`library_*`, `item_*`, `user_*`...) so they grou
 | Resource | Tools |
 |---|---|
 | server | `server_info` (connectivity, permissions, libraries, providers and server-wide totals), `server_tasks` (with `log`, today's server log, to see why a scan or merge failed), `server_sessions`, `server_backups`, `server_backup_create`, `server_tags` |
-| libraries | `library_list`, `library_get` (in depth, with statistics), `library_create`, `library_edit`, `library_search`, `library_items` (the server's own filters and sorts: genre, tag, author, series, narrator, progress, tracks...), `library_recent`, `library_filters`, `library_scan` |
+| libraries | `library_list`, `library_get` (in depth, with statistics), `library_create`, `library_edit`, `library_search`, `library_items` (the server's own filters and sorts: genre, tag, author, series, narrator, progress, tracks...), `library_recent`, `library_filters`, `library_scan`, `library_issues_remove` (delete the records of books whose folders are gone), `library_issues_merge` (after a folder was renamed or moved and the server made a new record for it: carry the old record's details, cover, chapters, everyone's progress and bookmarks, and its place in collections and playlists onto the new one, then delete the old) |
 | audits | the 19 audits in [the table above](#the-audits): `audit_all`, `audit_unmatched`, `audit_missing`, `audit_issues`, `audit_no_audio`, `audit_path`, `audit_chapters`, `audit_duplicates`, `audit_abridged`, `audit_series`, `audit_spelling`, `audit_authors`, `audit_narrators`, `audit_genres`, `audit_whitespace`, `audit_unembedded`, `audit_unplayable`, `audit_covers`, `audit_matched`, `audit_podcasts` |
 | items | `item_get` (with optional `chapters` and `files`), `item_edit` (also a book's track order, its chapters moving with their files, and which ebook is the main one; with `items`, the same change on many at once, `add_tags`, `remove_tags`, `add_series` and `remove_series` editing each one's own list), `item_rescan`, `item_embed_metadata` (or with `m4b`, merge the book into one m4b at its own bitrate, previewed until `confirm`), `item_send_ebook` (email the main ebook to a Kindle or Kobo set up in the web app), `item_compare_audio` (are two items the same recording? It takes stretches of one book at five points and finds each in the other by the rise and fall of the voice, allowing for a copy a few percent faster or slower, then checks the spectrum where they line up: a re-encode, a split copy or another edition's label is the same voice saying the same thing, another narrator is not, and nor is the same narrator recording the book again. `points`, `stretch_s`, `reach_s` and `speed_pct` listen harder. It reads about half of the second book over the network and needs ffmpeg where abs-mcp runs; the Docker image has it) |
 | matching | `item_match` (candidates from the first of `providers`, in order, that has any), `item_match_apply`, `item_match_batch` → `item_match_apply_batch` (a window of books scored against the provider, paged by offset, a reader named in the narrator field, the folder's brackets (`(Tipton)`, `[John Lee]`) or a `Read by` credit standing in for the description each checked against the candidate's, so a copy matched to another reading is no longer exact, then the accepted rows applied by asin; both apply tools take `override_details` with a `keep` list of fields to put back afterwards, or `smart`, which fills the empty fields and then decides each remaining difference by rule, writing file-tag titles and company narrators over, keeping curated series and plain years, and reporting the rest for review; neither applies anything without `confirm`, and until then says what would be applied, and with `smart` every decision. Every applied match records its store as a `zz-provider:` tag, which the audits and the batch search ask first, and `item_match_tag` backfills it for books matched before the tag existed), `item_cover_search`, `item_cover_edit` (url, file, or `remove`), `item_cover_upgrade` (the store's full-size cover when it is bigger and the same picture, set once `confirm` is passed), `item_chapters_set` (explicit list, from Audible by asin, or `fit` to fit the book's own chapters to its audio) |
@@ -164,23 +164,23 @@ Tools are named resource-first (`library_*`, `item_*`, `user_*`...) so they grou
 | podcasts | `podcast_episodes` (one show, or the newest across the library), `podcast_episode_get`, `podcast_episode_edit`, `podcast_check_new`, `podcast_feed_episodes`, `podcast_episode_download`, `podcast_downloads`, `podcast_search`, `podcast_add`, `podcast_edit` (the automatic download settings) |
 | users | `user_get`, `user_in_progress`, `user_progress_get`, `user_progress_set` (also a whole series off the Continue Series shelf, and `remove` to delete the progress), `user_bookmarks`, `user_bookmark_edit` (`add_bookmarks`, `remove_bookmarks`), `user_history`, `user_history_remove`, `user_stats` (all-time or year in review, or the whole server's year), `user_list`, `user_create`, `user_edit` (admin) |
 
-`item_delete` (a book, or with `file` one file of it), `podcast_episode_delete`, `author_delete`, `library_issues_remove`, `collection_delete`, `playlist_delete` and `user_history_remove` are only registered when `--enable-delete` / `ABS_ENABLE_DELETE` is set; the ones that erase files or many records at once (`item_delete`, `podcast_episode_delete`, `library_issues_remove`, `user_history_remove`, and `metadata_rename` with `remove`) say what they would remove and change nothing until called again with `confirm`. So do the tools that write over what a book has from a store: `item_match_apply`, `item_match_apply_batch` and `item_cover_upgrade`. `--read-only` registers the 59 read tools and nothing else, so a write tool is absent from `tools/list` rather than refused when called.
+`item_delete` (a book, or with `file` one file of it), `podcast_episode_delete`, `author_delete`, `library_issues_remove`, `library_issues_merge`, `collection_delete`, `playlist_delete` and `user_history_remove` are only registered when `--enable-delete` / `ABS_ENABLE_DELETE` is set; the ones that erase files or many records at once (`item_delete`, `podcast_episode_delete`, `library_issues_remove`, `user_history_remove`, and `metadata_rename` with `remove`) say what they would remove and change nothing until called again with `confirm`. So do the tools that write over what a book has from a store: `item_match_apply`, `item_match_apply_batch` and `item_cover_upgrade`. `--read-only` registers the 59 read tools and nothing else, so a write tool is absent from `tools/list` rather than refused when called.
 
 ### Choosing which tools load
 
-**The default is `core`: five read-only tools, about 1,200 tokens.** The whole surface is around 28,000 tokens of tool definitions before anyone asks a question, which is a poor way to spend a client's context by default. `--toolsets` / `ABS_TOOLSETS` loads the groups a session actually needs, and `core` comes along with whatever else is asked for, because nothing else can find a library or open an item.
+**The default is `core`: five read-only tools, about 1,200 tokens.** The whole surface is around 29,000 tokens of tool definitions before anyone asks a question, which is a poor way to spend a client's context by default. `--toolsets` / `ABS_TOOLSETS` loads the groups a session actually needs, and `core` comes along with whatever else is asked for, because nothing else can find a library or open an item.
 
 **Curating a library needs `ABS_TOOLSETS=curation`** - the audits and everything that fixes what they find. `ABS_TOOLSETS=all` restores every tool.
 
 | toolset | tools | with core | ~tokens |
 |---|---|---|---|
 | `core` *(default)* | 5 | 5 | 1,200 |
-| `admin` | 15 | 20 | 4,600 |
+| `admin` | 16 | 21 | 5,100 |
 | `organise` | 12 | 17 | 3,200 |
 | `podcasts` | 11 | 16 | 3,200 |
 | `listening` | 10 | 15 | 3,300 |
-| `curation` | 46 | 51 | 18,400 |
-| `all` | 99 | 99 | 28,000 |
+| `curation` | 46 | 51 | 18,800 |
+| `all` | 100 | 100 | 28,900 |
 
 Tokens are what the model sees: each tool's name, description and input schema, measured over a real `tools/list` at four bytes a token. Every tool also carries an output schema, another 38,000 tokens across `all`, but clients keep that to themselves to validate results rather than sending it to the model.
 
@@ -222,6 +222,17 @@ A pattern that matches no tool aborts startup and names it, so a typo cannot sil
 4. `audit_missing field=chapters` finds long books with no chapters; `item_chapters_set` pulls them from Audible by asin.
 5. `audit_duplicates` and `audit_series` show what to prune and what is missing.
 
+### After a folder is renamed or moved
+
+Audiobookshelf follows a renamed folder by its inode. Where the library sits on storage that gives a moved folder a new one (some network and pooled mounts), the next scan makes a new record for the folder and flags the old one missing, with everyone's listening progress still on it. `library_issues_merge` (in `admin`, and only with `--enable-delete`) pairs each missing record with the record made since for the same audio files, carries the old record's details, tags, chapters, cover, every account's progress and bookmarks, and its place in collections and playlists onto the new one, reads it back, and then deletes the old record. Without `confirm` it only reports. Its limits:
+
+- the day a book was added, and the day each account started it, cannot be carried: the server sets both itself
+- another account's progress, bookmarks and playlists can only be written as that account, so a confirmed run makes a key for each account that expires in fifteen minutes, and deletes it when the run ends
+- a record holding the same audio that was already in the library before the folder went missing is taken for a second copy, not the folder moved, and is merged into only when `into` names it
+- a missing record with an open RSS feed or share link is left as it is, since deleting it would close them
+- a pair where anything fails to carry is left as it is, old record and all, with the reason
+- books only: a podcast's progress hangs on its episodes
+
 ## Using the client on its own
 
 `sdk/abs` is a plain Go client for the Audiobookshelf API with **no dependencies outside the standard library**, and no knowledge of MCP. If you only want to talk to Audiobookshelf from Go, take it and ignore the rest:
@@ -233,7 +244,7 @@ client, err := abs.New("http://nas:13378", os.Getenv("ABS_TOKEN"))
 items, err := client.Items(ctx, libraryID, abs.ItemsOptions{Limit: 50})
 ```
 
-It has 209 methods covering **every one of Audiobookshelf's 202 API routes** - libraries, items, authors, series, narrators, collections, playlists, progress, bookmarks, podcasts, provider search, RSS feeds, tags, genres, tasks, backups, playback sessions, notifications, email, API keys, sharing, settings and user administration. File downloads stream rather than buffer, so a multi-gigabyte audiobook does not have to fit in memory.
+It has 213 methods covering **every one of Audiobookshelf's 202 API routes** - libraries, items, authors, series, narrators, collections, playlists, progress, bookmarks, podcasts, provider search, RSS feeds, tags, genres, tasks, backups, playback sessions, notifications, email, API keys, sharing, settings and user administration. File downloads stream rather than buffer, so a multi-gigabyte audiobook does not have to fit in memory.
 
 `make apicheck` reads the route table out of the Audiobookshelf source and fails if anything is missing, so the coverage claim is checked rather than asserted. Audiobookshelf publishes no OpenAPI spec and its [public API docs say they are unmaintained](https://api.audiobookshelf.org), so the types here are written against the server source (see [docs/README.md](docs/README.md)) and then **proved against a running server** - which is the only thing that catches the server changing shape underneath you.
 
@@ -267,7 +278,7 @@ Those journeys, like everything else, drive `tools.RegisterAll` in process, whic
 
 Coverage has to span all three or it lies: `go test -cover ./...` reports about 40% for `tools/`, because almost everything real happens in the live suites behind the `integration` tag. `make cover` runs each into its own binary coverage directory and merges them with `go tool covdata` - stdlib tooling, no third-party merger - which is what the badge reports.
 
-**All 99 tools and all 209 client methods are exercised**, 204 of the methods asserting a result rather than only that the call reached the server. The five that do not - sending an ebook by email, firing a notification, closing a device session, unlinking OpenID, syncing an offline session - need infrastructure a throwaway container has not got, and say so where they are written. Both are enforced rather than claimed: the acceptance suite records every tool it calls and fails if the server registered one nothing called, and a unit test reads the live suite and fails if the client has a method nothing in it calls, so neither a new tool nor a new method can ship untested. Each test file is named for the code it tests (`tools/items_test.go` for `tools/items.go`), and each package makes its canned servers in one file. Calls out to Audible, Audnexus and iTunes go through a record/replay proxy (`lib/providerproxy`), so neither suite needs a network:
+**All 100 tools and all 213 client methods are exercised**, 208 of the methods asserting a result rather than only that the call reached the server. The five that do not - sending an ebook by email, firing a notification, closing a device session, unlinking OpenID, syncing an offline session - need infrastructure a throwaway container has not got, and say so where they are written. Both are enforced rather than claimed: the acceptance suite records every tool it calls and fails if the server registered one nothing called, and a unit test reads the live suite and fails if the client has a method nothing in it calls, so neither a new tool nor a new method can ship untested. Each test file is named for the code it tests (`tools/items_test.go` for `tools/items.go`), and each package makes its canned servers in one file. Calls out to Audible, Audnexus and iTunes go through a record/replay proxy (`lib/providerproxy`), so neither suite needs a network:
 
 ```bash
 make record         # re-record every cassette against the real providers

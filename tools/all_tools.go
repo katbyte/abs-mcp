@@ -52,7 +52,7 @@ type Options struct {
 }
 
 // Toolsets group the tools by the job someone is doing, so a client can load a
-// working subset instead of all of them. The whole surface is around 28,000
+// working subset instead of all of them. The whole surface is around 29,000
 // tokens of tool definitions (name, description, input schema) before anyone
 // has asked a question; core alone is about 1,200.
 //
@@ -112,7 +112,7 @@ var Toolsets = map[string][]string{
 	// other people's accounts, and the tools that remove records
 	"admin": {
 		"server_sessions", "server_tasks", "server_backups", "server_backup_create",
-		"library_create", "library_edit", "library_scan", "library_issues_remove",
+		"library_create", "library_edit", "library_scan", "library_issues_remove", "library_issues_merge",
 		"item_rescan", "item_embed_metadata", "item_delete", "author_delete", "user_list",
 		"user_create", "user_edit",
 	},
@@ -307,6 +307,7 @@ func RegisterAll(server *mcp.Server, client *abs.Client, opts Options) ([]string
 func queueTools(r *registry) {
 	registerServerTools(r)
 	registerLibraryTools(r)
+	registerIssuesMerge(r)
 	registerAuditTools(r)
 	registerPathAudit(r)
 	registerChaptersAudit(r)

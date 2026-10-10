@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/katbyte/abs-mcp/sdk/abs"
@@ -100,6 +101,42 @@ func TestPlaylistMethods(t *testing.T) {
 	removed := must(client.RemoveFromPlaylist(ctx, pl.ID, []abs.PlaylistEntry{{LibraryItemID: items[1].ID}}))
 	if len(removed.Items) != 1 {
 		t.Errorf("after remove = %d entries, want 1", len(removed.Items))
+	}
+}
+
+// A collection and a playlist are lists in an order, and each takes a new
+// one: what was added last can be put first.
+func TestCollectionAndPlaylistOrder(t *testing.T) {
+	ctx := skipUnlessLive(t)
+	id := library(t)
+
+	items := must(client.Items(ctx, id, abs.ItemsOptions{Limit: 3})).Results
+	first, second, third := items[0].ID, items[1].ID, items[2].ID
+
+	col := must(client.CreateCollection(ctx, id, "SDK Order", "", []string{first, second, third}))
+	t.Cleanup(func() { _ = client.DeleteCollection(t.Context(), col.ID) })
+	if _, err := client.OrderCollection(ctx, col.ID, []string{third, first, second}); err != nil {
+		t.Fatalf("OrderCollection: %v", err)
+	}
+	books := make([]string, 0, 3)
+	for _, b := range must(client.Collection(ctx, col.ID)).Books {
+		books = append(books, b.ID)
+	}
+	if !slices.Equal(books, []string{third, first, second}) {
+		t.Errorf("the collection read back = %v, want the order it was given", books)
+	}
+
+	pl := must(client.CreatePlaylist(ctx, id, "SDK Order Playlist", "", []abs.PlaylistEntry{{LibraryItemID: first}, {LibraryItemID: second}, {LibraryItemID: third}}))
+	t.Cleanup(func() { _ = client.DeletePlaylist(t.Context(), pl.ID) })
+	if _, err := client.OrderPlaylist(ctx, pl.ID, []abs.PlaylistEntry{{LibraryItemID: third}, {LibraryItemID: first}, {LibraryItemID: second}}); err != nil {
+		t.Fatalf("OrderPlaylist: %v", err)
+	}
+	entries := make([]string, 0, 3)
+	for _, e := range must(client.Playlist(ctx, pl.ID)).Items {
+		entries = append(entries, e.LibraryItemID)
+	}
+	if !slices.Equal(entries, []string{third, first, second}) {
+		t.Errorf("the playlist read back = %v, want the order it was given", entries)
 	}
 }
 

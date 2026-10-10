@@ -65,7 +65,7 @@ var auditSpecs = []auditSpec{
 	},
 	{
 		"audit_issues", "issues",
-		"Find items whose folder is missing from disk or holds no playable media. These are broken records rather than metadata gaps: remove them with library_issues_remove, or item_delete one at a time.",
+		"Find items whose folder is missing from disk or holds no playable media. These are broken records rather than metadata gaps. A folder renamed or moved on a server that did not follow it leaves its old record here and a new one beside it: library_issues_merge puts the two back together, progress and all. What is really gone is removed with library_issues_remove, or item_delete one at a time.",
 	},
 	{
 		"audit_no_audio", "no_audio",

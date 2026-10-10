@@ -3,6 +3,9 @@
 package integration
 
 import (
+	"bytes"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -233,6 +236,32 @@ func TestSetCoverFromFile(t *testing.T) {
 	}
 	if w == 0 || h == 0 {
 		t.Errorf("cover is %dx%d", w, h)
+	}
+}
+
+// UploadCover sends the image itself, and CoverFile hands back the file the
+// server kept: the bytes that were sent, where Cover answers a resized copy.
+func TestUploadCoverAndReadItBack(t *testing.T) {
+	ctx := skipUnlessLive(t)
+	id := library(t)
+
+	item := must(client.Items(ctx, id, abs.ItemsOptions{Limit: 1})).Results[0]
+	t.Cleanup(func() { _ = client.RemoveCover(t.Context(), item.ID) })
+	if err := client.UploadCover(ctx, item.ID, "cover.jpg", bytes.NewReader(tinyJPEG())); err != nil {
+		t.Fatalf("UploadCover: %v", err)
+	}
+	body := must(client.CoverFile(ctx, item.ID))
+	got, err := io.ReadAll(body)
+	_ = body.Close()
+	if err != nil || !bytes.Equal(got, tinyJPEG()) {
+		t.Errorf("CoverFile = %d bytes, %v; want the %d that were sent", len(got), err, len(tinyJPEG()))
+	}
+
+	if err := client.RemoveCover(ctx, item.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.CoverFile(ctx, item.ID); !errors.Is(err, abs.ErrNoCover) {
+		t.Errorf("CoverFile with no cover = %v, want ErrNoCover", err)
 	}
 }
 
