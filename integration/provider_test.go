@@ -2,8 +2,8 @@
 
 // The client calls that make Audiobookshelf reach outside itself: Audible,
 // Audnexus, iTunes and RSS feeds. Audiobookshelf makes those requests, not us,
-// so they are intercepted at the container's edge by lib/providerproxy and
-// replayed from testdata/cassettes.
+// so they are intercepted at the container's edge by go-kt's record/replay
+// proxy (test/replayproxy) and replayed from testdata/cassettes.
 //
 //	make record-sdk   # re-record against the real providers
 package integration

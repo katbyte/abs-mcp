@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -14,9 +15,13 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
+
+	"github.com/katbyte/go-kt/chttp"
 )
 
 func TestNewRejectsBadURLs(t *testing.T) {
@@ -55,7 +60,7 @@ func TestEncodeFilter(t *testing.T) {
 	}
 }
 
-func TestHTTPErrorMessage(t *testing.T) {
+func TestStatusErrorMessage(t *testing.T) {
 	t.Parallel()
 
 	c := newClient(t, newJSONServer(t, always(http.StatusForbidden, "nope")))
@@ -70,24 +75,42 @@ func TestHTTPErrorMessage(t *testing.T) {
 	}
 }
 
+// failing is a transport every request fails on, the way it is told to.
+type failing struct{ err error }
+
+func (f failing) RoundTrip(*http.Request) (*http.Response, error) { return nil, f.err }
+
 // A dial the Mac refused with "no route to host" says what the Mac may be
 // doing, since no retry and no server fixes Local Network privacy; any other
 // transport error, and every dial elsewhere, is passed through as it is.
-func TestTransportErrorNamesLocalNetworkPrivacy(t *testing.T) {
+// Saying so is go-kt's HTTP client's work: what is checked here is that this
+// client's calls and its downloads both go through it.
+func TestARefusedDialNamesLocalNetworkPrivacy(t *testing.T) {
 	t.Parallel()
 
 	refused := &net.OpError{Op: "dial", Net: "tcp", Err: &os.SyscallError{Syscall: "connect", Err: syscall.EHOSTUNREACH}}
-	got := transportError(refused)
-	if !errors.Is(got, syscall.EHOSTUNREACH) {
-		t.Errorf("transportError(%v) = %v, want the refusal kept", refused, got)
+	c, err := New("http://nas.invalid:13378", "k", func(o *chttp.Options) { o.Base = failing{refused} })
+	if err != nil {
+		t.Fatal(err)
 	}
-	if hinted := strings.Contains(got.Error(), "Local Network"); hinted != (runtime.GOOS == "darwin") {
-		t.Errorf("transportError(%v) = %q on %s, want the hint only on macOS", refused, got, runtime.GOOS)
+	_, call := c.Me(t.Context())
+	_, download := c.DownloadItem(t.Context(), "i1")
+	for what, got := range map[string]error{"a call": call, "a download": download} {
+		if !errors.Is(got, syscall.EHOSTUNREACH) {
+			t.Errorf("%s over a refused dial = %v, want the refusal kept", what, got)
+		}
+		if hinted := got != nil && strings.Contains(got.Error(), "Local Network"); hinted != (runtime.GOOS == "darwin") {
+			t.Errorf("%s over a refused dial = %q on %s, want the hint only on macOS", what, got, runtime.GOOS)
+		}
 	}
 
 	timedOut := &net.OpError{Op: "dial", Net: "tcp", Err: context.DeadlineExceeded}
-	if got := transportError(timedOut); got.Error() != timedOut.Error() {
-		t.Errorf("transportError(%v) = %v, want it unchanged", timedOut, got)
+	c, err = New("http://nas.invalid:13378", "k", func(o *chttp.Options) { o.Base = failing{timedOut} })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Me(t.Context()); err == nil || !strings.HasSuffix(err.Error(), timedOut.Error()) {
+		t.Errorf("a call over a dial that timed out = %v, want it as it was", err)
 	}
 }
 
@@ -107,18 +130,9 @@ func TestIntQueryOmitsZero(t *testing.T) {
 	}
 }
 
-func TestTruncateAndBoolQuery(t *testing.T) {
+func TestBoolQuery(t *testing.T) {
 	t.Parallel()
 
-	if got := truncate("short", 10); got != "short" {
-		t.Errorf("truncate under the limit = %q", got)
-	}
-	if got := truncate("exactly-10", 10); got != "exactly-10" {
-		t.Errorf("truncate at the limit = %q", got)
-	}
-	if got := truncate("far too long to keep", 5); got != "far t..." {
-		t.Errorf("truncate over the limit = %q", got)
-	}
 	if boolQuery(true) != "1" || boolQuery(false) != "0" {
 		t.Errorf("boolQuery = %q/%q, want 1/0", boolQuery(true), boolQuery(false))
 	}
@@ -250,7 +264,7 @@ func TestRedirectsAndWebPagesAreRefused(t *testing.T) {
 
 // A rejected key says so, which is the first thing a misconfigured
 // deployment hits.
-func TestHTTPErrorNamesTheKeyOn401(t *testing.T) {
+func TestStatusErrorNamesTheKeyOn401(t *testing.T) {
 	t.Parallel()
 
 	s := newJSONServer(t, func(*http.Request) (int, string) { return http.StatusUnauthorized, "Unauthorized" })
@@ -303,5 +317,137 @@ func TestEveryMethodHasALiveTest(t *testing.T) {
 		if !called[method.Name] {
 			t.Errorf("%s has no live test: nothing in %s calls it", method.Name, suite)
 		}
+	}
+}
+
+// recorder is a logger that keeps what it is told.
+type recorder struct {
+	mu    sync.Mutex
+	lines []string
+}
+
+func (r *recorder) Debugf(format string, args ...any) { r.add("DEBUG " + fmt.Sprintf(format, args...)) }
+
+func (r *recorder) Tracef(format string, args ...any) { r.add("TRACE " + fmt.Sprintf(format, args...)) }
+
+func (r *recorder) add(line string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.lines = append(r.lines, line)
+}
+
+func (r *recorder) text() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return strings.Join(r.lines, "\n")
+}
+
+// A read is asked for again when a gateway could not reach the server, and a
+// write is sent once whatever comes back: one that got no answer, or an
+// error for one, may still have been made. A read that never gets through
+// says how often it was tried, and a plain 500 is the server's own answer,
+// not asked for twice.
+func TestAReadIsTriedAgainAndAWriteIsNot(t *testing.T) {
+	t.Parallel()
+
+	hits := 0
+	s := newJSONServer(t, func(*http.Request) (int, string) {
+		hits++
+		if hits < 3 {
+			return http.StatusBadGateway, "bad gateway"
+		}
+
+		return http.StatusOK, `{"id":"u1","username":"kt"}`
+	})
+	me, err := newClient(t, s).Me(t.Context())
+	if err != nil || me.ID != "u1" || len(s.requests()) != 3 {
+		t.Errorf("Me = %+v, %v after %v, want the account on the third try", me, err, s.requests())
+	}
+
+	s = newJSONServer(t, always(http.StatusServiceUnavailable, "starting up"))
+	_, err = newClient(t, s).Me(t.Context())
+	if got := len(s.requests()); got != 3 || err == nil || !strings.Contains(err.Error(), "GET /api/me: HTTP 503: starting up (tried 3 times)") {
+		t.Errorf("a read answered 503 every time = %v after %d requests, want it tried 3 times and said so", err, got)
+	}
+
+	s = newJSONServer(t, always(http.StatusServiceUnavailable, "starting up"))
+	err = newClient(t, s).ScanLibrary(t.Context(), "lib", false)
+	if got := s.requests(); len(got) != 1 || err == nil || strings.Contains(err.Error(), "tried") {
+		t.Errorf("a write answered 503 = %v after %v, want it sent once", err, got)
+	}
+
+	s = newJSONServer(t, always(http.StatusInternalServerError, "boom"))
+	_, err = newClient(t, s).Me(t.Context())
+	if got := s.requests(); len(got) != 1 || chttp.StatusCode(err) != http.StatusInternalServerError {
+		t.Errorf("a read answered 500 = %v after %v, want the server's answer after one request", err, got)
+	}
+
+	// and a caller that wants none of it says so
+	s = newJSONServer(t, always(http.StatusBadGateway, "bad gateway"))
+	_, err = newClient(t, s, WithRetry(chttp.Retry{Tries: 1})).Me(t.Context())
+	if got := s.requests(); len(got) != 1 || err == nil {
+		t.Errorf("with one try a read answered 502 = %v after %v, want it sent once", err, got)
+	}
+}
+
+// A client handed a logger traces its calls to it, without the key that
+// every one of them carries; one handed none logs nothing.
+func TestAClientTracesToTheLoggerItIsHanded(t *testing.T) {
+	t.Parallel()
+
+	s := newJSONServer(t, always(http.StatusOK, `{"id":"u1","username":"kt","token":"the-account-token"}`))
+	log := &recorder{}
+	c, err := New(s.URL, "the-api-key", WithLog(log))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Me(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	out := log.text()
+	for _, want := range []string{"Audiobookshelf API Request Details", "GET /api/me HTTP/1.1", "Authorization: REDACTED", "Audiobookshelf API Response Details", `"username": "kt"`, `"token": "REDACTED"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the trace is missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "the-api-key") || strings.Contains(out, "the-account-token") {
+		t.Errorf("the trace shows a key:\n%s", out)
+	}
+}
+
+// A client acting as another account is the same client with that account's
+// key: the same server, and the same logger.
+func TestAsIsTheSameClientWithAnotherKey(t *testing.T) {
+	t.Parallel()
+
+	var keys []string
+	s := newJSONServer(t, func(r *http.Request) (int, string) {
+		keys = append(keys, r.Header.Get("Authorization"))
+
+		return http.StatusOK, `{"id":"u1"}`
+	})
+	log := &recorder{}
+	c := newClient(t, s, WithLog(log))
+	other, err := c.As("another-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Me(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := other.Me(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	if !slices.Equal(keys, []string{"Bearer k", "Bearer another-key"}) || other.BaseURL() != c.BaseURL() {
+		t.Errorf("the two clients sent %v to %s and %s, want each its own key to one server", keys, c.BaseURL(), other.BaseURL())
+	}
+	if got := strings.Count(log.text(), "API Request Details"); got != 2 {
+		t.Errorf("%d of the two clients' requests were traced, want both", got)
+	}
+	if _, err := c.As(""); err == nil {
+		t.Error("a client was made to act as an account with no key")
 	}
 }

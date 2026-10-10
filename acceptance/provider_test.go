@@ -1,9 +1,9 @@
 //go:build integration
 
 // The tools that reach a metadata provider. Audiobookshelf, not abs-mcp, makes
-// these calls, so they are intercepted at its edge by the record/replay proxy
-// in lib/providerproxy: by default they replay from
-// testdata/cassettes and touch no network, and `make record` refreshes them
+// these calls, so they are intercepted at its edge by go-kt's record/replay
+// proxy (test/replayproxy): by default they replay from testdata/cassettes
+// and touch no network, and `make record` refreshes them
 // against the real Audible, Audnexus and iTunes.
 //
 // The multi-step flows are ordered subtests rather than separate tests,

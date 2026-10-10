@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/katbyte/go-kt/lock"
+
 	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -233,7 +235,7 @@ func (p providerConfig) providerOrder(it *abs.Item, providers []string) []string
 // rather than as a listing had them. The hold is let go however the call
 // ends: one left behind by a panic would stall every later edit of the book.
 func (r *registry) tagOne(ctx context.Context, itemID, provider string) error {
-	release := r.locks.hold(itemKeys(itemID)...)
+	release := r.locks.By(lock.ID[abs.Item](itemID))
 	defer release()
 	fresh, err := r.client.Item(ctx, itemID)
 	if err != nil {

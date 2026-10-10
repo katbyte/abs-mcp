@@ -929,3 +929,13 @@ type Shelf struct {
 	Type     string          `json:"type"` // book, podcast, episode, series, authors
 	Entities json.RawMessage `json:"entities"`
 }
+
+// LockID is the record a copy of an item is: whatever keeps two edits of one
+// item in one process apart locks on it (go-kt's lock.By).
+func (i *Item) LockID() string { return i.ID }
+
+// LockID is the record a copy of a collection is.
+func (c *Collection) LockID() string { return c.ID }
+
+// LockID is the record a copy of a playlist is.
+func (p *Playlist) LockID() string { return p.ID }

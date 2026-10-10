@@ -708,7 +708,7 @@ func registerUserTools(r *registry) {
 		}
 		// the server keeps an account's bookmarks as one list, read and
 		// saved whole by every add and removal
-		defer r.locks.hold("bookmarks")()
+		defer r.locks.ByString(bookmarksLock)()
 
 		rowOf := func(b *abs.Bookmark) bookmarkRow {
 			return bookmarkRow{

@@ -8,7 +8,6 @@ package integration
 
 import (
 	"bytes"
-	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -16,6 +15,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/katbyte/go-kt/chttp"
 
 	"github.com/katbyte/abs-mcp/sdk/abs"
 )
@@ -51,7 +52,7 @@ func TestNotifications(t *testing.T) {
 	}
 	// firing one notification, as opposed to all of them
 	if err := client.TestOneNotification(ctx, id); err != nil {
-		if _, reached := errors.AsType[*abs.HTTPError](err); !reached {
+		if reached := chttp.StatusCode(err) != 0; !reached {
 			t.Errorf("TestOneNotification did not reach the server: %v", err)
 		}
 	}
@@ -98,13 +99,19 @@ func TestAPIKeyAdmin(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = client.DeleteAPIKey(t.Context(), created.ID) })
 
-	// the new key actually works
-	other, err := abs.New(client.BaseURL(), created.Key)
+	// the new key actually works, for the same client acting as its account
+	other, err := client.As(created.Key)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := other.Me(ctx); err != nil {
-		t.Errorf("the created key does not authenticate: %v", err)
+	if as, err := other.Me(ctx); err != nil || as.ID != me.ID {
+		t.Errorf("the created key does not authenticate as its account: %+v, %v", as, err)
+	}
+	if other.BaseURL() != client.BaseURL() {
+		t.Errorf("the client acting as the key's account is at %s, want the same server", other.BaseURL())
+	}
+	if _, err := client.As(""); err == nil {
+		t.Error("a client was made to act as an account with no key")
 	}
 
 	if _, err := client.UpdateAPIKey(ctx, created.ID, map[string]any{"name": "sdk-key-renamed", "isActive": true}); err != nil {
@@ -181,7 +188,7 @@ func TestSettingsAndMaintenance(t *testing.T) {
 	// the watcher payload is inferred rather than read out of the server
 	// source, so this asserts it reaches the server, not that it applied
 	if err := client.UpdateWatcher(ctx, library(t), true); err != nil {
-		if _, reached := errors.AsType[*abs.HTTPError](err); !reached {
+		if reached := chttp.StatusCode(err) != 0; !reached {
 			t.Errorf("UpdateWatcher did not reach the server: %v", err)
 		}
 	}
@@ -252,7 +259,7 @@ func TestSessionsAndAuth(t *testing.T) {
 		t.Errorf("SyncSession: %v", err)
 	}
 	if err := client.CloseSession(ctx, session.ID, nil); err != nil {
-		if _, reached := errors.AsType[*abs.HTTPError](err); !reached {
+		if reached := chttp.StatusCode(err) != 0; !reached {
 			t.Errorf("CloseSession did not reach the server: %v", err)
 		}
 	}
@@ -413,7 +420,7 @@ func TestRemainingAdminSurface(t *testing.T) {
 		if err == nil {
 			return
 		}
-		if _, reached := errors.AsType[*abs.HTTPError](err); !reached {
+		if reached := chttp.StatusCode(err) != 0; !reached {
 			t.Errorf("%s did not reach the server: %v", name, err)
 		}
 	}
@@ -522,13 +529,12 @@ func TestBackupFiles(t *testing.T) {
 		t.Errorf("DownloadBackup streamed %d bytes: %v", n, err)
 	}
 
-	var he *abs.HTTPError
-	if err := client.UploadBackup(ctx, "sdk.audiobookshelf", strings.NewReader("not a backup")); err != nil && !errors.As(err, &he) {
+	if err := client.UploadBackup(ctx, "sdk.audiobookshelf", strings.NewReader("not a backup")); err != nil && chttp.StatusCode(err) == 0 {
 		t.Errorf("UploadBackup did not reach the server: %v", err)
 	}
 	if err := client.ApplyBackup(ctx, "00000000-0000-0000-0000-000000000000"); err == nil {
 		t.Error("ApplyBackup accepted a nonexistent id")
-	} else if !errors.As(err, &he) {
+	} else if chttp.StatusCode(err) == 0 {
 		t.Errorf("ApplyBackup did not reach the server: %v", err)
 	}
 }

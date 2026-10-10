@@ -2,18 +2,25 @@
 
 ### Breaking
 
-- the Go client moves from `lib/abs` to `sdk/abs`, as in embyfin-mcp: change the import path; `lib` keeps the helpers (audioprobe, audiosample, providerproxy)
+- the Go client moves from `lib/abs` to `sdk/abs`, as in embyfin-mcp: change the import path; `lib` keeps the helpers (audioprobe, audiosample)
+- `--allow-tools` beside `--toolsets` adds to them, "these sets and this tool as well", where it narrowed them; `--deny-tools` narrows. On its own it is only the tools it names, where the default set was mixed in
+- the Go client's error for a refused call is go-kt's `*chttp.StatusError` in place of `abs.HTTPError`: `Status` is `StatusCode`
 
 ### Added
 
 - `library_issues_merge` puts a book back together after a folder rename or move left it with two records: what is on the old record goes to the new one, then the old one is deleted
 - the Go client can upload a cover, read a cover as the file it is, reorder a collection or a playlist, and keep the day a book was finished when it sets progress
+- the Go client can act as another account with `As`, and takes a logger with `WithLog` and a retry rule with `WithRetry`
 - `audit_path` reports a book the record places in a series when its folder does not say so
 - `--audit-skip` / `ABS_AUDIT_SKIP` leaves out an audit rule that is a way of filing rather than a mistake: `path-series`
 - on macOS, a connection the system refused with "no route to host" says that Local Network privacy may be blocking the process, and that a terminal app updated while running needs a restart
 
 ### Changed
 
+- a read is asked for again when a gateway could not reach the server or the connection dropped, three times in all; a write is still sent once
+- `ABS_LOG=trace` shows every request and answer, with the API key blanked
+- `audit_spelling` and the name audits no longer report two short names one letter apart as one misspelt
+- serving, the tool registry, the locks, the HTTP client, the whitespace checks and the live suites' recording proxy are go-kt's, shared with embyfin-mcp and technitium-mcp
 - built with Go 1.27.2, which fixes denial-of-service flaws in Go's HTTP and TLS code
 - the Docker image and the release build take their base images from Google's mirror of Docker Hub, and from Docker Hub itself when the mirror gives nothing
 

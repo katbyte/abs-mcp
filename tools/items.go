@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/katbyte/go-kt/lock"
+
 	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -250,7 +252,7 @@ func registerItemTools(r *registry) {
 		if (len(in.Tracks) > 0 || in.Ebook != "") && it.IsPodcast() {
 			return nil, editOut{}, errors.New("tracks and ebook are a book's; this item is a podcast")
 		}
-		defer r.locks.hold(itemKeys(ids...)...)()
+		defer r.locks.By(itemLocks(ids...)...)()
 		// the lists are edited from the items as they are once held, not as
 		// the lookup found them: a call running alongside may have changed them
 		editSeries := len(in.AddSeries) > 0 || len(in.RemoveSeries) > 0
@@ -675,7 +677,7 @@ func registerItemTools(r *registry) {
 		}
 		// held from the read the kept fields and the provider tag are
 		// restored from, to the last write
-		defer r.locks.hold(itemKeys(it.ID)...)()
+		defer r.locks.By(it)()
 		if it, err = client.Item(ctx, it.ID); err != nil {
 			return nil, applyOut{}, err
 		}
@@ -1083,7 +1085,7 @@ func registerItemTools(r *registry) {
 			return embedOut{Running: true}, nil
 		}
 		if confirm {
-			release := r.locks.hold(itemKeys(it.ID)...)
+			release := r.locks.By(it)
 			defer release()
 			if it, err = client.Item(ctx, it.ID); err != nil { // as it is once held
 				return embedOut{}, err
@@ -1235,7 +1237,7 @@ func registerItemTools(r *registry) {
 	// the disk: the server takes the file out of the book even when it cannot
 	// remove it, and the next scan would put it back
 	deleteFile := func(ctx context.Context, it *abs.Item, name string, confirm bool) (deleteOut, error) {
-		release := r.locks.hold(itemKeys(it.ID)...)
+		release := r.locks.By(it)
 		defer release()
 		it, err := client.Item(ctx, it.ID) // as it is once held
 		if err != nil {
@@ -1306,7 +1308,7 @@ func registerItemTools(r *registry) {
 		}
 		// the account's bookmarks are one list, which user_bookmark_edit
 		// reads and saves whole: held from reading them to the delete
-		defer r.locks.hold(append(itemKeys(it.ID), "bookmarks")...)()
+		defer r.locks.By(it, lock.String(bookmarksLock))()
 		me, err := client.Me(ctx)
 		if err != nil {
 			return nil, deleteOut{}, err

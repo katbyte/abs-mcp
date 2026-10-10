@@ -14,7 +14,6 @@ on:
       - 'scripts/abs-testenv.sh'
       - 'acceptance/**'
       - 'integration/**'
-      - 'lib/providerproxy/**'
       - '.github/workflows/pr-integration.yaml'
   workflow_dispatch:
 

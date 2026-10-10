@@ -278,10 +278,22 @@ func TestBinaryRegistersWhatTheFlagsAsk(t *testing.T) {
 			want: []string{"item_delete", "author_delete", "collection_delete", "playlist_delete"},
 		},
 		{
-			name:     "--allow-tools narrows what a toolset registered",
-			args:     []string{"--toolsets", "all", "--allow-tools", "library_*"},
-			want:     []string{"library_list", "library_items"},
-			unwanted: []string{"item_get", "audit_all"},
+			name:     "--allow-tools alone is only the tools it names",
+			args:     []string{"--allow-tools", "library_*"},
+			want:     []string{"library_list", "library_items", "library_scan"},
+			unwanted: []string{"item_get", "audit_all", "server_info"},
+		},
+		{
+			name:     "--allow-tools beside a toolset adds to it",
+			args:     []string{"--toolsets", "core", "--allow-tools", "library_scan"},
+			want:     []string{"library_scan", "item_get", "library_list", "server_info"},
+			unwanted: []string{"audit_all", "item_edit"},
+		},
+		{
+			name:     "and gets nothing past the delete gate",
+			args:     []string{"--toolsets", "core", "--allow-tools", "item_delete"},
+			want:     []string{"item_get"},
+			unwanted: []string{"item_delete"},
 		},
 		{
 			name:     "--deny-tools removes from it",

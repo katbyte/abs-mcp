@@ -137,7 +137,7 @@ func registerIssuesMerge(r *registry) {
 		}
 		// one call at a time, and no edit under it: a record read here is
 		// written back whole a moment later
-		defer r.locks.holdAll()()
+		defer r.locks.All()()
 
 		if in.Into != "" && len(in.Items) != 1 {
 			return nil, issuesMergeOut{}, errors.New("into names where one record goes: give that one record in items")
@@ -899,7 +899,7 @@ func (m *issuesMerger) actingAs(ctx context.Context, u *abs.User) (*abs.Client, 
 		return nil, fmt.Errorf("making a key to act as %s, whose progress, bookmarks and playlists only that account can write: %w", u.Username, err)
 	}
 	m.keys = append(m.keys, key.ID)
-	as, err := abs.New(m.client.BaseURL(), key.Key)
+	as, err := m.client.As(key.Key)
 	if err != nil {
 		return nil, err
 	}

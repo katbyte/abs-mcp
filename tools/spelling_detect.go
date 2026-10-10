@@ -5,6 +5,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	ktspelling "github.com/katbyte/go-kt/spelling"
 )
 
 // The detectors behind audit_spelling beyond "same key, different spelling".
@@ -111,37 +113,20 @@ func truncationOf(short, long string) bool {
 	return i == len(sw)
 }
 
-// initialsOf reports whether short is long with a first name reduced to its
-// initial, middle names or initials aside: "c z dunn" is "christian dunn",
-// "j k rowling" is "joanne rowling". The surname has to be the same and at
-// least three letters, and the short form a single letter: "joe hill" is not
-// "joey w hill", those are two people. Both are normalized.
-func initialsOf(short, long string) bool {
-	sw, lw := strings.Fields(short), strings.Fields(long)
-	if len(sw) < 2 || len(lw) < 2 || short == long {
-		return false
-	}
-	sur := sw[len(sw)-1]
-	if len(sur) < 3 || sur != lw[len(lw)-1] {
-		return false
-	}
-	a, b := sw[0], lw[0]
-	if len(a) > len(b) {
-		a, b = b, a
-	}
-	return len(a) == 1 && len(b) > 1 && strings.HasPrefix(b, a)
-}
-
-// typoApart reports whether two normalized values differ by a slip of the
+// typoApart reports whether two normalized titles differ by a slip of the
 // keyboard: one edit for anything six letters or longer, two for twelve or
-// longer when they start with the same word (peter whickam / peter wickham).
-// Letters, not bytes: a two-character Japanese word is six bytes long.
+// longer when they start with the same word. Letters, not bytes: a
+// two-character Japanese word is six bytes long.
+//
+// It is what match scoring takes for the same title a typo away. The
+// spelling audit asks go-kt's TypoApart, which is stricter: it does not take
+// two short words one letter apart for a slip.
 func typoApart(a, b string) bool {
 	la, lb := utf8.RuneCountInString(a), utf8.RuneCountInString(b)
 	if a == b || la < 6 || lb < 6 {
 		return false
 	}
-	switch typoDistance(a, b, 2) {
+	switch ktspelling.Distance(a, b, 2) {
 	case 0, 1:
 		return true
 	case 2:
@@ -151,45 +136,6 @@ func typoApart(a, b string) bool {
 		return strings.Fields(a)[0] == strings.Fields(b)[0]
 	}
 	return false
-}
-
-// typoDistance is the Damerau-Levenshtein distance (optimal string alignment,
-// so a transposition is one edit), capped: anything past limit comes back as
-// limit+1, and strings whose lengths differ by more than limit are not walked.
-func typoDistance(a, b string, limit int) int {
-	ra, rb := []rune(a), []rune(b)
-	if d := len(ra) - len(rb); d > limit || -d > limit {
-		return limit + 1
-	}
-	prev2 := make([]int, len(rb)+1)
-	prev := make([]int, len(rb)+1)
-	cur := make([]int, len(rb)+1)
-	for j := range prev {
-		prev[j] = j
-	}
-	for i := 1; i <= len(ra); i++ {
-		cur[0] = i
-		best := cur[0]
-		for j := 1; j <= len(rb); j++ {
-			cost := 1
-			if ra[i-1] == rb[j-1] {
-				cost = 0
-			}
-			cur[j] = min(prev[j]+1, cur[j-1]+1, prev[j-1]+cost)
-			if i > 1 && j > 1 && ra[i-1] == rb[j-2] && ra[i-2] == rb[j-1] {
-				cur[j] = min(cur[j], prev2[j-2]+1)
-			}
-			best = min(best, cur[j])
-		}
-		if best > limit {
-			return limit + 1
-		}
-		prev2, prev, cur = prev, cur, prev2
-	}
-	if prev[len(rb)] > limit {
-		return limit + 1
-	}
-	return prev[len(rb)]
 }
 
 // splitValue reports whether a person field holds more than one name: "Etienne

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/katbyte/go-kt/chttp"
 )
 
 // A download runs as long as the file takes: the two-minute limit on an API
@@ -82,7 +84,7 @@ func TestAnUploadArrivesWhole(t *testing.T) {
 
 // A ranged read passes the Range through with the key, and hands back the
 // 206 whole, Content-Range included, which is what a seeking reader needs; a
-// refusal is an HTTPError like any other.
+// refusal is a status error like any other.
 func TestARangedReadPassesTheRangeThrough(t *testing.T) {
 	t.Parallel()
 
@@ -153,7 +155,7 @@ func TestDeleteAuthorImageDecodesTheAuthor(t *testing.T) {
 	}
 }
 
-// A streamed endpoint reports a refusal as an HTTPError like everything else,
+// A streamed endpoint reports a refusal as a status error like everything else,
 // rather than handing back a body that is an error message.
 func TestStreamErrorsCarryTheStatus(t *testing.T) {
 	t.Parallel()
@@ -164,8 +166,8 @@ func TestStreamErrorsCarryTheStatus(t *testing.T) {
 	c := newClient(t, s)
 
 	_, err := c.DownloadItem(t.Context(), "i1")
-	var he *HTTPError
-	if !errors.As(err, &he) || he.Status != http.StatusForbidden {
+	he, ok := errors.AsType[*chttp.StatusError](err)
+	if !ok || he.StatusCode != http.StatusForbidden {
 		t.Fatalf("DownloadItem error = %v, want HTTP 403", err)
 	}
 	if !strings.Contains(he.Body, "no download permission") {

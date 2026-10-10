@@ -220,8 +220,8 @@ func TestAuditDescriptionsSayWhatTheCodeDoes(t *testing.T) {
 	r := &registry{opts: Options{EnableDelete: true}}
 	queueTools(r)
 	desc := map[string]string{}
-	for _, p := range r.pending {
-		desc[p.name] = p.description
+	for _, p := range queuedTools(t, r) {
+		desc[p.Name] = p.Description
 	}
 	for tool, gone := range map[string]string{
 		"audit_unembedded": "not part of audit_all",

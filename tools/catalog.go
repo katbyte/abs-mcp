@@ -958,7 +958,7 @@ func registerSeriesTools(r *registry) {
 			"A book already in both keeps its number in the target, or takes the one it had if the target had none. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in mergeIn) (*mcp.CallToolResult, mergeOut, error) {
 		// every book of the series is read and its series list written back
-		defer r.locks.holdAll()()
+		defer r.locks.All()()
 		from, err := resolveSeries(ctx, client, in.Library, in.From)
 		if err != nil {
 			return nil, mergeOut{}, fmt.Errorf("from: %w", err)

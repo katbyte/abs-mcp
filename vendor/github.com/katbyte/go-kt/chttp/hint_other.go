@@ -1,5 +1,5 @@
 //go:build !darwin
 
-package abs
+package chttp
 
 const localNetworkHint = ""

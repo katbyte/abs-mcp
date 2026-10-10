@@ -15,7 +15,14 @@ const (
 	testTool    = "item_get"
 	testSet     = "curation"
 	denyDeletes = "*_delete"
-	tagOff      = "off"
+	// coreSet is the set a binary told nothing serves, listTool a read tool in
+	// it, scanTool a write tool outside it, and deleteTool a tool behind the
+	// delete gate
+	coreSet    = "core"
+	listTool   = "library_list"
+	scanTool   = "library_scan"
+	deleteTool = "item_delete"
+	tagOff     = "off"
 )
 
 // load drives the real flag wiring against a temporary home and working
@@ -28,7 +35,7 @@ func load(t *testing.T, home, wd string) *FlagData {
 	t.Setenv("HOME", home)
 	t.Chdir(wd)
 
-	if err := configureFlags(&cobra.Command{Use: "abs-mcp"}); err != nil {
+	if err := configureFlags(&cobra.Command{Use: appName}); err != nil {
 		t.Fatalf("configureFlags: %v", err)
 	}
 

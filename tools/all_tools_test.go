@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -25,27 +24,27 @@ func TestAnnotationsSayWhatAToolCanDo(t *testing.T) {
 	t.Parallel()
 
 	srv := mcp.NewServer(&mcp.Implementation{Name: "t", Version: "0"}, nil)
-	r := &registry{server: srv, client: newTestClient(t), opts: Options{EnableDelete: true}}
+	r := &registry{client: newTestClient(t), opts: Options{EnableDelete: true}}
 	queueTools(r)
-	kinds := map[string]toolKind{}
-	for _, p := range r.pending {
-		kinds[p.name] = p.kind
+	kinds := map[string]string{}
+	for name, tool := range queuedTools(t, r) {
+		kinds[name] = tool.Kind
 	}
-	for name := range additiveTools {
-		if kinds[name] != writeTool {
+	for name, hints := range toolHints {
+		if hints.Additive && kinds[name] != writeTool.String() {
 			t.Errorf("%s is listed as additive but is not a registered write tool", name)
 		}
-	}
-	for name := range openWorldTools {
 		if _, ok := kinds[name]; !ok {
-			t.Errorf("%s is listed as open world but is not a registered tool", name)
+			t.Errorf("%s has hints but is not a registered tool", name)
+		}
+		// the two hints this application does not use would change what a client is told
+		if hints.Idempotent || hints.WritesHere {
+			t.Errorf("%s is hinted %+v: a hint no tool here has claimed before, which this test does not check", name, hints)
 		}
 	}
 
 	st, ct := mcp.NewInMemoryTransports()
-	for _, p := range r.pending {
-		p.register()
-	}
+	registerEvery(t, r, srv)
 	if _, err := srv.Connect(t.Context(), st, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -64,52 +63,36 @@ func TestAnnotationsSayWhatAToolCanDo(t *testing.T) {
 			t.Errorf("%s has no destructive or open world hint", tool.Name)
 			continue
 		}
-		if *a.OpenWorldHint != openWorldTools[tool.Name] {
+		if *a.OpenWorldHint != toolHints[tool.Name].OpenWorld {
 			t.Errorf("%s: open world %v", tool.Name, *a.OpenWorldHint)
 		}
+		if a.IdempotentHint {
+			t.Errorf("%s says a second call changes nothing more, which no tool here has claimed", tool.Name)
+		}
 		switch kinds[tool.Name] {
-		case readTool:
+		case readTool.String():
 			if !a.ReadOnlyHint || *a.DestructiveHint {
 				t.Errorf("%s is a read tool annotated %+v", tool.Name, a)
 			}
-		case writeTool:
-			if a.ReadOnlyHint || *a.DestructiveHint == additiveTools[tool.Name] {
-				t.Errorf("%s: read-only %v, destructive %v; additive %v", tool.Name, a.ReadOnlyHint, *a.DestructiveHint, additiveTools[tool.Name])
+		case writeTool.String():
+			if a.ReadOnlyHint || *a.DestructiveHint == toolHints[tool.Name].Additive {
+				t.Errorf("%s: read-only %v, destructive %v; additive %v", tool.Name, a.ReadOnlyHint, *a.DestructiveHint, toolHints[tool.Name].Additive)
 			}
-		case deleteTool:
+		case deleteTool.String():
 			if a.ReadOnlyHint || !*a.DestructiveHint {
 				t.Errorf("%s is a delete tool annotated %+v", tool.Name, a)
 			}
+		default:
+			t.Errorf("%s is served but was not queued with a kind", tool.Name)
 		}
-	}
-}
-
-// A list with nothing in it answers [] rather than null: null cannot tell
-// "none" from "not fetched", and Go leaves a list nothing was appended to nil.
-func TestEmptyNilSlices(t *testing.T) {
-	t.Parallel()
-
-	type inner struct{ Tags []string }
-	type out struct {
-		Items  []inner
-		Ptr    *inner
-		Names  []string
-		Nested [][]string
-		Keep   []string
-	}
-	v := out{Items: []inner{{}}, Ptr: &inner{}, Keep: []string{"x"}}
-	emptyNilSlices(reflect.ValueOf(&v).Elem())
-
-	if v.Names == nil || v.Nested == nil || v.Items[0].Tags == nil || v.Ptr.Tags == nil {
-		t.Errorf("nil slices survived: %+v", v)
-	}
-	if len(v.Keep) != 1 {
-		t.Error("a populated slice was touched")
 	}
 }
 
 // A handler that panics answers its call with an error naming the tool and
 // logs the stack, rather than ending the session: the next call is served.
+// The recovery is go-kt's registry's; what is checked here is that this
+// application's tools go through it, and that the stack reaches the log this
+// registry was given.
 func TestAPanicInAToolIsAnErrorNotACrash(t *testing.T) {
 	t.Parallel()
 
@@ -118,7 +101,7 @@ func TestAPanicInAToolIsAnErrorNotACrash(t *testing.T) {
 		logged strings.Builder
 	)
 	srv := mcp.NewServer(&mcp.Implementation{Name: "t", Version: "0"}, nil)
-	r := &registry{server: srv, client: newTestClient(t), errorLog: func(format string, args ...any) {
+	r := &registry{client: newTestClient(t), errorLog: func(format string, args ...any) {
 		mu.Lock()
 		defer mu.Unlock()
 		_, _ = fmt.Fprintf(&logged, format, args...)
@@ -132,9 +115,7 @@ func TestAPanicInAToolIsAnErrorNotACrash(t *testing.T) {
 	add(r, readTool, &mcp.Tool{Name: "zzyzx_fine"}, func(context.Context, *mcp.CallToolRequest, none) (*mcp.CallToolResult, none, error) {
 		return nil, none{}, nil
 	})
-	for _, p := range r.pending {
-		p.register()
-	}
+	registerEvery(t, r, srv)
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := t.Context()
@@ -238,23 +219,34 @@ func TestRegisterAllFilters(t *testing.T) {
 	}
 }
 
-func TestMatchPattern(t *testing.T) {
+// Beside toolsets an allow list adds to them: a session that works in one
+// set and needs one tool of another asks for the set and that tool, where it
+// used to have to ask for the whole of the other set. A deny list is what
+// narrows a set, and neither gets a tool past the delete gate.
+func TestAnAllowListAddsToToolsets(t *testing.T) {
 	t.Parallel()
 
-	for _, tc := range []struct {
-		pattern, name string
-		want          bool
-	}{
-		{"item_get", "item_get", true},
-		{"item_get", "item_gets", false},
-		{"item_*", "item_get", true},
-		{"item_*", "library_items", false},
-		{"*_delete", "item_delete", true},
-		{"*", "anything", true},
-	} {
-		if got := matchPattern(tc.pattern, tc.name); got != tc.want {
-			t.Errorf("matchPattern(%q, %q) = %v", tc.pattern, tc.name, got)
-		}
+	curation := register(t, Options{Toolsets: []string{"curation"}})
+	if slices.Contains(curation, "library_scan") {
+		t.Fatal("library_scan is in the curation set, so this test shows nothing: pick a tool of another set")
+	}
+
+	got := register(t, Options{Toolsets: []string{"curation"}, Allow: []string{"library_scan"}})
+	want := slices.Sorted(slices.Values(append(slices.Clone(curation), "library_scan")))
+	if !slices.Equal(got, want) {
+		t.Errorf("curation and library_scan registered %d tools, want curation's %d and the scan", len(got), len(curation))
+	}
+
+	got = register(t, Options{Toolsets: []string{"curation"}, Allow: []string{"library_scan"}, Deny: []string{"audit_*"}})
+	if !slices.Contains(got, "library_scan") || slices.ContainsFunc(got, func(n string) bool { return strings.HasPrefix(n, "audit_") }) || len(got) >= len(want) {
+		t.Errorf("with the audits denied: %v, want curation without them, and the scan", got)
+	}
+
+	if got := register(t, Options{Toolsets: []string{"core"}, Allow: []string{"item_delete"}}); slices.Contains(got, "item_delete") {
+		t.Error("an allow list got a delete tool registered with deletes off")
+	}
+	if got := register(t, Options{Toolsets: []string{"core"}, Allow: []string{"item_delete"}, EnableDelete: true}); !slices.Contains(got, "item_delete") {
+		t.Error("an allow list naming a delete tool, with deletes on, did not register it")
 	}
 }
 

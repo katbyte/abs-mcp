@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+
+	"github.com/katbyte/go-kt/chttp"
 )
 
 // Server administration: notifications, email, API keys, custom providers,
@@ -426,8 +427,7 @@ func (c *Client) ServerPathExists(ctx context.Context, path string) (bool, error
 	q.Set("path", path)
 	q.Set("level", "0")
 	err := c.get(ctx, "/api/filesystem", q, nil)
-	var he *HTTPError
-	if errors.As(err, &he) && he.Status == http.StatusBadRequest {
+	if chttp.StatusCode(err) == http.StatusBadRequest {
 		return false, nil
 	}
 	return err == nil, err

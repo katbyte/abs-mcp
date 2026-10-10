@@ -224,7 +224,7 @@ func registerCollectionTools(r *registry) {
 		}
 		// what it holds is judged once held, so two adds of one book at once
 		// do not both say they added it
-		defer r.locks.hold("collection:" + c.ID)()
+		defer r.locks.By(c)()
 		if c, err = client.Collection(ctx, c.ID); err != nil {
 			return nil, editOut{}, err
 		}

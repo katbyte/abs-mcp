@@ -1,30 +1,12 @@
 package cli
 
 import (
-	"context"
-	"crypto/subtle"
-	"errors"
-	"fmt"
-	"net/http"
-	"os/signal"
-	"syscall"
-	"time"
-
 	"github.com/katbyte/abs-mcp/tools"
 	"github.com/katbyte/go-kt/clog"
+	"github.com/katbyte/go-kt/mcp/server"
 	"github.com/katbyte/go-kt/version"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
-)
-
-const (
-	mcpPath           = "/mcp"
-	readHeaderTimeout = 10 * time.Second
-	shutdownTimeout   = 10 * time.Second
-	// sessionTimeout closes a session its client stopped using without
-	// closing it, so an always-on container does not keep every one it ever
-	// served
-	sessionTimeout = 30 * time.Minute
 )
 
 func serveCmd() *cobra.Command {
@@ -52,131 +34,32 @@ lets anyone who can reach the port use every tool, say so with --allow-no-auth
 				return err
 			}
 
-			server := mcp.NewServer(&mcp.Implementation{
+			srv := mcp.NewServer(&mcp.Implementation{
 				Name:    "audiobookshelf",
 				Title:   "Audiobookshelf Library Curator",
 				Version: version.Version,
 			}, nil)
 
-			registered, err := tools.RegisterAll(server, client, f.ToolOptions())
+			registered, err := tools.RegisterAll(srv, client, f.ToolOptions())
 			if err != nil {
 				return err
 			}
 			clog.Log.Infof("registered %d tools", len(registered))
 
-			if f.Listen == "" {
-				return server.Run(cmd.Context(), &mcp.StdioTransport{})
-			}
-			if err := checkAuth(f.AuthToken, f.AllowNoAuth); err != nil {
-				return err
-			}
-
-			return serveHTTP(cmd.Context(), server, f.Listen, f.AuthToken)
+			return server.Run(cmd.Context(), srv, f.serveOptions())
 		},
 	}
 }
 
-// checkAuth is what stands between --listen and an open port: with no bearer
-// token the server refuses to start unless the operator said, in so many
-// words, that no auth is wanted. A blank ABS_AUTH_TOKEN in a copied .env used
-// to come up serving every tool to the whole network with one WARN line.
-func checkAuth(token string, allowNoAuth bool) error {
-	if token != "" || allowNoAuth {
-		return nil
+// serveOptions is how this tool serves: stdio, or HTTP at --listen behind
+// --auth-token, with the health probe a container asks outside the check.
+// The serving itself is go-kt's.
+func (f *FlagData) serveOptions() server.Options {
+	return server.Options{
+		Listen:      f.Listen,
+		AuthToken:   f.AuthToken,
+		AllowNoAuth: f.AllowNoAuth,
+		Name:        "abs-mcp",
+		EnvPrefix:   "ABS",
 	}
-
-	return errors.New("--listen needs --auth-token (ABS_AUTH_TOKEN); to serve with no token at all, pass --allow-no-auth (ABS_ALLOW_NO_AUTH=true)")
-}
-
-// serveHTTP serves the MCP server over Streamable HTTP at /mcp (plus GET /healthz for
-// container health checks) until the context is cancelled or SIGINT/SIGTERM arrives,
-// then drains in-flight requests.
-// newMux builds the HTTP routes: the MCP endpoint behind the bearer check, and
-// an unauthenticated health probe for a container or a load balancer. It is
-// separate from serveHTTP so the routing and the auth can be tested without
-// binding a port.
-func newMux(server *mcp.Server, authToken string) *http.ServeMux {
-	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{SessionTimeout: sessionTimeout})
-
-	mux := http.NewServeMux()
-	mux.Handle(mcpPath, requireBearer(authToken, handler))
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok\n"))
-	})
-
-	return mux
-}
-
-func serveHTTP(ctx context.Context, server *mcp.Server, addr, authToken string) error {
-	ctx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	mux := newMux(server, authToken)
-
-	srv := &http.Server{
-		Addr:              addr,
-		Handler:           mux,
-		ReadHeaderTimeout: readHeaderTimeout,
-	}
-	// a connected client holds its event stream open, and Shutdown waits for
-	// it: without closing the sessions a stop took the whole timeout and
-	// exited failing, racing a container's own ten-second grace
-	srv.RegisterOnShutdown(func() {
-		for ss := range server.Sessions() {
-			_ = ss.Close()
-		}
-	})
-
-	if authToken == "" {
-		clog.Log.Warnf("no auth token set (ABS_AUTH_TOKEN): anyone who can reach %s can use every tool", addr)
-	}
-
-	clog.Log.Infof("serving MCP over HTTP on %s%s", addr, mcpPath)
-
-	errCh := make(chan error, 1)
-
-	go func() { errCh <- srv.ListenAndServe() }()
-
-	select {
-	case err := <-errCh:
-		if errors.Is(err, http.ErrServerClosed) {
-			return nil
-		}
-
-		return fmt.Errorf("listening on %s: %w", addr, err)
-	case <-ctx.Done():
-	}
-
-	clog.Log.Info("shutting down")
-
-	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
-	defer cancel()
-
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("shutting down: %w", err)
-	}
-
-	return nil
-}
-
-// requireBearer rejects requests without a matching "Authorization: Bearer <token>" header.
-// An empty token disables the check.
-func requireBearer(token string, next http.Handler) http.Handler {
-	if token == "" {
-		return next
-	}
-
-	want := []byte("Bearer " + token)
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), want) != 1 {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="abs-mcp"`)
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
 }

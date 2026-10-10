@@ -8,7 +8,10 @@ import (
 	"path"
 	"slices"
 	"strings"
-	"sync"
+
+	"github.com/katbyte/go-kt/chttp"
+
+	"github.com/katbyte/go-kt/parallel"
 
 	"github.com/katbyte/abs-mcp/lib/audioprobe"
 	"github.com/katbyte/abs-mcp/lib/audiosample"
@@ -264,7 +267,7 @@ func unplayableChunk(ctx context.Context, client *abs.Client, items []abs.Item, 
 		}
 	}
 
-	if err := eachAtOnce(ctx, len(probes), probeWorkers, func(ctx context.Context, k int) error {
+	if err := parallel.Each(ctx, len(probes), probeWorkers, func(ctx context.Context, k int) error {
 		f := probes[k]
 		f.report, f.err = audioprobe.Probe(ctx, audioprobe.ItemFile(client, items[f.item].ID, f.file.Ino))
 		f.read = f.err == nil
@@ -286,7 +289,7 @@ func unplayableChunk(ctx context.Context, client *abs.Client, items []abs.Item, 
 				}
 			}
 		}
-		if err := eachAtOnce(ctx, len(plays), checkWorkers, func(ctx context.Context, k int) error {
+		if err := parallel.Each(ctx, len(plays), checkWorkers, func(ctx context.Context, k int) error {
 			f := plays[k]
 			f.health, f.err = playStretches(ctx, sampler, items[f.item].ID, f.file)
 			return serverFailure(ctx, items[f.item].Title(), f.err)
@@ -319,7 +322,7 @@ func serverFailure(ctx context.Context, title string, err error) error {
 	if err == nil || errors.Is(err, audioprobe.ErrMalformed) {
 		return nil
 	}
-	if he, ok := errors.AsType[*abs.HTTPError](err); ok && (he.Status == http.StatusNotFound || he.Status == http.StatusInternalServerError) {
+	if code := chttp.StatusCode(err); code == http.StatusNotFound || code == http.StatusInternalServerError {
 		return nil
 	}
 	return fmt.Errorf("reading the files of %q: %w", title, err)
@@ -600,41 +603,4 @@ func playStretches(ctx context.Context, s *audiosample.Sampler, itemID string, a
 		}
 	}
 	return out, nil
-}
-
-// eachAtOnce runs fn for each of n jobs, at most workers at a time, and
-// returns the first error, which cancels the rest.
-func eachAtOnce(ctx context.Context, n, workers int, fn func(ctx context.Context, i int) error) error {
-	ctx, cancel := context.WithCancelCause(ctx)
-	defer cancel(nil)
-	var (
-		wg    sync.WaitGroup
-		once  sync.Once
-		first error
-	)
-	sem := make(chan struct{}, max(workers, 1))
-	for i := range n {
-		select {
-		case sem <- struct{}{}:
-		case <-ctx.Done():
-		}
-		if ctx.Err() != nil {
-			break
-		}
-		wg.Go(func() {
-			defer func() { <-sem }()
-			if err := fn(ctx, i); err != nil {
-				once.Do(func() {
-					first = err
-					cancel(err)
-				})
-			}
-		})
-	}
-	wg.Wait()
-	if first != nil {
-		return first
-	}
-	// only the caller's context can have ended this one
-	return context.Cause(ctx)
 }

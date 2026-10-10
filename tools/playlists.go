@@ -333,7 +333,7 @@ func registerPlaylistTools(r *registry) {
 		}
 		// what it holds is judged once held, so two adds of one entry at once
 		// do not both say they added it
-		defer r.locks.hold("playlist:" + p.ID)()
+		defer r.locks.By(p)()
 		if p, err = client.Playlist(ctx, p.ID); err != nil {
 			return nil, editOut{}, err
 		}

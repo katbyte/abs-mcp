@@ -19,9 +19,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/katbyte/abs-mcp/lib/providerproxy"
 	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/abs-mcp/tools"
+	"github.com/katbyte/go-kt/test/env"
+	"github.com/katbyte/go-kt/test/replayproxy"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -146,16 +147,8 @@ var (
 	ctx     context.Context
 	session *mcp.ClientSession
 	ready   bool
-	proxy   *providerproxy.Proxy
+	proxy   *replayproxy.Proxy
 )
-
-// recording reports whether this run should call the real providers and
-// refresh the cassettes, rather than replay them.
-func recording() bool { return os.Getenv("ABS_TEST_RECORD") != "" }
-
-// verifying reports whether to check the cassettes against the live providers
-// without rewriting them.
-func verifying() bool { return os.Getenv("ABS_TEST_VERIFY") != "" }
 
 // providersReady reports whether the provider proxy came up, so the tests that
 // need it can skip rather than fail confusingly when it did not.
@@ -163,12 +156,12 @@ func providersReady() bool { return proxy != nil }
 
 // configured reports whether the container environment is present.
 func configured() bool {
-	return os.Getenv("ABS_SERVER") != "" && os.Getenv("ABS_TOKEN") != ""
+	return suiteEnv.Configured()
 }
 
 // dataDir is the host path the container's library folders are bind-mounted
 // from, so a test can add or remove files and rescan.
-func dataDir() string { return os.Getenv("ABS_TEST_DATA") }
+func dataDir() string { return suiteEnv.DataDir() }
 
 // runSuite is the suite's TestMain: it connects, starts the provider proxy,
 // seeds the fixtures, and runs.
@@ -239,7 +232,7 @@ func runSuite(m *testing.M) {
 
 var (
 	proxyMisses []string
-	proxyDrifts []providerproxy.Drift
+	proxyDrifts []replayproxy.Drift
 )
 
 var (
@@ -270,32 +263,26 @@ func uncovered() ([]string, error) {
 	return missing, nil
 }
 
+// suiteEnv is the environment scripts/abs-testenv.sh exports for a live
+// suite, read the way go-kt's test plumbing reads it for every tool.
+var suiteEnv = env.New("ABS")
+
 // startProxy brings up the record/replay proxy the container's HTTP_PROXY
 // already points at. Audiobookshelf makes the provider calls, not us, so this
-// is the only layer that can intercept them.
+// is the only layer that can intercept them. The proxy is go-kt's: replaying
+// unless ABS_TEST_RECORD or ABS_TEST_VERIFY says otherwise.
 func startProxy() error {
-	port := 18080
-	if v := os.Getenv("ABS_TEST_PROXY_PORT"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil {
-			return fmt.Errorf("ABS_TEST_PROXY_PORT=%q: %w", v, err)
-		}
-		port = n
+	port, err := suiteEnv.ProxyPort()
+	if err != nil {
+		return err
 	}
 
-	mode := providerproxy.Replay
-	switch {
-	case recording():
-		mode = providerproxy.Record
-	case verifying():
-		mode = providerproxy.Verify
-	}
-
-	p, err := providerproxy.New(providerproxy.Options{
-		Mode:        mode,
+	p, err := replayproxy.New(replayproxy.Options{
+		Mode:        suiteEnv.Mode(),
 		CassetteDir: filepath.Join("testdata", "cassettes"),
 		// all interfaces: the container reaches this through host.docker.internal
-		Addr: "0.0.0.0:" + strconv.Itoa(port),
+		Addr:       "0.0.0.0:" + strconv.Itoa(port),
+		RecordHint: "record it with " + suiteEnv.Var("TEST_RECORD") + "=1, which records only what is missing",
 	})
 	if err != nil {
 		return err

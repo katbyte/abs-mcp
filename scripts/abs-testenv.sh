@@ -11,8 +11,8 @@
 # and the metadata are all the integration tests' job, through library_create,
 # library_scan and item_edit, so those tools are exercised rather than bypassed.
 #
-# The container is pointed at the record/replay proxy the tests run (see
-# internal/providerproxy): Audiobookshelf, not abs-mcp, is what calls Audible,
+# The container is pointed at the record/replay proxy the tests run (go-kt's
+# test/replayproxy): Audiobookshelf, not abs-mcp, is what calls Audible,
 # Audnexus and iTunes, so intercepting those calls has to happen at its edge.
 # Disabling TLS verification is what lets the proxy present its own certificate
 # for those hosts; this container is a throwaway that exists for one test run.

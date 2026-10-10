@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/katbyte/go-kt/lock"
+
 	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -217,7 +219,7 @@ type rowMatch struct {
 // last write, and let go however the row ends: a hold left behind by a panic
 // would stall every later edit of the book.
 func (r *registry) applyRow(ctx context.Context, itemID, provider string, how rowMatch, res *applyResult) {
-	release := r.locks.hold(itemKeys(itemID)...)
+	release := r.locks.By(lock.ID[abs.Item](itemID))
 	defer release()
 	fresh, err := r.client.Item(ctx, itemID)
 	switch {

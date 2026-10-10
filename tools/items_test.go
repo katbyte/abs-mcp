@@ -129,7 +129,7 @@ func TestItemDeleteHoldsTheBookmarks(t *testing.T) {
 	f.json("DELETE /api/items/"+itemID, `OK`)
 	r, call := registryCaller(t, f)
 
-	release := r.locks.hold("bookmarks")
+	release := r.locks.ByString(bookmarksLock)
 	done := make(chan error, 1)
 	go func() {
 		_, err := call("item_delete", map[string]any{"item": itemID, "confirm": true})

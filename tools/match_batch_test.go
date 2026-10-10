@@ -256,7 +256,9 @@ func TestARowThatPanicsLetsGoOfItsBook(t *testing.T) {
 			}()
 			row(r)
 		}()
-		released(t, &r.locks)
+		if !r.locks.Idle() {
+			t.Errorf("%s: the row that panicked left a lock behind", name)
+		}
 	}
 }
 

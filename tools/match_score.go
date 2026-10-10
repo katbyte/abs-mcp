@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 
+	ktspelling "github.com/katbyte/go-kt/spelling"
+
 	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
@@ -113,7 +115,7 @@ func sharesName(as, bs []string) bool {
 		na := norm(a)
 		for _, b := range bs {
 			nb := norm(b)
-			if na == nb || initialsOf(na, nb) || initialsOf(nb, na) {
+			if na == nb || ktspelling.InitialsOf(na, nb) {
 				return true
 			}
 		}

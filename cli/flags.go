@@ -39,8 +39,8 @@ func configureFlags(root *cobra.Command) error {
 	pflags.Bool("read-only", false, "register only tools that never change server state")
 	pflags.Bool("enable-delete", false, "register the tools that delete items, episodes, authors, collections and playlists")
 	pflags.StringSlice("toolsets", nil, "groups of tools to register: all, core (default), curation, listening, podcasts, organise, admin, or a resource family like item (core is always included)")
-	pflags.StringSlice("allow-tools", nil, "only register these tools: names, prefix globs like library_*, or the essential preset")
-	pflags.StringSlice("deny-tools", nil, "never register these tools: names or prefix globs like *_delete")
+	pflags.StringSlice("allow-tools", nil, "register these tools as well as the toolsets asked for, or only these when no toolset is: names, prefix globs like library_*, or the essential preset")
+	pflags.StringSlice("deny-tools", nil, "never register these tools, whatever asked for them: names or prefix globs like *_delete")
 	pflags.String("listen", "", "serve MCP over HTTP on this address (e.g. :8080) instead of stdio")
 	pflags.String("auth-token", "", "bearer token required on the HTTP endpoint (consider exporting to ABS_AUTH_TOKEN instead)")
 	pflags.Bool("allow-no-auth", false, "serve HTTP with no bearer token: anyone who can reach the port can use every tool")
@@ -145,20 +145,23 @@ func GetFlags() *FlagData {
 }
 
 func (f *FlagData) NewClient() (*abs.Client, error) {
-	return abs.New(f.Server, f.Token)
+	return abs.New(f.Server, f.Token, abs.WithLog(clog.Log))
 }
 
-// DefaultToolsets is what the binary registers when --toolsets is not given:
-// enough to find things and read them, and nothing that writes. The whole
-// surface is around 12,000 tokens of tool definitions before a question is
-// asked, which is a poor thing to spend a client's context on by default. Ask for more with
-// --toolsets, or --toolsets all for everything.
+// DefaultToolsets is what the binary registers when neither --toolsets nor
+// --allow-tools is given: enough to find things and read them, and nothing
+// that writes. The whole surface is around 12,000 tokens of tool definitions
+// before a question is asked, which is a poor thing to spend a client's
+// context on by default. Ask for more with --toolsets, or --toolsets all for
+// everything.
 var DefaultToolsets = []string{"core"}
 
-// ToolOptions maps the flags onto the tool registration options.
+// ToolOptions maps the flags onto the tool registration options. The default
+// toolsets are for a binary told nothing about which tools it is to serve:
+// an allow list with no toolsets beside it is only the tools it names.
 func (f *FlagData) ToolOptions() tools.Options {
 	sets := f.Toolsets
-	if len(sets) == 0 {
+	if len(sets) == 0 && len(f.AllowTools) == 0 {
 		sets = DefaultToolsets
 	}
 

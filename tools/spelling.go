@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	ktspelling "github.com/katbyte/go-kt/spelling"
+
 	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -294,9 +296,9 @@ func (c spellingCounts) report(field string) []vocabGroup {
 				}
 				var kind string
 				switch {
-				case nameFields[field] && field != "series" && truncationOf(short, long), personFields[field] && initialsOf(short, long):
+				case nameFields[field] && field != "series" && truncationOf(short, long), personFields[field] && ktspelling.InitialsOf(short, long):
 					kind = "contains"
-				case typoApart(a, b):
+				case ktspelling.TypoApart(a, b):
 					kind = "near"
 				default:
 					continue
@@ -461,7 +463,7 @@ func registerSpellingTools(r *registry) {
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in renameIn) (*mcp.CallToolResult, renameOut, error) {
 		// a sweep reads every item and writes the ones it changes back
 		// whole: no edit of an item may land in between
-		defer r.locks.holdAll()()
+		defer r.locks.All()()
 		field := vocabField(in.Field)
 		if field == "" {
 			return nil, renameOut{}, fmt.Errorf("unknown field %q; choose one of: %s", in.Field, strings.Join(vocabFields, ", "))

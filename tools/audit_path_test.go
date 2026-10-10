@@ -304,11 +304,11 @@ func TestAuditPathSeriesRuleIsTheServers(t *testing.T) {
 		r := &registry{opts: tc.opts}
 		r.opts.AuditSkip, _ = auditSkips(tc.opts.AuditSkip)
 		queueTools(r)
-		for _, p := range r.pending {
-			if p.name != "audit_path" {
+		for _, p := range queuedTools(t, r) {
+			if p.Name != "audit_path" {
 				continue
 			}
-			if says := strings.Contains(p.description, "--audit-skip "+rulePathSeries); says != (len(tc.want) > 0) {
+			if says := strings.Contains(p.Description, "--audit-skip "+rulePathSeries); says != (len(tc.want) > 0) {
 				t.Errorf("skipping %q: audit_path's description says the series rule: %v", tc.opts.AuditSkip, says)
 			}
 		}

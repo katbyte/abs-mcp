@@ -5,20 +5,18 @@
 // Every tool is registered through add with a kind: read tools never change
 // server state, write tools do (and are dropped under --read-only), and delete
 // tools remove library records or files (and are only registered with
-// --enable-delete). --allow-tools / --deny-tools further narrow the set.
+// --enable-delete). --toolsets and --allow-tools ask for tools, and
+// --deny-tools takes tools out of what they asked for. Which tools a session
+// gets from all that, and what each tells a client about itself, is go-kt's
+// registry's work.
 package tools
 
 import (
-	"cmp"
-	"context"
-	"fmt"
-	"reflect"
-	"runtime/debug"
 	"slices"
-	"strings"
 
 	"github.com/katbyte/abs-mcp/sdk/abs"
-	"github.com/katbyte/go-kt/clog"
+	"github.com/katbyte/go-kt/lock"
+	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -31,12 +29,15 @@ type Options struct {
 	EnableDelete bool
 	// Toolsets, when set, restricts registration to the named groups (see
 	// Toolsets). "core" is always included, so a set can be asked for on its
-	// own. Allow and Deny narrow whatever is left.
+	// own.
 	Toolsets []string
-	// Allow, when set, restricts registration to matching tools: exact names,
-	// prefix/suffix globs (library_*, *_delete) or the "essential" preset.
+	// Allow asks for tools by name: exact names, prefix/suffix globs
+	// (library_*, *_delete) or the "essential" preset. Beside Toolsets it
+	// adds to them, "these sets and these tools as well"; on its own it is
+	// only the tools it names. It lets nothing past ReadOnly or EnableDelete.
 	Allow []string
-	// Deny removes matching tools from whatever Allow left.
+	// Deny removes matching tools from whatever Toolsets and Allow asked for:
+	// it is how a toolset is narrowed.
 	Deny []string
 	// ProviderTag is the prefix of the tag that records which store a match
 	// came from, "zz-provider:" by default; "off" writes and reads none.
@@ -130,177 +131,112 @@ var EssentialTools = []string{
 	"user_progress_set",
 }
 
-type toolKind int
-
 const (
-	readTool toolKind = iota
-	writeTool
-	deleteTool
+	readTool   = mcpregistry.Read
+	writeTool  = mcpregistry.Write
+	deleteTool = mcpregistry.Delete
 )
 
-type pending struct {
-	name        string
-	kind        toolKind
-	description string
-	register    func()
-}
-
-// registry collects tool registrations so the allow/deny patterns can be
-// validated against the full tool list before anything is added.
+// registry is this application's tools and what they share. Which of them a
+// session gets, and what each tells a client about itself, is go-kt's
+// registry's work (tools), so the allow and deny patterns are checked
+// against every tool before any is registered.
 type registry struct {
-	server  *mcp.Server
-	client  *abs.Client
-	opts    Options
-	pending []pending
-	locks   writeLocks
+	client *abs.Client
+	opts   Options
+	// tools holds every tool queued, made when the first is (see queued)
+	tools *mcpregistry.Registry
+	// locks keep the calls of one turn from undoing each other (see
+	// locks.go): a set of this server's own
+	locks lock.Set
 	// errorLog is where a handler's panic is logged; nil is the process's
 	// own log, which writes to stderr
 	errorLog func(format string, args ...any)
 }
 
-// add queues a tool for registration. It sets the MCP annotations from kind so
-// clients can tell read-only from destructive tools without parsing
-// descriptions.
-func add[In, Out any](r *registry, kind toolKind, t *mcp.Tool, h mcp.ToolHandlerFor[In, Out]) {
-	f := false
-	switch kind {
-	case readTool:
-		t.Annotations = &mcp.ToolAnnotations{ReadOnlyHint: true, DestructiveHint: &f, OpenWorldHint: &f}
-	case writeTool:
-		// MCP reads destructive false as "only ever adds": true of a tool
-		// that creates something new, not of one that overwrites a field,
-		// replaces a cover or a list, or rewrites a file's tags
-		t.Annotations = &mcp.ToolAnnotations{DestructiveHint: new(!additiveTools[t.Name]), OpenWorldHint: new(openWorldTools[t.Name])}
-	case deleteTool:
-		t.Annotations = &mcp.ToolAnnotations{DestructiveHint: new(true), OpenWorldHint: &f}
+// toolHints are what a tool tells a client about itself beyond its kind.
+//
+// A write tool here as additive only ever adds - a new library, collection,
+// playlist, podcast or account, or episodes the podcast did not hold - or
+// changes nothing on the server, as sending an ebook does not, and so can say
+// it is not destructive. Every other write tool can overwrite or remove
+// something. A backup is not here: the server prunes the oldest past its
+// limit.
+//
+// One that is open world reaches past the server: sending an ebook emails it
+// out.
+var toolHints = map[string]mcpregistry.Hints{
+	"library_create":           {Additive: true},
+	"collection_create":        {Additive: true},
+	"playlist_create":          {Additive: true},
+	"podcast_add":              {Additive: true},
+	"podcast_episode_download": {Additive: true},
+	"user_create":              {Additive: true},
+	"item_send_ebook":          {Additive: true, OpenWorld: true},
+}
+
+// queued is every tool queued so far, in go-kt's registry, which is made
+// when the first tool is.
+func (r *registry) queued() *mcpregistry.Registry {
+	if r.tools == nil {
+		r.tools = mcpregistry.New(mcpregistry.Config{
+			Toolsets:  Toolsets,
+			Essential: EssentialTools,
+			Hints:     toolHints,
+			LogError:  r.errorLog,
+		})
 	}
 
-	wrapped := func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
-		res, out, err := recovered(ctx, r, t.Name, h, req, in)
-		if err == nil {
-			emptyNilSlices(reflect.ValueOf(&out).Elem())
-		}
+	return r.tools
+}
 
-		return res, out, err
+// add queues a typed tool for registration. go-kt's registry sets the MCP
+// annotations from kind and the tool's hints so clients can tell read-only
+// from destructive tools without parsing descriptions, turns a panic in the
+// handler into an ordinary tool error, and sends empty collections as []
+// rather than null: an AI client reading "items": null cannot tell "none"
+// from "not fetched", and Go leaves un-appended slices nil.
+func add[In, Out any](r *registry, kind mcpregistry.Kind, t *mcp.Tool, h mcp.ToolHandlerFor[In, Out]) {
+	mcpregistry.Add(r.queued(), kind, t, h)
+}
+
+// queuedFor is every tool queued for these options, with the options made
+// the server's own: registration never calls the client, only the handlers
+// do.
+func queuedFor(client *abs.Client, opts Options) (*registry, error) {
+	opts.Providers = slices.Clone(opts.Providers) // the server's own, whatever the caller does with its slice
+	var err error
+	if opts.AuditSkip, err = auditSkips(opts.AuditSkip); err != nil {
+		return nil, err
 	}
+	r := &registry{client: client, opts: opts}
+	queueTools(r)
 
-	r.pending = append(r.pending, pending{
-		name:        t.Name,
-		kind:        kind,
-		description: t.Description,
-		register:    func() { mcp.AddTool(r.server, t, wrapped) },
-	})
-}
-
-// additiveTools are the write tools that only ever add - a new library,
-// collection, playlist, podcast or account, or episodes the podcast did not
-// hold - or change nothing on the server, as sending an ebook does not, and
-// so can say they are not destructive. Every other write tool can overwrite
-// or remove something. A backup is not here: the server prunes the oldest
-// past its limit.
-var additiveTools = map[string]bool{
-	"library_create":           true,
-	"collection_create":        true,
-	"playlist_create":          true,
-	"podcast_add":              true,
-	"podcast_episode_download": true,
-	"user_create":              true,
-	"item_send_ebook":          true,
-}
-
-// openWorldTools reach past the server: sending an ebook emails it out.
-var openWorldTools = map[string]bool{
-	"item_send_ebook": true,
-}
-
-// emptyNilSlices walks v (structs, pointers, slices) and replaces every
-// settable nil slice with an empty one, so a list with nothing in it answers
-// [] rather than null: null cannot tell "none" from "not fetched", and Go
-// leaves a list nothing was appended to nil.
-func emptyNilSlices(v reflect.Value) {
-	switch v.Kind() {
-	case reflect.Pointer:
-		if !v.IsNil() {
-			emptyNilSlices(v.Elem())
-		}
-	case reflect.Struct:
-		for _, f := range v.Fields() {
-			emptyNilSlices(f)
-		}
-	case reflect.Slice:
-		if v.IsNil() {
-			if v.CanSet() {
-				v.Set(reflect.MakeSlice(v.Type(), 0, 0))
-			}
-
-			return
-		}
-		for i := range v.Len() {
-			emptyNilSlices(v.Index(i))
-		}
-	default:
-	}
-}
-
-// recovered calls a handler, turning a panic into an ordinary tool error.
-// Nothing above the handler recovers one - not the MCP SDK, not the CLI - so
-// one nil dereference in one tool would otherwise end the whole session. The
-// caller is told which tool failed; the stack goes to the log, which writes
-// to stderr, because in stdio mode stdout carries the protocol itself.
-func recovered[In, Out any](ctx context.Context, r *registry, name string, h mcp.ToolHandlerFor[In, Out], req *mcp.CallToolRequest, in In) (res *mcp.CallToolResult, out Out, err error) {
-	defer func() {
-		if p := recover(); p != nil {
-			r.logError("internal error in %s: %v\n%s", name, p, debug.Stack())
-			var zero Out
-			res, out, err = nil, zero, fmt.Errorf("internal error in %s: %v", name, p)
-		}
-	}()
-
-	return h(ctx, req, in)
-}
-
-// logError writes to the registry's log: the process's own, which writes to
-// stderr, unless a test gave it another.
-func (r *registry) logError(format string, args ...any) {
-	if r.errorLog != nil {
-		r.errorLog(format, args...)
-		return
-	}
-	clog.Log.Errorf(format, args...)
+	return r, nil
 }
 
 // RegisterAll adds every tool permitted by opts to the MCP server and returns
 // the names registered. It fails when an allow/deny pattern matches no tool,
 // so a typo cannot silently hide one.
 func RegisterAll(server *mcp.Server, client *abs.Client, opts Options) ([]string, error) {
-	opts.Providers = slices.Clone(opts.Providers) // the server's own, whatever the caller does with its slice
-	var err error
-	if opts.AuditSkip, err = auditSkips(opts.AuditSkip); err != nil {
-		return nil, err
-	}
-	r := &registry{server: server, client: client, opts: opts}
-	queueTools(r)
-
-	names := make([]string, 0, len(r.pending))
-	for _, p := range r.pending {
-		names = append(names, p.name)
-	}
-	keep, err := selected(r, names, opts)
+	r, err := queuedFor(client, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	var registered []string
-	for _, p := range r.pending {
-		if !keep[p.name] {
-			continue
-		}
-		p.register()
-		registered = append(registered, p.name)
-	}
-	slices.Sort(registered)
+	return r.queued().Register(server, opts.selection())
+}
 
-	return registered, nil
+// selection is the part of the options that chooses tools, as go-kt's
+// registry takes it.
+func (o *Options) selection() mcpregistry.Selection {
+	return mcpregistry.Selection{
+		ReadOnly:     o.ReadOnly,
+		EnableDelete: o.EnableDelete,
+		Toolsets:     o.Toolsets,
+		Allow:        o.Allow,
+		Deny:         o.Deny,
+	}
 }
 
 // queueTools queues every tool, before any filtering.
@@ -338,225 +274,43 @@ func queueTools(r *registry) {
 	registerSendEbookTool(r)
 }
 
-// selected applies the kind gates and the toolset/allow/deny filters, and is
-// shared by RegisterAll and Describe so `abs-mcp tools` cannot drift from what
-// the server actually registers.
-func selected(r *registry, names []string, opts Options) (map[string]bool, error) {
-	sets, err := compileToolsets(opts.Toolsets, names)
-	if err != nil {
-		return nil, err
-	}
-	allow, err := compilePatterns(opts.Allow, names, "allow")
-	if err != nil {
-		return nil, err
-	}
-	deny, err := compilePatterns(opts.Deny, names, "deny")
-	if err != nil {
-		return nil, err
-	}
-
-	keep := make(map[string]bool, len(r.pending))
-	for _, p := range r.pending {
-		switch {
-		case p.kind == deleteTool && !opts.EnableDelete:
-		case p.kind != readTool && opts.ReadOnly:
-		case len(sets) > 0 && !sets[p.name]:
-		case len(allow) > 0 && !matchesAny(allow, p.name):
-		case matchesAny(deny, p.name):
-		default:
-			keep[p.name] = true
-		}
-	}
-
-	return keep, nil
-}
-
-// compileToolsets turns the requested set names into the tools they hold,
-// always including core. An unknown name aborts startup naming the valid ones,
-// the way an allow/deny pattern that matches nothing does.
-func compileToolsets(raw, known []string) (map[string]bool, error) {
-	var asked []string
-	for _, entry := range raw {
-		for name := range strings.SplitSeq(entry, ",") {
-			if name = strings.TrimSpace(name); name != "" {
-				asked = append(asked, name)
-			}
-		}
-	}
-	if len(asked) == 0 {
-		return nil, nil
-	}
-
-	out := map[string]bool{}
-	for _, name := range asked {
-		if name == "all" {
-			for _, t := range known {
-				out[t] = true
-			}
-			continue
-		}
-		if tools, ok := Toolsets[name]; ok {
-			for _, t := range tools {
-				out[t] = true
-			}
-			continue
-		}
-		// not a named set: a resource family, every tool with that prefix
-		found := false
-		for _, t := range known {
-			if strings.HasPrefix(t, name+"_") {
-				out[t], found = true, true
-			}
-		}
-		if !found {
-			return nil, fmt.Errorf("unknown toolset %q (sets: all, %s; or a resource family: %s)",
-				name, strings.Join(setNames(), ", "), strings.Join(resourceFamilies(known), ", "))
-		}
-	}
-	// core is what every other set assumes: without it there is no way to find
-	// a library or open an item
-	for _, t := range Toolsets["core"] {
-		out[t] = true
-	}
-
-	return out, nil
-}
-
-// setNames lists the curated toolsets, sorted.
-func setNames() []string {
-	out := make([]string, 0, len(Toolsets))
-	for k := range Toolsets {
-		out = append(out, k)
-	}
-	slices.Sort(out)
-
-	return out
-}
-
-// resourceFamilies lists the resource prefixes in use, sorted.
-func resourceFamilies(known []string) []string {
-	seen := map[string]bool{}
-	var out []string
-	for _, t := range known {
-		if i := strings.Index(t, "_"); i > 0 && !seen[t[:i]] {
-			seen[t[:i]] = true
-			out = append(out, t[:i])
-		}
-	}
-	slices.Sort(out)
-
-	return out
-}
-
-// compilePatterns expands the essential preset, splits comma-separated
-// entries, and checks that every pattern matches at least one known tool.
-func compilePatterns(raw, known []string, which string) ([]string, error) {
-	var out []string
-	for _, entry := range raw {
-		for pat := range strings.SplitSeq(entry, ",") {
-			pat = strings.TrimSpace(pat)
-			if pat == "" {
-				continue
-			}
-			if pat == "essential" {
-				out = append(out, EssentialTools...)
-				continue
-			}
-			if !slices.ContainsFunc(known, func(n string) bool { return matchPattern(pat, n) }) {
-				return nil, fmt.Errorf("%s-tools pattern %q matches no tool (have: %s)", which, pat, strings.Join(known, ", "))
-			}
-			out = append(out, pat)
-		}
-	}
-
-	return out, nil
-}
-
-func matchesAny(patterns []string, name string) bool {
-	return slices.ContainsFunc(patterns, func(p string) bool { return matchPattern(p, name) })
-}
-
-// matchPattern supports exact names plus a single leading or trailing '*'.
-func matchPattern(pattern, name string) bool {
-	switch {
-	case pattern == "*":
-		return true
-	case strings.HasSuffix(pattern, "*"):
-		return strings.HasPrefix(name, strings.TrimSuffix(pattern, "*"))
-	case strings.HasPrefix(pattern, "*"):
-		return strings.HasSuffix(name, strings.TrimPrefix(pattern, "*"))
-	default:
-		return pattern == name
-	}
-}
-
 // ToolInfo describes a registered tool without a server to register it on.
-type ToolInfo struct {
-	Name        string
-	Kind        string // read, write or delete
-	Toolset     string // the curated set it belongs to
-	Description string
-}
+type ToolInfo = mcpregistry.Info
 
-// Describe lists the tools opts would register, for `abs-mcp tools`. It needs
-// no connectivity: registration never calls the client, only the handlers do.
-func Describe(opts Options) ([]ToolInfo, error) {
+// described is every tool queued with no server behind it, for the answers
+// that need none.
+func described(opts Options) (*registry, error) {
 	client, err := abs.New("https://describe.invalid", "describe")
 	if err != nil {
 		return nil, err
 	}
-	server := mcp.NewServer(&mcp.Implementation{Name: "abs-mcp", Version: "describe"}, nil)
 
-	if opts.AuditSkip, err = auditSkips(opts.AuditSkip); err != nil {
-		return nil, err
-	}
-	r := &registry{server: server, client: client, opts: opts}
-	queueTools(r)
+	return queuedFor(client, opts)
+}
 
-	names := make([]string, 0, len(r.pending))
-	for _, p := range r.pending {
-		names = append(names, p.name)
-	}
-	keep, err := selected(r, names, opts)
+// Describe lists the tools opts would register, for `abs-mcp tools`. It needs
+// no connectivity, and makes the same choice RegisterAll does.
+func Describe(opts Options) ([]ToolInfo, error) {
+	r, err := described(opts)
 	if err != nil {
 		return nil, err
 	}
 
-	set := map[string]string{}
-	for name, members := range Toolsets {
-		for _, m := range members {
-			// core wins: it is the set a tool is reached through most often
-			if set[m] == "" || name == "core" {
-				set[m] = name
-			}
-		}
-	}
-
-	kinds := map[toolKind]string{readTool: "read", writeTool: "write", deleteTool: "delete"}
-	out := make([]ToolInfo, 0, len(r.pending))
-	for _, p := range r.pending {
-		if !keep[p.name] {
-			continue
-		}
-		out = append(out, ToolInfo{Name: p.name, Kind: kinds[p.kind], Toolset: set[p.name], Description: p.description})
-	}
-	slices.SortFunc(out, func(a, b ToolInfo) int { return cmp.Compare(a.Name, b.Name) })
-
-	return out, nil
+	return r.queued().Describe(opts.selection())
 }
 
 // ToolsetNames lists the curated toolsets, for help output.
-func ToolsetNames() []string { return setNames() }
+func ToolsetNames() []string {
+	return mcpregistry.New(mcpregistry.Config{Toolsets: Toolsets}).ToolsetNames()
+}
 
 // FamilyNames lists the resource prefixes accepted by --toolsets, for help
 // output.
 func FamilyNames() []string {
-	r := &registry{}
-	queueTools(r)
-	names := make([]string, 0, len(r.pending))
-	for _, p := range r.pending {
-		names = append(names, p.name)
+	r, err := described(Options{})
+	if err != nil {
+		return nil
 	}
 
-	return resourceFamilies(names)
+	return r.queued().FamilyNames()
 }

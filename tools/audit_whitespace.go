@@ -5,9 +5,10 @@ import (
 	"context"
 	"fmt"
 	"path"
-	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/katbyte/go-kt/whitespace"
 
 	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -26,7 +27,7 @@ import (
 // Special Look"), a censored word, a bar. So every row carries the item's
 // own title beside the path, to say what the gap was.
 
-var whitespaceProblemOrder = []string{"odd_space", "double_space", "edge_space", "space_before_extension", "space_before_colon"}
+var whitespaceProblemOrder = whitespace.ProblemOrder
 
 var whitespaceWhereOrder = []string{"title", "subtitle", "author", "narrator", "series", "folder", "file"}
 
@@ -53,127 +54,32 @@ const (
 	takenShow = 3
 )
 
-var (
-	// wsRun is two or more spaces in a row
-	wsRun = regexp.MustCompile(` {2,}`)
-	// wsColon is a space before a colon or the look-alike U+A789 a filename
-	// uses for one, "Part Two ꞉ Six" where the library writes "Title꞉ Subtitle"
-	wsColon = regexp.MustCompile(` +([:꞉])`)
-)
+// The spaces out of place in a name are found, shown and put right by
+// go-kt's whitespace package, the one version of these checks every katbyte
+// tool uses: what is wrong with a name (whitespaceProblems), the name with
+// the offending spaces made visible (whitespaceVisible), and the name put
+// right (whitespaceFixed), "" when nothing is left of it but spaces or its
+// extension. A file's name is read as a stem and an extension.
 
-// oddSpace is a space that is not the ordinary one: a tab, a line break, a
-// non-breaking or typographic space. The ideographic space, U+3000, is not
-// one: Japanese titles use it as written.
-func oddSpace(r rune) bool {
-	switch r {
-	case '\t', '\n', '\r', '\v', '\f', 0x85, 0xA0, 0x1680, 0x2028, 0x2029, 0x202F, 0x205F:
-		return true
+// textKind is how a name is read: a file's as a stem and an extension.
+func textKind(file bool) whitespace.Text {
+	if file {
+		return whitespace.File
 	}
-	return r >= 0x2000 && r <= 0x200A
+
+	return whitespace.Name
 }
 
-// plainSpaces is a name with every odd space made an ordinary one: an odd
-// space doubles, ends a name or stands before a colon as an ordinary one
-// does, and is looked for that way.
-func plainSpaces(name string) string {
-	return strings.Map(func(r rune) rune {
-		if oddSpace(r) {
-			return ' '
-		}
-		return r
-	}, name)
-}
-
-// splitExt parts a file name into its stem and its extension; a name whose
-// last dot starts no plausible extension is all stem. The name is read
-// without the spaces after it: "Chapter 1 .mp3 " is "Chapter 1 " and ".mp3".
-func splitExt(name string) (stem, ext string) {
-	name = strings.TrimRight(name, " ")
-	ext = path.Ext(name)
-	if ext == "" || ext == name || len(ext) > 6 || strings.Contains(ext, " ") {
-		return name, ""
-	}
-	return strings.TrimSuffix(name, ext), ext
-}
-
-// whitespaceProblems is what is wrong with the spaces in one name, in
-// whitespaceProblemOrder. A file's name is read as a stem and an extension.
 func whitespaceProblems(name string, file bool) []string {
-	var out []string
-	plain := plainSpaces(name)
-	if plain != name {
-		out = append(out, "odd_space")
-	}
-	if strings.Contains(plain, "  ") {
-		out = append(out, "double_space")
-	}
-	if strings.HasPrefix(plain, " ") || strings.HasSuffix(plain, " ") {
-		out = append(out, "edge_space")
-	}
-	if file {
-		if stem, ext := splitExt(plain); ext != "" && strings.HasSuffix(stem, " ") {
-			out = append(out, "space_before_extension")
-		}
-	}
-	if wsColon.MatchString(plain) {
-		out = append(out, "space_before_colon")
-	}
-	return out
+	return whitespace.Problems(name, textKind(file))
 }
 
-// whitespaceVisible writes a name with the offending spaces made visible: ␣
-// for an ordinary space in a run, at an end, before a colon or before the
-// extension, and [U+00A0] for a space that is not the ordinary one, wherever
-// it is.
 func whitespaceVisible(name string, file bool) string {
-	runes := []rune(name)
-	plain := []rune(plainSpaces(name))
-	extAt := -1
-	if file {
-		if stem, ext := splitExt(string(plain)); ext != "" {
-			extAt = len([]rune(stem))
-		}
-	}
-	var b strings.Builder
-	for i := 0; i < len(runes); {
-		if plain[i] != ' ' {
-			b.WriteRune(runes[i])
-			i++
-			continue
-		}
-		end := i
-		for end < len(plain) && plain[end] == ' ' {
-			end++
-		}
-		mark := end-i > 1 || i == 0 || end == len(plain) || end == extAt || plain[end] == ':' || plain[end] == '꞉'
-		for ; i < end; i++ {
-			switch {
-			case oddSpace(runes[i]):
-				fmt.Fprintf(&b, "[U+%04X]", runes[i])
-			case mark:
-				b.WriteRune('␣')
-			default:
-				b.WriteRune(' ')
-			}
-		}
-	}
-	return b.String()
+	return whitespace.Visible(name, textKind(file))
 }
 
-// whitespaceFixed is the name with its spaces put right: an odd space made
-// an ordinary one, runs made one, the ends and the space before a colon or
-// the extension dropped. "" when nothing but spaces, or an extension, is
-// left.
 func whitespaceFixed(name string, file bool) string {
-	stem, ext := plainSpaces(name), ""
-	if file {
-		stem, ext = splitExt(stem)
-	}
-	stem = strings.Trim(wsColon.ReplaceAllString(wsRun.ReplaceAllString(stem, " "), "$1"), " ")
-	if stem == "" {
-		return ""
-	}
-	return stem + ext
+	return whitespace.Fixed(name, textKind(file))
 }
 
 // diskFixed is whitespaceFixed for a folder or file name, "" too when what is
@@ -272,9 +178,9 @@ func seriesTextSpaced(it *abs.Item) bool {
 		}
 		text = strings.Join(parts, ", ")
 	}
-	plain := plainSpaces(text)
-	return plain != text || strings.Contains(plain, "  ") || strings.Contains(plain, " ,") ||
-		strings.HasPrefix(plain, " ") || strings.HasSuffix(plain, " ") || wsColon.MatchString(plain)
+	// a space before the comma that joins two names is one at the end of a
+	// name; an odd one there is a problem of the text's already
+	return len(whitespace.Problems(text, whitespace.Name)) > 0 || strings.Contains(text, " ,")
 }
 
 // bookSeries is a book and the series names the listing gives it.

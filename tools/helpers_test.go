@@ -204,18 +204,6 @@ func sameRefs(a, b []abs.SeriesRef) bool {
 	})
 }
 
-// released fails a test whose locks still track a record once every hold
-// has been let go.
-func released(t *testing.T, l *writeLocks) {
-	t.Helper()
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if len(l.records) != 0 {
-		t.Errorf("records left behind: %v", l.records)
-	}
-}
-
 func numbered(id, path, series, seq string) *abs.Item {
 	it := &abs.Item{ID: id, MediaType: "book", RelPath: path}
 	it.Media.Metadata.Title = path

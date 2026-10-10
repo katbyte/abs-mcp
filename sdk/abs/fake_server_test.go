@@ -17,6 +17,9 @@ import (
 	"net/url"
 	"sync"
 	"testing"
+	"time"
+
+	"github.com/katbyte/go-kt/chttp"
 )
 
 // fakeServer is a canned Audiobookshelf that records the requests made to it.
@@ -120,13 +123,20 @@ func (s *fakeServer) sent(t *testing.T) map[string]any {
 	return body
 }
 
-func newClient(t *testing.T, s *fakeServer) *Client {
+func newClient(t *testing.T, s *fakeServer, opts ...Option) *Client {
 	t.Helper()
 
-	c, err := New(s.URL, "k")
+	c, err := New(s.URL, "k", append([]Option{atOnce()}, opts...)...)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	return c
+}
+
+// atOnce has a client try again as it does by default, with no wait between
+// tries: what a test is about is whether a request is sent again, not how
+// long after.
+func atOnce() Option {
+	return WithRetry(chttp.Retry{Wait: func(int) time.Duration { return 0 }})
 }

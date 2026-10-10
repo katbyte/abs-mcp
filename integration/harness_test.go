@@ -27,8 +27,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/lib/providerproxy"
 	"github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/go-kt/test/env"
+	"github.com/katbyte/go-kt/test/replayproxy"
 )
 
 var (
@@ -37,41 +38,32 @@ var (
 	podcasts string // the podcast library, for the episode endpoints
 )
 
-func recording() bool { return os.Getenv("ABS_TEST_RECORD") != "" }
-func verifying() bool { return os.Getenv("ABS_TEST_VERIFY") != "" }
-
 var (
-	proxy       *providerproxy.Proxy
+	proxy       *replayproxy.Proxy
 	proxyMisses []string
-	proxyDrifts []providerproxy.Drift
+	proxyDrifts []replayproxy.Drift
 )
+
+// suiteEnv is the environment scripts/abs-testenv.sh exports for a live
+// suite, read the way go-kt's test plumbing reads it for every tool.
+var suiteEnv = env.New("ABS")
 
 // startProxy brings up the record/replay proxy the container's HTTP_PROXY
 // already points at. Audiobookshelf makes the provider calls, not us, so this
-// is the only layer that can intercept them.
+// is the only layer that can intercept them. The proxy is go-kt's: replaying
+// unless ABS_TEST_RECORD or ABS_TEST_VERIFY says otherwise.
 func startProxy() error {
-	port := 18080
-	if v := os.Getenv("ABS_TEST_PROXY_PORT"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil {
-			return fmt.Errorf("ABS_TEST_PROXY_PORT=%q: %w", v, err)
-		}
-		port = n
+	port, err := suiteEnv.ProxyPort()
+	if err != nil {
+		return err
 	}
 
-	mode := providerproxy.Replay
-	switch {
-	case recording():
-		mode = providerproxy.Record
-	case verifying():
-		mode = providerproxy.Verify
-	}
-
-	p, err := providerproxy.New(providerproxy.Options{
-		Mode:        mode,
+	p, err := replayproxy.New(replayproxy.Options{
+		Mode:        suiteEnv.Mode(),
 		CassetteDir: filepath.Join("testdata", "cassettes"),
 		// all interfaces: the container reaches this through host.docker.internal
-		Addr: "0.0.0.0:" + strconv.Itoa(port),
+		Addr:       "0.0.0.0:" + strconv.Itoa(port),
+		RecordHint: "record it with " + suiteEnv.Var("TEST_RECORD") + "=1, which records only what is missing",
 	})
 	if err != nil {
 		return err

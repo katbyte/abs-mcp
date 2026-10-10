@@ -21,6 +21,11 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
+
+	"github.com/katbyte/go-kt/chttp"
+
+	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 
 	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -104,7 +109,8 @@ func (f *fakeABS) answer(route string, r reply) {
 func (f *fakeABS) client(t *testing.T) *abs.Client {
 	t.Helper()
 
-	c, err := abs.New(f.srv.URL, "test")
+	// tries again as a real client does, without the waits between tries
+	c, err := abs.New(f.srv.URL, "test", abs.WithRetry(chttp.Retry{Wait: func(int) time.Duration { return 0 }}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,13 +200,38 @@ func registryCaller(t *testing.T, f *fakeABS) (r *registry, call func(name strin
 
 	client := f.client(t)
 	srv := mcp.NewServer(&mcp.Implementation{Name: "t", Version: "0"}, nil)
-	r = &registry{server: srv, client: client, opts: Options{EnableDelete: true}}
+	r = &registry{client: client, opts: Options{EnableDelete: true}}
 	queueTools(r)
-	for _, p := range r.pending {
-		p.register()
-	}
+	registerEvery(t, r, srv)
 
 	return r, connected(t, srv)
+}
+
+// registerEvery puts every tool a registry has queued on a server, the
+// delete tools among them.
+func registerEvery(t *testing.T, r *registry, srv *mcp.Server) {
+	t.Helper()
+
+	if _, err := r.queued().Register(srv, mcpregistry.Selection{EnableDelete: true}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// queuedTools is every tool a registry has queued, by name: its kind, its
+// toolset and its description, as `abs-mcp tools` prints them.
+func queuedTools(t *testing.T, r *registry) map[string]ToolInfo {
+	t.Helper()
+
+	infos, err := r.queued().Describe(mcpregistry.Selection{EnableDelete: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := make(map[string]ToolInfo, len(infos))
+	for _, info := range infos {
+		out[info.Name] = info
+	}
+
+	return out
 }
 
 // connected calls srv's tools over an in-memory session and hands back the
