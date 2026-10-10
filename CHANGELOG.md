@@ -12,6 +12,11 @@
 - `--audit-skip` / `ABS_AUDIT_SKIP` leaves out an audit rule that is a way of filing rather than a mistake: `path-series`
 - on macOS, a connection the system refused with "no route to host" says that Local Network privacy may be blocking the process, and that a terminal app updated while running needs a restart
 
+### Changed
+
+- built with Go 1.27.2, which fixes denial-of-service flaws in Go's HTTP and TLS code
+- the Docker image and the release build take their base images from Google's mirror of Docker Hub, and from Docker Hub itself when the mirror gives nothing
+
 ## 0.6.0 (2026-10-03)
 
 ### Breaking
