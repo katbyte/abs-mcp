@@ -71,7 +71,7 @@ All options can be passed as command-line flags, environment variables, or via a
 | `ABS_TOOLSETS` | `--toolsets` | groups of tools to register, default `core`: `all`, `core`, `curation`, `listening`, `podcasts`, `organise`, `admin`, or a resource family like `item` (`core` is always included) |
 | `ABS_ALLOW_TOOLS` | `--allow-tools` | register these tools as well as the toolsets asked for, or only these when no toolset is (names, `library_*` globs, or `essential`) |
 | `ABS_DENY_TOOLS` | `--deny-tools` | never register these tools, whatever asked for them (names or globs such as `*_delete`) |
-| `ABS_LOG` | | log level (`WARN` default; `DEBUG`, `TRACE`, ...) |
+| `ABS_LOG` | | log level (`WARN` default; `INFO` adds a line for each call of a tool that changes or deletes something, with passwords and keys blanked; `DEBUG`, `TRACE`, ...) |
 | `ABS_LISTEN` | `--listen` | serve MCP over HTTP on this address (e.g. `:8080`) instead of stdio |
 | `ABS_AUTH_TOKEN` | `--auth-token` | bearer token required on the HTTP endpoint (required with `--listen`) |
 | `ABS_ALLOW_NO_AUTH` | `--allow-no-auth` | serve HTTP with no bearer token at all: anyone who can reach the port can use every tool |

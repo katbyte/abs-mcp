@@ -1,3 +1,10 @@
+## Unreleased
+
+### Added
+
+- at `ABS_LOG=INFO`, a log line for each call of a tool that changes or deletes something, with passwords and keys blanked
+- a call refused for an argument the tool does not take says which arguments it does take
+
 ## 0.7.0 (2026-10-09)
 
 ### Breaking
