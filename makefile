@@ -130,7 +130,7 @@ yamllint: $(YAMLLINT) ## Check YAML files with yamllint (config in .yamllint.yml
 
 shellcheck: $(SHELLCHECK) ## Check shell scripts with shellcheck
 	@echo "==> Checking shell scripts with shellcheck..."
-	@$(SHELLCHECK) scripts/*.sh
+	@$(SHELLCHECK) .scripts/*.sh
 
 zizmor: $(ZIZMOR) ## Audit GitHub workflows for security issues with zizmor
 	@echo "==> Auditing workflows with zizmor..."
@@ -182,9 +182,9 @@ testacc-integration: ## SDK tests in a throwaway container
 	@echo "==> integration (SDK) on port 13379..."
 	@set -e; \
 		ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_PORT=13379 ABS_TEST_PROXY_PORT=18180 ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk \
-			scripts/abs-testenv.sh up | grep '^export' > .testenv-sdk.sh; \
+			.scripts/abs-testenv.sh up | grep '^export' > .testenv-sdk.sh; \
 		trap 'st=$$?; [ $$st -eq 0 ] || docker logs abs-mcp-sdk 2>&1 | tail -60; \
-			ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk scripts/abs-testenv.sh down; \
+			ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk .scripts/abs-testenv.sh down; \
 			rm -f .testenv-sdk.sh; exit $$st' EXIT; \
 		. ./.testenv-sdk.sh; \
 		go test -tags integration -count=1 ./integration/... -timeout ${TEST_TIMEOUT} -v
@@ -192,9 +192,9 @@ testacc-integration: ## SDK tests in a throwaway container
 testacc-acceptance: ## Tool tests in a throwaway container
 	@echo "==> acceptance (tools) on port 13378..."
 	@set -e; \
-		scripts/abs-testenv.sh up | grep '^export' > .testenv.sh; \
+		.scripts/abs-testenv.sh up | grep '^export' > .testenv.sh; \
 		trap 'st=$$?; [ $$st -eq 0 ] || docker logs abs-mcp-test 2>&1 | tail -60; \
-			scripts/abs-testenv.sh down; rm -f .testenv.sh; exit $$st' EXIT; \
+			.scripts/abs-testenv.sh down; rm -f .testenv.sh; exit $$st' EXIT; \
 		. ./.testenv.sh; \
 		go test -tags integration -count=1 ./acceptance/... -timeout ${TEST_TIMEOUT} -v
 
@@ -217,16 +217,16 @@ cover: ## Run every suite with coverage and report the total
 	@echo "==> integration (SDK) with coverage..."
 	@set -e; \
 		ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_PORT=13379 ABS_TEST_PROXY_PORT=18180 ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk \
-			scripts/abs-testenv.sh up | grep '^export' > .testenv-sdk.sh; \
+			.scripts/abs-testenv.sh up | grep '^export' > .testenv-sdk.sh; \
 		trap 'st=$$?; ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk \
-			scripts/abs-testenv.sh down; rm -f .testenv-sdk.sh; exit $$st' EXIT; \
+			.scripts/abs-testenv.sh down; rm -f .testenv-sdk.sh; exit $$st' EXIT; \
 		. ./.testenv-sdk.sh; \
 		go test -tags integration -count=1 -coverpkg=$(COVERPKG) ./integration/... \
 			-timeout $(TEST_TIMEOUT) -args -test.gocoverdir=$(CURDIR)/$(COVERDIR)/integration
 	@echo "==> acceptance (tools) with coverage..."
 	@set -e; \
-		scripts/abs-testenv.sh up | grep '^export' > .testenv.sh; \
-		trap 'st=$$?; scripts/abs-testenv.sh down; rm -f .testenv.sh; exit $$st' EXIT; \
+		.scripts/abs-testenv.sh up | grep '^export' > .testenv.sh; \
+		trap 'st=$$?; .scripts/abs-testenv.sh down; rm -f .testenv.sh; exit $$st' EXIT; \
 		. ./.testenv.sh; \
 		go test -tags integration -count=1 -coverpkg=$(COVERPKG) ./acceptance/... \
 			-timeout $(TEST_TIMEOUT) -args -test.gocoverdir=$(CURDIR)/$(COVERDIR)/acceptance
@@ -247,41 +247,41 @@ record-sdk: ## Re-record the SDK suite's provider cassettes against the real pro
 	@echo "==> recording the SDK cassettes (this hits the network)..."
 	@set -e; \
 		ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_PORT=13379 ABS_TEST_PROXY_PORT=18180 ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk \
-			scripts/abs-testenv.sh up | grep '^export' > .testenv-sdk.sh; \
-		trap 'ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk scripts/abs-testenv.sh down; rm -f .testenv-sdk.sh' EXIT; \
+			.scripts/abs-testenv.sh up | grep '^export' > .testenv-sdk.sh; \
+		trap 'ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk .scripts/abs-testenv.sh down; rm -f .testenv-sdk.sh' EXIT; \
 		. ./.testenv-sdk.sh; \
 		ABS_TEST_RECORD=all go test -tags integration -count=1 ./integration/... -timeout ${TEST_TIMEOUT} -v
 
 record: ## Re-record the provider cassettes against the real Audible/Audnexus/iTunes
 	@echo "==> recording against the real providers (this hits the network)..."
 	@set -e; \
-		scripts/abs-testenv.sh up | grep '^export' > .testenv.sh; \
-		trap 'scripts/abs-testenv.sh down; rm -f .testenv.sh' EXIT; \
+		.scripts/abs-testenv.sh up | grep '^export' > .testenv.sh; \
+		trap '.scripts/abs-testenv.sh down; rm -f .testenv.sh' EXIT; \
 		. ./.testenv.sh; \
 		ABS_TEST_RECORD=all go test -tags integration -count=1 ./acceptance/... -timeout ${TEST_TIMEOUT} -v
 
 record-check: ## Check both suites' provider cassettes still match the real APIs, without rewriting them
 	@echo "==> verifying cassettes against the real providers (this hits the network)..."
 	@set -e; \
-		scripts/abs-testenv.sh up | grep '^export' > .testenv.sh; \
-		trap 'scripts/abs-testenv.sh down; rm -f .testenv.sh' EXIT; \
+		.scripts/abs-testenv.sh up | grep '^export' > .testenv.sh; \
+		trap '.scripts/abs-testenv.sh down; rm -f .testenv.sh' EXIT; \
 		. ./.testenv.sh; \
 		ABS_TEST_VERIFY=1 go test -tags integration -count=1 ./acceptance/... -timeout ${TEST_TIMEOUT}
 	@set -e; \
 		ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_PORT=13379 ABS_TEST_PROXY_PORT=18180 ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk \
-			scripts/abs-testenv.sh up | grep '^export' > .testenv-sdk.sh; \
-		trap 'ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk scripts/abs-testenv.sh down; rm -f .testenv-sdk.sh' EXIT; \
+			.scripts/abs-testenv.sh up | grep '^export' > .testenv-sdk.sh; \
+		trap 'ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk .scripts/abs-testenv.sh down; rm -f .testenv-sdk.sh' EXIT; \
 		. ./.testenv-sdk.sh; \
 		ABS_TEST_VERIFY=1 go test -tags integration -count=1 ./integration/... -timeout ${TEST_TIMEOUT}
 
 testenv-up: ## Start and seed a throwaway Audiobookshelf container
-	@scripts/abs-testenv.sh up
+	@.scripts/abs-testenv.sh up
 
 testenv-down: ## Remove the throwaway Audiobookshelf container
-	@scripts/abs-testenv.sh down
+	@.scripts/abs-testenv.sh down
 
 apicheck: ## Report how much of the Audiobookshelf API sdk/abs covers
-	@python3 scripts/apicheck.py --list
+	@python3 .scripts/apicheck.py --list
 
 check-all: build test testacc lint actionlint yamllint shellcheck depscheck apicheck ## Run build + tests (incl. integration) + all linters + depscheck
 

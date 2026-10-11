@@ -10,9 +10,9 @@
 //
 //	make testacc                       # start a container, run these, tear it down
 //
-//	eval "$(scripts/abs-testenv.sh up)"  # or drive it by hand
+//	eval "$(.scripts/abs-testenv.sh up)"  # or drive it by hand
 //	go test -tags integration ./acceptance/...
-//	scripts/abs-testenv.sh down
+//	.scripts/abs-testenv.sh down
 package acceptance
 
 import "testing"

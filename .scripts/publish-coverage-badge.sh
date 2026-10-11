@@ -8,7 +8,7 @@
 # later step cannot use them), so the token is put on the remote here instead
 # of being read from the checkout.
 #
-# Usage: PCT=81.0 ./scripts/publish-coverage-badge.sh
+# Usage: PCT=81.0 ./.scripts/publish-coverage-badge.sh
 set -euo pipefail
 
 PCT="${PCT:?set PCT to the coverage percentage, e.g. 81.0}"

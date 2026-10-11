@@ -1,6 +1,6 @@
 //go:build integration
 
-// The harness: scripts/abs-testenv.sh brings the container up and exports
+// The harness: .scripts/abs-testenv.sh brings the container up and exports
 // ABS_SERVER, ABS_TOKEN and ABS_TEST_DATA, and everything here drives it
 // through the MCP tools rather than the HTTP API, so building the fixtures is
 // itself a test of library_create, library_scan, item_edit and the rest.
@@ -69,7 +69,7 @@ var podcasts = []string{"Well There's Your Problem", "Behind the Bastards"}
 
 // messyBook is one book of the Messy library, addressed by its folder because
 // two of them end up with the same title. Each carries one of the defects
-// the curation audits are for; the layout itself (scripts/abs-testenv.sh)
+// the curation audits are for; the layout itself (.scripts/abs-testenv.sh)
 // supplies the rest: a series folder with no series on the book, files named
 // after another book, one book twice, a single-file m4b, a ribboned cover.
 type messyBook struct {
@@ -146,7 +146,7 @@ var (
 )
 
 // notReady is what a test says as it skips because no container is up.
-const notReady = "ABS_SERVER and ABS_TOKEN are not set; run: eval \"$(scripts/abs-testenv.sh up)\""
+const notReady = "ABS_SERVER and ABS_TOKEN are not set; run: eval \"$(.scripts/abs-testenv.sh up)\""
 
 // suite drives the tools as a client does, through go-kt's live-suite
 // helpers, and keeps count of what each tool was asked. Until start connects
@@ -235,7 +235,7 @@ var (
 	proxyDrifts []replayproxy.Drift
 )
 
-// suiteEnv is the environment scripts/abs-testenv.sh exports for a live
+// suiteEnv is the environment .scripts/abs-testenv.sh exports for a live
 // suite, read the way go-kt's test plumbing reads it for every tool.
 var suiteEnv = env.New("ABS")
 

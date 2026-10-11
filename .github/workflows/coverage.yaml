@@ -11,7 +11,7 @@ on:
       - 'go.sum'
       - 'vendor/**'
       - 'makefile'
-      - 'scripts/abs-testenv.sh'
+      - '.scripts/abs-testenv.sh'
       - '.github/workflows/coverage.yaml'
   workflow_dispatch:
 
@@ -68,10 +68,10 @@ jobs:
           # the checkout persists no credentials, so the push is given the
           # job's own token (the job asks for contents: write above)
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bash ./scripts/publish-coverage-badge.sh
+        run: bash ./.scripts/publish-coverage-badge.sh
 
       - name: Tear down
         if: always()
         run: |
-          ABS_TEST_CONTAINER=abs-mcp-sdk scripts/abs-testenv.sh down || true
-          scripts/abs-testenv.sh down || true
+          ABS_TEST_CONTAINER=abs-mcp-sdk .scripts/abs-testenv.sh down || true
+          .scripts/abs-testenv.sh down || true

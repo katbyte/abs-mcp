@@ -3,8 +3,8 @@
 # Bring up a throwaway Audiobookshelf in Docker, seed it with a known catalogue,
 # and print the environment the integration tests need.
 #
-#   eval "$(scripts/abs-testenv.sh up)"   # start, seed, export ABS_SERVER/ABS_TOKEN
-#   scripts/abs-testenv.sh down           # stop and remove everything
+#   eval "$(.scripts/abs-testenv.sh up)"   # start, seed, export ABS_SERVER/ABS_TOKEN
+#   .scripts/abs-testenv.sh down           # stop and remove everything
 #
 # This script only does what abs-mcp cannot: run the container, create the root
 # user, mint an API key, and lay the audio out on disk. The libraries, the scan
@@ -287,7 +287,7 @@ up() {
     "$access" | jq -r '.apiKey.apiKey')
   [ "$key" != "null" ] || { echo "no apiKey in the response" >&2; exit 1; }
 
-  # consumed with eval "$(scripts/abs-testenv.sh up)"
+  # consumed with eval "$(.scripts/abs-testenv.sh up)"
   echo "export ABS_SERVER='${URL}'"
   echo "export ABS_TOKEN='${key}'"
   # the tests create the libraries themselves with library_create, over these

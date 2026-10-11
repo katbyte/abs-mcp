@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Regenerates the source-build formula in katbyte/homebrew-tap for a released tag.
-# Usage: TAG=v1.0.0 [TAP_DRY_RUN=1] HOMEBREW_TAP_GITHUB_TOKEN=... ./scripts/update-homebrew-formula.sh
+# Usage: TAG=v1.0.0 [TAP_DRY_RUN=1] HOMEBREW_TAP_GITHUB_TOKEN=... ./.scripts/update-homebrew-formula.sh
 set -euo pipefail
 
 TAG="${TAG:?set TAG to the release tag, e.g. v1.0.0}"

@@ -203,7 +203,7 @@ func diskSilence(t *testing.T, path string, seconds int) {
 }
 
 // diskEpub writes a minimal epub titled after its file, built the way
-// scripts/abs-testenv.sh builds the fixture's: a zip whose first entry is an
+// .scripts/abs-testenv.sh builds the fixture's: a zip whose first entry is an
 // uncompressed mimetype.
 func diskEpub(t *testing.T, path string) {
 	t.Helper()

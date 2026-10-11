@@ -44,7 +44,7 @@ var (
 	proxyDrifts []replayproxy.Drift
 )
 
-// suiteEnv is the environment scripts/abs-testenv.sh exports for a live
+// suiteEnv is the environment .scripts/abs-testenv.sh exports for a live
 // suite, read the way go-kt's test plumbing reads it for every tool.
 var suiteEnv = env.New("ABS")
 
@@ -131,7 +131,7 @@ func skipUnlessLive(t *testing.T) context.Context {
 	t.Helper()
 
 	if client == nil {
-		t.Skip("ABS_SERVER and ABS_TOKEN are not set; run: eval \"$(scripts/abs-testenv.sh up)\"")
+		t.Skip("ABS_SERVER and ABS_TOKEN are not set; run: eval \"$(.scripts/abs-testenv.sh up)\"")
 	}
 
 	return t.Context()

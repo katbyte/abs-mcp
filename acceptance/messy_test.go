@@ -1,7 +1,7 @@
 //go:build integration
 
 // The Messy library: every defect the curation audits exist to find, seeded
-// on purpose (the layout in scripts/abs-testenv.sh, the metadata in
+// on purpose (the layout in .scripts/abs-testenv.sh, the metadata in
 // messyBooks). Each test here is one audit against it, asserting the finding
 // it was seeded for and that the clean books beside it are left alone.
 package acceptance

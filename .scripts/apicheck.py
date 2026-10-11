@@ -6,9 +6,9 @@ they are unmaintained, so the route table in the server source is the only
 reference there is. This reads it, reads the paths sdk/abs builds, and prints
 what is covered, what is deliberately out of scope, and what is simply missing.
 
-    scripts/apicheck.py              # against the pinned ABS version
-    scripts/apicheck.py --list       # also list every uncovered route
-    scripts/apicheck.py --ref master # check against a different ABS ref
+    .scripts/apicheck.py              # against the pinned ABS version
+    .scripts/apicheck.py --list       # also list every uncovered route
+    .scripts/apicheck.py --ref master # check against a different ABS ref
 """
 
 import argparse

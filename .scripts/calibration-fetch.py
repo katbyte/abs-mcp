@@ -17,11 +17,11 @@ into the public domain as the project's rule (librivox.org/pages/public-domain),
 each archive.org page carrying the dedication in its metadata. Nothing is
 copied into the repo. docs/CALIBRATION.md has the detail.
 
-    scripts/calibration-fetch.py                 # into ~/.cache/abs-mcp/calibration
-    scripts/calibration-fetch.py --dir /some/dir
-    scripts/calibration-fetch.py --list          # say what would be fetched, fetch nothing
-    scripts/calibration-fetch.py --manifest-only # write the manifest, fetch nothing
-    scripts/calibration-fetch.py --only 4511,200  # fetch some of the recordings
+    .scripts/calibration-fetch.py                 # into ~/.cache/abs-mcp/calibration
+    .scripts/calibration-fetch.py --dir /some/dir
+    .scripts/calibration-fetch.py --list          # say what would be fetched, fetch nothing
+    .scripts/calibration-fetch.py --manifest-only # write the manifest, fetch nothing
+    .scripts/calibration-fetch.py --only 4511,200  # fetch some of the recordings
 
 Then: ABS_CALIBRATION_DIR=~/.cache/abs-mcp/calibration go test -tags calibration ./lib/audiosample/...
 """
