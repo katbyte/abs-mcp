@@ -1,12 +1,6 @@
-// Package whitespace finds the spaces out of place in a name: doubled,
-// leading, trailing and odd spaces, and a space before a colon or a file
-// extension. For each name it says what is wrong (Problems), shows it with
-// the offending spaces made visible (Visible) and puts it right (Fixed).
-//
-// Names come in kinds (Text), because what is wrong depends on what the text
-// is: a file name has an extension a space can sit before, and a title in
-// its own language keeps the spaces its typography sets - French puts one
-// before a colon.
+// Package whitespace finds the spaces out of place in a name: doubled, at an end, odd, or before a colon or a file extension. It says what is wrong
+// (Problems), shows it (Visible) and puts it right (Fixed). What is wrong depends on the kind of text (Text): a file name has an extension, and a
+// French title keeps its space before a colon.
 package whitespace
 
 import (
@@ -33,15 +27,12 @@ var ProblemOrder = []string{OddSpace, DoubleSpace, EdgeSpace, BeforeExtension, B
 var (
 	// run is two or more spaces in a row
 	run = regexp.MustCompile(` {2,}`)
-	// colon is a space before a colon or the look-alike U+A789 a renamer
-	// writes for one, "Title ꞉ Subtitle" where the library has "Title꞉
-	// Subtitle"
+	// colon is a space before a colon or the look-alike U+A789 a renamer writes for one, "Title ꞉ Subtitle" where the library has "Title꞉ Subtitle"
 	colon = regexp.MustCompile(` +([:꞉])`)
 )
 
-// Odd is a space that is not the ordinary one: a tab, a line break, a
-// non-breaking or typographic space. The ideographic space, U+3000, is not
-// one: Japanese titles use it as written.
+// Odd is a space that is not the ordinary one: a tab, a line break, a non-breaking or typographic space. The ideographic space, U+3000, is not one:
+// Japanese titles use it as written.
 func Odd(r rune) bool {
 	switch r {
 	case '\t', '\n', '\r', '\v', '\f', 0x85, 0xA0, 0x1680, 0x2028, 0x2029, 0x202F, 0x205F:
@@ -51,8 +42,7 @@ func Odd(r rune) bool {
 	return r >= 0x2000 && r <= 0x200A
 }
 
-// Typographic is a no-break or narrow space a language's own typography sets
-// on purpose: French puts one before a colon ("Titre : Sous-titre").
+// Typographic is a no-break or narrow space a language's own typography sets on purpose: French puts one before a colon ("Titre : Sous-titre").
 func Typographic(r rune) bool {
 	return r == 0xA0 || r == 0x202F || (r >= 0x2000 && r <= 0x200A)
 }
@@ -68,9 +58,8 @@ const (
 	Name Text = iota
 	// File is a file name, read as a stem and an extension
 	File
-	// Foreign is an original title, written in its own language: the space
-	// before a colon and the typographic spaces that language's typography
-	// sets are left alone, and only the rest is a problem
+	// Foreign is an original title, written in its own language: the space before a colon and the typographic spaces that language's typography sets
+	// are left alone, and only the rest is a problem
 	Foreign
 )
 
@@ -79,11 +68,7 @@ func (k Text) odd(r rune) bool {
 	return Odd(r) && (k != Foreign || !Typographic(r))
 }
 
-// plain is a text with every space that is odd in this kind of text made an
-// ordinary one. An odd space doubles, ends a name and stands before a colon
-// or an extension as an ordinary one does, so those are looked for in the
-// text read this way: two no-break spaces are a double space, and one before
-// a colon is a space before a colon.
+// plain is a text with every odd space made an ordinary one, since an odd space doubles or ends a name as an ordinary one does.
 func (k Text) plain(name string) string {
 	return strings.Map(func(r rune) rune {
 		if k.odd(r) {
@@ -108,11 +93,8 @@ func EndsWithSpace(s string) bool {
 	return Any(r)
 }
 
-// SplitExt parts a file name into its stem and its extension; a name whose
-// last dot starts no plausible extension (longer than five letters, or with
-// a space in it) is all stem. The name is read without the spaces after it,
-// which are no part of either: "Chapter 1 .mp3 " is "Chapter 1 " and ".mp3",
-// so a space after the extension hides none before it.
+// SplitExt parts a file name into stem and extension; a last dot that starts no plausible extension (over five letters, or with a space) is all stem.
+// Trailing spaces are read as neither, so one after the extension hides none before it.
 func SplitExt(name string) (stem, ext string) {
 	name = strings.TrimRightFunc(name, Any)
 	ext = path.Ext(name)
@@ -123,8 +105,7 @@ func SplitExt(name string) (stem, ext string) {
 	return strings.TrimSuffix(name, ext), ext
 }
 
-// Problems is what is wrong with the spaces in one text, in ProblemOrder;
-// nothing for a text whose spaces are all in place.
+// Problems is what is wrong with the spaces in one text, in ProblemOrder; nothing for a text whose spaces are all in place.
 func Problems(name string, k Text) []string {
 	var out []string
 	if strings.ContainsFunc(name, k.odd) {
@@ -151,11 +132,8 @@ func Problems(name string, k Text) []string {
 	return out
 }
 
-// Visible writes a text with the offending spaces made visible: ␣ for an
-// ordinary space in a run, at an end, before a colon or before the
-// extension, and [U+00A0] for a space that is not the ordinary one, wherever
-// it is. An odd space makes a run with the spaces beside it, so the ordinary
-// one next to it is marked too.
+// Visible shows the offending spaces: ␣ for an ordinary space out of place, [U+00A0] for an odd one wherever it is. An odd space makes a run with its
+// neighbours, which are marked too.
 func Visible(name string, k Text) string {
 	runes, plain := []rune(name), []rune(k.plain(name))
 	extAt := -1
@@ -193,11 +171,7 @@ func Visible(name string, k Text) string {
 	return b.String()
 }
 
-// Fixed is a text with its spaces put right: an odd space made an ordinary
-// one, runs made one, the ends and the space before a colon or the extension
-// dropped. It is "" when nothing is left of the name but spaces, or its
-// extension: there is no name to suggest, and ".mkv" for " .mkv" would be a
-// file the next reader takes for a hidden one.
+// Fixed is a text with its spaces put right; "" when nothing is left but spaces or an extension, since ".mkv" would read as a hidden file.
 func Fixed(name string, k Text) string {
 	stem, ext := k.plain(name), ""
 	if k == File {
@@ -215,12 +189,8 @@ func Fixed(name string, k Text) string {
 	return stem + ext
 }
 
-// DroppedAt is what a title holds where a name has two spaces in a row,
-// when the words either side of the gap are in the title too: ":" for "Dune
-// Part Two" written with two spaces against "Dune: Part Two", the asterisks
-// of a censored word. "" when the two do not line up, or the title holds
-// nothing there, or more than a few words - which is another name rather
-// than a character a renamer dropped.
+// DroppedAt is what a title holds where a name has two spaces in a row, when the words either side are in the title: ":" for "Dune Part Two" against
+// "Dune: Part Two". "" when they do not line up, or the gap holds more than a few words, which is another name.
 func DroppedAt(name, title string) string {
 	gap := run.FindStringIndex(name)
 	if gap == nil {
@@ -248,9 +218,7 @@ func DroppedAt(name, title string) string {
 	return between
 }
 
-// IndexWord is where word first stands in s as a word of its own, and not
-// inside a longer one ("IV" in "Episode IV", not in "DIVE"); -1 when it does
-// not.
+// IndexWord is where word first stands in s as a word of its own ("IV" in "Episode IV", not in "DIVE"); -1 for nowhere.
 func IndexWord(s, word string) int {
 	for from := 0; from <= len(s)-len(word); {
 		i := strings.Index(s[from:], word)

@@ -1,8 +1,13 @@
 ## Unreleased
 
+### Changed
+
+- `library_list`, `server_info`, `server_sessions`, `server_backups` and `server_backup_create` take no arguments and now refuse one, as every other tool refuses an argument it does not take
+- an address in an error loses its sign-in, its query values and what follows a `#`, so a stored key cannot come back in one
+
 ### Added
 
-- at `ABS_LOG=INFO`, a log line for each call of a tool that changes or deletes something, with passwords and keys blanked
+- at `ABS_LOG=INFO`, a log line for each call of a tool that changes or deletes something, with passwords, keys, and the sign-in and query values of any address blanked
 - a call refused for an argument the tool does not take says which arguments it does take
 
 ## 0.7.0 (2026-10-09)
