@@ -1,0 +1,46 @@
+# Configuration for typos (https://github.com/crate-ci/typos), run by `make typos` and
+# .github/workflows/typos.yaml. It checks every file type and splits identifiers, so misspelled
+# function and variable names are caught as well as prose.
+#
+# locale is "en" (accept both UK and US spellings): our own text is Canadian English, which takes
+# -ize like the US but -our/-re like the UK, and names mirroring the Audiobookshelf API are American.
+
+[files]
+ignore-hidden = false # the default skips dotfiles, which would leave .github/ workflows unchecked
+extend-exclude = [
+  ".git/",
+  ".idea/",
+  ".tools/bin/", # gitignored tool installs (make tools)
+  ".tools/npm/",
+  ".tools/venv/",
+  "**/vendor/",
+  "**/go.mod", # commit hashes in pinned versions
+  "**/go.sum",
+  "**/testdata/", # recorded server answers and podcast feeds, other people's words
+]
+
+[default]
+locale = "en"
+extend-ignore-re = [
+  '"audibel(\.ca)?', # tests that a misspelt provider is refused
+  '"titel"',          # tests that a misspelt sort is refused
+  '"path-serie"',     # tests that a misspelt rule is refused
+  'Theif of Time',    # a misspelt file name the path audit has to find
+  'Wil Wheaton',      # a narrator
+  'B0DESTROYR',       # a made-up store id
+  'ANDed',
+  '[./]opf\b',       # the ebook package file and its namespace
+]
+
+[default.extend-words]
+# audio container and box names
+caf = "caf"
+trak = "trak"
+# language codes
+fre = "fre"
+# short variable names
+fo = "fo"
+sur = "sur"
+# linter names
+decorder = "decorder"
+importas = "importas"

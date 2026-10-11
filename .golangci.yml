@@ -16,6 +16,7 @@ issues:
   max-same-issues: 0
 
 linters:
+  default: none # only the linters listed below run; without this golangci-lint adds its own standard set
   enable:
     - asasalint                 # check for pass []any as any in variadic func(...any)
     - asciicheck                # ensure code does not contain non-ASCII identifiers
@@ -167,6 +168,8 @@ linters:
       checks: ["all"] # adds the ST* style checks, off by default
     nakedret:
       max-func-lines: 30
+    nolintlint:
+      require-specific: true # a nolint that names no linter switches off every linter for the code below it
     misspell:
       # no locale: this codebase is Canadian English, which takes -ize like the
       # US but -our/-re like the UK, and misspell has no locale that matches.
