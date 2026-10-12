@@ -48,7 +48,7 @@ type Options struct {
 	// SecretHeaders are headers a trace must not show, beside Authorization, Proxy-Authorization, Cookie and Set-Cookie.
 	SecretHeaders []string
 	// SecretNames are names a trace must not show the value of wherever they appear, compared without case, beside those hidden unasked (SecretName):
-	// an API's "pass" or "pin" needs naming, proxyPassword does not.
+	// an API's "pass" or "pin" needs naming, proxyPassword and passwordConfirmation do not.
 	SecretNames []string
 	// TraceBody is how much of a body a trace prints: 0 is DefaultTraceBody, negative prints none. No more is ever read for it.
 	TraceBody int
@@ -130,15 +130,18 @@ func retrySafe(req *http.Request) bool {
 	return false
 }
 
+// resent is how many times a request has been sent again; it travels with the request, so everything that retries it counts on the one.
+type resent struct{ n int }
+
 // counted gives a request a count of retries unless it has one: Fetch starts it, so its re-reads and the transport's retries share one limit. A
 // redirect followed on the way is not a retry and costs nothing.
-func counted(req *http.Request) (with *http.Request, again *int) {
-	if n, ok := req.Context().Value(triesKey).(*int); ok {
-		return req, n
+func counted(req *http.Request) (with *http.Request, again *resent) {
+	if r, ok := req.Context().Value(triesKey).(*resent); ok && r != nil {
+		return req, r
 	}
-	n := new(int)
+	r := new(resent)
 
-	return req.WithContext(context.WithValue(req.Context(), triesKey, n)), n
+	return req.WithContext(context.WithValue(req.Context(), triesKey, r)), r
 }
 
 // Tries is how many times the request behind an answer was sent: 1 for first time, 0 for a request no client of this package sent.
@@ -146,8 +149,8 @@ func Tries(resp *http.Response) int {
 	if resp == nil || resp.Request == nil {
 		return 0
 	}
-	if n, ok := resp.Request.Context().Value(triesKey).(*int); ok {
-		return *n + 1
+	if r, ok := resp.Request.Context().Value(triesKey).(*resent); ok && r != nil {
+		return r.n + 1
 	}
 
 	return 0
@@ -201,13 +204,13 @@ func (c *Client) Fetch(req *http.Request, limit int64) (*http.Response, []byte, 
 			return resp, body, nil
 		}
 
-		if *again >= tries-1 || !retrySafe(req) || !c.o.Retry.failed(err) || req.Context().Err() != nil || !rewind(req) {
-			return resp, nil, tried(fmt.Errorf("reading the answer: %w", err), *again+1)
+		if again.n >= tries-1 || !retrySafe(req) || !c.o.Retry.failed(err) || req.Context().Err() != nil || !rewind(req) {
+			return resp, nil, tried(fmt.Errorf("reading the answer: %w", err), again.n+1)
 		}
 
-		wait := c.o.Retry.wait(*again)
-		c.debugf("%s answer stopped part way (try %d of %d), asking again in %s: %v", c.o.Name, *again+1, tries, wait, err)
-		*again++
+		wait := c.o.Retry.wait(again.n)
+		c.debugf("%s answer stopped part way (try %d of %d), asking again in %s: %v", c.o.Name, again.n+1, tries, wait, err)
+		again.n++
 		if !sleep(req.Context(), wait) {
 			return resp, nil, errors.Join(req.Context().Err(), err)
 		}
@@ -302,13 +305,13 @@ func (t *RetryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	tries := t.o.Retry.tries()
 	for {
 		resp, err := t.transport.RoundTrip(req)
-		left := *again < tries-1
+		left := again.n < tries-1
 		if err != nil {
 			// the write may have landed and only the answer been lost, so only a request safe to repeat goes again
 			if left && safe && t.o.Retry.failed(err) && req.Context().Err() == nil && rewind(req) {
-				wait := t.o.Retry.wait(*again)
-				t.debugf("%s request failed (try %d of %d), retrying in %s: %v", t.o.Name, *again+1, tries, wait, err)
-				*again++
+				wait := t.o.Retry.wait(again.n)
+				t.debugf("%s request failed (try %d of %d), retrying in %s: %v", t.o.Name, again.n+1, tries, wait, err)
+				again.n++
 				if !sleep(req.Context(), wait) {
 					return nil, errors.Join(req.Context().Err(), err)
 				}
@@ -316,20 +319,20 @@ func (t *RetryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 				continue
 			}
 
-			return nil, tried(err, *again+1)
+			return nil, tried(err, again.n+1)
 		}
 
 		// a 429 was refused before it was acted on, so anything may retry it; a server error leaves a write's fate unknown
 		if resp.StatusCode == http.StatusTooManyRequests || (safe && t.o.Retry.status(resp.StatusCode)) {
 			if left && rewind(req) {
-				wait := t.o.Retry.wait(*again)
+				wait := t.o.Retry.wait(again.n)
 				if resp.StatusCode == http.StatusTooManyRequests {
 					if ra, ok := retryAfter(resp.Header.Get("Retry-After"), time.Now()); ok {
 						wait = ra
 					}
 				}
-				t.debugf("%s got status %d (try %d of %d), retrying in %s", t.o.Name, resp.StatusCode, *again+1, tries, wait)
-				*again++
+				t.debugf("%s got status %d (try %d of %d), retrying in %s", t.o.Name, resp.StatusCode, again.n+1, tries, wait)
+				again.n++
 				_ = resp.Body.Close()
 				if !sleep(req.Context(), wait) {
 					return nil, req.Context().Err()

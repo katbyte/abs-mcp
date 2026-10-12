@@ -22,9 +22,9 @@ GOLANGCI_LINT=$(TOOLS_BIN)/golangci-lint
 # cannot bump them): shellcheck, typos and zizmor are static binaries downloaded from their github
 # releases, yamllint is pip installed into a repo-local venv and markdownlint-cli2 is npm installed
 # into a repo-local prefix. all rebuild when this makefile changes.
-MARKDOWNLINT_CLI2_VERSION=0.23.2
+MARKDOWNLINT_CLI2_VERSION=0.23.3
 SHELLCHECK_VERSION=v0.11.0
-TYPOS_VERSION=v1.50.1
+TYPOS_VERSION=v1.51.1
 YAMLLINT_VERSION=1.38.0
 ZIZMOR_VERSION=v1.30.1
 MARKDOWNLINT=$(TOOLS_BIN)/markdownlint-cli2

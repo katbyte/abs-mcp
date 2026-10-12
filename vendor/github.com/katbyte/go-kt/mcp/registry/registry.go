@@ -614,7 +614,7 @@ func (r *Registry) calls(tools map[string]pending) mcp.Middleware {
 func hideAddresses(res *mcp.CallToolResult) {
 	for i, c := range res.Content {
 		text, ok := c.(*mcp.TextContent)
-		if !ok {
+		if !ok || text == nil {
 			continue
 		}
 

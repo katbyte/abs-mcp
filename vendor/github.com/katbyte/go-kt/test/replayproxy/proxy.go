@@ -161,7 +161,6 @@ func New(opts Options) (*Proxy, error) {
 		fresh:      map[string]bool{},
 		upstream: &http.Transport{
 			Proxy:                 nil, // go straight out; we are the proxy
-			ForceAttemptHTTP2:     false,
 			MaxIdleConns:          10,
 			IdleConnTimeout:       30 * time.Second,
 			TLSHandshakeTimeout:   20 * time.Second,

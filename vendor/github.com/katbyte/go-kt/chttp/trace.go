@@ -23,19 +23,28 @@ const redacted = "REDACTED"
 // secretHeaders are the headers a credential travels in whatever the API.
 var secretHeaders = []string{"Authorization", "Proxy-Authorization", "Cookie", "Set-Cookie"}
 
-// secretEndings are how a credential's name ends, whatever is in front: primaryNodePassword, refresh_token, TmdbApiKey. Matching the ending means a
-// name nobody listed is still hidden; the price is a page token hidden too.
-var secretEndings = []string{"password", "passphrase", "passkey", "secret", "token", "cookie", "apikey", "api_key", "privatekey", "private_key"}
+// secretWords make a name a credential's wherever they sit in it: primaryNodePassword, passwordConfirmation, clientSecretValue. The price is a
+// harmless name with one of them in it, passwordPolicy, hidden too.
+var secretWords = []string{"password", "passphrase", "secret"}
 
-// SecretName reports whether a name holds a credential, by the rule a trace hides one by: a common credential parameter, one of also, or a name
-// ending password, passphrase, passkey, secret, token, cookie, apikey, api_key, privatekey or private_key, in any case.
+// secretEndings are how a credential's name ends, whatever is in front: refresh_token, TmdbApiKey. Only the ending is matched, since maxTokens and
+// cookiePolicy hold no credential; the price is a page token hidden too.
+var secretEndings = []string{"passkey", "token", "cookie", "apikey", "api_key", "privatekey", "private_key"}
+
+// SecretName reports whether a name holds a credential, by the rule a trace hides one by: a common credential parameter, one of also, a name with
+// password, passphrase or secret anywhere in it, or one ending passkey, token, cookie, apikey, api_key, privatekey or private_key, in any case.
 func SecretName(name string, also ...string) bool {
 	name = strings.ToLower(name)
 	if slices.Contains(credentialParams, name) || slices.ContainsFunc(also, func(a string) bool { return strings.EqualFold(a, name) }) {
 		return true
 	}
 
-	return slices.ContainsFunc(secretEndings, func(ending string) bool { return strings.HasSuffix(name, ending) })
+	return reads(name)
+}
+
+// reads reports whether a lower-case name reads as a credential's, by a word in it or by how it ends.
+func reads(name string) bool {
+	return slices.ContainsFunc(secretWords, func(word string) bool { return strings.Contains(name, word) }) || slices.ContainsFunc(secretEndings, func(ending string) bool { return strings.HasSuffix(name, ending) })
 }
 
 // defaultSecrets is what is hidden when nothing more is named.
@@ -71,12 +80,12 @@ func newSecrets(o Options) secrets {
 		s.names = append(s.names, strings.ToLower(n))
 	}
 
-	// a field with one of the names, or one ending as a credential's does
-	named := make([]string, 0, len(s.names)+1)
+	// a field with one of the names, or one that reads as a credential's by a word in it or by how it ends
+	named := make([]string, 0, len(s.names)+2)
 	for _, n := range s.names {
 		named = append(named, regexp.QuoteMeta(n))
 	}
-	named = append(named, `[^"\\]*(?:`+strings.Join(secretEndings, "|")+`)`)
+	named = append(named, `[^"\\]*(?:`+strings.Join(secretWords, "|")+`)[^"\\]*`, `[^"\\]*(?:`+strings.Join(secretEndings, "|")+`)`)
 	s.fields = regexp.MustCompile(`(?i)("(?:` + strings.Join(named, "|") + `)"\s*:\s*)"(?:[^"\\]|\\.)*"?`)
 
 	return s
@@ -90,7 +99,7 @@ func (s secrets) header(name string) bool {
 func (s secrets) name(name string) bool {
 	name = strings.ToLower(name)
 
-	return slices.Contains(s.names, name) || slices.ContainsFunc(secretEndings, func(ending string) bool { return strings.HasSuffix(name, ending) })
+	return slices.Contains(s.names, name) || reads(name)
 }
 
 // query is a query string or form with its credentials blanked.
