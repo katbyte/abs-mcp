@@ -64,17 +64,19 @@ jobs:
               - vendor
 
       # autobuild only reaches what `go build ./...` builds, which leaves the
-      # integration/ and acceptance/ suites out entirely: every file there is
-      # behind //go:build integration, so `go list ./...` does not even report
+      # two suites under acceptance/ out entirely: every file there is
+      # behind //go:build acceptance, so `go list ./...` does not even report
       # the packages, and CodeQL reported "Go files were found but not
       # processed" for 25 of the repository's 66 Go files. Compiling the test
-      # binaries and throwing them away puts those in front of the extractor.
+      # binaries and throwing them away puts those in front of the extractor,
+      # and the same goes for the calibration test behind its own tag.
       - name: Build
         if: matrix.language == 'go'
         run: |
           go build ./...
-          go test -c -o /dev/null -tags integration ./integration/
-          go test -c -o /dev/null -tags integration ./acceptance/
+          go test -c -o /dev/null -tags acceptance ./acceptance/abs/
+          go test -c -o /dev/null -tags acceptance ./acceptance/tools/
+          go test -c -o /dev/null -tags calibration ./tools/
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1

@@ -57,7 +57,7 @@ jobs:
             echo "## coverage: ${pct}%"
             echo
             echo '```'
-            go tool covdata percent -i=.coverage/unit,.coverage/integration,.coverage/acceptance
+            go tool covdata percent -i=.coverage/unit,.coverage/sdk,.coverage/tools
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 

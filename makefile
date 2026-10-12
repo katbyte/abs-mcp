@@ -187,21 +187,21 @@ depscheck: ## Check that go.mod/go.sum and vendor/ are in sync
 test: build ## Run the unit tests, with the race detector
 	go test -race ./... -timeout ${TEST_TIMEOUT}
 
-test-integration: ## Run the SDK tests (sdk/abs shapes) against an already-running server
+test-sdk: ## Run the SDK tests (sdk/abs shapes) against an already-running server
 	@[ -n "${ABS_SERVER}" ] && [ -n "${ABS_TOKEN}" ] || \
 		(echo 'ABS_SERVER and ABS_TOKEN must be set; or use "make testacc"'; exit 1)
-	go test -tags integration -count=1 ./integration/... -timeout ${TEST_TIMEOUT} -v
+	go test -tags acceptance -count=1 ./acceptance/abs/... -timeout ${TEST_TIMEOUT} -v
 
-test-acceptance: ## Run the tool tests (behaviour, audits, providers) against an already-running server
+test-tools: ## Run the tool tests (behaviour, audits, providers) against an already-running server
 	@[ -n "${ABS_SERVER}" ] && [ -n "${ABS_TOKEN}" ] || \
 		(echo 'ABS_SERVER and ABS_TOKEN must be set; or use "make testacc"'; exit 1)
-	go test -tags integration -count=1 ./acceptance/... -timeout ${TEST_TIMEOUT} -v
+	go test -tags acceptance -count=1 ./acceptance/tools/... -timeout ${TEST_TIMEOUT} -v
 
 # each suite gets its own container and provider proxy port: the SDK tests
 # create and delete libraries of their own, which would trample the tool
 # suite's fixtures, and the two can then run side by side
-testacc-integration: ## SDK tests in a throwaway container
-	@echo "==> integration (SDK) on port 13379..."
+testacc-sdk: ## SDK tests in a throwaway container
+	@echo "==> acceptance: sdk on port 13379..."
 	@set -e; \
 		ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_PORT=13379 ABS_TEST_PROXY_PORT=18180 ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk \
 			.scripts/abs-testenv.sh up | grep '^export' > .testenv-sdk.sh; \
@@ -209,22 +209,22 @@ testacc-integration: ## SDK tests in a throwaway container
 			ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk .scripts/abs-testenv.sh down; \
 			rm -f .testenv-sdk.sh; exit $$st' EXIT; \
 		. ./.testenv-sdk.sh; \
-		go test -tags integration -count=1 ./integration/... -timeout ${TEST_TIMEOUT} -v
+		go test -tags acceptance -count=1 ./acceptance/abs/... -timeout ${TEST_TIMEOUT} -v
 
-testacc-acceptance: ## Tool tests in a throwaway container
-	@echo "==> acceptance (tools) on port 13378..."
+testacc-tools: ## Tool tests in a throwaway container
+	@echo "==> acceptance: tools on port 13378..."
 	@set -e; \
 		.scripts/abs-testenv.sh up | grep '^export' > .testenv.sh; \
 		trap 'st=$$?; [ $$st -eq 0 ] || docker logs abs-mcp-test 2>&1 | tail -60; \
 			.scripts/abs-testenv.sh down; rm -f .testenv.sh; exit $$st' EXIT; \
 		. ./.testenv.sh; \
-		go test -tags integration -count=1 ./acceptance/... -timeout ${TEST_TIMEOUT} -v
+		go test -tags acceptance -count=1 ./acceptance/tools/... -timeout ${TEST_TIMEOUT} -v
 
-testacc: testacc-integration testacc-acceptance ## Run both live suites, each in its own container
+testacc: testacc-sdk testacc-tools ## Run both live suites, each in its own container
 
 # Coverage has to span all three suites or it lies: the unit tests alone report
 # around 40% for tools/, because almost everything real happens in the live
-# suites behind the integration tag. Each writes binary coverage into its own
+# suites behind the acceptance tag. Each writes binary coverage into its own
 # directory and covdata merges them, which is stdlib tooling rather than a
 # third-party merger.
 COVERDIR?=.coverage
@@ -232,33 +232,33 @@ COVERPKG=./tools/...,./lib/...,./sdk/...,./cli/...
 
 cover: ## Run every suite with coverage and report the total
 	@rm -rf $(COVERDIR)
-	@mkdir -p $(COVERDIR)/unit $(COVERDIR)/integration $(COVERDIR)/acceptance
+	@mkdir -p $(COVERDIR)/unit $(COVERDIR)/sdk $(COVERDIR)/tools
 	@echo "==> unit..."
 	@go test -count=1 -coverpkg=$(COVERPKG) ./tools/ ./cli/ ./lib/... ./sdk/... \
 		-args -test.gocoverdir=$(CURDIR)/$(COVERDIR)/unit >/dev/null
-	@echo "==> integration (SDK) with coverage..."
+	@echo "==> acceptance: sdk with coverage..."
 	@set -e; \
 		ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_PORT=13379 ABS_TEST_PROXY_PORT=18180 ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk \
 			.scripts/abs-testenv.sh up | grep '^export' > .testenv-sdk.sh; \
 		trap 'st=$$?; ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk \
 			.scripts/abs-testenv.sh down; rm -f .testenv-sdk.sh; exit $$st' EXIT; \
 		. ./.testenv-sdk.sh; \
-		go test -tags integration -count=1 -coverpkg=$(COVERPKG) ./integration/... \
-			-timeout $(TEST_TIMEOUT) -args -test.gocoverdir=$(CURDIR)/$(COVERDIR)/integration
-	@echo "==> acceptance (tools) with coverage..."
+		go test -tags acceptance -count=1 -coverpkg=$(COVERPKG) ./acceptance/abs/... \
+			-timeout $(TEST_TIMEOUT) -args -test.gocoverdir=$(CURDIR)/$(COVERDIR)/sdk
+	@echo "==> acceptance: tools with coverage..."
 	@set -e; \
 		.scripts/abs-testenv.sh up | grep '^export' > .testenv.sh; \
 		trap 'st=$$?; .scripts/abs-testenv.sh down; rm -f .testenv.sh; exit $$st' EXIT; \
 		. ./.testenv.sh; \
-		go test -tags integration -count=1 -coverpkg=$(COVERPKG) ./acceptance/... \
-			-timeout $(TEST_TIMEOUT) -args -test.gocoverdir=$(CURDIR)/$(COVERDIR)/acceptance
+		go test -tags acceptance -count=1 -coverpkg=$(COVERPKG) ./acceptance/tools/... \
+			-timeout $(TEST_TIMEOUT) -args -test.gocoverdir=$(CURDIR)/$(COVERDIR)/tools
 	@go tool covdata textfmt \
-		-i=$(COVERDIR)/unit,$(COVERDIR)/integration,$(COVERDIR)/acceptance \
+		-i=$(COVERDIR)/unit,$(COVERDIR)/sdk,$(COVERDIR)/tools \
 		-o=$(COVERDIR)/coverage.out
 	@echo
 	@go tool cover -func=$(COVERDIR)/coverage.out | tail -1
 	@echo "==> per package"
-	@go tool covdata percent -i=$(COVERDIR)/unit,$(COVERDIR)/integration,$(COVERDIR)/acceptance
+	@go tool covdata percent -i=$(COVERDIR)/unit,$(COVERDIR)/sdk,$(COVERDIR)/tools
 
 cover-html: cover ## Run every suite with coverage and open the HTML report
 	@go tool cover -html=$(COVERDIR)/coverage.out
@@ -272,7 +272,7 @@ record-sdk: ## Re-record the SDK suite's provider cassettes against the real pro
 			.scripts/abs-testenv.sh up | grep '^export' > .testenv-sdk.sh; \
 		trap 'ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk .scripts/abs-testenv.sh down; rm -f .testenv-sdk.sh' EXIT; \
 		. ./.testenv-sdk.sh; \
-		ABS_TEST_RECORD=all go test -tags integration -count=1 ./integration/... -timeout ${TEST_TIMEOUT} -v
+		ABS_TEST_RECORD=all go test -tags acceptance -count=1 ./acceptance/abs/... -timeout ${TEST_TIMEOUT} -v
 
 record: ## Re-record the provider cassettes against the real Audible/Audnexus/iTunes
 	@echo "==> recording against the real providers (this hits the network)..."
@@ -280,7 +280,7 @@ record: ## Re-record the provider cassettes against the real Audible/Audnexus/iT
 		.scripts/abs-testenv.sh up | grep '^export' > .testenv.sh; \
 		trap '.scripts/abs-testenv.sh down; rm -f .testenv.sh' EXIT; \
 		. ./.testenv.sh; \
-		ABS_TEST_RECORD=all go test -tags integration -count=1 ./acceptance/... -timeout ${TEST_TIMEOUT} -v
+		ABS_TEST_RECORD=all go test -tags acceptance -count=1 ./acceptance/tools/... -timeout ${TEST_TIMEOUT} -v
 
 record-check: ## Check both suites' provider cassettes still match the real APIs, without rewriting them
 	@echo "==> verifying cassettes against the real providers (this hits the network)..."
@@ -288,13 +288,13 @@ record-check: ## Check both suites' provider cassettes still match the real APIs
 		.scripts/abs-testenv.sh up | grep '^export' > .testenv.sh; \
 		trap '.scripts/abs-testenv.sh down; rm -f .testenv.sh' EXIT; \
 		. ./.testenv.sh; \
-		ABS_TEST_VERIFY=1 go test -tags integration -count=1 ./acceptance/... -timeout ${TEST_TIMEOUT}
+		ABS_TEST_VERIFY=1 go test -tags acceptance -count=1 ./acceptance/tools/... -timeout ${TEST_TIMEOUT}
 	@set -e; \
 		ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_PORT=13379 ABS_TEST_PROXY_PORT=18180 ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk \
 			.scripts/abs-testenv.sh up | grep '^export' > .testenv-sdk.sh; \
 		trap 'ABS_TEST_CONTAINER=abs-mcp-sdk ABS_TEST_DATA=$${HOME}/.cache/abs-mcp/sdk .scripts/abs-testenv.sh down; rm -f .testenv-sdk.sh' EXIT; \
 		. ./.testenv-sdk.sh; \
-		ABS_TEST_VERIFY=1 go test -tags integration -count=1 ./integration/... -timeout ${TEST_TIMEOUT}
+		ABS_TEST_VERIFY=1 go test -tags acceptance -count=1 ./acceptance/abs/... -timeout ${TEST_TIMEOUT}
 
 testenv-up: ## Start and seed a throwaway Audiobookshelf container
 	@.scripts/abs-testenv.sh up
@@ -305,6 +305,6 @@ testenv-down: ## Remove the throwaway Audiobookshelf container
 apicheck: ## Report how much of the Audiobookshelf API sdk/abs covers
 	@python3 .scripts/apicheck.py --list
 
-check-all: build test testacc lint actionlint yamllint shellcheck typos markdownlint depscheck apicheck ## Run build + tests (incl. integration) + all linters + depscheck
+check-all: build test testacc lint actionlint yamllint shellcheck typos markdownlint depscheck apicheck ## Run build + tests (incl. the live suites) + all linters + depscheck
 
-.PHONY: default all help fmt goimports build docker lint lint-fix actionlint yamllint shellcheck zizmor typos typos-fix markdownlint depscheck check-all install tools test test-integration test-acceptance testacc testacc-integration testacc-acceptance cover cover-html record record-sdk record-check testenv-up testenv-down apicheck
+.PHONY: default all help fmt goimports build docker lint lint-fix actionlint yamllint shellcheck zizmor typos typos-fix markdownlint depscheck check-all install tools test test-sdk test-tools testacc testacc-sdk testacc-tools cover cover-html record record-sdk record-check testenv-up testenv-down apicheck

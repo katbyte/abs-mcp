@@ -1,0 +1,20 @@
+//go:build acceptance
+
+// Package tools_test covers every tool against a real Audiobookshelf running
+// in Docker - the API wrappers and the audits alike - so response shapes,
+// filter encoding and permissions are checked against the thing abs-mcp
+// actually talks to rather than a stub.
+//
+// Fixtures are built through the tools themselves (library_create,
+// library_scan, item_edit), so the setup is part of the coverage.
+//
+//	make testacc                       # start a container, run these, tear it down
+//
+//	eval "$(.scripts/abs-testenv.sh up)"  # or drive it by hand
+//	go test -tags acceptance ./acceptance/tools/...
+//	.scripts/abs-testenv.sh down
+package tools_test
+
+import "testing"
+
+func TestMain(m *testing.M) { runSuite(m) }

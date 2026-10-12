@@ -287,7 +287,7 @@ func TestStatusErrorNamesTheKeyOn401(t *testing.T) {
 func TestEveryMethodHasALiveTest(t *testing.T) {
 	t.Parallel()
 
-	const suite = "../../integration"
+	const suite = "../../acceptance/abs"
 	files, err := filepath.Glob(filepath.Join(suite, "*_test.go"))
 	if err != nil || len(files) == 0 {
 		t.Fatalf("no live tests found in %s: %v", suite, err)

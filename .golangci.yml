@@ -6,10 +6,12 @@ version: "2"
 run:
   timeout: 60m
   modules-download-mode: vendor
-  # the two live suites (acceptance/, integration/) are behind this tag; without
-  # it they are never compiled, so never linted
+  # every test file is linted: the two live suites (acceptance/abs, acceptance/tools) are behind the first
+  # tag and the by-ear calibration (tools/calibration_test.go) behind the second, and a file behind a tag
+  # that is not listed here is never compiled, so never linted
   build-tags:
-    - integration
+    - acceptance
+    - calibration
 
 issues:
   max-issues-per-linter: 0
@@ -86,29 +88,31 @@ linters:
           - goconst
       # tool schemas, filter groups, audit check names and API query keys repeat the same short
       # words (title, series, genres, include...) by design; constants would only add indirection
-      - path: '(tools|sdk/abs|acceptance|integration)/.*\.go'
+      - path: '(tools|sdk/abs|acceptance)/.*\.go'
         linters:
           - goconst
       # the live suites share one server and its seeded libraries, so their tests run one after another;
       # the calibration is one long run over a corpus on disk
-      - path: '(acceptance|integration)/.*_test\.go|tools/calibration_test\.go'
+      - path: 'acceptance/.*_test\.go|tools/calibration_test\.go'
         linters:
           - paralleltest
           - tparallel
       # the live suites write the audio a container reads, run ffmpeg over it and call the test server, and
-      # the calibration writes copies of a corpus for ffmpeg to make: world-readable files, and paths and
-      # commands built from test values, are what they are for
-      - path: '(acceptance|integration)/.*_test\.go|tools/calibration_test\.go'
+      # the calibration writes copies of a corpus for ffmpeg to make: world-readable files and folders (G301,
+      # G306), and paths, addresses and commands built from test values (G204, G304, G702, G703, G704), are
+      # what they are for. Every other gosec rule applies to them as it does everywhere else
+      - path: 'acceptance/.*_test\.go|tools/calibration_test\.go'
+        text: '^G(204|301|304|306|702|703|704)\b'
         linters:
           - gosec
       # the steps of the fix journey take t and are not helpers: marked as helpers, a failure would
       # name the line that ran the step rather than the line in it that failed
-      - path: 'acceptance/journey_fix_test\.go'
+      - path: 'acceptance/tools/journey_fix_test\.go'
         linters:
           - thelper
       # runSuite is the acceptance suite's TestMain, kept beside the rest of the harness: it cleans up
       # and then exits with the suite's code, as redundant-test-main-exit below allows a TestMain
-      - path: 'acceptance/harness_test\.go'
+      - path: 'acceptance/tools/harness_test\.go'
         text: 'deep-exit'
         linters:
           - revive

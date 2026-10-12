@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 #
 # Bring up a throwaway Audiobookshelf in Docker, seed it with a known catalogue,
-# and print the environment the integration tests need.
+# and print the environment the acceptance tests need.
 #
 #   eval "$(.scripts/abs-testenv.sh up)"   # start, seed, export ABS_SERVER/ABS_TOKEN
 #   .scripts/abs-testenv.sh down           # stop and remove everything
 #
 # This script only does what abs-mcp cannot: run the container, create the root
 # user, mint an API key, and lay the audio out on disk. The libraries, the scan
-# and the metadata are all the integration tests' job, through library_create,
+# and the metadata are all the acceptance tests' job, through library_create,
 # library_scan and item_edit, so those tools are exercised rather than bypassed.
 #
 # The container is pointed at the record/replay proxy the tests run (go-kt's
@@ -47,7 +47,7 @@ api() {
 }
 
 # title|author - the on-disk layout only. Series, tags and genres are seeded by
-# the integration tests through item_edit, and the scan is driven by
+# the acceptance tests through item_edit, and the scan is driven by
 # library_scan, so those tools are exercised rather than bypassed.
 FICTION='Foundation|Isaac Asimov
 Foundation and Empire|Isaac Asimov
