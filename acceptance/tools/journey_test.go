@@ -26,7 +26,7 @@ import (
 
 	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/abs-mcp/tools"
-	acc "github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/mcp/acctest"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -98,9 +98,9 @@ func adminClient(t *testing.T) *abs.Client {
 func libraryID(t *testing.T, name string) string {
 	t.Helper()
 
-	for _, l := range acc.Rows(t, suite.Call(t, "library_list", nil)["libraries"], "libraries") {
+	for _, l := range acctest.Rows(t, suite.Call(t, "library_list", nil)["libraries"], "libraries") {
 		if l["name"] == name {
-			return acc.Str(l["id"])
+			return acctest.Str(l["id"])
 		}
 	}
 	t.Fatalf("no library named %s", name)
@@ -112,7 +112,7 @@ func libraryID(t *testing.T, name string) string {
 func itemID(t *testing.T, library, title string) string {
 	t.Helper()
 
-	id := acc.Str(suite.Call(t, "item_get", map[string]any{"library": library, "item": title})["id"])
+	id := acctest.Str(suite.Call(t, "item_get", map[string]any{"library": library, "item": title})["id"])
 	if id == "" {
 		t.Fatalf("no id for %s in %s", title, library)
 	}
@@ -142,7 +142,7 @@ func waitIdle(t *testing.T) {
 
 	for range 60 {
 		running := 0
-		for _, task := range acc.Rows(t, suite.Call(t, "server_tasks", nil)["tasks"], "tasks") {
+		for _, task := range acctest.Rows(t, suite.Call(t, "server_tasks", nil)["tasks"], "tasks") {
 			if task["status"] == "running" {
 				running++
 			}
@@ -161,7 +161,7 @@ func waitIdle(t *testing.T) {
 // the coverage check wants is every tool answering the harness's session.
 type userSession struct {
 	ID, Name, Token string
-	suite           *acc.Suite
+	suite           *acctest.Suite
 }
 
 // call invokes a tool as this user.
@@ -240,7 +240,7 @@ func newUserWith(t *testing.T, username string, create abs.UserCreate, opts tool
 	if _, err := tools.RegisterAll(srv, client, opts); err != nil {
 		t.Fatal(err)
 	}
-	connected, err := acc.Connect(ctx, srv)
+	connected, err := acctest.Connect(ctx, srv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,18 +259,18 @@ func snapshot(t *testing.T) map[string]any {
 	t.Helper()
 
 	snap := map[string]any{}
-	libs := acc.RowsOfAny(object(adminGet(t, "/api/libraries"))["libraries"])
+	libs := acctest.RowsOfAny(object(adminGet(t, "/api/libraries"))["libraries"])
 	snap["libraries"] = libs
 	for _, l := range libs {
 		lib := object(l)
-		id := acc.Str(lib["id"])
-		name := acc.Str(lib["name"])
+		id := acctest.Str(lib["id"])
+		name := acctest.Str(lib["name"])
 
 		listing := object(adminGet(t, "/api/libraries/"+id+"/items?limit=500"))
-		results := acc.RowsOfAny(listing["results"])
+		results := acctest.RowsOfAny(listing["results"])
 		ids := make([]string, 0, len(results))
 		for _, r := range results {
-			ids = append(ids, acc.Str(object(r)["id"]))
+			ids = append(ids, acctest.Str(object(r)["id"]))
 		}
 		slices.Sort(ids)
 		var expanded any = []any{}
@@ -289,9 +289,9 @@ func snapshot(t *testing.T) map[string]any {
 		snap[name+"/playlists"] = adminGet(t, "/api/libraries/"+id+"/playlists")
 		snap[name+"/narrators"] = adminGet(t, "/api/libraries/"+id+"/narrators")
 	}
-	users := acc.RowsOfAny(object(adminGet(t, "/api/users"))["users"])
+	users := acctest.RowsOfAny(object(adminGet(t, "/api/users"))["users"])
 	for _, u := range users {
-		id := acc.Str(object(u)["id"])
+		id := acctest.Str(object(u)["id"])
 		full := object(adminGet(t, "/api/users/"+id))
 		delete(full, "lastSeen")
 		snap["user/"+id] = full
@@ -371,11 +371,11 @@ func TestJourneyLookupsChangeNothing(t *testing.T) {
 	t.Cleanup(func() { suite.Call(t, "collection_delete", map[string]any{"collection": "Zzyzx Lookup Collection"}) })
 	suite.Call(t, "playlist_create", map[string]any{"library": "Fiction", "name": "Zzyzx Lookup Playlist", "entries": []any{map[string]any{"item": "Foundation"}}})
 	t.Cleanup(func() { suite.Call(t, "playlist_delete", map[string]any{"playlist": "Zzyzx Lookup Playlist"}) })
-	episodes := acc.Rows(t, suite.Call(t, "podcast_episodes", map[string]any{"item": "Behind the Bastards"})["episodes"], "episodes")
+	episodes := acctest.Rows(t, suite.Call(t, "podcast_episodes", map[string]any{"item": "Behind the Bastards"})["episodes"], "episodes")
 	if len(episodes) == 0 {
 		t.Fatal("no podcast episode to look at")
 	}
-	episode := acc.Str(episodes[0]["id"])
+	episode := acctest.Str(episodes[0]["id"])
 	waitIdle(t)
 
 	calls := []readCall{
@@ -509,8 +509,8 @@ func TestJourneyEditsDuringAScan(t *testing.T) {
 	}
 
 	ids := map[string]string{}
-	for _, it := range acc.Rows(t, suite.Call(t, "library_items", map[string]any{"library": "Messy", "limit": 100})["items"], "items") {
-		ids[acc.Str(it["path"])] = acc.Str(it["id"])
+	for _, it := range acctest.Rows(t, suite.Call(t, "library_items", map[string]any{"library": "Messy", "limit": 100})["items"], "items") {
+		ids[acctest.Str(it["path"])] = acctest.Str(it["id"])
 	}
 	id := func(relPath string) string {
 		if ids[relPath] == "" {
@@ -553,11 +553,11 @@ func TestJourneyEditsDuringAScan(t *testing.T) {
 
 	// and afterwards, everything is as it was left
 	col := suite.Call(t, "collection_get", map[string]any{"collection": "Zzyzx Scan Shelf"})
-	held := acc.Rows(t, col["items"], "items")
+	held := acctest.Rows(t, col["items"], "items")
 	colIDs, colTitles := make([]string, 0, len(held)), make([]string, 0, len(held))
 	for _, b := range held {
-		colIDs = append(colIDs, acc.Str(b["id"]))
-		colTitles = append(colTitles, acc.Str(b["title"]))
+		colIDs = append(colIDs, acctest.Str(b["id"]))
+		colTitles = append(colTitles, acctest.Str(b["title"]))
 	}
 	// the created book first; a batch add lands in the server's own order,
 	// not the order it was asked in
@@ -565,26 +565,26 @@ func TestJourneyEditsDuringAScan(t *testing.T) {
 		t.Errorf("collection = %v, want Mort, then Eric and Reaper Man", colTitles)
 	}
 	pl := suite.Call(t, "playlist_get", map[string]any{"playlist": "Zzyzx Scan Queue"})
-	entries := acc.Rows(t, pl["entries"], "entries")
+	entries := acctest.Rows(t, pl["entries"], "entries")
 	plIDs := make([]string, 0, len(entries))
 	for _, e := range entries {
-		plIDs = append(plIDs, acc.Str(object(e["item"])["id"]))
+		plIDs = append(plIDs, acctest.Str(object(e["item"])["id"]))
 	}
 	if !slices.Equal(plIDs, []string{witches, rites}) {
 		t.Errorf("playlist = %v, want Witches Abroad then Equal Rites", plIDs)
 	}
 	book := suite.Call(t, "item_get", map[string]any{"item": colour})
-	if tags := acc.Strs(t, book["tags"], "tags"); !slices.Contains(tags, "zzyzx-scan") {
+	if tags := acctest.Strs(t, book["tags"], "tags"); !slices.Contains(tags, "zzyzx-scan") {
 		t.Errorf("tags = %v, want the tag added mid-scan", tags)
 	}
-	if series := acc.Strs(t, book["series"], "series"); !slices.Contains(series, "Zzyzx Scan Saga #1") || !slices.Contains(series, "Discworld #01") {
+	if series := acctest.Strs(t, book["series"], "series"); !slices.Contains(series, "Zzyzx Scan Saga #1") || !slices.Contains(series, "Discworld #01") {
 		t.Errorf("series = %v, want the added series beside Discworld #01", series)
 	}
-	if d := acc.Str(suite.Call(t, "series_get", map[string]any{"library": "Messy", "series": "Discworld"})["description"]); d != "Zzyzx: edited mid-scan" {
+	if d := acctest.Str(suite.Call(t, "series_get", map[string]any{"library": "Messy", "series": "Discworld"})["description"]); d != "Zzyzx: edited mid-scan" {
 		t.Errorf("series description = %q", d)
 	}
 	// the scan re-read every book without re-titling any from its folder
-	if total := acc.Num(t, suite.Call(t, "library_items", map[string]any{"library": "Messy", "limit": 1})["total"], "total"); total != len(messyBooks) {
+	if total := acctest.Num(t, suite.Call(t, "library_items", map[string]any{"library": "Messy", "limit": 1})["total"], "total"); total != len(messyBooks) {
 		t.Errorf("Messy has %d books after the scan, want %d", total, len(messyBooks))
 	}
 	if title := suite.Call(t, "item_get", map[string]any{"item": id("Terry Pratchett/Discworld - 07 - Pyramids")})["title"]; title != "Small Gods" {
@@ -615,18 +615,18 @@ func TestJourneyAuditAllIsEachAudit(t *testing.T) {
 			items := 0
 			for _, l := range libraries {
 				if library == "" || l.Name == library {
-					items += acc.Num(t, suite.Call(t, "library_items", map[string]any{"library": l.Name, "limit": 1})["total"], "total")
+					items += acctest.Num(t, suite.Call(t, "library_items", map[string]any{"library": l.Name, "limit": 1})["total"], "total")
 				}
 			}
-			if scanned := acc.Num(t, all["items_scanned"], "items_scanned"); scanned != items {
+			if scanned := acctest.Num(t, all["items_scanned"], "items_scanned"); scanned != items {
 				t.Errorf("items_scanned = %d, want every item, %d", scanned, items)
 			}
 
 			total := 0
-			for _, row := range acc.Rows(t, all["audits"], "audits") {
-				name := acc.Str(row["audit"])
-				field := acc.Str(row["field"])
-				found := acc.Num(t, row["found"], "found")
+			for _, row := range acctest.Rows(t, all["audits"], "audits") {
+				name := acctest.Str(row["audit"])
+				field := acctest.Str(row["field"])
+				found := acctest.Num(t, row["found"], "found")
 				total += found
 				extra := map[string]any{}
 				if field != "" {
@@ -637,14 +637,14 @@ func TestJourneyAuditAllIsEachAudit(t *testing.T) {
 					t.Errorf("%s %s: audit_all counts %d, the audit alone fails: %v", name, field, found, err)
 					continue
 				}
-				if got := acc.Num(t, out["total_findings"], "total_findings"); got != found {
+				if got := acctest.Num(t, out["total_findings"], "total_findings"); got != found {
 					t.Errorf("%s %s: audit_all says %d, the audit says %d", name, field, found, got)
 				}
 			}
-			if sum := acc.Num(t, all["total_findings"], "total_findings"); sum != total {
+			if sum := acctest.Num(t, all["total_findings"], "total_findings"); sum != total {
 				t.Errorf("total_findings = %d, the rows add up to %d", sum, total)
 			}
-			for _, name := range acc.Strs(t, all["clean"], "clean") {
+			for _, name := range acctest.Strs(t, all["clean"], "clean") {
 				// a clean audit_missing field is listed as "audit_missing <field>"
 				tool, field, _ := strings.Cut(name, " ")
 				extra := map[string]any{}
@@ -656,7 +656,7 @@ func TestJourneyAuditAllIsEachAudit(t *testing.T) {
 					t.Errorf("%s is clean in audit_all, the audit alone fails: %v", name, err)
 					continue
 				}
-				if got := acc.Num(t, out["total_findings"], "total_findings"); got != 0 {
+				if got := acctest.Num(t, out["total_findings"], "total_findings"); got != 0 {
 					t.Errorf("%s is clean in audit_all, the audit finds %d", name, got)
 				}
 			}
@@ -685,10 +685,10 @@ func TestJourneyWritesDoneTwice(t *testing.T) {
 		if p1["progress_id"] != p2["progress_id"] || p1["finished_at"] != p2["finished_at"] {
 			t.Errorf("finishing a finished book changed its record: %v then %v", p1, p2)
 		}
-		if done := acc.BoolOf(suite.Call(t, "user_progress_set", map[string]any{"remove": true, "library": "Fiction", "item": "City of Golden Shadow"})["removed"]); !done {
+		if done := acctest.BoolOf(suite.Call(t, "user_progress_set", map[string]any{"remove": true, "library": "Fiction", "item": "City of Golden Shadow"})["removed"]); !done {
 			t.Error("the first removal removed nothing")
 		}
-		if done := acc.BoolOf(suite.Call(t, "user_progress_set", map[string]any{"remove": true, "library": "Fiction", "item": "City of Golden Shadow"})["removed"]); done {
+		if done := acctest.BoolOf(suite.Call(t, "user_progress_set", map[string]any{"remove": true, "library": "Fiction", "item": "City of Golden Shadow"})["removed"]); done {
 			t.Error("the second removal said it removed something")
 		}
 	})
@@ -698,15 +698,15 @@ func TestJourneyWritesDoneTwice(t *testing.T) {
 		t.Cleanup(func() { suite.Call(t, "collection_delete", map[string]any{"collection": "Zzyzx Twice Shelf"}) })
 
 		out := suite.Call(t, "collection_edit", map[string]any{"collection": "Zzyzx Twice Shelf", "add_items": []any{"Foundation"}})
-		if got := acc.Strs(t, out["already_held"], "already_held"); !slices.Equal(got, []string{"Foundation"}) || out["added"] != nil {
+		if got := acctest.Strs(t, out["already_held"], "already_held"); !slices.Equal(got, []string{"Foundation"}) || out["added"] != nil {
 			t.Errorf("adding a held book: %v", out)
 		}
 		removed := suite.Call(t, "collection_edit", map[string]any{"collection": "Zzyzx Twice Shelf", "remove_items": []any{"Second Foundation"}})
 		again := suite.Call(t, "collection_edit", map[string]any{"collection": "Zzyzx Twice Shelf", "remove_items": []any{"Second Foundation"}})
-		if !slices.Equal(acc.Strs(t, removed["removed"], "removed"), []string{"Second Foundation"}) || !slices.Equal(acc.Strs(t, again["not_held"], "not_held"), []string{"Second Foundation"}) {
+		if !slices.Equal(acctest.Strs(t, removed["removed"], "removed"), []string{"Second Foundation"}) || !slices.Equal(acctest.Strs(t, again["not_held"], "not_held"), []string{"Second Foundation"}) {
 			t.Errorf("removing twice: %v then %v", removed, again)
 		}
-		if n := len(acc.Rows(t, suite.Call(t, "collection_get", map[string]any{"collection": "Zzyzx Twice Shelf"})["items"], "items")); n != 1 {
+		if n := len(acctest.Rows(t, suite.Call(t, "collection_get", map[string]any{"collection": "Zzyzx Twice Shelf"})["items"], "items")); n != 1 {
 			t.Errorf("the collection holds %d books, want 1", n)
 		}
 	})
@@ -717,18 +717,18 @@ func TestJourneyWritesDoneTwice(t *testing.T) {
 
 		first := suite.Call(t, "playlist_edit", map[string]any{"playlist": "Zzyzx Twice Queue", "add_entries": []any{map[string]any{"item": "Abaddon's Gate"}}})
 		second := suite.Call(t, "playlist_edit", map[string]any{"playlist": "Zzyzx Twice Queue", "add_entries": []any{map[string]any{"item": "Abaddon's Gate"}}})
-		if !slices.Equal(acc.Strs(t, first["added"], "added"), []string{"Abaddon's Gate"}) || !slices.Equal(acc.Strs(t, second["already_held"], "already_held"), []string{"Abaddon's Gate"}) {
+		if !slices.Equal(acctest.Strs(t, first["added"], "added"), []string{"Abaddon's Gate"}) || !slices.Equal(acctest.Strs(t, second["already_held"], "already_held"), []string{"Abaddon's Gate"}) {
 			t.Errorf("adding twice: %v then %v", first, second)
 		}
-		if n := acc.Num(t, second["entries"], "entries"); n != 3 {
+		if n := acctest.Num(t, second["entries"], "entries"); n != 3 {
 			t.Errorf("entries = %d after the second add, want 3", n)
 		}
 		suite.Call(t, "playlist_edit", map[string]any{"playlist": "Zzyzx Twice Queue", "remove_entries": []any{map[string]any{"item": "Foundation"}}})
 		again := suite.Call(t, "playlist_edit", map[string]any{"playlist": "Zzyzx Twice Queue", "remove_entries": []any{map[string]any{"item": "Foundation"}}})
-		if !slices.Equal(acc.Strs(t, again["not_held"], "not_held"), []string{"Foundation"}) {
+		if !slices.Equal(acctest.Strs(t, again["not_held"], "not_held"), []string{"Foundation"}) {
 			t.Errorf("the second removal: %v", again)
 		}
-		if n := len(acc.Rows(t, suite.Call(t, "playlist_get", map[string]any{"playlist": "Zzyzx Twice Queue"})["entries"], "entries")); n != 2 {
+		if n := len(acctest.Rows(t, suite.Call(t, "playlist_get", map[string]any{"playlist": "Zzyzx Twice Queue"})["entries"], "entries")); n != 2 {
 			t.Errorf("the playlist holds %d entries, want 2", n)
 		}
 	})
@@ -739,17 +739,17 @@ func TestJourneyWritesDoneTwice(t *testing.T) {
 		})
 		for i, want := range []bool{true, false} {
 			out := suite.Call(t, "item_edit", map[string]any{"library": "Fiction", "item": "Foundation", "add_tags": []any{"zzyzx-twice"}, "add_series": []any{"Zzyzx Twice Saga #1"}})
-			if updated := acc.BoolOf(out["updated"]); updated != want {
+			if updated := acctest.BoolOf(out["updated"]); updated != want {
 				t.Errorf("call %d: updated = %v, want %v", i+1, updated, want)
 			}
 		}
 		book := suite.Call(t, "item_get", map[string]any{"library": "Fiction", "item": "Foundation"})
-		tags, series := acc.Strs(t, book["tags"], "tags"), acc.Strs(t, book["series"], "series")
+		tags, series := acctest.Strs(t, book["tags"], "tags"), acctest.Strs(t, book["series"], "series")
 		if countOf(tags, "zzyzx-twice") != 1 || countOf(series, "Zzyzx Twice Saga #1") != 1 {
 			t.Errorf("tags %v, series %v: want each once", tags, series)
 		}
 		out := suite.Call(t, "item_edit", map[string]any{"library": "Fiction", "items": []any{"Foundation"}, "add_tags": []any{"zzyzx-twice"}})
-		if n := acc.Num(t, out["items_updated"], "items_updated"); n != 0 {
+		if n := acctest.Num(t, out["items_updated"], "items_updated"); n != 0 {
 			t.Errorf("item_edit items add_tags of a held tag updated %d", n)
 		}
 	})
@@ -759,14 +759,14 @@ func TestJourneyWritesDoneTwice(t *testing.T) {
 			suite.Call(t, "metadata_rename", map[string]any{"field": "tags", "from": "zzyzx-space-opera", "to": "space-opera"})
 		})
 		first := suite.Call(t, "metadata_rename", map[string]any{"field": "tags", "from": "space-opera", "to": "zzyzx-space-opera"})
-		if n := acc.Num(t, first["items_updated"], "items_updated"); n != 2 {
+		if n := acctest.Num(t, first["items_updated"], "items_updated"); n != 2 {
 			t.Errorf("first rename updated %d, want the 2 Expanse books", n)
 		}
 		second := suite.Call(t, "metadata_rename", map[string]any{"field": "tags", "from": "space-opera", "to": "zzyzx-space-opera"})
-		if n := acc.Num(t, second["items_updated"], "items_updated"); n != 0 {
+		if n := acctest.Num(t, second["items_updated"], "items_updated"); n != 0 {
 			t.Errorf("second rename updated %d, want 0", n)
 		}
-		if tags := acc.Strs(t, suite.Call(t, "server_tags", map[string]any{"kind": "tags"})["tags"], "tags"); slices.Contains(tags, "space-opera") || !slices.Contains(tags, "zzyzx-space-opera") {
+		if tags := acctest.Strs(t, suite.Call(t, "server_tags", map[string]any{"kind": "tags"})["tags"], "tags"); slices.Contains(tags, "space-opera") || !slices.Contains(tags, "zzyzx-space-opera") {
 			t.Errorf("tags after the renames = %v", tags)
 		}
 	})
@@ -777,7 +777,7 @@ func TestJourneyWritesDoneTwice(t *testing.T) {
 		})
 		suite.Call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Leviathan Wakes", "add_bookmarks": []any{map[string]any{"time_s": 0.5, "title": "Zzyzx once"}}})
 		suite.Call(t, "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Leviathan Wakes", "add_bookmarks": []any{map[string]any{"time_s": 0.5, "title": "Zzyzx twice"}}})
-		marks := acc.Rows(t, suite.Call(t, "user_bookmarks", map[string]any{"library": "Fiction", "item": "Leviathan Wakes"})["bookmarks"], "bookmarks")
+		marks := acctest.Rows(t, suite.Call(t, "user_bookmarks", map[string]any{"library": "Fiction", "item": "Leviathan Wakes"})["bookmarks"], "bookmarks")
 		if len(marks) != 1 || marks[0]["title"] != "Zzyzx twice" {
 			t.Errorf("bookmarks = %v, want one, renamed", marks)
 		}
@@ -816,7 +816,7 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 	admin := adminClient(t)
 
 	t.Run("libraries", func(t *testing.T) {
-		for _, l := range acc.Rows(t, suite.Call(t, "library_list", nil)["libraries"], "libraries") {
+		for _, l := range acctest.Rows(t, suite.Call(t, "library_list", nil)["libraries"], "libraries") {
 			byID, byName := suite.Call(t, "library_get", map[string]any{"library": l["id"]}), suite.Call(t, "library_get", map[string]any{"library": l["name"]})
 			if byID["id"] != l["id"] || byName["id"] != l["id"] {
 				t.Errorf("%v: by id %v, by name %v", l["name"], byID["id"], byName["id"])
@@ -826,18 +826,18 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 
 	t.Run("items", func(t *testing.T) {
 		for _, lib := range []string{"Fiction", "Non-Fiction", "Messy"} {
-			listed := acc.Rows(t, suite.Call(t, "library_items", map[string]any{"library": lib, "limit": 100})["items"], "items")
+			listed := acctest.Rows(t, suite.Call(t, "library_items", map[string]any{"library": lib, "limit": 100})["items"], "items")
 			seen := map[string]int{}
 			for _, it := range listed {
-				seen[acc.Str(it["title"])]++
+				seen[acctest.Str(it["title"])]++
 			}
 			for _, it := range listed {
-				title := acc.Str(it["title"])
+				title := acctest.Str(it["title"])
 				if byID := suite.Call(t, "item_get", map[string]any{"item": it["id"]}); byID["id"] != it["id"] {
 					t.Errorf("%s by id = %v", title, byID["id"])
 				}
 				if seen[title] > 1 {
-					if msg := suite.CallErr(t, "item_get", map[string]any{"library": lib, "item": title}); !strings.Contains(msg, acc.Str(it["id"])) {
+					if msg := suite.CallErr(t, "item_get", map[string]any{"library": lib, "item": title}); !strings.Contains(msg, acctest.Str(it["id"])) {
 						t.Errorf("%s is two books; the refusal does not list %v: %s", title, it["id"], msg)
 					}
 					continue
@@ -851,7 +851,7 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 
 	t.Run("authors and series", func(t *testing.T) {
 		for _, lib := range []string{"Fiction", "Messy"} {
-			for _, a := range acc.Rows(t, suite.Call(t, "author_list", map[string]any{"library": lib, "limit": 100})["authors"], "authors") {
+			for _, a := range acctest.Rows(t, suite.Call(t, "author_list", map[string]any{"library": lib, "limit": 100})["authors"], "authors") {
 				if got := suite.Call(t, "author_get", map[string]any{"author": a["id"]}); got["id"] != a["id"] {
 					t.Errorf("author %v by id = %v", a["name"], got["id"])
 				}
@@ -859,7 +859,7 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 					t.Errorf("author %v by name = %v", a["name"], got["id"])
 				}
 			}
-			for _, s := range acc.Rows(t, suite.Call(t, "series_list", map[string]any{"library": lib, "limit": 100})["series"], "series") {
+			for _, s := range acctest.Rows(t, suite.Call(t, "series_list", map[string]any{"library": lib, "limit": 100})["series"], "series") {
 				if got := suite.Call(t, "series_get", map[string]any{"series": s["id"]}); got["id"] != s["id"] {
 					t.Errorf("series %v by id = %v", s["name"], got["id"])
 				}
@@ -878,7 +878,7 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 	t.Run("a series renamed, found by the name it has now", func(t *testing.T) {
 		// the server's filter data keeps a series under its old name for half
 		// an hour after a rename; every lookup by name has to see the new one
-		id := acc.Str(suite.Call(t, "series_get", map[string]any{"library": "Fiction", "series": "Otherland"})["id"])
+		id := acctest.Str(suite.Call(t, "series_get", map[string]any{"library": "Fiction", "series": "Otherland"})["id"])
 		t.Cleanup(func() { suite.Call(t, "series_edit", map[string]any{"series": id, "name": "Otherland"}) })
 
 		suite.Call(t, "series_edit", map[string]any{"library": "Fiction", "series": "Otherland", "name": "Zzyzx Otherland"})
@@ -888,7 +888,7 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 		if msg := suite.CallErr(t, "series_get", map[string]any{"library": "Fiction", "series": "Otherland"}); !strings.Contains(msg, "no series named") {
 			t.Errorf("the old name still resolves: %s", msg)
 		}
-		if total := acc.Num(t, suite.Call(t, "library_items", map[string]any{"library": "Fiction", "filter": "series:Zzyzx Otherland"})["total"], "total"); total != 2 {
+		if total := acctest.Num(t, suite.Call(t, "library_items", map[string]any{"library": "Fiction", "filter": "series:Zzyzx Otherland"})["total"], "total"); total != 2 {
 			t.Errorf("a filter by the new name finds %d books, want 2", total)
 		}
 		names := valuesIn(t, suite.Call(t, "library_filters", map[string]any{"library": "Fiction"})["series"], "series", "name")
@@ -900,7 +900,7 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 	})
 
 	t.Run("users", func(t *testing.T) {
-		for _, u := range acc.Rows(t, suite.Call(t, "user_list", nil)["users"], "users") {
+		for _, u := range acctest.Rows(t, suite.Call(t, "user_list", nil)["users"], "users") {
 			if got := suite.Call(t, "user_get", map[string]any{"user": u["id"]}); got["id"] != u["id"] {
 				t.Errorf("user %v by id = %v", u["username"], got["id"])
 			}
@@ -912,7 +912,7 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 
 	t.Run("podcast episodes", func(t *testing.T) {
 		for _, show := range podcasts {
-			for _, e := range acc.Rows(t, suite.Call(t, "podcast_episodes", map[string]any{"item": show})["episodes"], "episodes") {
+			for _, e := range acctest.Rows(t, suite.Call(t, "podcast_episodes", map[string]any{"item": show})["episodes"], "episodes") {
 				if got := suite.Call(t, "podcast_episode_get", map[string]any{"item": show, "episode": e["id"]}); got["id"] != e["id"] {
 					t.Errorf("%s episode %v by id = %v", show, e["title"], got["id"])
 				}
@@ -922,7 +922,7 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 
 	t.Run("collections sharing a name", func(t *testing.T) {
 		made := suite.Call(t, "collection_create", map[string]any{"library": "Fiction", "name": "Zzyzx Shared", "items": []any{"Foundation"}})
-		madeID := acc.Str(made["id"])
+		madeID := acctest.Str(made["id"])
 		t.Cleanup(func() {
 			eventually(t, "deleting a collection", func() error { return admin.DeleteCollection(context.WithoutCancel(ctx), madeID) })
 		})
@@ -953,8 +953,8 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 	})
 
 	t.Run("a collection renamed, found by the name it has now", func(t *testing.T) {
-		made := acc.Str(suite.Call(t, "collection_create", map[string]any{"library": "Fiction", "name": "Zzyzx Renamed Shelf", "items": []any{"Foundation"}})["id"])
-		other := acc.Str(suite.Call(t, "collection_create", map[string]any{"library": "Fiction", "name": "Zzyzx Other Shelf", "items": []any{"Second Foundation"}})["id"])
+		made := acctest.Str(suite.Call(t, "collection_create", map[string]any{"library": "Fiction", "name": "Zzyzx Renamed Shelf", "items": []any{"Foundation"}})["id"])
+		other := acctest.Str(suite.Call(t, "collection_create", map[string]any{"library": "Fiction", "name": "Zzyzx Other Shelf", "items": []any{"Second Foundation"}})["id"])
 		t.Cleanup(func() {
 			for _, id := range []string{made, other} {
 				eventually(t, "deleting a collection", func() error { return admin.DeleteCollection(context.WithoutCancel(ctx), id) })
@@ -977,7 +977,7 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 
 	t.Run("playlists sharing a name", func(t *testing.T) {
 		made := suite.Call(t, "playlist_create", map[string]any{"library": "Fiction", "name": "Zzyzx Shared List", "entries": []any{map[string]any{"item": "Foundation"}}})
-		madeID := acc.Str(made["id"])
+		madeID := acctest.Str(made["id"])
 		t.Cleanup(func() {
 			eventually(t, "deleting a playlist", func() error { return admin.DeletePlaylist(context.WithoutCancel(ctx), madeID) })
 		})

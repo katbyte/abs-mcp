@@ -13,16 +13,16 @@ import (
 	"strings"
 	"testing"
 
-	acc "github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // unembedded reports whether audit_unembedded lists a book, with its detail.
 func unembedded(t *testing.T, library, id string) (string, bool) {
 	t.Helper()
 
-	for _, f := range acc.Rows(t, suite.Call(t, "audit_unembedded", map[string]any{"library": library})["findings"], "findings") {
+	for _, f := range acctest.Rows(t, suite.Call(t, "audit_unembedded", map[string]any{"library": library})["findings"], "findings") {
 		if f["id"] == id {
-			return acc.Str(f["detail"]), true
+			return acctest.Str(f["detail"]), true
 		}
 	}
 	return "", false
@@ -34,7 +34,7 @@ func embed(t *testing.T, library, id string, args map[string]any) {
 	t.Helper()
 
 	out := suite.Call(t, "item_embed_metadata", args)
-	if embedded := acc.BoolOf(out["embedded"]); !embedded || out["running"] != nil || out["rescan"] == nil {
+	if embedded := acctest.BoolOf(out["embedded"]); !embedded || out["running"] != nil || out["rescan"] == nil {
 		t.Fatalf("item_embed_metadata = %v, want it embedded and read back", out)
 	}
 	if detail, listed := unembedded(t, library, id); listed {
@@ -64,7 +64,7 @@ func TestJourneyEmbeddedIsWhatAScanReads(t *testing.T) {
 	}
 
 	lib := suite.Call(t, "library_create", map[string]any{"name": library, "folders": []any{"/scratch/zzyzx-embed"}})
-	libID := acc.Str(object(lib["library"])["id"])
+	libID := acctest.Str(object(lib["library"])["id"])
 	t.Cleanup(func() {
 		eventually(t, "deleting the embed library", func() error {
 			if err := admin.DeleteLibrary(ctx, libID); err != nil && !isNotFound(err) {
@@ -81,7 +81,7 @@ func TestJourneyEmbeddedIsWhatAScanReads(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitIdle(t)
-	id := acc.Str(acc.Rows(t, suite.Call(t, "library_items", map[string]any{"library": library})["items"], "items")[0]["id"])
+	id := acctest.Str(acctest.Rows(t, suite.Call(t, "library_items", map[string]any{"library": library})["items"], "items")[0]["id"])
 
 	want := map[string]any{
 		"title": "Zzyzx Embedded Title", "author": "Zzyzx Embedded Author", "narrator": "Zzyzx Embedded Reader",
@@ -98,10 +98,10 @@ func TestJourneyEmbeddedIsWhatAScanReads(t *testing.T) {
 				t.Errorf("%s = %v, want %v", k, got[k], v)
 			}
 		}
-		if series := acc.Strs(t, got["series"], "series"); !slices.Equal(series, wantSeries) {
+		if series := acctest.Strs(t, got["series"], "series"); !slices.Equal(series, wantSeries) {
 			t.Errorf("series = %v, want %v", series, wantSeries)
 		}
-		if genres := acc.Strs(t, got["genres"], "genres"); !slices.Equal(genres, wantGenres) {
+		if genres := acctest.Strs(t, got["genres"], "genres"); !slices.Equal(genres, wantGenres) {
 			t.Errorf("genres = %v, want %v", genres, wantGenres)
 		}
 		if chapters := titlesIn(t, got["chapter_list"], "chapter_list"); !slices.Equal(chapters, wantChapters) {
@@ -129,7 +129,7 @@ func TestJourneyEmbeddedIsWhatAScanReads(t *testing.T) {
 			t.Errorf("the backup of the original file: %v", err)
 		}
 		// another rescan of the embedded file changes nothing the journey set
-		if result := acc.Str(suite.Call(t, "item_rescan", map[string]any{"item": id})["result"]); result != "UPTODATE" {
+		if result := acctest.Str(suite.Call(t, "item_rescan", map[string]any{"item": id})["result"]); result != "UPTODATE" {
 			t.Errorf("a rescan straight after the embed's own = %s, want UPTODATE", result)
 		}
 		check(t, id)
@@ -155,7 +155,7 @@ func TestJourneyEmbeddedIsWhatAScanReads(t *testing.T) {
 			t.Fatal(err)
 		}
 		waitIdle(t)
-		again := acc.Str(acc.Rows(t, suite.Call(t, "library_items", map[string]any{"library": library})["items"], "items")[0]["id"])
+		again := acctest.Str(acctest.Rows(t, suite.Call(t, "library_items", map[string]any{"library": library})["items"], "items")[0]["id"])
 		if again == id {
 			t.Fatalf("the scan kept the deleted record's id %s", id)
 		}

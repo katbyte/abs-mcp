@@ -30,7 +30,7 @@ import (
 	"testing"
 	"time"
 
-	acc "github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/mcp/acctest"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -200,10 +200,10 @@ func librariesThrough(t *testing.T, session *mcp.ClientSession) []string {
 		t.Fatalf("library_list through the binary: %v", res.Content)
 	}
 	out := object(res.StructuredContent)
-	libs := acc.Rows(t, out["libraries"], "libraries")
+	libs := acctest.Rows(t, out["libraries"], "libraries")
 	names := make([]string, 0, len(libs))
 	for _, l := range libs {
-		names = append(names, acc.Str(l["name"]))
+		names = append(names, acctest.Str(l["name"]))
 	}
 	slices.Sort(names)
 

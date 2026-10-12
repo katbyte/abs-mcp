@@ -12,7 +12,7 @@ import (
 	"sync"
 	"testing"
 
-	acc "github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // atOnce makes n calls concurrently and fails on any error.
@@ -49,7 +49,7 @@ func TestJourneyCallsAtOnce(t *testing.T) {
 		atOnce(t, n, func(i int) (string, map[string]any) {
 			return "item_edit", map[string]any{"library": "Fiction", "item": "Leviathan Wakes", "add_tags": []any{fmt.Sprintf("zzyzx-at-once-%d", i)}}
 		})
-		tags := acc.Strs(t, suite.Call(t, "item_get", map[string]any{"library": "Fiction", "item": "Leviathan Wakes"})["tags"], "tags")
+		tags := acctest.Strs(t, suite.Call(t, "item_get", map[string]any{"library": "Fiction", "item": "Leviathan Wakes"})["tags"], "tags")
 		for i := range n {
 			if !slices.Contains(tags, fmt.Sprintf("zzyzx-at-once-%d", i)) {
 				t.Errorf("tags = %v, missing zzyzx-at-once-%d", tags, i)
@@ -65,7 +65,7 @@ func TestJourneyCallsAtOnce(t *testing.T) {
 		atOnce(t, n, func(i int) (string, map[string]any) {
 			return "item_edit", map[string]any{"library": "Fiction", "item": "Leviathan Wakes", "add_series": []any{fmt.Sprintf("Zzyzx At Once %d #1", i)}}
 		})
-		series := acc.Strs(t, suite.Call(t, "item_get", map[string]any{"library": "Fiction", "item": "Leviathan Wakes"})["series"], "series")
+		series := acctest.Strs(t, suite.Call(t, "item_get", map[string]any{"library": "Fiction", "item": "Leviathan Wakes"})["series"], "series")
 		if len(series) != n+1 || !slices.Contains(series, "The Expanse #1") {
 			t.Errorf("series = %v, want The Expanse and the %d added", series, n)
 		}
@@ -80,7 +80,7 @@ func TestJourneyCallsAtOnce(t *testing.T) {
 			}
 			return "item_edit", map[string]any{"library": "Fiction", "items": []any{"Abaddon's Gate"}, "add_tags": []any{tag}}
 		})
-		tags := acc.Strs(t, suite.Call(t, "item_get", map[string]any{"library": "Fiction", "item": "Abaddon's Gate"})["tags"], "tags")
+		tags := acctest.Strs(t, suite.Call(t, "item_get", map[string]any{"library": "Fiction", "item": "Abaddon's Gate"})["tags"], "tags")
 		for i := range 2 * n {
 			if !slices.Contains(tags, fmt.Sprintf("zzyzx-mixed-%d", i)) {
 				t.Errorf("tags = %v, missing zzyzx-mixed-%d", tags, i)
@@ -107,7 +107,7 @@ func TestJourneyCallsAtOnce(t *testing.T) {
 		atOnce(t, len(others), func(i int) (string, map[string]any) {
 			return "playlist_edit", map[string]any{"playlist": "Zzyzx At Once Queue", "add_entries": []any{map[string]any{"item": others[i]}}}
 		})
-		if got := acc.Rows(t, suite.Call(t, "playlist_get", map[string]any{"playlist": "Zzyzx At Once Queue"})["entries"], "entries"); len(got) != 1+len(others) {
+		if got := acctest.Rows(t, suite.Call(t, "playlist_get", map[string]any{"playlist": "Zzyzx At Once Queue"})["entries"], "entries"); len(got) != 1+len(others) {
 			t.Errorf("the playlist holds %d entries, want all %d", len(got), 1+len(others))
 		}
 	})
@@ -122,7 +122,7 @@ func TestJourneyCallsAtOnce(t *testing.T) {
 		atOnce(t, n, func(i int) (string, map[string]any) {
 			return "user_bookmark_edit", map[string]any{"library": "Fiction", "item": "Second Foundation", "add_bookmarks": []any{map[string]any{"time_s": seconds(i), "title": fmt.Sprintf("Zzyzx At Once %d", i)}}}
 		})
-		if got := acc.Rows(t, suite.Call(t, "user_bookmarks", map[string]any{"library": "Fiction", "item": "Second Foundation"})["bookmarks"], "bookmarks"); len(got) != n {
+		if got := acctest.Rows(t, suite.Call(t, "user_bookmarks", map[string]any{"library": "Fiction", "item": "Second Foundation"})["bookmarks"], "bookmarks"); len(got) != n {
 			t.Errorf("bookmarks = %v, want all %d", titlesIn(t, got, "bookmarks"), n)
 		}
 	})
@@ -139,7 +139,7 @@ func TestJourneyCallsAtOnce(t *testing.T) {
 		})
 		for i, b := range books {
 			p := object(suite.Call(t, "user_progress_get", map[string]any{"library": "Fiction", "item": b})["progress"])
-			if p == nil || acc.Num(t, p["percent"], "percent") != 20+10*i {
+			if p == nil || acctest.Num(t, p["percent"], "percent") != 20+10*i {
 				t.Errorf("%s progress = %v, want %d percent", b, p, 20+10*i)
 			}
 		}

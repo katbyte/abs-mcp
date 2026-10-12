@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/katbyte/abs-mcp/sdk/abs"
-	acc "github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
 func TestItemGet(t *testing.T) {
@@ -33,14 +33,14 @@ func TestItemGet(t *testing.T) {
 		if item["type"] != "book" {
 			t.Errorf("%s type = %v, want book", tc.title, item["type"])
 		}
-		if noCover := acc.BoolOf(item["no_cover"]); !noCover {
+		if noCover := acctest.BoolOf(item["no_cover"]); !noCover {
 			t.Errorf("%s should report no_cover", tc.title)
 		}
 	}
 
 	// the series projection is "Name #sequence"
 	item := suite.Call(t, "item_get", map[string]any{"item": "Sea of Silver Light"})
-	if series := acc.Strs(t, item["series"], "series"); !slices.Equal(series, []string{"Otherland #4"}) {
+	if series := acctest.Strs(t, item["series"], "series"); !slices.Equal(series, []string{"Otherland #4"}) {
 		t.Errorf("series = %v, want [Otherland #4]", series)
 	}
 
@@ -68,18 +68,18 @@ func TestItemGetFiles(t *testing.T) {
 	if out["title"] != "Foundation" {
 		t.Errorf("title = %v", out["title"])
 	}
-	tracks := acc.Rows(t, out["track_list"], "track_list")
+	tracks := acctest.Rows(t, out["track_list"], "track_list")
 	if len(tracks) != 1 {
 		t.Fatalf("tracks = %d, want the single fixture file", len(tracks))
 	}
-	if name := acc.Str(tracks[0]["filename"]); name != "01.mp3" {
+	if name := acctest.Str(tracks[0]["filename"]); name != "01.mp3" {
 		t.Errorf("filename = %v, want 01.mp3", tracks[0]["filename"])
 	}
 	// ffprobe ran on it, so the codec must have come back
-	if codec := acc.Str(tracks[0]["codec"]); codec == "" {
+	if codec := acctest.Str(tracks[0]["codec"]); codec == "" {
 		t.Errorf("no codec probed: %v", tracks[0])
 	}
-	if acc.Num(t, tracks[0]["duration_s"], "duration_s") != 1 || acc.Num(t, tracks[0]["size"], "size") <= 0 {
+	if acctest.Num(t, tracks[0]["duration_s"], "duration_s") != 1 || acctest.Num(t, tracks[0]["size"], "size") <= 0 {
 		t.Errorf("track = %v, want one second and its size in bytes", tracks[0])
 	}
 }
@@ -95,7 +95,7 @@ func TestItemGetChapters(t *testing.T) {
 	if out["title"] != "Foundation" {
 		t.Errorf("title = %v", out["title"])
 	}
-	if chapters := acc.Rows(t, out["chapter_list"], "chapter_list"); len(chapters) != 0 {
+	if chapters := acctest.Rows(t, out["chapter_list"], "chapter_list"); len(chapters) != 0 {
 		t.Errorf("chapter_list = %v, want none on the fixtures", chapters)
 	}
 }
@@ -109,7 +109,7 @@ func TestItemChaptersSetExplicit(t *testing.T) {
 			map[string]any{"title": "Chapter Two", "start_s": 0.5},
 		},
 	})
-	if n := acc.Num(t, out["chapters"], "chapters"); n != 2 {
+	if n := acctest.Num(t, out["chapters"], "chapters"); n != 2 {
 		t.Errorf("chapters = %d, want 2", n)
 	}
 	t.Cleanup(func() {
@@ -120,7 +120,7 @@ func TestItemChaptersSetExplicit(t *testing.T) {
 	})
 
 	got := suite.Call(t, "item_get", map[string]any{"item": "War Is a Racket", "chapters": true})
-	chapters := acc.Rows(t, got["chapter_list"], "chapter_list")
+	chapters := acctest.Rows(t, got["chapter_list"], "chapter_list")
 	if len(chapters) != 2 {
 		t.Fatalf("read back %d chapters, want 2", len(chapters))
 	}
@@ -134,10 +134,10 @@ func TestItemEditRoundTrip(t *testing.T) {
 		"item": "War Is a Racket", "subtitle": "The Antiwar Classic",
 		"tags": []any{"war", "politics", "acceptance-test"},
 	})
-	if updated := acc.BoolOf(out["updated"]); !updated {
+	if updated := acctest.BoolOf(out["updated"]); !updated {
 		t.Errorf("item_edit reported no update: %v", out)
 	}
-	if fields := acc.Strs(t, out["fields_sent"], "fields_sent"); !slices.Contains(fields, "subtitle") {
+	if fields := acctest.Strs(t, out["fields_sent"], "fields_sent"); !slices.Contains(fields, "subtitle") {
 		t.Errorf("fields_sent = %v, want subtitle among them", fields)
 	}
 	t.Cleanup(func() {
@@ -147,7 +147,7 @@ func TestItemEditRoundTrip(t *testing.T) {
 	})
 
 	item := suite.Call(t, "item_get", map[string]any{"item": "War Is a Racket"})
-	if tags := acc.Strs(t, item["tags"], "tags"); !slices.Contains(tags, "acceptance-test") {
+	if tags := acctest.Strs(t, item["tags"], "tags"); !slices.Contains(tags, "acceptance-test") {
 		t.Errorf("tags = %v, want the edit to be visible", tags)
 	}
 	if item["subtitle"] != "The Antiwar Classic" {
@@ -178,7 +178,7 @@ func TestItemRescan(t *testing.T) {
 	out := suite.Call(t, "item_rescan", map[string]any{"item": "Foundation"})
 
 	// NOTHING, ADDED, UPDATED, REMOVED or UPTODATE
-	result := acc.Str(out["result"])
+	result := acctest.Str(out["result"])
 	if !slices.Contains([]string{"NOTHING", "ADDED", "UPDATED", "REMOVED", "UPTODATE"}, result) {
 		t.Errorf("item_rescan result = %q, want one of the documented values", result)
 	}
@@ -206,7 +206,7 @@ func TestItemEmbedMetadata(t *testing.T) {
 	keepAudioFiles(t, "A Brief History of Vice")
 	out := suite.Call(t, "item_embed_metadata", map[string]any{"item": "A Brief History of Vice", "backup": true})
 
-	if embedded := acc.BoolOf(out["embedded"]); !embedded {
+	if embedded := acctest.BoolOf(out["embedded"]); !embedded {
 		t.Errorf("item_embed_metadata = %v, want embedded", out)
 	}
 }
@@ -230,10 +230,10 @@ func TestItemEditMany(t *testing.T) {
 	out := suite.Call(t, "item_edit", map[string]any{
 		"library": "Non-Fiction", "items": titles, "genres": []any{"Batch Genre"},
 	})
-	if n := acc.Num(t, out["items_updated"], "items_updated"); n != 3 || !acc.BoolOf(out["updated"]) {
+	if n := acctest.Num(t, out["items_updated"], "items_updated"); n != 3 || !acctest.BoolOf(out["updated"]) {
 		t.Errorf("items_updated = %d, want 3: %v", n, out)
 	}
-	if sent := acc.Strs(t, out["items"], "items"); len(sent) != 3 {
+	if sent := acctest.Strs(t, out["items"], "items"); len(sent) != 3 {
 		t.Errorf("items = %v, want the three titles", sent)
 	}
 	t.Cleanup(func() {
@@ -244,7 +244,7 @@ func TestItemEditMany(t *testing.T) {
 
 	for _, title := range titles {
 		item := suite.Call(t, "item_get", map[string]any{"item": title})
-		if genres := acc.Strs(t, item["genres"], "genres"); !slices.Contains(genres, "Batch Genre") {
+		if genres := acctest.Strs(t, item["genres"], "genres"); !slices.Contains(genres, "Batch Genre") {
 			t.Errorf("%v genres = %v, want the edit applied", title, genres)
 		}
 	}
@@ -283,7 +283,7 @@ func TestItemEditManyWithPodcasts(t *testing.T) {
 		n := 0
 		for _, title := range titles {
 			// an item with no tags answers without the list
-			if slices.Contains(acc.RowsOfAny(suite.Call(t, "item_get", map[string]any{"item": title})["tags"]), any("zzyzx-many")) {
+			if slices.Contains(acctest.RowsOfAny(suite.Call(t, "item_get", map[string]any{"item": title})["tags"]), any("zzyzx-many")) {
 				n++
 			}
 		}
@@ -294,15 +294,15 @@ func TestItemEditManyWithPodcasts(t *testing.T) {
 	})
 
 	out := suite.Call(t, "item_edit", map[string]any{"items": titles, "add_tags": []any{"zzyzx-many"}})
-	if n := acc.Num(t, out["items_updated"], "items_updated"); n != 3 || tagged() != 3 {
+	if n := acctest.Num(t, out["items_updated"], "items_updated"); n != 3 || tagged() != 3 {
 		t.Errorf("add_tags = %v, and %d of the 3 carry the tag", out, tagged())
 	}
 	out = suite.Call(t, "item_edit", map[string]any{"items": titles, "add_tags": []any{"zzyzx-many"}})
-	if n := acc.Num(t, out["items_updated"], "items_updated"); n != 0 || acc.BoolOf(out["updated"]) {
+	if n := acctest.Num(t, out["items_updated"], "items_updated"); n != 0 || acctest.BoolOf(out["updated"]) {
 		t.Errorf("a tag they all carry, added again = %v", out)
 	}
 	out = suite.Call(t, "item_edit", map[string]any{"items": titles, "remove_tags": []any{"zzyzx-many"}})
-	if n := acc.Num(t, out["items_updated"], "items_updated"); n != 3 || tagged() != 0 {
+	if n := acctest.Num(t, out["items_updated"], "items_updated"); n != 3 || tagged() != 0 {
 		t.Errorf("remove_tags = %v, and %d still carry the tag", out, tagged())
 	}
 }
@@ -316,22 +316,22 @@ func TestItemGetPodcast(t *testing.T) {
 	if out["type"] != "podcast" {
 		t.Errorf("type = %v, want podcast", out["type"])
 	}
-	episodes := acc.Rows(t, out["episodes"], "episodes")
+	episodes := acctest.Rows(t, out["episodes"], "episodes")
 	if len(episodes) == 0 {
 		t.Fatal("no episodes on a podcast item_get")
 	}
-	if total := acc.Num(t, out["episode_total"], "episode_total"); total != len(episodes) {
+	if total := acctest.Num(t, out["episode_total"], "episode_total"); total != len(episodes) {
 		t.Errorf("episode_total = %d but %d episodes returned", total, len(episodes))
 	}
 
 	// files=true on a podcast lists the downloaded episodes' audio, which comes
 	// from a different field than a book's tracks
-	tracks := acc.Rows(t, out["track_list"], "track_list")
+	tracks := acctest.Rows(t, out["track_list"], "track_list")
 	if len(tracks) != len(episodes) {
 		t.Errorf("track_list = %d, want one per downloaded episode (%d)", len(tracks), len(episodes))
 	}
 	for _, tr := range tracks {
-		if codec := acc.Str(tr["codec"]); codec == "" {
+		if codec := acctest.Str(tr["codec"]); codec == "" {
 			t.Errorf("no codec probed on %v", tr)
 		}
 	}
@@ -342,7 +342,7 @@ func TestItemGetPodcast(t *testing.T) {
 	if chapters == nil {
 		t.Error("chapter_list is absent even though chapters was asked for")
 	}
-	if got := acc.Rows(t, chapters, "chapter_list"); len(got) != 0 {
+	if got := acctest.Rows(t, chapters, "chapter_list"); len(got) != 0 {
 		t.Errorf("chapter_list = %v, want empty on a podcast", got)
 	}
 }
@@ -362,7 +362,7 @@ func TestItemSendEbook(t *testing.T) {
 	t.Cleanup(func() { _, _ = admin.UpdateEReaderDevices(ctx, before.EReaderDevices) })
 
 	out := suite.Call(t, "item_send_ebook", map[string]any{"item": "Foundation", "library": "Fiction"})
-	if !slices.Contains(acc.Strs(t, out["devices"], "devices"), "Zzyzx Reader") || acc.BoolOf(out["sent"]) {
+	if !slices.Contains(acctest.Strs(t, out["devices"], "devices"), "Zzyzx Reader") || acctest.BoolOf(out["sent"]) {
 		t.Errorf("the device list = %v", out)
 	}
 	if msg := suite.CallErr(t, "item_send_ebook", map[string]any{"item": "Foundation", "library": "Fiction", "device": "zzyzx reader"}); !strings.Contains(msg, "SMTP") {

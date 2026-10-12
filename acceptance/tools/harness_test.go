@@ -17,7 +17,7 @@ import (
 
 	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/abs-mcp/tools"
-	acc "github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/mcp/acctest"
 	"github.com/katbyte/go-kt/test/env"
 	"github.com/katbyte/go-kt/test/replayproxy"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -151,7 +151,7 @@ const notReady = "ABS_SERVER and ABS_TOKEN are not set; run: eval \"$(.scripts/a
 // suite drives the tools as a client does, through go-kt's live-suite
 // helpers, and keeps count of what each tool was asked. Until start connects
 // it, every call skips.
-var suite = &acc.Suite{NotReady: notReady}
+var suite = &acctest.Suite{NotReady: notReady}
 
 // providersReady reports whether the provider proxy came up, so the tests that
 // need it can skip rather than fail confusingly when it did not.
@@ -202,7 +202,7 @@ func runSuite(m *testing.M) {
 	// every registered tool must have answered something above, not only
 	// refused it. Only a whole-suite run can say that, so a -run or -skip
 	// filter skips the check.
-	if acc.WholeRun() {
+	if acctest.WholeRun() {
 		report, err := suite.CoverageReport()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "\n"+err.Error())
@@ -287,7 +287,7 @@ func start() error {
 	if _, err := tools.RegisterAll(srv, client, tools.Options{EnableDelete: true}); err != nil {
 		return err
 	}
-	connected, err := acc.Connect(ctx, srv)
+	connected, err := acctest.Connect(ctx, srv)
 	if err != nil {
 		return err
 	}
@@ -305,7 +305,7 @@ func seed() error {
 		return err
 	}
 	have := map[string]bool{}
-	for _, row := range acc.RowsOf(existing["libraries"]) {
+	for _, row := range acctest.RowsOf(existing["libraries"]) {
 		if name, ok := row["name"].(string); ok {
 			have[name] = true
 		}
@@ -371,15 +371,15 @@ func seedMessy() error {
 		if err != nil {
 			return err
 		}
-		items := acc.RowsOfAny(out["items"])
+		items := acctest.RowsOfAny(out["items"])
 		for _, r := range items {
 			row := object(r)
-			id := acc.Str(row["id"])
+			id := acctest.Str(row["id"])
 			got, err := suite.Invoke("item_get", map[string]any{"item": id})
 			if err != nil {
 				return err
 			}
-			path := acc.Str(got["path"])
+			path := acctest.Str(got["path"])
 			ids[path] = id
 		}
 		if len(items) < 50 {
@@ -451,7 +451,7 @@ func waitForItems(library string, want int) error {
 
 // object reads a decoded JSON object, nil when it is anything else: for a
 // value a test goes on to compare, where one of the wrong kind fails the
-// comparison. go-kt's acc.Object is the strict one, which fails the test.
+// comparison. go-kt's acctest.Object is the strict one, which fails the test.
 func object(v any) map[string]any {
 	if m, ok := v.(map[string]any); ok {
 		return m

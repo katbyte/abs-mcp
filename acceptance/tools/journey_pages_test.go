@@ -19,7 +19,7 @@ import (
 	"testing"
 
 	"github.com/katbyte/abs-mcp/sdk/abs"
-	acc "github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // pageWalk reads a listing that pages by offset from one offset to its end,
@@ -34,15 +34,15 @@ func pageWalk(t *testing.T, tool, key string, args map[string]any, from, limit i
 	total := -1
 	for offset := from; ; {
 		out := suite.Call(t, tool, withArgs(args, map[string]any{"limit": limit, "offset": offset}))
-		if got := acc.Num(t, out["offset"], "offset"); got != offset {
+		if got := acctest.Num(t, out["offset"], "offset"); got != offset {
 			t.Fatalf("%s %v from %d answers offset %d", tool, args, offset, got)
 		}
-		n := acc.Num(t, out["total"], "total")
+		n := acctest.Num(t, out["total"], "total")
 		if total >= 0 && n != total {
 			t.Errorf("%s %v: the total moved from %d to %d at offset %d", tool, args, total, n, offset)
 		}
 		total = n
-		page := acc.Rows(t, out[key], key)
+		page := acctest.Rows(t, out[key], key)
 		ids = append(ids, valuesIn(t, out[key], key, "id")...)
 		next, more := out["next_offset"]
 		if !more {
@@ -54,7 +54,7 @@ func pageWalk(t *testing.T, tool, key string, args map[string]any, from, limit i
 		if len(page) != limit {
 			t.Errorf("%s %v: a page of %d at offset %d is short of the limit %d and not the last", tool, args, len(page), offset, limit)
 		}
-		if got := acc.Num(t, next, "next_offset"); got != offset+len(page) {
+		if got := acctest.Num(t, next, "next_offset"); got != offset+len(page) {
 			t.Fatalf("%s %v: next_offset %d after %d rows from %d", tool, args, got, len(page), offset)
 		}
 		offset += len(page)
@@ -73,9 +73,9 @@ func everyPageOnce(t *testing.T, tool, key string, args map[string]any, limit in
 	t.Helper()
 
 	whole := suite.Call(t, tool, withArgs(args, map[string]any{"limit": 1000}))
-	all := acc.Rows(t, whole[key], key)
+	all := acctest.Rows(t, whole[key], key)
 	ids := valuesIn(t, whole[key], key, "id")
-	if total := acc.Num(t, whole["total"], "total"); total != len(all) || whole["next_offset"] != nil {
+	if total := acctest.Num(t, whole["total"], "total"); total != len(all) || whole["next_offset"] != nil {
 		t.Fatalf("%s %v unpaged: %d rows of %d, next_offset %v", tool, args, len(all), total, whole["next_offset"])
 	}
 	if len(all) <= 2*limit {
@@ -94,7 +94,7 @@ func everyPageOnce(t *testing.T, tool, key string, args map[string]any, limit in
 		}
 	}
 	past := suite.Call(t, tool, withArgs(args, map[string]any{"limit": limit, "offset": len(all) + 2}))
-	if got := acc.Rows(t, past[key], key); len(got) != 0 || past["next_offset"] != nil {
+	if got := acctest.Rows(t, past[key], key); len(got) != 0 || past["next_offset"] != nil {
 		t.Errorf("%s %v past the end: %d rows, next_offset %v", tool, args, len(got), past["next_offset"])
 	}
 	return all
@@ -110,7 +110,7 @@ func ordered(t *testing.T, what string, all []map[string]any, key string, desc b
 		var cmp int
 		switch av := a.(type) {
 		case float64:
-			bv := acc.DecimalOr0(b)
+			bv := acctest.DecimalOr0(b)
 			cmp = int(av - bv)
 		default:
 			cmp = strings.Compare(strings.ToLower(fmt.Sprint(a)), strings.ToLower(fmt.Sprint(b)))
@@ -156,14 +156,14 @@ func TestJourneyEveryPageReadOnce(t *testing.T) {
 			t.Errorf("sort Title = %v, want sort title's %v", got, title)
 		}
 		for _, pair := range [][2]string{{"genres:Fantasy", "GENRES:Fantasy"}, {"missing:asin", "Missing:ASIN"}, {"narrators:Nigel Planer", "narrator:Nigel Planer"}} {
-			a := acc.Num(t, suite.Call(t, "library_items", withMessy(map[string]any{"filter": pair[0]}))["total"], "total")
-			b := acc.Num(t, suite.Call(t, "library_items", withMessy(map[string]any{"filter": pair[1]}))["total"], "total")
+			a := acctest.Num(t, suite.Call(t, "library_items", withMessy(map[string]any{"filter": pair[0]}))["total"], "total")
+			b := acctest.Num(t, suite.Call(t, "library_items", withMessy(map[string]any{"filter": pair[1]}))["total"], "total")
 			if a == 0 || a == len(messyBooks) || a != b {
 				t.Errorf("%s finds %d, %s finds %d: want the same few books", pair[0], a, pair[1], b)
 			}
 		}
 		// a limit past the cap is taken, not refused
-		if got := acc.Rows(t, suite.Call(t, "library_items", withMessy(map[string]any{"limit": 5000}))["items"], "items"); len(got) != len(messyBooks) {
+		if got := acctest.Rows(t, suite.Call(t, "library_items", withMessy(map[string]any{"limit": 5000}))["items"], "items"); len(got) != len(messyBooks) {
 			t.Errorf("limit 5000 answered %d rows, want all %d", len(got), len(messyBooks))
 		}
 
@@ -257,7 +257,7 @@ func TestJourneyMatchedBooksPageInTheOrderAdded(t *testing.T) {
 	auditFrom := func(t *testing.T, offset int, extra map[string]any) ([]string, int, any) {
 		t.Helper()
 		out := suite.Call(t, "audit_matched", withMessy(withArgs(map[string]any{"providers": []any{"audible"}, "limit": 2, "offset": offset}, extra)))
-		return valuesIn(t, out["findings"], "findings", "id"), acc.Num(t, out["items_scanned"], "items_scanned"), out["next_offset"]
+		return valuesIn(t, out["findings"], "findings", "id"), acctest.Num(t, out["items_scanned"], "items_scanned"), out["next_offset"]
 	}
 
 	found, scanned, next := auditFrom(t, 0, nil)
@@ -301,12 +301,12 @@ func TestJourneyMatchedBooksPageInTheOrderAdded(t *testing.T) {
 	var tagged []string
 	for offset, calls := 0, 0; calls < 10; calls++ {
 		out := suite.Call(t, "item_match_tag", map[string]any{"library": "Messy", "providers": []any{"audible"}, "limit": 2, "offset": offset})
-		got := acc.Rows(t, out["rows"], "rows")
-		if acc.Num(t, out["tagged"], "tagged") != len(got) || acc.Num(t, out["checked"], "checked") != len(got) {
+		got := acctest.Rows(t, out["rows"], "rows")
+		if acctest.Num(t, out["tagged"], "tagged") != len(got) || acctest.Num(t, out["checked"], "checked") != len(got) {
 			t.Errorf("offset %d: %v, want each book checked and tagged", offset, out)
 		}
 		for _, r := range got {
-			tagged = append(tagged, acc.Str(r["id"]))
+			tagged = append(tagged, acctest.Str(r["id"]))
 			if r["provider"] != "audible" {
 				t.Errorf("%v was tagged %v", r["title"], r["provider"])
 			}
@@ -314,10 +314,10 @@ func TestJourneyMatchedBooksPageInTheOrderAdded(t *testing.T) {
 		if out["next_offset"] == nil {
 			break
 		}
-		if n := acc.Num(t, out["next_offset"], "next_offset"); n != offset+len(got) {
+		if n := acctest.Num(t, out["next_offset"], "next_offset"); n != offset+len(got) {
 			t.Fatalf("offset %d says next_offset %d after %d books", offset, n, len(got))
 		}
-		offset = acc.Num(t, out["next_offset"], "next_offset")
+		offset = acctest.Num(t, out["next_offset"], "next_offset")
 	}
 	slices.Sort(tagged)
 	want := slices.Clone(ids)
@@ -326,7 +326,7 @@ func TestJourneyMatchedBooksPageInTheOrderAdded(t *testing.T) {
 		t.Errorf("tagged %v, want each of %v once", tagged, want)
 	}
 	rest := suite.Call(t, "item_match_tag", map[string]any{"library": "Messy", "providers": []any{"audible"}, "limit": 100})
-	if acc.Num(t, rest["already_tagged"], "already_tagged") != len(ids) || acc.Num(t, rest["tagged"], "tagged") != 0 {
+	if acctest.Num(t, rest["already_tagged"], "already_tagged") != len(ids) || acctest.Num(t, rest["tagged"], "tagged") != 0 {
 		t.Errorf("after the pages: %v, want all %d already tagged", rest, len(ids))
 	}
 	for _, id := range ids {
@@ -348,34 +348,34 @@ func readExpanse(t *testing.T) expanseShelf {
 	t.Helper()
 
 	var s expanseShelf
-	s.Items = acc.Num(t, suite.Call(t, "library_get", map[string]any{"library": "Fiction"})["items"], "items")
-	for _, row := range acc.Rows(t, suite.Call(t, "series_list", map[string]any{"library": "Fiction"})["series"], "series") {
+	s.Items = acctest.Num(t, suite.Call(t, "library_get", map[string]any{"library": "Fiction"})["items"], "items")
+	for _, row := range acctest.Rows(t, suite.Call(t, "series_list", map[string]any{"library": "Fiction"})["series"], "series") {
 		if row["name"] == "The Expanse" {
-			s.SeriesBooks = acc.Num(t, row["books"], "books")
+			s.SeriesBooks = acctest.Num(t, row["books"], "books")
 			s.Sequence = listOrNone(t, row["sequence"], "sequence")
 			slices.Sort(s.Sequence)
 		}
 	}
-	for _, gap := range acc.Rows(t, suite.Call(t, "audit_series", map[string]any{"library": "Fiction"})["gaps"], "gaps") {
+	for _, gap := range acctest.Rows(t, suite.Call(t, "audit_series", map[string]any{"library": "Fiction"})["gaps"], "gaps") {
 		if gap["name"] == "The Expanse" {
 			s.Missing = listOrNone(t, gap["missing"], "missing")
 		}
 	}
-	s.AuthorBooks = len(acc.Rows(t, suite.Call(t, "author_get", map[string]any{"library": "Fiction", "author": "James S. A. Corey"})["books"], "books"))
-	for _, n := range acc.Rows(t, suite.Call(t, "narrator_list", map[string]any{"library": "Fiction"})["narrators"], "narrators") {
+	s.AuthorBooks = len(acctest.Rows(t, suite.Call(t, "author_get", map[string]any{"library": "Fiction", "author": "James S. A. Corey"})["books"], "books"))
+	for _, n := range acctest.Rows(t, suite.Call(t, "narrator_list", map[string]any{"library": "Fiction"})["narrators"], "narrators") {
 		if n["name"] == "Jefferson Mays" {
-			s.NarratorBooks = acc.Num(t, n["books"], "books")
+			s.NarratorBooks = acctest.Num(t, n["books"], "books")
 		}
 	}
 	filters := suite.Call(t, "library_filters", map[string]any{"library": "Fiction"})
-	for _, r := range acc.Rows(t, filters["series"], "series") {
+	for _, r := range acctest.Rows(t, filters["series"], "series") {
 		if r["name"] == "The Expanse" {
-			s.SeriesIDs = append(s.SeriesIDs, acc.Str(r["id"]))
+			s.SeriesIDs = append(s.SeriesIDs, acctest.Str(r["id"]))
 		}
 	}
-	for _, r := range acc.Rows(t, filters["authors"], "authors") {
+	for _, r := range acctest.Rows(t, filters["authors"], "authors") {
 		if r["name"] == "James S. A. Corey" {
-			s.AuthorIDs = append(s.AuthorIDs, acc.Str(r["id"]))
+			s.AuthorIDs = append(s.AuthorIDs, acctest.Str(r["id"]))
 		}
 	}
 	return s
@@ -455,14 +455,14 @@ func TestJourneyAMissingBookJoinsItsSeries(t *testing.T) {
 
 	// deleted with its folder: asked first, which changes nothing
 	preview := suite.Call(t, "item_delete", map[string]any{"library": "Fiction", "item": "Caliban's War", "delete_files": true})
-	if preview["would_delete"] != "Caliban's War" || !strings.Contains(acc.Str(preview["files"]), "Caliban's War") || preview["deleted"] != nil {
+	if preview["would_delete"] != "Caliban's War" || !strings.Contains(acctest.Str(preview["files"]), "Caliban's War") || preview["deleted"] != nil {
 		t.Errorf("the unconfirmed delete = %v, want what it would remove", preview)
 	}
 	if _, err := os.Stat(dir); err != nil {
 		t.Fatalf("the unconfirmed delete touched the folder: %v", err)
 	}
 	gone := suite.Call(t, "item_delete", map[string]any{"library": "Fiction", "item": "Caliban's War", "delete_files": true, "confirm": true})
-	if gone["deleted"] != "Caliban's War" || !acc.BoolOf(gone["files_removed"]) {
+	if gone["deleted"] != "Caliban's War" || !acctest.BoolOf(gone["files_removed"]) {
 		t.Errorf("the delete = %v", gone)
 	}
 	eventually(t, "the folder going", func() error {
@@ -515,10 +515,10 @@ func TestJourneyReadsAnswerWhatWasAsked(t *testing.T) {
 		addedAt := map[string]float64{}
 		for _, l := range libraries {
 			listing := object(adminGet(t, "/api/libraries/"+libraryID(t, l.Name)+"/items?limit=500"))
-			results := acc.RowsOfAny(listing["results"])
+			results := acctest.RowsOfAny(listing["results"])
 			for _, r := range results {
 				row := object(r)
-				addedAt[acc.Str(row["id"])] = acc.DecimalOr0(row["addedAt"])
+				addedAt[acctest.Str(row["id"])] = acctest.DecimalOr0(row["addedAt"])
 			}
 		}
 		recent := valuesIn(t, suite.Call(t, "library_recent", map[string]any{"limit": 1000})["items"], "items", "id")
@@ -554,11 +554,11 @@ func TestJourneyReadsAnswerWhatWasAsked(t *testing.T) {
 			t.Helper()
 			out := suite.Call(t, "series_get", map[string]any{"library": "Fiction", "series": "Foundation"})
 			books := map[string]bool{}
-			for _, b := range acc.Rows(t, out["books"], "books") {
-				books[acc.Str(b["title"])] = acc.BoolOf(b["finished"])
+			for _, b := range acctest.Rows(t, out["books"], "books") {
+				books[acctest.Str(b["title"])] = acctest.BoolOf(b["finished"])
 			}
-			complete := acc.BoolOf(out["complete"])
-			return books, acc.Num(t, out["finished"], "finished"), complete
+			complete := acctest.BoolOf(out["complete"])
+			return books, acctest.Num(t, out["finished"], "finished"), complete
 		}
 		check := func(t *testing.T, when string, done ...string) {
 			t.Helper()
@@ -644,7 +644,7 @@ func TestJourneyListsHeldWholeArePaged(t *testing.T) {
 	t.Run("narrator_list", func(t *testing.T) {
 		whole := suite.Call(t, "narrator_list", withMessy(map[string]any{"limit": 1000}))
 		names := valuesIn(t, whole["narrators"], "narrators", "name")
-		if acc.Num(t, whole["total"], "total") != len(names) || whole["next_offset"] != nil || len(names) < 5 {
+		if acctest.Num(t, whole["total"], "total") != len(names) || whole["next_offset"] != nil || len(names) < 5 {
 			t.Fatalf("narrator_list whole: %d names of %v, next %v", len(names), whole["total"], whole["next_offset"])
 		}
 		if !slices.IsSorted(names) {
@@ -658,7 +658,7 @@ func TestJourneyListsHeldWholeArePaged(t *testing.T) {
 			if out["next_offset"] == nil {
 				break
 			}
-			if len(page) != 2 || acc.Num(t, out["next_offset"], "next_offset") != offset+2 {
+			if len(page) != 2 || acctest.Num(t, out["next_offset"], "next_offset") != offset+2 {
 				t.Fatalf("a page of %d at %d, next %v", len(page), offset, out["next_offset"])
 			}
 			offset += 2
@@ -672,7 +672,7 @@ func TestJourneyListsHeldWholeArePaged(t *testing.T) {
 		whole := suite.Call(t, "library_filters", withMessy(map[string]any{"limit": 1000}))
 		authors := valuesIn(t, whole["authors"], "authors", "name")
 		totals := object(whole["totals"])
-		if acc.Num(t, totals["authors"], "totals.authors") != len(authors) || whole["next_offset"] != nil || len(authors) < 5 {
+		if acctest.Num(t, totals["authors"], "totals.authors") != len(authors) || whole["next_offset"] != nil || len(authors) < 5 {
 			t.Fatalf("library_filters whole: %d authors, totals %v, next %v", len(authors), totals, whole["next_offset"])
 		}
 		for _, list := range []string{"genres", "tags", "narrators", "languages", "publishers", "published_decades", "authors", "series"} {
@@ -687,14 +687,14 @@ func TestJourneyListsHeldWholeArePaged(t *testing.T) {
 			if out["series"] != nil || out["tags"] != nil || out["narrators"] != nil || len(object(out["totals"])) != 2 {
 				t.Fatalf("lists not asked for came back at offset %d: %v", offset, out)
 			}
-			walked = append(walked, valuesIn(t, acc.RowsOfAny(out["authors"]), "authors", "name")...)
-			if got := len(acc.RowsOfAny(out["genres"])); got > 2 {
+			walked = append(walked, valuesIn(t, acctest.RowsOfAny(out["authors"]), "authors", "name")...)
+			if got := len(acctest.RowsOfAny(out["genres"])); got > 2 {
 				t.Errorf("a page of %d genres, want at most 2", got)
 			}
 			if out["next_offset"] == nil {
 				break
 			}
-			offset = acc.Num(t, out["next_offset"], "next_offset")
+			offset = acctest.Num(t, out["next_offset"], "next_offset")
 			if offset > 1000 {
 				t.Fatal("library_filters never reached its last page")
 			}

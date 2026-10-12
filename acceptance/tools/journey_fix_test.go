@@ -20,7 +20,7 @@ import (
 	"strings"
 	"testing"
 
-	acc "github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // writeJPEG writes a square test image of n pixels.
@@ -95,10 +95,10 @@ func valuesIn(t *testing.T, v any, field, key string) []string {
 	if v == nil {
 		return nil
 	}
-	found := acc.Rows(t, v, field)
+	found := acctest.Rows(t, v, field)
 	out := make([]string, 0, len(found))
 	for _, row := range found {
-		out = append(out, acc.Str(row[key]))
+		out = append(out, acctest.Str(row[key]))
 	}
 	return out
 }
@@ -111,7 +111,7 @@ func spellingsIn(t *testing.T, v any) [][]string {
 		return nil
 	}
 	var out [][]string
-	for _, group := range acc.Rows(t, v, "names") {
+	for _, group := range acctest.Rows(t, v, "names") {
 		out = append(out, valuesIn(t, group["spellings"], "spellings", "value"))
 	}
 	return out
@@ -157,9 +157,9 @@ func (l loop) run(t *testing.T) {
 func messyID(t *testing.T, relPath string) string {
 	t.Helper()
 
-	for _, it := range acc.Rows(t, suite.Call(t, "library_items", map[string]any{"library": "Messy", "limit": 100})["items"], "items") {
+	for _, it := range acctest.Rows(t, suite.Call(t, "library_items", map[string]any{"library": "Messy", "limit": 100})["items"], "items") {
 		if it["path"] == relPath {
-			return acc.Str(it["id"])
+			return acctest.Str(it["id"])
 		}
 	}
 	t.Fatalf("no messy book at %s", relPath)
@@ -207,16 +207,16 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 	t.Run("a gap whose book is on the shelf, linked", func(t *testing.T) {
 		var greenMars, suggest string
 		audit := func(t *testing.T) bool {
-			for _, gap := range acc.Rows(t, messyAudit("audit_series", nil)["gaps"], "gaps") {
+			for _, gap := range acctest.Rows(t, messyAudit("audit_series", nil)["gaps"], "gaps") {
 				if gap["name"] != "Mars Trilogy" {
 					continue
 				}
 				if gap["unlinked"] == nil {
 					return true
 				}
-				unlinked := acc.Rows(t, gap["unlinked"], "unlinked")
-				greenMars = acc.Str(unlinked[0]["id"])
-				suggest = acc.Str(unlinked[0]["suggest"])
+				unlinked := acctest.Rows(t, gap["unlinked"], "unlinked")
+				greenMars = acctest.Str(unlinked[0]["id"])
+				suggest = acctest.Str(unlinked[0]["suggest"])
 				return true
 			}
 			return false
@@ -248,10 +248,10 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 		var keep, other string
 		loop{
 			audit: func(t *testing.T) bool {
-				for _, group := range acc.Rows(t, messyAudit("audit_series", nil)["names"], "names") {
+				for _, group := range acctest.Rows(t, messyAudit("audit_series", nil)["names"], "names") {
 					spellings := valuesIn(t, group["spellings"], "spellings", "value")
 					if slices.Contains(spellings, "The Wheel of Time") && slices.Contains(spellings, "Wheel of Time") {
-						keep = acc.Str(group["keep"])
+						keep = acctest.Str(group["keep"])
 						other = spellings[0]
 						if other == keep {
 							other = spellings[1]
@@ -263,11 +263,11 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 			},
 			fix: func(t *testing.T) {
 				out := suite.Call(t, "series_merge", map[string]any{"library": "Messy", "from": other, "into": keep})
-				if moved := acc.Num(t, out["moved"], "moved"); moved != 2 {
+				if moved := acctest.Num(t, out["moved"], "moved"); moved != 2 {
 					t.Errorf("moved = %d, want 2", moved)
 				}
 				got := suite.Call(t, "series_get", map[string]any{"library": "Messy", "series": keep})
-				if n := len(acc.Rows(t, got["books"], "books")); n != 4 {
+				if n := len(acctest.Rows(t, got["books"], "books")); n != 4 {
 					t.Errorf("%s holds %d books after the merge, want 4", keep, n)
 				}
 			},
@@ -287,9 +287,9 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 		var suggest string
 		loop{
 			audit: func(t *testing.T) bool {
-				for _, row := range acc.Rows(t, messyAudit("audit_series", nil)["numbering"], "numbering") {
+				for _, row := range acctest.Rows(t, messyAudit("audit_series", nil)["numbering"], "numbering") {
 					if row["title"] == "The Light Fantastic" && row["problem"] == "padding" {
-						suggest = acc.Str(row["suggest"])
+						suggest = acctest.Str(row["suggest"])
 						return true
 					}
 				}
@@ -297,7 +297,7 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 			},
 			fix: func(t *testing.T) {
 				suite.Call(t, "item_edit", map[string]any{"library": "Messy", "item": "The Light Fantastic", "add_series": []any{suggest}})
-				if series := acc.Strs(t, suite.Call(t, "item_get", map[string]any{"library": "Messy", "item": "The Light Fantastic"})["series"], "series"); !slices.Equal(series, []string{"Discworld #02"}) {
+				if series := acctest.Strs(t, suite.Call(t, "item_get", map[string]any{"library": "Messy", "item": "The Light Fantastic"})["series"], "series"); !slices.Equal(series, []string{"Discworld #02"}) {
 					t.Errorf("series = %v, want [Discworld #02]", series)
 				}
 			},
@@ -312,9 +312,9 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 		var suggest string
 		loop{
 			audit: func(t *testing.T) bool {
-				for _, row := range acc.Rows(t, messyAudit("audit_series", nil)["titles"], "titles") {
+				for _, row := range acctest.Rows(t, messyAudit("audit_series", nil)["titles"], "titles") {
 					if row["id"] == id {
-						suggest = acc.Str(row["suggest"])
+						suggest = acctest.Str(row["suggest"])
 						return true
 					}
 				}
@@ -351,10 +351,10 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 		var keep, other string
 		loop{
 			audit: func(t *testing.T) bool {
-				for _, group := range acc.Rows(t, messyAudit("audit_narrators", nil)["names"], "names") {
+				for _, group := range acctest.Rows(t, messyAudit("audit_narrators", nil)["names"], "names") {
 					spellings := valuesIn(t, group["spellings"], "spellings", "value")
 					if slices.Contains(spellings, "Michael Kramer") && slices.Contains(spellings, "Micheal Kramer") {
-						keep = acc.Str(group["keep"])
+						keep = acctest.Str(group["keep"])
 						other = spellings[0]
 						if other == keep {
 							other = spellings[1]
@@ -366,7 +366,7 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 			},
 			fix: func(t *testing.T) {
 				out := suite.Call(t, "metadata_rename", map[string]any{"field": "narrators", "library": "Messy", "from": other, "to": keep})
-				if n := acc.Num(t, out["items_updated"], "items_updated"); n != 2 {
+				if n := acctest.Num(t, out["items_updated"], "items_updated"); n != 2 {
 					t.Errorf("items_updated = %d, want the 2 books spelled %s", n, other)
 				}
 			},
@@ -387,12 +387,12 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 			},
 			fix: func(t *testing.T) {
 				out := suite.Call(t, "author_edit", map[string]any{"library": "Messy", "author": "Sanderson, Brandon", "name": "Brandon Sanderson"})
-				if merged := acc.BoolOf(out["merged"]); !merged {
+				if merged := acctest.BoolOf(out["merged"]); !merged {
 					t.Errorf("merged = %v, want the rename to merge into the existing record", out["merged"])
 				}
 				// the row after a merge counts the books the record now has
 				author := object(out["author"])
-				if books := acc.Num(t, author["books"], "books"); books != 3 {
+				if books := acctest.Num(t, author["books"], "books"); books != 3 {
 					t.Errorf("books = %d after the merge, want 3", books)
 				}
 			},
@@ -426,7 +426,7 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 					if out[section] == nil {
 						return false
 					}
-					for _, row := range acc.Rows(t, out[section], section) {
+					for _, row := range acctest.Rows(t, out[section], section) {
 						if row["value"] == value {
 							finding = row
 							return true
@@ -439,12 +439,12 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 					case string:
 						tool, args := suggestCall(t, suggest)
 						// a suggested remove only previews until confirmed
-						if acc.BoolOf(args["remove"]) {
+						if acctest.BoolOf(args["remove"]) {
 							args["confirm"] = true
 						}
 						suite.Call(t, tool, args)
 					case map[string]any:
-						field := acc.Str(finding["field"])
+						field := acctest.Str(finding["field"])
 						suite.Call(t, "metadata_rename", map[string]any{"field": field, "from": value, "split": suggest})
 					default:
 						t.Fatalf("%s %q carries no suggest: %v", section, value, finding)
@@ -467,7 +467,7 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 		})(t)
 		// the split touched only the book carrying the compound: Fantasy is
 		// still a genre on the books that had it
-		if genres := acc.Strs(t, suite.Call(t, "item_get", map[string]any{"item": mort})["genres"], "genres"); !slices.Equal(genres, []string{"Fantasy"}) {
+		if genres := acctest.Strs(t, suite.Call(t, "item_get", map[string]any{"item": mort})["genres"], "genres"); !slices.Equal(genres, []string{"Fantasy"}) {
 			t.Errorf("Mort's genres = %v, want [Fantasy]", genres)
 		}
 	})
@@ -485,7 +485,7 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 		})
 		suite.Call(t, "item_edit", map[string]any{"library": "Fiction", "item": "Leviathan Wakes", "language": "eng"})
 		spelled := func(t *testing.T) bool {
-			for _, group := range acc.Rows(t, suite.Call(t, "audit_spelling", map[string]any{"library": "Fiction", "field": "languages"})["groups"], "groups") {
+			for _, group := range acctest.Rows(t, suite.Call(t, "audit_spelling", map[string]any{"library": "Fiction", "field": "languages"})["groups"], "groups") {
 				if slices.Contains(valuesIn(t, group["spellings"], "spellings", "value"), "eng") {
 					return true
 				}
@@ -496,7 +496,7 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 			t.Fatal("eng beside English is not reported")
 		}
 		out := suite.Call(t, "metadata_rename", map[string]any{"field": "languages", "library": "Fiction", "from": "eng", "to": "English"})
-		if items := acc.Strs(t, out["items"], "items"); !slices.Equal(items, []string{"Leviathan Wakes"}) {
+		if items := acctest.Strs(t, out["items"], "items"); !slices.Equal(items, []string{"Leviathan Wakes"}) {
 			t.Errorf("items = %v, want [Leviathan Wakes]", items)
 		}
 		if spelled(t) {
@@ -507,10 +507,10 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 	t.Run("a duplicate, deleted and scanned back", func(t *testing.T) {
 		var outside string
 		audit := func(t *testing.T) bool {
-			for _, group := range acc.Rows(t, messyAudit("audit_duplicates", nil)["groups"], "groups") {
-				for _, it := range acc.Rows(t, group["items"], "items") {
+			for _, group := range acctest.Rows(t, messyAudit("audit_duplicates", nil)["groups"], "groups") {
+				for _, it := range acctest.Rows(t, group["items"], "items") {
 					if it["path"] == "Terry Pratchett/Mort" {
-						outside = acc.Str(it["id"])
+						outside = acctest.Str(it["id"])
 						return true
 					}
 				}
@@ -538,9 +538,9 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 						continue
 					}
 					var id string
-					for _, it := range acc.Rows(t, suite.Call(t, "library_items", map[string]any{"library": "Messy", "limit": 100})["items"], "items") {
+					for _, it := range acctest.Rows(t, suite.Call(t, "library_items", map[string]any{"library": "Messy", "limit": 100})["items"], "items") {
 						if it["path"] == b.Path {
-							id = acc.Str(it["id"])
+							id = acctest.Str(it["id"])
 						}
 					}
 					if id == "" {
@@ -558,16 +558,16 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 	t.Run("a ribboned cover, replaced", func(t *testing.T) {
 		requireProviders(t)
 
-		covers := acc.Strs(t, suite.Call(t, "item_cover_search", map[string]any{
+		covers := acctest.Strs(t, suite.Call(t, "item_cover_search", map[string]any{
 			"item": "Foundation and Empire", "providers": []any{"audible"}, "title": "Foundation and Empire", "author": "Isaac Asimov",
 		})["covers"], "covers")
 		if len(covers) == 0 {
 			t.Skip("no recorded cover to replace it with")
 		}
-		folder := acc.Str(suite.Call(t, "item_get", map[string]any{"library": "Messy", "item": "Moving Pictures"})["full_path"])
+		folder := acctest.Str(suite.Call(t, "item_get", map[string]any{"library": "Messy", "item": "Moving Pictures"})["full_path"])
 		loop{
 			audit: func(t *testing.T) bool {
-				for _, row := range acc.Rows(t, messyAudit("audit_covers", map[string]any{"banner": true, "limit": 100})["findings"], "findings") {
+				for _, row := range acctest.Rows(t, messyAudit("audit_covers", map[string]any{"banner": true, "limit": 100})["findings"], "findings") {
 					if row["title"] == "Moving Pictures" && row["problem"] == "banner" {
 						return true
 					}
@@ -593,8 +593,8 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 		// the book's own folder
 		const book = "War Is a Racket"
 		it := suite.Call(t, "item_get", map[string]any{"library": "Non-Fiction", "item": book})
-		folder := acc.Str(it["full_path"])
-		rel := acc.Str(it["path"])
+		folder := acctest.Str(it["full_path"])
+		rel := acctest.Str(it["path"])
 		big := filepath.Join(data, "nonfiction", rel, "zzyzx-bigger.jpg")
 		writeJPEG(t, big, 600)
 		t.Cleanup(func() {
@@ -604,7 +604,7 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 		})
 		loop{
 			audit: func(t *testing.T) bool {
-				for _, row := range acc.Rows(t, suite.Call(t, "audit_covers", map[string]any{"library": "Non-Fiction"})["findings"], "findings") {
+				for _, row := range acctest.Rows(t, suite.Call(t, "audit_covers", map[string]any{"library": "Non-Fiction"})["findings"], "findings") {
 					if row["title"] == book && row["problem"] == "small" {
 						return true
 					}
@@ -623,7 +623,7 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 	t.Run("a missing cover, set", func(t *testing.T) {
 		requireProviders(t)
 
-		covers := acc.Strs(t, suite.Call(t, "item_cover_search", map[string]any{
+		covers := acctest.Strs(t, suite.Call(t, "item_cover_search", map[string]any{
 			"item": "Foundation and Empire", "providers": []any{"audible"}, "title": "Foundation and Empire", "author": "Isaac Asimov",
 		})["covers"], "covers")
 		if len(covers) == 0 {
@@ -647,16 +647,16 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 
 		loop{
 			audit: func(t *testing.T) bool {
-				for _, row := range acc.Rows(t, suite.Call(t, "audit_authors", map[string]any{"library": "Fiction"})["records"], "records") {
+				for _, row := range acctest.Rows(t, suite.Call(t, "audit_authors", map[string]any{"library": "Fiction"})["records"], "records") {
 					if row["name"] == "Isaac Asimov" {
-						return slices.Contains(acc.Strs(t, row["problems"], "problems"), "unmatched")
+						return slices.Contains(acctest.Strs(t, row["problems"], "problems"), "unmatched")
 					}
 				}
 				return false
 			},
 			fix: func(t *testing.T) {
 				cand := object(suite.Call(t, "author_match", map[string]any{"library": "Fiction", "author": "Isaac Asimov", "query": "Isaac Asimov"})["candidate"])
-				asin := acc.Str(cand["asin"])
+				asin := acctest.Str(cand["asin"])
 				if asin == "" {
 					t.Fatal("author_match found no one")
 				}
@@ -678,27 +678,27 @@ func TestJourneyEveryFixableAudit(t *testing.T) {
 				return slices.Contains(titlesIn(t, suite.Call(t, "audit_unmatched", map[string]any{"library": "Non-Fiction"})["findings"], "findings"), book)
 			},
 			fix: func(t *testing.T) {
-				candidates := acc.Rows(t, suite.Call(t, "item_match", map[string]any{
+				candidates := acctest.Rows(t, suite.Call(t, "item_match", map[string]any{
 					"library": "Non-Fiction", "item": book, "providers": []any{"audible"}, "title": book, "author": "Smedley D. Butler",
 				})["candidates"], "candidates")
 				if len(candidates) == 0 {
 					t.Fatal("item_match found no candidate")
 				}
-				asin := acc.Str(candidates[0]["asin"])
+				asin := acctest.Str(candidates[0]["asin"])
 				out := suite.Call(t, "item_match_apply", map[string]any{"confirm": true, "library": "Non-Fiction", "item": book, "providers": []any{"audible"}, "asin": asin})
-				if updated := acc.BoolOf(out["updated"]); !updated {
+				if updated := acctest.BoolOf(out["updated"]); !updated {
 					t.Errorf("item_match_apply reported no update: %v", out)
 				}
 			},
 			putBack: func(t *testing.T) {
 				suite.Call(t, "item_edit", map[string]any{
 					"library": "Non-Fiction", "item": book, "clear": []any{"asin", "isbn", "description", "subtitle", "series"},
-					"tags": toAny(acc.Strs(t, before["tags"], "tags")), "genres": toAny(acc.Strs(t, before["genres"], "genres")),
+					"tags": toAny(acctest.Strs(t, before["tags"], "tags")), "genres": toAny(acctest.Strs(t, before["genres"], "genres")),
 					"publisher": before["publisher"], "year": before["year"], "narrators": []any{before["narrator"]},
 					"authors": []any{before["author"]}, "title": book,
 				})
 				// the cover.jpg in the folder is still the book's
-				folder := acc.Str(before["full_path"])
+				folder := acctest.Str(before["full_path"])
 				suite.Call(t, "item_cover_edit", map[string]any{"library": "Non-Fiction", "item": book, "file": path.Join(folder, "cover.jpg")})
 			},
 		}.run(t)

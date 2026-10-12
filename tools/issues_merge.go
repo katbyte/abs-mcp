@@ -200,9 +200,9 @@ func (m *issuesMerger) run(ctx context.Context, libs []abs.Library, only []strin
 			for j := range items {
 				switch it := &items[j]; {
 				case it.IsMissing:
-					missing = append(missing, *it)
+					missing = append(missing, items[j])
 				case !it.IsInvalid && !it.IsPodcast():
-					present[it.Media.NumAudioFiles] = append(present[it.Media.NumAudioFiles], *it)
+					present[it.Media.NumAudioFiles] = append(present[it.Media.NumAudioFiles], items[j])
 				}
 			}
 			return true

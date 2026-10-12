@@ -48,6 +48,10 @@ func libraryBooks(ctx context.Context, client *abs.Client, libraryID string, ref
 		if err != nil {
 			return nil, err
 		}
+		if it == nil {
+			return nil, fmt.Errorf("%q: the lookup gave neither a book nor an error", ref)
+		}
+
 		switch {
 		case it.LibraryID != libraryID:
 			return nil, fmt.Errorf("%q is in another library (%s): a collection holds books from its own library", it.Title(), it.LibraryID)

@@ -423,14 +423,16 @@ func registerUserTools(r *registry) {
 	// hideSeries takes a series off the Continue Series shelf or puts it
 	// back, and reads the account back to say which it is
 	hideSeries := func(ctx context.Context, in progressSetIn) (progressSetOut, error) {
-		switch {
-		case in.Item != "" || in.Episode != "":
+		if in.Item != "" || in.Episode != "" {
 			return progressSetOut{}, errors.New("series stands in for item; pass one or the other")
-		case in.Hide == nil:
+		}
+		if in.Hide == nil {
 			return progressSetOut{}, errors.New("with series, pass hide_from_continue: true takes it off the Continue Series shelf, false puts it back")
-		case in.Finished != nil || in.Position != nil || in.Percent != nil:
+		}
+		if in.Finished != nil || in.Position != nil || in.Percent != nil {
 			return progressSetOut{}, errors.New("a series has no progress of its own: set finished, position_s or percent on a book")
 		}
+
 		s, err := resolveSeries(ctx, client, in.Library, in.Series)
 		if err != nil {
 			return progressSetOut{}, err

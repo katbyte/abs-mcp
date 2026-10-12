@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	acc "github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // metadata_rename merges a group audit_spelling found, whichever field it is
@@ -25,7 +25,7 @@ func TestMetadataRenameLanguage(t *testing.T) {
 	})
 
 	// which audit_spelling now groups
-	groups := acc.Rows(t, suite.Call(t, "audit_spelling", map[string]any{"field": "languages"})["groups"], "groups")
+	groups := acctest.Rows(t, suite.Call(t, "audit_spelling", map[string]any{"field": "languages"})["groups"], "groups")
 	if len(groups) != 1 {
 		t.Fatalf("audit_spelling found %d language groups, want 1: %v", len(groups), groups)
 	}
@@ -33,15 +33,15 @@ func TestMetadataRenameLanguage(t *testing.T) {
 	out := suite.Call(t, "metadata_rename", map[string]any{
 		"library": "Fiction", "field": "languages", "from": "eng", "to": "English",
 	})
-	if n := acc.Num(t, out["items_updated"], "items_updated"); n != 1 {
+	if n := acctest.Num(t, out["items_updated"], "items_updated"); n != 1 {
 		t.Errorf("items_updated = %d, want 1", n)
 	}
-	if titles := acc.Strs(t, out["items"], "items"); len(titles) != 1 || titles[0] != item {
+	if titles := acctest.Strs(t, out["items"], "items"); len(titles) != 1 || titles[0] != item {
 		t.Errorf("items = %v, want [%s]", titles, item)
 	}
 
 	// and the group is gone
-	if after := acc.Rows(t, suite.Call(t, "audit_spelling", map[string]any{"field": "languages"})["groups"], "groups"); len(after) != 0 {
+	if after := acctest.Rows(t, suite.Call(t, "audit_spelling", map[string]any{"field": "languages"})["groups"], "groups"); len(after) != 0 {
 		t.Errorf("audit_spelling still reports %d groups after the merge: %v", len(after), after)
 	}
 }
@@ -57,7 +57,7 @@ func TestMetadataRenamePublisher(t *testing.T) {
 	out := suite.Call(t, "metadata_rename", map[string]any{
 		"field": "publisher", "from": "round table", "to": "Round Table",
 	})
-	if n := acc.Num(t, out["items_updated"], "items_updated"); n != 1 {
+	if n := acctest.Num(t, out["items_updated"], "items_updated"); n != 1 {
 		t.Errorf("items_updated = %d, want 1", n)
 	}
 
@@ -80,10 +80,10 @@ func TestMetadataRenameLanguageOnPodcasts(t *testing.T) {
 
 	shows := map[string]string{}
 	for _, show := range append(slices.Clone(podcasts), feed.title) {
-		shows[show] = acc.Str(suite.Call(t, "item_get", map[string]any{"library": "Podcasts", "item": show})["language"])
+		shows[show] = acctest.Str(suite.Call(t, "item_get", map[string]any{"library": "Podcasts", "item": show})["language"])
 	}
 	const book = "War Is a Racket"
-	was := acc.Str(suite.Call(t, "item_get", map[string]any{"item": book})["language"])
+	was := acctest.Str(suite.Call(t, "item_get", map[string]any{"item": book})["language"])
 	restore := func(item, library, language string) {
 		args := map[string]any{"item": item, "library": library, "language": language}
 		if language == "" {
@@ -105,7 +105,7 @@ func TestMetadataRenameLanguageOnPodcasts(t *testing.T) {
 	suite.Call(t, "item_edit", map[string]any{"item": book, "language": "zzyzx-eng"})
 
 	out := suite.Call(t, "metadata_rename", map[string]any{"field": "languages", "from": "zzyzx-eng", "to": "Zzyzxish"})
-	if n := acc.Num(t, out["items_updated"], "items_updated"); n != len(shows)+1 {
+	if n := acctest.Num(t, out["items_updated"], "items_updated"); n != len(shows)+1 {
 		t.Errorf("items_updated = %d, want the %d shows and the book: %v", n, len(shows), out)
 	}
 	for show := range shows {
@@ -123,10 +123,10 @@ func TestMetadataRenameAuthor(t *testing.T) {
 	out := suite.Call(t, "metadata_rename", map[string]any{
 		"library": "Non-Fiction", "field": "authors", "from": "Smedley D. Butler", "to": "Smedley Butler",
 	})
-	if n := acc.Num(t, out["items_updated"], "items_updated"); n != 1 {
+	if n := acctest.Num(t, out["items_updated"], "items_updated"); n != 1 {
 		t.Errorf("items_updated = %d, want 1", n)
 	}
-	if merged := acc.BoolOf(out["merged"]); merged {
+	if merged := acctest.BoolOf(out["merged"]); merged {
 		t.Error("a rename onto a new name reported a merge")
 	}
 	t.Cleanup(func() {
@@ -150,21 +150,21 @@ func TestMetadataRemoveGenre(t *testing.T) {
 	// without confirm it names what it would drop the genre from and drops nothing
 	out := suite.Call(t, "metadata_rename", map[string]any{"field": "genres", "from": "Temporary Genre", "remove": true})
 	preview := object(out["would_remove"])
-	if found := acc.Num(t, preview["found"], "preview.found"); found != 1 || acc.Num(t, out["items_updated"], "items_updated") != 0 {
+	if found := acctest.Num(t, preview["found"], "preview.found"); found != 1 || acctest.Num(t, out["items_updated"], "items_updated") != 0 {
 		t.Errorf("preview = %v, want the one book and nothing changed", out)
 	}
-	if items := acc.Strs(t, preview["items"], "preview.items"); len(items) != 1 || items[0] != "War Is a Racket" {
+	if items := acctest.Strs(t, preview["items"], "preview.items"); len(items) != 1 || items[0] != "War Is a Racket" {
 		t.Errorf("preview items = %v, want War Is a Racket", items)
 	}
-	if genres := acc.Strs(t, suite.Call(t, "item_get", map[string]any{"item": "War Is a Racket"})["genres"], "genres"); len(genres) != 2 {
+	if genres := acctest.Strs(t, suite.Call(t, "item_get", map[string]any{"item": "War Is a Racket"})["genres"], "genres"); len(genres) != 2 {
 		t.Errorf("the preview dropped the genre: %v", genres)
 	}
 
 	out = suite.Call(t, "metadata_rename", map[string]any{"field": "genres", "from": "Temporary Genre", "remove": true, "confirm": true})
-	if n := acc.Num(t, out["items_updated"], "items_updated"); n != 1 {
+	if n := acctest.Num(t, out["items_updated"], "items_updated"); n != 1 {
 		t.Errorf("items_updated = %d, want 1", n)
 	}
-	if genres := acc.Strs(t, suite.Call(t, "item_get", map[string]any{"item": "War Is a Racket"})["genres"], "genres"); len(genres) != 1 {
+	if genres := acctest.Strs(t, suite.Call(t, "item_get", map[string]any{"item": "War Is a Racket"})["genres"], "genres"); len(genres) != 1 {
 		t.Errorf("genres = %v, want only History", genres)
 	}
 }

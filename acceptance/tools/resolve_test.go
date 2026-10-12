@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	acc "github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // Every tool that takes a thing documents "id, or an exact title" - and only
@@ -15,11 +15,11 @@ import (
 // resource: list it, take the id, and ask for it again by id.
 func TestResolveByID(t *testing.T) {
 	// library
-	libs := acc.Rows(t, suite.Call(t, "library_list", nil)["libraries"], "libraries")
+	libs := acctest.Rows(t, suite.Call(t, "library_list", nil)["libraries"], "libraries")
 	var libID string
 	for _, l := range libs {
 		if l["name"] == "Fiction" {
-			libID = acc.Str(l["id"])
+			libID = acctest.Str(l["id"])
 		}
 	}
 	if libID == "" {
@@ -30,11 +30,11 @@ func TestResolveByID(t *testing.T) {
 	}
 
 	// item, and the library narrowed by id at the same time
-	items := acc.Rows(t, suite.Call(t, "library_items", map[string]any{"library": libID, "limit": 50})["items"], "items")
+	items := acctest.Rows(t, suite.Call(t, "library_items", map[string]any{"library": libID, "limit": 50})["items"], "items")
 	var itemID string
 	for _, it := range items {
 		if it["title"] == "Foundation" {
-			itemID = acc.Str(it["id"])
+			itemID = acctest.Str(it["id"])
 		}
 	}
 	if itemID == "" {
@@ -51,11 +51,11 @@ func TestResolveByID(t *testing.T) {
 	}
 
 	// author
-	authors := acc.Rows(t, suite.Call(t, "author_list", map[string]any{"library": libID})["authors"], "authors")
+	authors := acctest.Rows(t, suite.Call(t, "author_list", map[string]any{"library": libID})["authors"], "authors")
 	if len(authors) == 0 {
 		t.Fatal("no authors")
 	}
-	authorID := acc.Str(authors[0]["id"])
+	authorID := acctest.Str(authors[0]["id"])
 	name := authors[0]["name"]
 	if authorID == "" {
 		t.Fatalf("no id on author %v", authors[0])
@@ -65,11 +65,11 @@ func TestResolveByID(t *testing.T) {
 	}
 
 	// series
-	series := acc.Rows(t, suite.Call(t, "series_list", map[string]any{"library": libID})["series"], "series")
+	series := acctest.Rows(t, suite.Call(t, "series_list", map[string]any{"library": libID})["series"], "series")
 	if len(series) == 0 {
 		t.Fatal("no series")
 	}
-	seriesID := acc.Str(series[0]["id"])
+	seriesID := acctest.Str(series[0]["id"])
 	seriesName := series[0]["name"]
 	if seriesID != "" {
 		if got := suite.Call(t, "series_get", map[string]any{"series": seriesID}); got["name"] != seriesName {
@@ -78,11 +78,11 @@ func TestResolveByID(t *testing.T) {
 	}
 
 	// user
-	users := acc.Rows(t, suite.Call(t, "user_list", nil)["users"], "users")
+	users := acctest.Rows(t, suite.Call(t, "user_list", nil)["users"], "users")
 	if len(users) == 0 {
 		t.Fatal("no users")
 	}
-	userID := acc.Str(users[0]["id"])
+	userID := acctest.Str(users[0]["id"])
 	if got := suite.Call(t, "user_get", map[string]any{"user": userID}); got["username"] != "root" {
 		t.Errorf("user by id = %v, want root", got["username"])
 	}
@@ -94,7 +94,7 @@ func TestResolveCollectionAndPlaylistByID(t *testing.T) {
 	created := suite.Call(t, "collection_create", map[string]any{
 		"library": "Fiction", "name": "By ID Collection", "items": []any{"Foundation"},
 	})
-	colID := acc.Str(created["id"])
+	colID := acctest.Str(created["id"])
 	t.Cleanup(func() { suite.Call(t, "collection_delete", map[string]any{"collection": colID}) })
 	if colID == "" {
 		t.Fatalf("no collection id: %v", created)
@@ -107,7 +107,7 @@ func TestResolveCollectionAndPlaylistByID(t *testing.T) {
 		"library": "Fiction", "name": "By ID Playlist",
 		"entries": []any{map[string]any{"item": "Foundation"}},
 	})
-	plID := acc.Str(pl["id"])
+	plID := acctest.Str(pl["id"])
 	t.Cleanup(func() { suite.Call(t, "playlist_delete", map[string]any{"playlist": plID}) })
 	if plID == "" {
 		t.Fatalf("no playlist id: %v", pl)
@@ -148,9 +148,9 @@ func TestResolveAmbiguousAcrossLibraries(t *testing.T) {
 	// and naming the library resolves it again
 	one := suite.Call(t, "author_list", map[string]any{"library": "Fiction"})
 	var id string
-	for _, a := range acc.Rows(t, one["authors"], "authors") {
+	for _, a := range acctest.Rows(t, one["authors"], "authors") {
 		if a["name"] == shared {
-			id = acc.Str(a["id"])
+			id = acctest.Str(a["id"])
 		}
 	}
 	if id == "" {
@@ -173,7 +173,7 @@ func TestResolveRejectsNonTitleMatch(t *testing.T) {
 	if !strings.Contains(msg, "another field") {
 		t.Errorf("an asin hit was not refused as a non-title match: %s", msg)
 	}
-	id := acc.Str(suite.Call(t, "item_get", map[string]any{"item": book})["id"])
+	id := acctest.Str(suite.Call(t, "item_get", map[string]any{"item": book})["id"])
 	if id == "" || !strings.Contains(msg, id) {
 		t.Errorf("the refusal does not offer the id %q: %s", id, msg)
 	}

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	acc "github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // The non-fiction genre is History on all three books, which is under the
@@ -18,31 +18,31 @@ import (
 func TestAuditGenres(t *testing.T) {
 	out := suite.Call(t, "audit_genres", map[string]any{"library": "Non-Fiction"})
 
-	if scanned := acc.Num(t, out["items_scanned"], "items_scanned"); scanned != 3 {
+	if scanned := acctest.Num(t, out["items_scanned"], "items_scanned"); scanned != 3 {
 		t.Errorf("items_scanned = %d, want 3", scanned)
 	}
-	if found := acc.Num(t, out["total_findings"], "total_findings"); found != 2 {
+	if found := acctest.Num(t, out["total_findings"], "total_findings"); found != 2 {
 		t.Errorf("total_findings = %d, want the narrow genre and the redundant tag", found)
 	}
 	for _, section := range []string{"placeholders", "compound"} {
-		if len(acc.Rows(t, out[section], section)) != 0 {
+		if len(acctest.Rows(t, out[section], section)) != 0 {
 			t.Errorf("%s = %v, want nothing", section, out[section])
 		}
 	}
-	if v := out["no_genres"]; v != nil && len(acc.Rows(t, v, "no_genres")) != 0 {
+	if v := out["no_genres"]; v != nil && len(acctest.Rows(t, v, "no_genres")) != 0 {
 		t.Errorf("no_genres = %v, want none: every fixture has a genre", v)
 	}
 
-	narrow := acc.Rows(t, out["narrow"], "narrow")
-	if len(narrow) != 1 || narrow[0]["value"] != "History" || acc.Num(t, narrow[0]["items"], "items") != 3 {
+	narrow := acctest.Rows(t, out["narrow"], "narrow")
+	if len(narrow) != 1 || narrow[0]["value"] != "History" || acctest.Num(t, narrow[0]["items"], "items") != 3 {
 		t.Errorf("narrow = %v, want History on 3 books", narrow)
-	} else if suggest := acc.Str(narrow[0]["suggest"]); !strings.Contains(suggest, "to_field=tags") {
+	} else if suggest := acctest.Str(narrow[0]["suggest"]); !strings.Contains(suggest, "to_field=tags") {
 		t.Errorf("narrow suggests %q, want a move to tags", suggest)
 	}
-	redundant := acc.Rows(t, out["redundant"], "redundant")
-	if len(redundant) != 1 || redundant[0]["value"] != "history" || acc.Num(t, redundant[0]["items"], "items") != 2 {
+	redundant := acctest.Rows(t, out["redundant"], "redundant")
+	if len(redundant) != 1 || redundant[0]["value"] != "history" || acctest.Num(t, redundant[0]["items"], "items") != 2 {
 		t.Errorf("redundant = %v, want the history tag on 2 books", redundant)
-	} else if suggest := acc.Str(redundant[0]["suggest"]); !strings.Contains(suggest, "remove=true") {
+	} else if suggest := acctest.Str(redundant[0]["suggest"]); !strings.Contains(suggest, "remove=true") {
 		t.Errorf("redundant suggests %q, want a removal", suggest)
 	}
 }
@@ -55,7 +55,7 @@ func TestSeriesMerge(t *testing.T) {
 
 	// a second spelling with one book in it, beside the three-book series
 	suite.Call(t, "item_edit", map[string]any{"item": book, "add_series": []any{"Foundation Saga #1"}})
-	if series := acc.Strs(t, suite.Call(t, "item_get", map[string]any{"item": book})["series"], "series"); len(series) != 2 {
+	if series := acctest.Strs(t, suite.Call(t, "item_get", map[string]any{"item": book})["series"], "series"); len(series) != 2 {
 		t.Fatalf("series after add_series = %v, want both", series)
 	}
 
@@ -64,21 +64,21 @@ func TestSeriesMerge(t *testing.T) {
 	}
 
 	out := suite.Call(t, "series_merge", map[string]any{"library": "Fiction", "from": "Foundation Saga", "into": "Foundation"})
-	if moved := acc.Num(t, out["moved"], "moved"); moved != 1 {
+	if moved := acctest.Num(t, out["moved"], "moved"); moved != 1 {
 		t.Errorf("moved = %d, want 1", moved)
 	}
-	if books := acc.Strs(t, out["books"], "books"); !slices.Contains(books, "Foundation #1") {
+	if books := acctest.Strs(t, out["books"], "books"); !slices.Contains(books, "Foundation #1") {
 		t.Errorf("books = %v, want Foundation at #1", books)
 	}
-	if removed := acc.BoolOf(out["from_removed"]); !removed {
+	if removed := acctest.BoolOf(out["from_removed"]); !removed {
 		t.Errorf("from_removed = %v, note %v: the server drops a series its last book leaves", out["from_removed"], out["note"])
 	}
 
 	// the book is in the target once, at its number
-	if series := acc.Strs(t, suite.Call(t, "item_get", map[string]any{"item": book})["series"], "series"); !slices.Equal(series, []string{"Foundation #1"}) {
+	if series := acctest.Strs(t, suite.Call(t, "item_get", map[string]any{"item": book})["series"], "series"); !slices.Equal(series, []string{"Foundation #1"}) {
 		t.Errorf("series after merge = %v, want [Foundation #1]", series)
 	}
-	if books := acc.Rows(t, suite.Call(t, "series_get", map[string]any{"library": "Fiction", "series": "Foundation"})["books"], "books"); len(books) != 3 {
+	if books := acctest.Rows(t, suite.Call(t, "series_get", map[string]any{"library": "Fiction", "series": "Foundation"})["books"], "books"); len(books) != 3 {
 		t.Errorf("Foundation has %d books after the merge, want 3", len(books))
 	}
 	if msg := suite.CallErr(t, "series_get", map[string]any{"library": "Fiction", "series": "Foundation Saga"}); msg == "" {
@@ -95,20 +95,20 @@ func TestItemMatchBatch(t *testing.T) {
 	out := suite.Call(t, "item_match_batch", map[string]any{
 		"library": "Fiction", "filter": "series:Foundation", "providers": []any{"audible"}, "candidates": 2,
 	})
-	if total := acc.Num(t, out["total"], "total"); total != 3 {
+	if total := acctest.Num(t, out["total"], "total"); total != 3 {
 		t.Errorf("total = %d, want the 3 Foundation books", total)
 	}
 	if _, more := out["next_offset"]; more {
 		t.Errorf("next_offset = %v on a three-book filter", out["next_offset"])
 	}
 
-	found := acc.Rows(t, out["rows"], "rows")
+	found := acctest.Rows(t, out["rows"], "rows")
 	if len(found) != 3 {
 		t.Fatalf("rows = %d, want 3", len(found))
 	}
 	confidences := []string{"exact", "likely", "edition", "unsure", "none"}
 	for _, row := range found {
-		conf := acc.Str(row["confidence"])
+		conf := acctest.Str(row["confidence"])
 		if !slices.Contains(confidences, conf) {
 			t.Errorf("%v: confidence = %q", row["title"], conf)
 		}
@@ -120,10 +120,10 @@ func TestItemMatchBatch(t *testing.T) {
 			t.Errorf("%v: no best candidate from the store", row["title"])
 			continue
 		}
-		if asin := acc.Str(best["asin"]); asin == "" {
+		if asin := acctest.Str(best["asin"]); asin == "" {
 			t.Errorf("%v: the best candidate has no asin", row["title"])
 		}
-		if title := acc.Str(best["title"]); !strings.Contains(strings.ToLower(title), "foundation") {
+		if title := acctest.Str(best["title"]); !strings.Contains(strings.ToLower(title), "foundation") {
 			t.Errorf("%v: best candidate is %q", row["title"], title)
 		}
 	}
@@ -134,7 +134,7 @@ func TestItemMatchBatch(t *testing.T) {
 	}
 	var sum int
 	for _, v := range counts {
-		n := acc.DecimalOr0(v)
+		n := acctest.DecimalOr0(v)
 		sum += int(n)
 	}
 	if sum != 3 {
@@ -166,15 +166,15 @@ func TestItemCoverUpgradeNeedsAnASIN(t *testing.T) {
 		"confirm": true,
 		"library": "Fiction", "items": books, "providers": []any{"audible"},
 	})
-	if upgraded := acc.Num(t, out["upgraded"], "upgraded"); upgraded != 0 {
+	if upgraded := acctest.Num(t, out["upgraded"], "upgraded"); upgraded != 0 {
 		t.Errorf("upgraded = %d, want 0", upgraded)
 	}
-	items := acc.Rows(t, out["items"], "items")
+	items := acctest.Rows(t, out["items"], "items")
 	if len(items) != 2 {
 		t.Fatalf("items = %v, want a row per book", items)
 	}
 	for _, row := range items {
-		if action := acc.Str(row["action"]); action != "no_asin" {
+		if action := acctest.Str(row["action"]); action != "no_asin" {
 			t.Errorf("%v: action = %q, want no_asin on an unmatched book", row["title"], action)
 		}
 	}

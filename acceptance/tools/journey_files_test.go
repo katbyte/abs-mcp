@@ -28,7 +28,7 @@ import (
 
 	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/abs-mcp/tools"
-	acc "github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // diskShelf is a library a journey owns, over a folder of its own under
@@ -105,7 +105,7 @@ func (s *diskShelf) open(t *testing.T, want int) {
 	t.Helper()
 
 	lib := object(suite.Call(t, "library_create", map[string]any{"name": s.name, "folders": []any{s.folder}})["library"])
-	if s.id = acc.Str(lib["id"]); s.id == "" {
+	if s.id = acctest.Str(lib["id"]); s.id == "" {
 		t.Fatalf("library_create gave no id: %v", lib)
 	}
 	s.scan(t, false)
@@ -132,8 +132,8 @@ func (s *diskShelf) items(t *testing.T) map[string]map[string]any {
 	t.Helper()
 
 	out := map[string]map[string]any{}
-	for _, it := range acc.Rows(t, suite.Call(t, "library_items", map[string]any{"library": s.name, "limit": 100})["items"], "items") {
-		out[acc.Str(it["path"])] = it
+	for _, it := range acctest.Rows(t, suite.Call(t, "library_items", map[string]any{"library": s.name, "limit": 100})["items"], "items") {
+		out[acctest.Str(it["path"])] = it
 	}
 	return out
 }
@@ -144,7 +144,7 @@ func (s *diskShelf) ids(t *testing.T) map[string]string {
 
 	out := map[string]string{}
 	for p, it := range s.items(t) {
-		out[p] = acc.Str(it["id"])
+		out[p] = acctest.Str(it["id"])
 	}
 	return out
 }
@@ -268,7 +268,7 @@ func diskSettle(t *testing.T) {
 	t.Helper()
 
 	for range 12 {
-		for _, task := range acc.Rows(t, suite.Call(t, "server_tasks", nil)["tasks"], "tasks") {
+		for _, task := range acctest.Rows(t, suite.Call(t, "server_tasks", nil)["tasks"], "tasks") {
 			if task["status"] == "running" {
 				waitIdle(t)
 				return
@@ -314,13 +314,13 @@ func TestJourneyABookDeletedWithItsFiles(t *testing.T) {
 
 	t.Run("previewed, nothing goes", func(t *testing.T) {
 		out := suite.Call(t, "item_delete", map[string]any{"item": ids[one], "delete_files": true})
-		if out["would_delete"] != "Zzyzx Book One" || out["deleted"] != nil || !acc.IsBool(out["files_removed"], false) {
+		if out["would_delete"] != "Zzyzx Book One" || out["deleted"] != nil || !acctest.IsBool(out["files_removed"], false) {
 			t.Errorf("preview = %v, want Book One named and nothing deleted", out)
 		}
 		if want := "the folder " + s.folder + "/" + one + " and everything in it"; out["files"] != want {
 			t.Errorf("files = %q, want %q", out["files"], want)
 		}
-		if marks := acc.Strs(t, out["bookmarks"], "bookmarks"); len(marks) != 1 || !strings.Contains(marks[0], `"Zzyzx Delete Mark"`) {
+		if marks := acctest.Strs(t, out["bookmarks"], "bookmarks"); len(marks) != 1 || !strings.Contains(marks[0], `"Zzyzx Delete Mark"`) {
 			t.Errorf("bookmarks = %v, want the one on it", marks)
 		}
 		// without delete_files the record is all that would go
@@ -333,14 +333,14 @@ func TestJourneyABookDeletedWithItsFiles(t *testing.T) {
 		if n := len(s.items(t)); n != 4 {
 			t.Errorf("the library holds %d books after the previews, want 4", n)
 		}
-		if marks := acc.Rows(t, suite.Call(t, "user_bookmarks", map[string]any{"item": ids[one]})["bookmarks"], "bookmarks"); len(marks) != 1 {
+		if marks := acctest.Rows(t, suite.Call(t, "user_bookmarks", map[string]any{"item": ids[one]})["bookmarks"], "bookmarks"); len(marks) != 1 {
 			t.Errorf("the previews took the bookmark: %v", marks)
 		}
 	})
 
 	t.Run("a book's folder", func(t *testing.T) {
 		out := suite.Call(t, "item_delete", map[string]any{"item": ids[one], "delete_files": true, "confirm": true})
-		if out["deleted"] != "Zzyzx Book One" || !acc.BoolOf(out["files_removed"]) || acc.Num(t, out["bookmarks_removed"], "bookmarks_removed") != 1 {
+		if out["deleted"] != "Zzyzx Book One" || !acctest.BoolOf(out["files_removed"]) || acctest.Num(t, out["bookmarks_removed"], "bookmarks_removed") != 1 {
 			t.Errorf("delete = %v", out)
 		}
 		// the folder, cover and all; the author folder and the book beside it stay
@@ -378,7 +378,7 @@ func TestJourneyABookDeletedWithItsFiles(t *testing.T) {
 		if !slices.Equal(left, []string{two, rootTwo}) {
 			t.Errorf("after a scan the library holds %v, want Book Two and Root Two", left)
 		}
-		if n := acc.Num(t, suite.Call(t, "audit_issues", map[string]any{"library": s.name})["total_findings"], "total_findings"); n != 0 {
+		if n := acctest.Num(t, suite.Call(t, "audit_issues", map[string]any{"library": s.name})["total_findings"], "total_findings"); n != 0 {
 			t.Errorf("audit_issues finds %d, want none: nothing was left pointing at a deleted file", n)
 		}
 	})
@@ -455,14 +455,14 @@ func TestJourneyAFolderRenamedKeepsItsBook(t *testing.T) {
 		if book["title"] != "Small Gods" {
 			t.Errorf("title = %v, want Small Gods kept through the move", book["title"])
 		}
-		if series := acc.Strs(t, book["series"], "series"); !slices.Contains(series, "Discworld #07") || !slices.Contains(series, "Zzyzx Moved Saga #1") {
+		if series := acctest.Strs(t, book["series"], "series"); !slices.Contains(series, "Discworld #07") || !slices.Contains(series, "Zzyzx Moved Saga #1") {
 			t.Errorf("series = %v, want both kept", series)
 		}
-		if n := acc.Num(t, suite.Call(t, "library_items", withMessy(map[string]any{"limit": 1}))["total"], "total"); n != len(messyBooks) {
+		if n := acctest.Num(t, suite.Call(t, "library_items", withMessy(map[string]any{"limit": 1}))["total"], "total"); n != len(messyBooks) {
 			t.Errorf("Messy holds %d books after the rename, want %d: the move made a second record", n, len(messyBooks))
 		}
 		progress := object(suite.Call(t, "user_progress_get", map[string]any{"item": id})["progress"])
-		if progress == nil || acc.Num(t, progress["percent"], "percent") != 50 {
+		if progress == nil || acctest.Num(t, progress["percent"], "percent") != 50 {
 			t.Errorf("progress = %v, want the 50%% set before the move", progress)
 		}
 		if marks := titlesIn(t, suite.Call(t, "user_bookmarks", map[string]any{"item": id})["bookmarks"], "bookmarks"); !slices.Equal(marks, []string{"Zzyzx Moved Mark"}) {
@@ -471,10 +471,10 @@ func TestJourneyAFolderRenamedKeepsItsBook(t *testing.T) {
 		if held := valuesIn(t, suite.Call(t, "collection_get", map[string]any{"collection": "Zzyzx Moved Shelf"})["items"], "items", "id"); !slices.Equal(held, []string{id}) {
 			t.Errorf("the collection holds %v, want the moved book", held)
 		}
-		entries := acc.Rows(t, suite.Call(t, "playlist_get", map[string]any{"playlist": "Zzyzx Moved Queue"})["entries"], "entries")
+		entries := acctest.Rows(t, suite.Call(t, "playlist_get", map[string]any{"playlist": "Zzyzx Moved Queue"})["entries"], "entries")
 		queued := make([]string, 0, len(entries))
 		for _, e := range entries {
-			queued = append(queued, acc.Str(object(e["item"])["id"]))
+			queued = append(queued, acctest.Str(object(e["item"])["id"]))
 		}
 		if !slices.Equal(queued, []string{id}) {
 			t.Errorf("the playlist holds %v, want the moved book", queued)
@@ -485,7 +485,7 @@ func TestJourneyAFolderRenamedKeepsItsBook(t *testing.T) {
 		if slices.Contains(diskFindingIDs(t, suite.Call(t, "audit_path", withMessy(nil))), id) {
 			t.Error("audit_path still reports the book once its folder is named after it")
 		}
-		if n := acc.Num(t, suite.Call(t, "audit_issues", withMessy(nil))["total_findings"], "total_findings"); n != 0 {
+		if n := acctest.Num(t, suite.Call(t, "audit_issues", withMessy(nil))["total_findings"], "total_findings"); n != 0 {
 			t.Errorf("audit_issues finds %d after the move, want none", n)
 		}
 
@@ -499,11 +499,11 @@ func TestJourneyAFolderRenamedKeepsItsBook(t *testing.T) {
 		src := filepath.Join(messy, outsidePath, "01.mp3")
 		dst := filepath.Join(messy, insidePath, "02.mp3")
 		tracks := func(id string) int {
-			return acc.Num(t, suite.Call(t, "item_get", map[string]any{"item": id})["audio_tracks"], "audio_tracks")
+			return acctest.Num(t, suite.Call(t, "item_get", map[string]any{"item": id})["audio_tracks"], "audio_tracks")
 		}
 		grouped := func(t *testing.T) bool {
 			t.Helper()
-			for _, g := range acc.Rows(t, suite.Call(t, "audit_duplicates", withMessy(nil))["groups"], "groups") {
+			for _, g := range acctest.Rows(t, suite.Call(t, "audit_duplicates", withMessy(nil))["groups"], "groups") {
 				if slices.Contains(valuesIn(t, g["items"], "items", "id"), inside) {
 					return true
 				}
@@ -523,7 +523,7 @@ func TestJourneyAFolderRenamedKeepsItsBook(t *testing.T) {
 			suite.Call(t, "library_scan", map[string]any{"library": "Messy"})
 			waitIdle(t)
 			diskUntil(t, "Mort scanned back outside the series", func() (bool, string) {
-				n := acc.Num(t, suite.Call(t, "library_items", withMessy(map[string]any{"limit": 1}))["total"], "total")
+				n := acctest.Num(t, suite.Call(t, "library_items", withMessy(map[string]any{"limit": 1}))["total"], "total")
 				return n == len(messyBooks) && tracks(inside) == 1, fmt.Sprintf("%d books, the series copy has %d tracks", n, tracks(inside))
 			})
 			// the server built the series copy's chapters from its two files,
@@ -572,7 +572,7 @@ func TestJourneyAFolderRenamedKeepsItsBook(t *testing.T) {
 		waitIdle(t)
 		diskUntil(t, "the scan seeing the move", func() (bool, string) {
 			missing := suite.Call(t, "item_get", map[string]any{"item": outside})["missing"]
-			return acc.BoolOf(missing) && tracks(inside) == 2, fmt.Sprintf("the outside copy missing %v, the series copy has %d tracks", missing, tracks(inside))
+			return acctest.BoolOf(missing) && tracks(inside) == 2, fmt.Sprintf("the outside copy missing %v, the series copy has %d tracks", missing, tracks(inside))
 		})
 
 		if got := diskFindingIDs(t, suite.Call(t, "audit_issues", withMessy(nil))); !slices.Equal(got, []string{outside}) {
@@ -585,10 +585,10 @@ func TestJourneyAFolderRenamedKeepsItsBook(t *testing.T) {
 		}
 
 		preview := suite.Call(t, "library_issues_remove", withMessy(nil))
-		if acc.Num(t, preview["found"], "found") != 1 || acc.Num(t, preview["removed"], "removed") != 0 || acc.Num(t, preview["remaining"], "remaining") != 1 {
+		if acctest.Num(t, preview["found"], "found") != 1 || acctest.Num(t, preview["removed"], "removed") != 0 || acctest.Num(t, preview["remaining"], "remaining") != 1 {
 			t.Errorf("preview = %v, want one found and none removed", preview)
 		}
-		if items := acc.Rows(t, preview["items"], "items"); len(items) != 1 || items[0]["id"] != outside || items[0]["title"] != "Mort" || items[0]["path"] != outsidePath || items[0]["full_path"] != "/messy/"+outsidePath {
+		if items := acctest.Rows(t, preview["items"], "items"); len(items) != 1 || items[0]["id"] != outside || items[0]["title"] != "Mort" || items[0]["path"] != outsidePath || items[0]["full_path"] != "/messy/"+outsidePath {
 			t.Errorf("preview items = %v, want the orphan by id, title and path", items)
 		}
 		if _, err := suite.Invoke("item_get", map[string]any{"item": outside}); err != nil {
@@ -596,13 +596,13 @@ func TestJourneyAFolderRenamedKeepsItsBook(t *testing.T) {
 		}
 
 		done := suite.Call(t, "library_issues_remove", withMessy(map[string]any{"confirm": true}))
-		if acc.Num(t, done["removed"], "removed") != 1 || acc.Num(t, done["remaining"], "remaining") != 0 {
+		if acctest.Num(t, done["removed"], "removed") != 1 || acctest.Num(t, done["remaining"], "remaining") != 0 {
 			t.Errorf("removal = %v, want the one removed and none left", done)
 		}
 		if msg := suite.CallErr(t, "item_get", map[string]any{"item": outside}); msg == "" {
 			t.Error("the removed record still resolves")
 		}
-		if n := acc.Num(t, suite.Call(t, "library_items", withMessy(map[string]any{"limit": 1}))["total"], "total"); n != len(messyBooks)-1 {
+		if n := acctest.Num(t, suite.Call(t, "library_items", withMessy(map[string]any{"limit": 1}))["total"], "total"); n != len(messyBooks)-1 {
 			t.Errorf("Messy holds %d books, want %d: the removal took more than the orphan", n, len(messyBooks)-1)
 		}
 		if tracks(inside) != 2 {
@@ -616,7 +616,7 @@ func TestJourneyAFolderRenamedKeepsItsBook(t *testing.T) {
 		if messyID(t, outsidePath) == outside {
 			t.Errorf("the removed record %s came back", outside)
 		}
-		if got := suite.Call(t, "item_get", map[string]any{"item": inside}); got["chapters"] != nil || acc.Num(t, got["audio_tracks"], "audio_tracks") != 1 {
+		if got := suite.Call(t, "item_get", map[string]any{"item": inside}); got["chapters"] != nil || acctest.Num(t, got["audio_tracks"], "audio_tracks") != 1 {
 			t.Errorf("the series copy has %v chapters in %v tracks after the put back, want none in one", got["chapters"], got["audio_tracks"])
 		}
 		if !grouped(t) {
@@ -671,7 +671,7 @@ func TestJourneyEditsSurviveAForcedScan(t *testing.T) {
 			for k, v := range wantList[id] {
 				var have []string
 				if got[k] != nil {
-					have = acc.Strs(t, got[k], k)
+					have = acctest.Strs(t, got[k], k)
 				}
 				if !slices.Equal(have, v) {
 					t.Errorf("%v %s = %v, want %v", got["title"], k, have, v)
@@ -692,12 +692,12 @@ func TestJourneyEditsSurviveAForcedScan(t *testing.T) {
 			"year": "1999", "publisher": "Zzyzx Press", "language": "English", "add_series": []any{"Zzyzx Rescan Omnibus"},
 		})
 		for _, id := range []string{book, other} {
-			if series := acc.Strs(t, suite.Call(t, "item_get", map[string]any{"item": id})["series"], "series"); !slices.Contains(series, "Zzyzx Rescan Omnibus") || len(series) != 2 {
+			if series := acctest.Strs(t, suite.Call(t, "item_get", map[string]any{"item": id})["series"], "series"); !slices.Contains(series, "Zzyzx Rescan Omnibus") || len(series) != 2 {
 				t.Errorf("series after add_series = %v, want the omnibus beside the book's own", series)
 			}
 		}
 		out := suite.Call(t, "item_edit", map[string]any{"library": s.name, "items": both, "remove_tags": []any{"zzyzx-drop"}, "remove_series": []any{"Zzyzx Rescan Omnibus"}})
-		if n := acc.Num(t, out["items_updated"], "items_updated"); n != 2 {
+		if n := acctest.Num(t, out["items_updated"], "items_updated"); n != 2 {
 			t.Errorf("items_updated = %d, want 2", n)
 		}
 		check(t)
@@ -717,7 +717,7 @@ func TestJourneyEditsSurviveAForcedScan(t *testing.T) {
 
 	t.Run("a forced scan keeps the edits", func(t *testing.T) {
 		s.scan(t, true)
-		if result := acc.Str(suite.Call(t, "item_rescan", map[string]any{"item": book})["result"]); result != "UPTODATE" {
+		if result := acctest.Str(suite.Call(t, "item_rescan", map[string]any{"item": book})["result"]); result != "UPTODATE" {
 			t.Errorf("item_rescan after a forced scan = %s, want UPTODATE", result)
 		}
 		check(t)
@@ -729,7 +729,7 @@ func TestJourneyEditsSurviveAForcedScan(t *testing.T) {
 
 	t.Run("a new track and a bigger cover, rescanned", func(t *testing.T) {
 		small := func() bool {
-			for _, row := range acc.Rows(t, suite.Call(t, "audit_covers", map[string]any{"library": s.name})["findings"], "findings") {
+			for _, row := range acctest.Rows(t, suite.Call(t, "audit_covers", map[string]any{"library": s.name})["findings"], "findings") {
 				if row["id"] == book && row["problem"] == "small" {
 					return true
 				}
@@ -743,18 +743,18 @@ func TestJourneyEditsSurviveAForcedScan(t *testing.T) {
 
 		writeJPEG(t, filepath.Join(s.root, bookPath, "cover.jpg"), 600)
 		diskSilence(t, filepath.Join(s.root, bookPath, "02.mp3"), 1)
-		if result := acc.Str(suite.Call(t, "item_rescan", map[string]any{"item": book})["result"]); result != "UPDATED" {
+		if result := acctest.Str(suite.Call(t, "item_rescan", map[string]any{"item": book})["result"]); result != "UPDATED" {
 			t.Errorf("item_rescan after adding a track = %s, want UPDATED", result)
 		}
 
 		after := suite.Call(t, "item_get", map[string]any{"item": book, "files": true})
-		if n := acc.Num(t, after["audio_tracks"], "audio_tracks"); n != 2 {
+		if n := acctest.Num(t, after["audio_tracks"], "audio_tracks"); n != 2 {
 			t.Errorf("audio_tracks = %d, want 2", n)
 		}
 		if files := valuesIn(t, after["track_list"], "track_list", "filename"); !slices.Equal(files, []string{"01.mp3", "02.mp3"}) {
 			t.Errorf("tracks = %v, want 01.mp3 then 02.mp3", files)
 		}
-		if acc.Num(t, after["duration_s"], "duration_s") <= acc.Num(t, before["duration_s"], "duration_s") {
+		if acctest.Num(t, after["duration_s"], "duration_s") <= acctest.Num(t, before["duration_s"], "duration_s") {
 			t.Errorf("duration_s = %v before and %v after a second track", before["duration_s"], after["duration_s"])
 		}
 		if small() {
@@ -789,7 +789,7 @@ func TestJourneyRemovingIssuesIsScoped(t *testing.T) {
 	missing := func(s *diskShelf) []string {
 		var out []string
 		for p, it := range s.items(t) {
-			if acc.BoolOf(it["missing"]) {
+			if acctest.BoolOf(it["missing"]) {
 				out = append(out, p)
 			}
 		}
@@ -811,8 +811,8 @@ func TestJourneyRemovingIssuesIsScoped(t *testing.T) {
 
 	t.Run("one library's issues, removed", func(t *testing.T) {
 		preview := suite.Call(t, "library_issues_remove", map[string]any{"library": one.name})
-		items := acc.Rows(t, preview["items"], "items")
-		if acc.Num(t, preview["found"], "found") != 1 || acc.Num(t, preview["removed"], "removed") != 0 || len(items) != 1 ||
+		items := acctest.Rows(t, preview["items"], "items")
+		if acctest.Num(t, preview["found"], "found") != 1 || acctest.Num(t, preview["removed"], "removed") != 0 || len(items) != 1 ||
 			items[0]["id"] != oneIDs[gonePath] || items[0]["path"] != gonePath || items[0]["full_path"] != one.folder+"/"+gonePath {
 			t.Errorf("preview = %v, want only this library's missing book", preview)
 		}
@@ -821,7 +821,7 @@ func TestJourneyRemovingIssuesIsScoped(t *testing.T) {
 		}
 
 		done := suite.Call(t, "library_issues_remove", map[string]any{"library": one.name, "confirm": true})
-		if acc.Num(t, done["removed"], "removed") != 1 || acc.Num(t, done["remaining"], "remaining") != 0 {
+		if acctest.Num(t, done["removed"], "removed") != 1 || acctest.Num(t, done["remaining"], "remaining") != 0 {
 			t.Errorf("removal = %v, want the one removed", done)
 		}
 		if got := slices.Sorted(func(yield func(string) bool) {
@@ -860,7 +860,7 @@ func TestJourneyRemovingIssuesIsScoped(t *testing.T) {
 		preview := suite.Call(t, "library_issues_remove", map[string]any{"library": one.name})
 		paths := valuesIn(t, preview["items"], "items", "path")
 		slices.Sort(paths)
-		if acc.Num(t, preview["found"], "found") != 2 || acc.Num(t, preview["removed"], "removed") != 0 ||
+		if acctest.Num(t, preview["found"], "found") != 2 || acctest.Num(t, preview["removed"], "removed") != 0 ||
 			!slices.Equal(paths, []string{alsoPath, keptPath}) {
 			t.Errorf("preview = %v, want both books listed and nothing removed", preview)
 		}
@@ -881,10 +881,10 @@ func TestJourneyRemovingIssuesIsScoped(t *testing.T) {
 			t.Errorf("after the folders came back the records are %v, want the same two", got)
 		}
 		progress := object(suite.Call(t, "user_progress_get", map[string]any{"item": kept})["progress"])
-		if progress == nil || acc.Num(t, progress["percent"], "percent") != 40 {
+		if progress == nil || acctest.Num(t, progress["percent"], "percent") != 40 {
 			t.Errorf("progress = %v, want the 40%% it had before the folders went", progress)
 		}
-		if n := acc.Num(t, suite.Call(t, "audit_issues", map[string]any{"library": one.name})["total_findings"], "total_findings"); n != 0 {
+		if n := acctest.Num(t, suite.Call(t, "audit_issues", map[string]any{"library": one.name})["total_findings"], "total_findings"); n != 0 {
 			t.Errorf("audit_issues finds %d once the folders are back", n)
 		}
 	})
@@ -911,8 +911,8 @@ func TestJourneyAnEbookOnlyFolder(t *testing.T) {
 		t.Errorf("the ebook-only book reads as ebook %v with %v tracks", book["ebook"], book["audio_tracks"])
 	}
 	out := suite.Call(t, "audit_no_audio", map[string]any{"library": s.name})
-	findings := acc.Rows(t, out["findings"], "findings")
-	if len(findings) != 1 || findings[0]["title"] != "Zzyzx Ebook Only" || findings[0]["detail"] != "ebook only (epub)" || acc.Num(t, out["total_findings"], "total_findings") != 1 {
+	findings := acctest.Rows(t, out["findings"], "findings")
+	if len(findings) != 1 || findings[0]["title"] != "Zzyzx Ebook Only" || findings[0]["detail"] != "ebook only (epub)" || acctest.Num(t, out["total_findings"], "total_findings") != 1 {
 		t.Errorf("audit_no_audio = %v, want the ebook alone, as an ebook", out)
 	}
 	// across every library it is still the only one: Foundation's epub sits
@@ -926,7 +926,7 @@ func TestJourneyAnEbookOnlyFolder(t *testing.T) {
 		t.Errorf("on disk after the delete: %v", got)
 	}
 	s.scan(t, false)
-	if n := acc.Num(t, suite.Call(t, "audit_no_audio", map[string]any{"library": s.name})["total_findings"], "total_findings"); n != 0 {
+	if n := acctest.Num(t, suite.Call(t, "audit_no_audio", map[string]any{"library": s.name})["total_findings"], "total_findings"); n != 0 {
 		t.Errorf("audit_no_audio finds %d after the delete and a scan", n)
 	}
 	if got := s.ids(t); len(got) != 1 || got[audioPath] != ids[audioPath] {
@@ -1028,8 +1028,8 @@ func TestJourneyASeriesRenamedOnDiskIsPutBackTogether(t *testing.T) {
 	pathFindings := func(t *testing.T) map[string]string {
 		t.Helper()
 		found := map[string]string{}
-		for _, f := range acc.Rows(t, suite.Call(t, "audit_path", map[string]any{"library": s.name})["findings"], "findings") {
-			found[acc.Str(f["id"])] = acc.Str(f["detail"])
+		for _, f := range acctest.Rows(t, suite.Call(t, "audit_path", map[string]any{"library": s.name})["findings"], "findings") {
+			found[acctest.Str(f["id"])] = acctest.Str(f["detail"])
 		}
 		return found
 	}
@@ -1101,29 +1101,29 @@ func TestJourneyASeriesRenamedOnDiskIsPutBackTogether(t *testing.T) {
 	// the merge has to untie and tie them again
 	suite.Call(t, "item_edit", map[string]any{"item": fresh[first], "series": []any{"Zzyzx Annals #7"}})
 	suite.Call(t, "item_edit", map[string]any{"item": fresh[first], "add_series": []any{saga + " #1"}})
-	if got := acc.Strs(t, suite.Call(t, "item_get", map[string]any{"item": fresh[first]})["series"], "series"); !slices.Equal(got, []string{"Zzyzx Annals #7", saga + " #1"}) {
+	if got := acctest.Strs(t, suite.Call(t, "item_get", map[string]any{"item": fresh[first]})["series"], "series"); !slices.Equal(got, []string{"Zzyzx Annals #7", saga + " #1"}) {
 		t.Fatalf("the new record's series = %v, want them the other way round from the old record's", got)
 	}
 
 	t.Run("the preview pairs them and carries nothing", func(t *testing.T) {
 		out := suite.Call(t, "library_issues_merge", map[string]any{"library": s.name})
-		pairs := acc.Rows(t, out["pairs"], "pairs")
-		if acc.Num(t, out["found"], "found") != 3 || acc.Num(t, out["merged"], "merged") != 0 || len(pairs) != 2 {
+		pairs := acctest.Rows(t, out["pairs"], "pairs")
+		if acctest.Num(t, out["found"], "found") != 3 || acctest.Num(t, out["merged"], "merged") != 0 || len(pairs) != 2 {
 			t.Fatalf("preview = %v, want three missing records, two of them paired", out)
 		}
 		same := map[string]string{ids[first]: "2 audio files of the same names and sizes", ids[second]: "one audio file of the same name and size"}
 		for _, pair := range pairs {
-			from := acc.Str(object(pair["from"])["id"])
+			from := acctest.Str(object(pair["from"])["id"])
 			rel := first
 			if from == ids[second] {
 				rel = second
 			}
-			if from != ids[rel] || object(pair["into"])["id"] != fresh[rel] || pair["same"] != same[from] || !acc.IsBool(pair["merged"], false) {
+			if from != ids[rel] || object(pair["into"])["id"] != fresh[rel] || pair["same"] != same[from] || !acctest.IsBool(pair["merged"], false) {
 				t.Errorf("the pair = %v, want %s into its new record", pair, rel)
 			}
 			carry := object(pair["carry"])
 			for _, want := range []string{"asin", "series", "tags"} {
-				if !slices.Contains(acc.Strs(t, carry["details"], "details"), want) {
+				if !slices.Contains(acctest.Strs(t, carry["details"], "details"), want) {
 					t.Errorf("%s: would carry the details %v, want %s among them", rel, carry["details"], want)
 				}
 			}
@@ -1134,19 +1134,19 @@ func TestJourneyASeriesRenamedOnDiskIsPutBackTogether(t *testing.T) {
 				want["progress"], want["bookmarks"] = []string{"root"}, []string{listener.Name}
 			}
 			for field, names := range want {
-				got := acc.Strs(t, carry[field], field)
+				got := acctest.Strs(t, carry[field], field)
 				slices.Sort(got)
 				slices.Sort(names)
 				if !slices.Equal(got, names) {
 					t.Errorf("%s: would carry %s = %v, want %v", rel, field, got, names)
 				}
 			}
-			if acc.BoolOf(carry["chapters"]) != (rel == first) || acc.BoolOf(carry["cover"]) != (rel == first) {
+			if acctest.BoolOf(carry["chapters"]) != (rel == first) || acctest.BoolOf(carry["cover"]) != (rel == first) {
 				t.Errorf("%s: would carry = %v, want the chapters and the cover of the first book alone", rel, carry)
 			}
 		}
-		unpaired := acc.Rows(t, out["unpaired"], "unpaired")
-		if len(unpaired) != 1 || unpaired[0]["path"] != deleted || !strings.Contains(acc.Str(unpaired[0]["why"]), "no record holds the same audio files") {
+		unpaired := acctest.Rows(t, out["unpaired"], "unpaired")
+		if len(unpaired) != 1 || unpaired[0]["path"] != deleted || !strings.Contains(acctest.Str(unpaired[0]["why"]), "no record holds the same audio files") {
 			t.Errorf("unpaired = %v, want the book that was deleted", unpaired)
 		}
 
@@ -1160,15 +1160,15 @@ func TestJourneyASeriesRenamedOnDiskIsPutBackTogether(t *testing.T) {
 
 	t.Run("one book on its own first", func(t *testing.T) {
 		out := suite.Call(t, "library_issues_merge", map[string]any{"library": s.name, "items": []any{second}, "confirm": true})
-		if acc.Num(t, out["merged"], "merged") != 1 || acc.Num(t, out["remaining"], "remaining") != 2 {
+		if acctest.Num(t, out["merged"], "merged") != 1 || acctest.Num(t, out["remaining"], "remaining") != 2 {
 			t.Fatalf("the second book alone = %v, want it merged and two records still missing", out)
 		}
 		got := suite.Call(t, "item_get", map[string]any{"item": fresh[second]})
-		if got["asin"] != "B0ZZYZX002" || !slices.Equal(acc.Strs(t, got["series"], "series"), []string{saga + " #2"}) || got["path"] != renamed[second] {
+		if got["asin"] != "B0ZZYZX002" || !slices.Equal(acctest.Strs(t, got["series"], "series"), []string{saga + " #2"}) || got["path"] != renamed[second] {
 			t.Errorf("the second book's new record = %v, want its asin and series at the new path", got)
 		}
 		theirs := object(suite.Call(t, "user_progress_get", map[string]any{"item": fresh[second]})["progress"])
-		if theirs == nil || !acc.IsBool(theirs["finished"], false) || acc.DecimalOr0(theirs["current_time_s"]) != 5 {
+		if theirs == nil || !acctest.IsBool(theirs["finished"], false) || acctest.DecimalOr0(theirs["current_time_s"]) != 5 {
 			t.Errorf("the admin's progress on the second book = %v, want five seconds in and not finished", theirs)
 		}
 		if marks := titlesIn(t, listener.call(t, "user_bookmarks", map[string]any{"item": fresh[second]})["bookmarks"], "bookmarks"); !slices.Equal(marks, []string{"Zzyzx Listener Mark"}) {
@@ -1181,8 +1181,8 @@ func TestJourneyASeriesRenamedOnDiskIsPutBackTogether(t *testing.T) {
 
 	t.Run("then the rest, and the new records have everything", func(t *testing.T) {
 		out := suite.Call(t, "library_issues_merge", map[string]any{"library": s.name, "confirm": true})
-		pairs := acc.Rows(t, out["pairs"], "pairs")
-		if acc.Num(t, out["merged"], "merged") != 1 || acc.Num(t, out["remaining"], "remaining") != 1 || len(pairs) != 1 || !acc.BoolOf(pairs[0]["merged"]) {
+		pairs := acctest.Rows(t, out["pairs"], "pairs")
+		if acctest.Num(t, out["merged"], "merged") != 1 || acctest.Num(t, out["remaining"], "remaining") != 1 || len(pairs) != 1 || !acctest.BoolOf(pairs[0]["merged"]) {
 			t.Fatalf("confirmed = %v, want the first book merged and the deleted one still missing", out)
 		}
 		if out["keys_left"] != nil || out["accounts_unreached"] != nil {
@@ -1191,7 +1191,7 @@ func TestJourneyASeriesRenamedOnDiskIsPutBackTogether(t *testing.T) {
 
 		got := suite.Call(t, "item_get", map[string]any{"item": fresh[first], "chapters": true})
 		if got["title"] != "Zzyzx First Voyage" || got["asin"] != "B0ZZYZX001" || got["path"] != renamed[first] ||
-			!slices.Equal(acc.Strs(t, got["series"], "series"), inOrder) || !slices.Contains(acc.Strs(t, got["tags"], "tags"), "zzyzx-curated") {
+			!slices.Equal(acctest.Strs(t, got["series"], "series"), inOrder) || !slices.Contains(acctest.Strs(t, got["tags"], "tags"), "zzyzx-curated") {
 			t.Errorf("the first book's new record = %v, want the old record's title, asin, tag and both series in its order, %v, at the new path", got, inOrder)
 		}
 		if titles := valuesIn(t, got["chapter_list"], "chapter_list", "title"); !slices.Equal(titles, []string{"Zzyzx Setting Out", "Zzyzx Coming Home"}) {
@@ -1212,7 +1212,7 @@ func TestJourneyASeriesRenamedOnDiskIsPutBackTogether(t *testing.T) {
 			t.Errorf("the admin's progress on the first book = %+v, %v; want finished when it was (%d) and where it was (%v)", carried, err, finished.FinishedAt, finished.CurrentTime)
 		}
 		theirs := object(listener.call(t, "user_progress_get", map[string]any{"item": fresh[first]})["progress"])
-		if theirs == nil || !acc.IsBool(theirs["finished"], false) || acc.DecimalOr0(theirs["current_time_s"]) != 5 {
+		if theirs == nil || !acctest.IsBool(theirs["finished"], false) || acctest.DecimalOr0(theirs["current_time_s"]) != 5 {
 			t.Errorf("the listener's progress on the first book = %v, want five seconds in and not finished", theirs)
 		}
 		if marks := titlesIn(t, suite.Call(t, "user_bookmarks", map[string]any{"item": fresh[first]})["bookmarks"], "bookmarks"); !slices.Equal(marks, []string{"Zzyzx Admin Mark"}) {
@@ -1232,8 +1232,8 @@ func TestJourneyASeriesRenamedOnDiskIsPutBackTogether(t *testing.T) {
 			"listener": {listener.call(t, "playlist_get", map[string]any{"playlist": "Zzyzx Listener Queue"})["entries"], []string{fresh[second], ids[stays]}},
 		} {
 			var queued []string
-			for _, e := range acc.Rows(t, c.entries, "entries") {
-				queued = append(queued, acc.Str(object(e["item"])["id"]))
+			for _, e := range acctest.Rows(t, c.entries, "entries") {
+				queued = append(queued, acctest.Str(object(e["item"])["id"]))
 			}
 			if !slices.Equal(queued, c.want) {
 				t.Errorf("the %s's playlist holds %v, want %v", who, queued, c.want)
@@ -1253,18 +1253,18 @@ func TestJourneyASeriesRenamedOnDiskIsPutBackTogether(t *testing.T) {
 		if found := pathFindings(t); len(found) != 0 {
 			t.Errorf("audit_path = %v, want nothing: every folder says its series now", found)
 		}
-		if groups := acc.Rows(t, suite.Call(t, "audit_duplicates", map[string]any{"library": s.name})["groups"], "groups"); len(groups) != 0 {
+		if groups := acctest.Rows(t, suite.Call(t, "audit_duplicates", map[string]any{"library": s.name})["groups"], "groups"); len(groups) != 0 {
 			t.Errorf("audit_duplicates = %v, want no book held twice", groups)
 		}
-		if missing := acc.Rows(t, suite.Call(t, "audit_issues", map[string]any{"library": s.name})["findings"], "findings"); len(missing) != 1 || missing[0]["path"] != deleted {
+		if missing := acctest.Rows(t, suite.Call(t, "audit_issues", map[string]any{"library": s.name})["findings"], "findings"); len(missing) != 1 || missing[0]["path"] != deleted {
 			t.Errorf("audit_issues = %v, want the deleted book alone", missing)
 		}
-		if again := suite.Call(t, "library_issues_merge", map[string]any{"library": s.name, "confirm": true}); acc.Num(t, again["merged"], "merged") != 0 || len(acc.Rows(t, again["unpaired"], "unpaired")) != 1 {
+		if again := suite.Call(t, "library_issues_merge", map[string]any{"library": s.name, "confirm": true}); acctest.Num(t, again["merged"], "merged") != 0 || len(acctest.Rows(t, again["unpaired"], "unpaired")) != 1 {
 			t.Errorf("a second run = %v, want nothing left to merge", again)
 		}
 
 		// what is really gone is removed, and nothing is left to report
-		if done := suite.Call(t, "library_issues_remove", map[string]any{"library": s.name, "confirm": true}); acc.Num(t, done["removed"], "removed") != 1 {
+		if done := suite.Call(t, "library_issues_remove", map[string]any{"library": s.name, "confirm": true}); acctest.Num(t, done["removed"], "removed") != 1 {
 			t.Errorf("library_issues_remove = %v, want the deleted book's record removed", done)
 		}
 		if missing := issues(t); len(missing) != 0 {
@@ -1309,18 +1309,18 @@ func TestJourneyFoldersNameTheirBooks(t *testing.T) {
 		suite.Call(t, "item_edit", map[string]any{"item": ids[second], "clear": []any{"series"}})
 
 		out := suite.Call(t, "audit_series", map[string]any{"library": s.name})
-		got := acc.Rows(t, out["numbering"], "numbering")
+		got := acctest.Rows(t, out["numbering"], "numbering")
 		if len(got) != 1 || got[0]["id"] != ids[second] || got[0]["problem"] != "unlinked" || got[0]["suggest"] != saga+" #2" {
 			t.Fatalf("numbering = %v, want the second voyage unlinked, with %s #2 to add", got, saga)
 		}
 		// the gap it leaves names it too, rather than calling #2 missing
-		gaps := acc.Rows(t, out["gaps"], "gaps")
+		gaps := acctest.Rows(t, out["gaps"], "gaps")
 		if len(gaps) != 1 || gaps[0]["name"] != saga || !slices.Equal(valuesIn(t, gaps[0]["unlinked"], "unlinked", "id"), []string{ids[second]}) {
 			t.Errorf("gaps = %v, want the saga's #2 found unlinked on the shelf", gaps)
 		}
 		suite.Call(t, "item_edit", map[string]any{"item": ids[second], "add_series": []any{got[0]["suggest"]}})
 		out = suite.Call(t, "audit_series", map[string]any{"library": s.name})
-		if n, g := len(acc.Rows(t, out["numbering"], "numbering")), len(acc.Rows(t, out["gaps"], "gaps")); n+g != 0 {
+		if n, g := len(acctest.Rows(t, out["numbering"], "numbering")), len(acctest.Rows(t, out["gaps"], "gaps")); n+g != 0 {
 			t.Errorf("after linking it: numbering %v, gaps %v; want both clear", out["numbering"], out["gaps"])
 		}
 	})
@@ -1347,14 +1347,14 @@ func TestJourneyFoldersNameTheirBooks(t *testing.T) {
 	t.Run("a year earlier than the folder's", func(t *testing.T) {
 		suite.Call(t, "item_edit", map[string]any{"item": ids[dated], "title": "Zzyzx Dated Book", "year": "1959"})
 		out := suite.Call(t, "audit_path", map[string]any{"library": s.name})
-		found := acc.Rows(t, out["findings"], "findings")
-		if len(found) != 1 || found[0]["id"] != ids[dated] || !strings.Contains(acc.Str(found[0]["detail"]), "says 1965 but the year is 1959") {
+		found := acctest.Rows(t, out["findings"], "findings")
+		if len(found) != 1 || found[0]["id"] != ids[dated] || !strings.Contains(acctest.Str(found[0]["detail"]), "says 1965 but the year is 1959") {
 			t.Fatalf("audit_path = %v, want the dated book, its year before its folder's", found)
 		}
 		// audit_all counts it, as it counts every audit_path finding
-		counts := acc.Rows(t, suite.Call(t, "audit_all", map[string]any{"library": s.name})["audits"], "audits")
+		counts := acctest.Rows(t, suite.Call(t, "audit_all", map[string]any{"library": s.name})["audits"], "audits")
 		i := slices.IndexFunc(counts, func(r map[string]any) bool { return r["audit"] == "audit_path" })
-		if i < 0 || acc.DecimalOr0(counts[i]["found"]) != 1 {
+		if i < 0 || acctest.DecimalOr0(counts[i]["found"]) != 1 {
 			t.Errorf("audit_all's audit_path = %v", counts)
 		}
 
@@ -1370,8 +1370,8 @@ func TestJourneyFoldersNameTheirBooks(t *testing.T) {
 	// its title alone is not
 	t.Run("a series the folder does not say", func(t *testing.T) {
 		suite.Call(t, "item_edit", map[string]any{"item": ids[institute], "series": []any{saga + " #4"}})
-		found := acc.Rows(t, suite.Call(t, "audit_path", map[string]any{"library": s.name})["findings"], "findings")
-		if len(found) != 1 || found[0]["id"] != ids[institute] || !strings.Contains(acc.Str(found[0]["detail"]), `does not say it is "`+saga+` #4"`) {
+		found := acctest.Rows(t, suite.Call(t, "audit_path", map[string]any{"library": s.name})["findings"], "findings")
+		if len(found) != 1 || found[0]["id"] != ids[institute] || !strings.Contains(acctest.Str(found[0]["detail"]), `does not say it is "`+saga+` #4"`) {
 			t.Fatalf("audit_path = %v, want the institute alone, placed in the saga by its record and not by its folder", found)
 		}
 
@@ -1381,7 +1381,7 @@ func TestJourneyFoldersNameTheirBooks(t *testing.T) {
 		if got := diskFindingIDs(t, other.call(t, "audit_path", map[string]any{"library": s.name})); len(got) != 0 {
 			t.Errorf("audit_path = %v on a server that leaves the series rule out", got)
 		}
-		counts := acc.Rows(t, other.call(t, "audit_all", map[string]any{"library": s.name})["audits"], "audits")
+		counts := acctest.Rows(t, other.call(t, "audit_all", map[string]any{"library": s.name})["audits"], "audits")
 		if slices.ContainsFunc(counts, func(r map[string]any) bool { return r["audit"] == "audit_path" }) {
 			t.Errorf("audit_all = %v on a server that leaves the series rule out", counts)
 		}
@@ -1414,10 +1414,10 @@ func (s *diskShelf) writeText(t *testing.T, rel, body string) {
 func chapterSpans(t *testing.T, id string) []string {
 	t.Helper()
 
-	chapters := acc.Rows(t, suite.Call(t, "item_get", map[string]any{"item": id, "chapters": true})["chapter_list"], "chapter_list")
+	chapters := acctest.Rows(t, suite.Call(t, "item_get", map[string]any{"item": id, "chapters": true})["chapter_list"], "chapter_list")
 	out := make([]string, 0, len(chapters))
 	for _, ch := range chapters {
-		out = append(out, fmt.Sprintf("%s %.0f-%.0f", acc.Str(ch["title"]), acc.DecimalOr0(ch["start_s"]), acc.DecimalOr0(ch["end_s"])))
+		out = append(out, fmt.Sprintf("%s %.0f-%.0f", acctest.Str(ch["title"]), acctest.DecimalOr0(ch["start_s"]), acctest.DecimalOr0(ch["end_s"])))
 	}
 	return out
 }
@@ -1456,7 +1456,7 @@ func TestJourneyTracksReorderedAndEbookChosen(t *testing.T) {
 	}
 
 	out := suite.Call(t, "item_edit", map[string]any{"item": id, "tracks": []any{"03.mp3", "01.mp3", "02.mp3"}})
-	if out["chapters"] != "moved" || !slices.Equal(acc.Strs(t, out["tracks"], "tracks"), []string{"03.mp3", "01.mp3", "02.mp3"}) {
+	if out["chapters"] != "moved" || !slices.Equal(acctest.Strs(t, out["tracks"], "tracks"), []string{"03.mp3", "01.mp3", "02.mp3"}) {
 		t.Errorf("item_edit tracks = %v", out)
 	}
 	if got := trackOrder(t, id); !slices.Equal(got, []string{"03.mp3", "01.mp3", "02.mp3"}) {
@@ -1465,7 +1465,7 @@ func TestJourneyTracksReorderedAndEbookChosen(t *testing.T) {
 	if got := chapterSpans(t, id); !slices.Equal(got, []string{"03 0-4", "01 4-6", "02 6-9"}) {
 		t.Errorf("chapters %v, want each with its file", got)
 	}
-	if found := acc.Rows(t, suite.Call(t, "audit_chapters", map[string]any{"library": s.name})["findings"], "findings"); len(found) != 0 {
+	if found := acctest.Rows(t, suite.Call(t, "audit_chapters", map[string]any{"library": s.name})["findings"], "findings"); len(found) != 0 {
 		t.Errorf("audit_chapters = %v after the chapters moved", found)
 	}
 	suite.Call(t, "item_rescan", map[string]any{"item": id})
@@ -1475,9 +1475,9 @@ func TestJourneyTracksReorderedAndEbookChosen(t *testing.T) {
 
 	// the ebooks: the scan chose one, and the other is supplementary
 	mainOf := func() string {
-		for _, f := range acc.Rows(t, suite.Call(t, "item_get", map[string]any{"item": id})["other_files"], "other_files") {
-			if acc.BoolOf(f["main"]) {
-				return acc.Str(f["filename"])
+		for _, f := range acctest.Rows(t, suite.Call(t, "item_get", map[string]any{"item": id})["other_files"], "other_files") {
+			if acctest.BoolOf(f["main"]) {
+				return acctest.Str(f["filename"])
 			}
 		}
 		return "none"
@@ -1495,7 +1495,7 @@ func TestJourneyTracksReorderedAndEbookChosen(t *testing.T) {
 		t.Errorf("item_edit ebook = %v; main is now %s", out, mainOf())
 	}
 	// asked again, it is already so: one more flip would leave none
-	if out = suite.Call(t, "item_edit", map[string]any{"item": id, "ebook": other}); acc.BoolOf(out["updated"]) || mainOf() != other {
+	if out = suite.Call(t, "item_edit", map[string]any{"item": id, "ebook": other}); acctest.BoolOf(out["updated"]) || mainOf() != other {
 		t.Errorf("a second call = %v; main is now %s", out, mainOf())
 	}
 	if out = suite.Call(t, "item_edit", map[string]any{"item": id, "ebook": "none"}); out["ebook"] != "none" || mainOf() != "none" {
@@ -1520,10 +1520,10 @@ func TestJourneyOneFileDeleted(t *testing.T) {
 		t.Fatalf("the preview = %v, and the disk %v", out, s.onDisk(t))
 	}
 	out = suite.Call(t, "item_delete", map[string]any{"item": id, "file": "notes .txt", "confirm": true})
-	if !acc.BoolOf(out["files_removed"]) || slices.Contains(s.onDisk(t), book+"/notes .txt") {
+	if !acctest.BoolOf(out["files_removed"]) || slices.Contains(s.onDisk(t), book+"/notes .txt") {
 		t.Errorf("the delete = %v, and the disk %v", out, s.onDisk(t))
 	}
-	for _, f := range acc.Rows(t, suite.Call(t, "item_get", map[string]any{"item": id})["other_files"], "other_files") {
+	for _, f := range acctest.Rows(t, suite.Call(t, "item_get", map[string]any{"item": id})["other_files"], "other_files") {
 		if f["filename"] == "notes .txt" {
 			t.Error("the book still lists the note")
 		}
@@ -1539,10 +1539,10 @@ func TestJourneyOneFileDeleted(t *testing.T) {
 	}
 
 	out = suite.Call(t, "item_delete", map[string]any{"item": id, "file": "Zzyzx Stray Book.epub", "confirm": true})
-	if !strings.Contains(acc.Str(out["note"]), "left with none") || slices.Contains(s.onDisk(t), book+"/Zzyzx Stray Book.epub") {
+	if !strings.Contains(acctest.Str(out["note"]), "left with none") || slices.Contains(s.onDisk(t), book+"/Zzyzx Stray Book.epub") {
 		t.Errorf("the main ebook's delete = %v, and the disk %v", out, s.onDisk(t))
 	}
-	if got := suite.Call(t, "item_get", map[string]any{"item": id}); got["ebook"] != nil || acc.Num(t, got["audio_tracks"], "audio_tracks") != 2 {
+	if got := suite.Call(t, "item_get", map[string]any{"item": id}); got["ebook"] != nil || acctest.Num(t, got["audio_tracks"], "audio_tracks") != 2 {
 		t.Errorf("after: ebook %v, %v tracks", got["ebook"], got["audio_tracks"])
 	}
 }
@@ -1562,7 +1562,7 @@ func TestJourneyMergedIntoOneM4B(t *testing.T) {
 
 	out := suite.Call(t, "item_embed_metadata", map[string]any{"item": id, "m4b": true})
 	plan := object(out["would_merge"])
-	if plan["into"] != "Zzyzx Merge Book.m4b" || acc.DecimalOr0(plan["channels"]) != 1 || !slices.Equal(acc.Strs(t, plan["files"], "files"), []string{"01.mp3", "02.mp3", "03.mp3"}) {
+	if plan["into"] != "Zzyzx Merge Book.m4b" || acctest.DecimalOr0(plan["channels"]) != 1 || !slices.Equal(acctest.Strs(t, plan["files"], "files"), []string{"01.mp3", "02.mp3", "03.mp3"}) {
 		t.Fatalf("the preview = %v", out)
 	}
 	if got := s.onDisk(t); slices.Contains(got, book+"/Zzyzx Merge Book.m4b") {
@@ -1570,9 +1570,9 @@ func TestJourneyMergedIntoOneM4B(t *testing.T) {
 	}
 
 	out = suite.Call(t, "item_embed_metadata", map[string]any{"item": id, "m4b": true, "confirm": true})
-	if acc.BoolOf(out["running"]) {
+	if acctest.BoolOf(out["running"]) {
 		diskUntil(t, "the merge", func() (bool, string) {
-			tasks := acc.Rows(t, suite.Call(t, "server_tasks", nil)["tasks"], "tasks")
+			tasks := acctest.Rows(t, suite.Call(t, "server_tasks", nil)["tasks"], "tasks")
 			return len(tasks) == 0, fmt.Sprint(tasks)
 		})
 		suite.Call(t, "item_rescan", map[string]any{"item": id})
@@ -1582,8 +1582,8 @@ func TestJourneyMergedIntoOneM4B(t *testing.T) {
 	if got := s.onDisk(t); !slices.Equal(got, []string{"Zzyzx Merge Author/", book + "/", book + "/Zzyzx Merge Book.m4b"}) {
 		t.Errorf("on disk after the merge: %v", got)
 	}
-	tracks := acc.Rows(t, suite.Call(t, "item_get", map[string]any{"item": id, "files": true})["track_list"], "track_list")
-	if len(tracks) != 1 || tracks[0]["filename"] != "Zzyzx Merge Book.m4b" || tracks[0]["codec"] != "aac" || acc.DecimalOr0(tracks[0]["duration_s"]) < 8 || acc.DecimalOr0(tracks[0]["duration_s"]) > 10 {
+	tracks := acctest.Rows(t, suite.Call(t, "item_get", map[string]any{"item": id, "files": true})["track_list"], "track_list")
+	if len(tracks) != 1 || tracks[0]["filename"] != "Zzyzx Merge Book.m4b" || tracks[0]["codec"] != "aac" || acctest.DecimalOr0(tracks[0]["duration_s"]) < 8 || acctest.DecimalOr0(tracks[0]["duration_s"]) > 10 {
 		t.Errorf("plays %v", tracks)
 	}
 	if msg := suite.CallErr(t, "item_embed_metadata", map[string]any{"item": id, "m4b": true}); !strings.Contains(msg, "already one m4b") {
@@ -1625,7 +1625,7 @@ func TestJourneyDiscFolders(t *testing.T) {
 	// by path, and by name alone where only one file has it
 	out := suite.Call(t, "item_edit", map[string]any{"item": id, "tracks": []any{"Disc 2/01.mp3", "Disc 1/01.mp3", "02.mp3"}})
 	want := []string{"Disc 2/01.mp3", "Disc 1/01.mp3", "Disc 1/02.mp3"}
-	if out["chapters"] != "moved" || !slices.Equal(acc.Strs(t, out["tracks"], "tracks"), want) {
+	if out["chapters"] != "moved" || !slices.Equal(acctest.Strs(t, out["tracks"], "tracks"), want) {
 		t.Errorf("item_edit tracks = %v", out)
 	}
 	if got := paths(); !slices.Equal(got, want) {
@@ -1660,7 +1660,7 @@ func TestJourneyChaptersAcrossFilesAreLeft(t *testing.T) {
 	}
 
 	out := suite.Call(t, "item_edit", map[string]any{"item": id, "tracks": []any{"03.mp3", "01.mp3", "02.mp3"}})
-	if out["chapters"] != "left" || !slices.Equal(acc.Strs(t, out["tracks"], "tracks"), []string{"03.mp3", "01.mp3", "02.mp3"}) {
+	if out["chapters"] != "left" || !slices.Equal(acctest.Strs(t, out["tracks"], "tracks"), []string{"03.mp3", "01.mp3", "02.mp3"}) {
 		t.Errorf("item_edit tracks = %v, want the chapters left", out)
 	}
 	if got := trackOrder(t, id); !slices.Equal(got, []string{"03.mp3", "01.mp3", "02.mp3"}) {
@@ -1672,7 +1672,7 @@ func TestJourneyChaptersAcrossFilesAreLeft(t *testing.T) {
 
 	// the order it already has moves nothing, chapters across files or not
 	out = suite.Call(t, "item_edit", map[string]any{"item": id, "tracks": []any{"03.mp3", "01.mp3", "02.mp3"}})
-	if out["chapters"] != "unchanged" || acc.BoolOf(out["updated"]) {
+	if out["chapters"] != "unchanged" || acctest.BoolOf(out["updated"]) {
 		t.Errorf("the same order again = %v", out)
 	}
 }
@@ -1692,11 +1692,11 @@ func TestJourneyMergedAtAChosenQuality(t *testing.T) {
 	id := s.ids(t)[book]
 
 	own := object(suite.Call(t, "item_embed_metadata", map[string]any{"item": id, "m4b": true})["would_merge"])
-	if acc.DecimalOr0(own["bitrate_kbps"]) != 64 || acc.DecimalOr0(own["channels"]) != 1 {
+	if acctest.DecimalOr0(own["bitrate_kbps"]) != 64 || acctest.DecimalOr0(own["channels"]) != 1 {
 		t.Fatalf("the book's own quality = %v, want 64k mono", own)
 	}
 	chosen := object(suite.Call(t, "item_embed_metadata", map[string]any{"item": id, "m4b": true, "bitrate_kbps": 32, "channels": 2})["would_merge"])
-	if acc.DecimalOr0(chosen["bitrate_kbps"]) != 32 || acc.DecimalOr0(chosen["channels"]) != 2 {
+	if acctest.DecimalOr0(chosen["bitrate_kbps"]) != 32 || acctest.DecimalOr0(chosen["channels"]) != 2 {
 		t.Fatalf("the preview = %v, want 32k stereo", chosen)
 	}
 	for _, c := range []struct {
@@ -1721,21 +1721,21 @@ func TestJourneyMergedAtAChosenQuality(t *testing.T) {
 	}
 
 	out := suite.Call(t, "item_embed_metadata", map[string]any{"item": id, "m4b": true, "confirm": true, "bitrate_kbps": 32, "channels": 2})
-	if acc.BoolOf(out["running"]) {
+	if acctest.BoolOf(out["running"]) {
 		diskUntil(t, "the merge", func() (bool, string) {
-			tasks := acc.Rows(t, suite.Call(t, "server_tasks", nil)["tasks"], "tasks")
+			tasks := acctest.Rows(t, suite.Call(t, "server_tasks", nil)["tasks"], "tasks")
 			return len(tasks) == 0, fmt.Sprint(tasks)
 		})
 		suite.Call(t, "item_rescan", map[string]any{"item": id})
-	} else if merged := object(out["merged"]); acc.DecimalOr0(merged["bitrate_kbps"]) != 32 || acc.DecimalOr0(merged["channels"]) != 2 {
+	} else if merged := object(out["merged"]); acctest.DecimalOr0(merged["bitrate_kbps"]) != 32 || acctest.DecimalOr0(merged["channels"]) != 2 {
 		t.Fatalf("the merge = %v", out)
 	}
-	tracks := acc.Rows(t, suite.Call(t, "item_get", map[string]any{"item": id, "files": true})["track_list"], "track_list")
-	if len(tracks) != 1 || tracks[0]["codec"] != "aac" || acc.DecimalOr0(tracks[0]["channels"]) != 2 {
+	tracks := acctest.Rows(t, suite.Call(t, "item_get", map[string]any{"item": id, "files": true})["track_list"], "track_list")
+	if len(tracks) != 1 || tracks[0]["codec"] != "aac" || acctest.DecimalOr0(tracks[0]["channels"]) != 2 {
 		t.Fatalf("plays %v, want one stereo m4b", tracks)
 	}
 	// an encoder keeps near what it is asked, not to it
-	if kbps := acc.DecimalOr0(tracks[0]["bitrate_kbps"]); kbps < 24 || kbps > 40 {
+	if kbps := acctest.DecimalOr0(tracks[0]["bitrate_kbps"]); kbps < 24 || kbps > 40 {
 		t.Errorf("the m4b is %vk, want about the 32k asked for, not the book's own 64k", kbps)
 	}
 }
@@ -1791,19 +1791,19 @@ func TestJourneyMergeCancelled(t *testing.T) {
 			return true, ""
 		default:
 		}
-		tasks := acc.Rows(t, suite.Call(t, "server_tasks", nil)["tasks"], "tasks")
+		tasks := acctest.Rows(t, suite.Call(t, "server_tasks", nil)["tasks"], "tasks")
 		return len(tasks) > 0, "no task is running"
 	})
 	if ended != nil {
 		t.Fatalf("the merge ended before it could be cancelled: %v %v; the book has to be longer", ended.out, ended.err)
 	}
 	// asked about while it runs, it is running, and is not started twice
-	if out := suite.Call(t, "item_embed_metadata", merge64); !acc.BoolOf(out["running"]) {
+	if out := suite.Call(t, "item_embed_metadata", merge64); !acctest.BoolOf(out["running"]) {
 		t.Errorf("a second merge of a book being merged = %v", out)
 	}
 
 	out := suite.Call(t, "item_embed_metadata", map[string]any{"item": id, "m4b": true, "cancel": true})
-	if !acc.BoolOf(out["cancelled"]) {
+	if !acctest.BoolOf(out["cancelled"]) {
 		t.Errorf("cancel = %v", out)
 	}
 	select {

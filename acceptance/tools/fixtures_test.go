@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	acc "github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // keepAudioFiles puts a seeded book's files back as they were once the test
@@ -23,8 +23,8 @@ func keepAudioFiles(t *testing.T, item string) {
 		t.Skip("ABS_TEST_DATA is not set")
 	}
 	got := suite.Call(t, "item_get", map[string]any{"item": item})
-	id := acc.Str(got["id"])
-	folder := acc.Str(got["full_path"])
+	id := acctest.Str(got["id"])
+	folder := acctest.Str(got["full_path"])
 	if id == "" || folder == "" {
 		t.Fatalf("item_get %q has no id or folder: %v", item, got)
 	}

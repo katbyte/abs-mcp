@@ -20,17 +20,17 @@ import (
 	"testing"
 	"time"
 
-	acc "github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // longBookChapters reads a book's chapters back as title@start pairs.
 func longBookChapters(t *testing.T, id string) []string {
 	t.Helper()
 
-	chapters := acc.Rows(t, suite.Call(t, "item_get", map[string]any{"item": id, "chapters": true})["chapter_list"], "chapter_list")
+	chapters := acctest.Rows(t, suite.Call(t, "item_get", map[string]any{"item": id, "chapters": true})["chapter_list"], "chapter_list")
 	out := make([]string, 0, len(chapters))
 	for _, ch := range chapters {
-		out = append(out, acc.Str(ch["title"])+"@"+time.Duration(acc.DecimalOr0(ch["start_s"])*float64(time.Second)).String())
+		out = append(out, acctest.Str(ch["title"])+"@"+time.Duration(acctest.DecimalOr0(ch["start_s"])*float64(time.Second)).String())
 	}
 	return out
 }
@@ -116,13 +116,13 @@ func TestJourneyALongBookChaptered(t *testing.T) {
 	id, two := s.ids(t)[longPath], s.ids(t)[twoPath]
 
 	book := suite.Call(t, "item_get", map[string]any{"item": id})
-	if d := acc.Num(t, book["duration_s"], "duration_s"); d < long-1 || d > long+1 || book["chapters"] != nil || acc.Num(t, book["audio_tracks"], "audio_tracks") != 1 {
+	if d := acctest.Num(t, book["duration_s"], "duration_s"); d < long-1 || d > long+1 || book["chapters"] != nil || acctest.Num(t, book["audio_tracks"], "audio_tracks") != 1 {
 		t.Fatalf("the long book reads as %vs long with %v chapters in %v tracks, want %ds, none, one file", book["duration_s"], book["chapters"], book["audio_tracks"], long)
 	}
 	audits := func(t *testing.T) (missing, chapters []map[string]any) {
 		t.Helper()
-		return acc.Rows(t, suite.Call(t, "audit_missing", map[string]any{"library": s.name, "field": "chapters"})["findings"], "findings"),
-			acc.Rows(t, suite.Call(t, "audit_chapters", map[string]any{"library": s.name})["findings"], "findings")
+		return acctest.Rows(t, suite.Call(t, "audit_missing", map[string]any{"library": s.name, "field": "chapters"})["findings"], "findings"),
+			acctest.Rows(t, suite.Call(t, "audit_chapters", map[string]any{"library": s.name})["findings"], "findings")
 	}
 	bothClear := func(t *testing.T) {
 		t.Helper()
@@ -145,10 +145,10 @@ func TestJourneyALongBookChaptered(t *testing.T) {
 
 	t.Run("one over the whole book: audit_chapters finds it single", func(t *testing.T) {
 		out := suite.Call(t, "item_chapters_set", map[string]any{"item": id, "chapters": []any{map[string]any{"title": "Zzyzx Whole Book", "start_s": 0}}})
-		if acc.Num(t, out["chapters"], "chapters") != 1 || !acc.BoolOf(out["updated"]) {
+		if acctest.Num(t, out["chapters"], "chapters") != 1 || !acctest.BoolOf(out["updated"]) {
 			t.Errorf("item_chapters_set = %v", out)
 		}
-		chapters := acc.Rows(t, suite.Call(t, "item_get", map[string]any{"item": id, "chapters": true})["chapter_list"], "chapter_list")
+		chapters := acctest.Rows(t, suite.Call(t, "item_get", map[string]any{"item": id, "chapters": true})["chapter_list"], "chapter_list")
 		if len(chapters) != 1 || !endsAt(chapters[0], long) {
 			t.Errorf("chapters = %v, want one running to the end", chapters)
 		}
@@ -171,13 +171,13 @@ func TestJourneyALongBookChaptered(t *testing.T) {
 	wantParts := []string{"Zzyzx Part One@0s", "Zzyzx Part Two@30m0s", "Zzyzx Part Three@1h0m0s", "Zzyzx Part Four@1h30m0s", "Zzyzx Part Five@2h0m0s"}
 
 	t.Run("a real list clears both", func(t *testing.T) {
-		if n := acc.Num(t, suite.Call(t, "item_chapters_set", map[string]any{"item": id, "chapters": parts})["chapters"], "chapters"); n != 5 {
+		if n := acctest.Num(t, suite.Call(t, "item_chapters_set", map[string]any{"item": id, "chapters": parts})["chapters"], "chapters"); n != 5 {
 			t.Errorf("chapters = %d, want 5", n)
 		}
 		if got := longBookChapters(t, id); !slices.Equal(got, wantParts) {
 			t.Errorf("chapters read back = %v, want %v", got, wantParts)
 		}
-		chapters := acc.Rows(t, suite.Call(t, "item_get", map[string]any{"item": id, "chapters": true})["chapter_list"], "chapter_list")
+		chapters := acctest.Rows(t, suite.Call(t, "item_get", map[string]any{"item": id, "chapters": true})["chapter_list"], "chapter_list")
 		if last := chapters[len(chapters)-1]; !endsAt(last, long) {
 			t.Errorf("the last chapter ends at %vs, want the end of the book", last["end_s"])
 		}
@@ -232,7 +232,7 @@ func TestJourneyALongBookChaptered(t *testing.T) {
 		// matched from the Canadian store, as the collection's books are
 		suite.Call(t, "item_edit", map[string]any{"item": id, "asin": store.asin, "add_tags": []any{"zz-provider:audible.ca"}})
 		out := suite.Call(t, "item_chapters_set", map[string]any{"item": id})
-		if out["region"] != "ca" || acc.Num(t, out["chapters"], "chapters") != 3 {
+		if out["region"] != "ca" || acctest.Num(t, out["chapters"], "chapters") != 3 {
 			t.Errorf("item_chapters_set = %v, want the three chapters from ca", out)
 		}
 		if asked := store.asked(); !slices.Equal(asked, []string{"ca"}) {
@@ -266,7 +266,7 @@ func TestJourneyALongBookChaptered(t *testing.T) {
 	twoRows := func(t *testing.T) []map[string]any {
 		t.Helper()
 		var out []map[string]any
-		for _, r := range acc.Rows(t, suite.Call(t, "audit_chapters", map[string]any{"library": s.name})["findings"], "findings") {
+		for _, r := range acctest.Rows(t, suite.Call(t, "audit_chapters", map[string]any{"library": s.name})["findings"], "findings") {
 			if r["id"] != two {
 				t.Errorf("audit_chapters reports another book: %v", r)
 				continue
@@ -277,14 +277,14 @@ func TestJourneyALongBookChaptered(t *testing.T) {
 	}
 	twoChapters := func(t *testing.T) []map[string]any {
 		t.Helper()
-		return acc.Rows(t, suite.Call(t, "item_get", map[string]any{"item": two, "chapters": true})["chapter_list"], "chapter_list")
+		return acctest.Rows(t, suite.Call(t, "item_get", map[string]any{"item": two, "chapters": true})["chapter_list"], "chapter_list")
 	}
 	// rescan scans the shelf and waits for the two-file book to hold files
 	rescan := func(t *testing.T, files int) {
 		t.Helper()
 		s.scan(t, false)
 		diskUntil(t, fmt.Sprintf("the two-file book scanned with %d files", files), func() (bool, string) {
-			got := acc.Num(t, suite.Call(t, "item_get", map[string]any{"item": two})["audio_tracks"], "audio_tracks")
+			got := acctest.Num(t, suite.Call(t, "item_get", map[string]any{"item": two})["audio_tracks"], "audio_tracks")
 			return got == files, fmt.Sprintf("%d files", got)
 		})
 	}
@@ -302,7 +302,7 @@ func TestJourneyALongBookChaptered(t *testing.T) {
 			map[string]any{"title": "Zzyzx Side C", "start_s": 1800},
 			map[string]any{"title": "Zzyzx Side D", "start_s": 2400},
 		}
-		if n := acc.Num(t, suite.Call(t, "item_chapters_set", map[string]any{"item": two, "chapters": sides})["chapters"], "chapters"); n != 4 {
+		if n := acctest.Num(t, suite.Call(t, "item_chapters_set", map[string]any{"item": two, "chapters": sides})["chapters"], "chapters"); n != 4 {
 			t.Fatalf("chapters = %d, want 4", n)
 		}
 		if err := os.Rename(second, away); err != nil {
@@ -316,13 +316,13 @@ func TestJourneyALongBookChaptered(t *testing.T) {
 		}
 		found := twoRows(t)
 		if len(found) != 1 || found[0]["problem"] != "past_end" ||
-			!strings.Contains(acc.Str(found[0]["detail"]), `2 of 4 chapters start at or past the end of the audio at`) ||
-			!strings.Contains(acc.Str(found[0]["detail"]), `from chapter 3, "Zzyzx Side C", at 1800s`) || !strings.Contains(acc.Str(found[0]["fix"]), "fit=true") {
+			!strings.Contains(acctest.Str(found[0]["detail"]), `2 of 4 chapters start at or past the end of the audio at`) ||
+			!strings.Contains(acctest.Str(found[0]["detail"]), `from chapter 3, "Zzyzx Side C", at 1800s`) || !strings.Contains(acctest.Str(found[0]["fix"]), "fit=true") {
 			t.Fatalf("audit_chapters = %v, want the two-file book past the end, fixed by fit", found)
 		}
 
 		out := suite.Call(t, "item_chapters_set", map[string]any{"item": two, "fit": true})
-		if acc.Num(t, out["chapters"], "chapters") != 2 || acc.Num(t, out["dropped"], "dropped") != 2 || !acc.BoolOf(out["updated"]) {
+		if acctest.Num(t, out["chapters"], "chapters") != 2 || acctest.Num(t, out["dropped"], "dropped") != 2 || !acctest.BoolOf(out["updated"]) {
 			t.Errorf("fit = %v, want two kept and two dropped", out)
 		}
 		got := twoChapters(t)
@@ -345,12 +345,12 @@ func TestJourneyALongBookChaptered(t *testing.T) {
 			t.Fatalf("with the file back the book has chapters %v, want the two fit left", got)
 		}
 		found := twoRows(t)
-		if len(found) != 1 || found[0]["problem"] != "short" || !strings.Contains(acc.Str(found[0]["detail"]), `the last chapter, "Zzyzx Side B", ends at`) {
+		if len(found) != 1 || found[0]["problem"] != "short" || !strings.Contains(acctest.Str(found[0]["detail"]), `the last chapter, "Zzyzx Side B", ends at`) {
 			t.Fatalf("audit_chapters = %v, want the two-file book short", found)
 		}
 
 		out := suite.Call(t, "item_chapters_set", map[string]any{"item": two, "fit": true})
-		if acc.Num(t, out["chapters"], "chapters") != 2 || out["dropped"] != nil || !acc.BoolOf(out["updated"]) {
+		if acctest.Num(t, out["chapters"], "chapters") != 2 || out["dropped"] != nil || !acctest.BoolOf(out["updated"]) {
 			t.Errorf("fit = %v, want both kept and nothing dropped", out)
 		}
 		if got := twoChapters(t); len(got) != 2 || !endsAt(got[1], 2*half) {

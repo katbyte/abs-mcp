@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	acc "github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // testFeed is an RSS feed the proxy answers for, newest episode first.
@@ -100,7 +100,7 @@ func waitEpisodes(t *testing.T, podcast string, want int) []string {
 	var got []string
 	for range 60 {
 		got = episodeTitles(t, podcast)
-		if len(got) == want && len(acc.Rows(t, suite.Call(t, "podcast_downloads", map[string]any{"library": "Podcasts"})["downloads"], "downloads")) == 0 {
+		if len(got) == want && len(acctest.Rows(t, suite.Call(t, "podcast_downloads", map[string]any{"library": "Podcasts"})["downloads"], "downloads")) == 0 {
 			waitIdle(t)
 			return episodeTitles(t, podcast)
 		}
@@ -141,15 +141,15 @@ func TestJourneyPodcastLife(t *testing.T) {
 			t.Errorf("removing %s: %v", folder, err)
 		}
 	})
-	shows := acc.Num(t, suite.Call(t, "library_items", map[string]any{"library": "Podcasts", "limit": 1})["total"], "total")
+	shows := acctest.Num(t, suite.Call(t, "library_items", map[string]any{"library": "Podcasts", "limit": 1})["total"], "total")
 
 	t.Run("subscribed, with the newest episode", func(t *testing.T) {
 		out := suite.Call(t, "podcast_add", map[string]any{"feed_url": feed.url(), "library": "Podcasts", "folder": "Zzyzx Feed Show", "download_latest": 1})
-		id = acc.Str(out["id"])
-		if id == "" || out["title"] != feed.title || acc.Num(t, out["feed_episodes"], "feed_episodes") != 3 {
+		id = acctest.Str(out["id"])
+		if id == "" || out["title"] != feed.title || acctest.Num(t, out["feed_episodes"], "feed_episodes") != 3 {
 			t.Fatalf("podcast_add = %v, want %s with 3 feed episodes", out, feed.title)
 		}
-		if queued := acc.Strs(t, out["queued"], "queued"); !slices.Equal(queued, []string{"Zzyzx Episode Three"}) {
+		if queued := acctest.Strs(t, out["queued"], "queued"); !slices.Equal(queued, []string{"Zzyzx Episode Three"}) {
 			t.Errorf("queued = %v, want the newest", queued)
 		}
 		if got := waitEpisodes(t, id, 1); !slices.Equal(got, []string{"Zzyzx Episode Three"}) {
@@ -176,7 +176,7 @@ func TestJourneyPodcastLife(t *testing.T) {
 		case !strings.Contains(err.Error(), id):
 			t.Errorf("a second subscription to the feed: %v", err)
 		}
-		if n := acc.Num(t, suite.Call(t, "library_items", map[string]any{"library": "Podcasts", "limit": 1})["total"], "total"); n != shows+1 {
+		if n := acctest.Num(t, suite.Call(t, "library_items", map[string]any{"library": "Podcasts", "limit": 1})["total"], "total"); n != shows+1 {
 			t.Errorf("Podcasts holds %d shows, want %d", n, shows+1)
 		}
 		if _, err := os.Stat(filepath.Join(data, "podcasts", "Zzyzx Feed Show Again")); !os.IsNotExist(err) {
@@ -191,7 +191,7 @@ func TestJourneyPodcastLife(t *testing.T) {
 			t.Fatalf("feed = %v, want newest first", titles)
 		}
 		queued := suite.Call(t, "podcast_episode_download", map[string]any{"item": id, "indexes": []any{2}})
-		if got := acc.Strs(t, queued["queued"], "queued"); !slices.Equal(got, []string{"Zzyzx Episode One"}) {
+		if got := acctest.Strs(t, queued["queued"], "queued"); !slices.Equal(got, []string{"Zzyzx Episode One"}) {
 			t.Errorf("queued = %v", got)
 		}
 		if got := waitEpisodes(t, id, 2); !slices.Equal(got, []string{"Zzyzx Episode Three", "Zzyzx Episode One"}) {
@@ -201,10 +201,10 @@ func TestJourneyPodcastLife(t *testing.T) {
 
 	t.Run("an episode already held, asked for again", func(t *testing.T) {
 		out := suite.Call(t, "podcast_episode_download", map[string]any{"item": id, "indexes": []any{0, 1}})
-		if got := acc.Strs(t, out["queued"], "queued"); !slices.Equal(got, []string{"Zzyzx Episode Two"}) {
+		if got := acctest.Strs(t, out["queued"], "queued"); !slices.Equal(got, []string{"Zzyzx Episode Two"}) {
 			t.Errorf("queued = %v, want only the one not held", got)
 		}
-		if got := acc.Strs(t, out["already_held"], "already_held"); !slices.Equal(got, []string{"Zzyzx Episode Three"}) {
+		if got := acctest.Strs(t, out["already_held"], "already_held"); !slices.Equal(got, []string{"Zzyzx Episode Three"}) {
 			t.Errorf("already_held = %v", got)
 		}
 		if got := waitEpisodes(t, id, 3); countOf(got, "Zzyzx Episode Three") != 1 {
@@ -214,9 +214,9 @@ func TestJourneyPodcastLife(t *testing.T) {
 
 	var two string
 	t.Run("an episode edited, and still known by its feed entry", func(t *testing.T) {
-		for _, e := range acc.Rows(t, suite.Call(t, "podcast_episodes", map[string]any{"item": id})["episodes"], "episodes") {
+		for _, e := range acctest.Rows(t, suite.Call(t, "podcast_episodes", map[string]any{"item": id})["episodes"], "episodes") {
 			if e["title"] == "Zzyzx Episode Two" {
-				two = acc.Str(e["id"])
+				two = acctest.Str(e["id"])
 			}
 		}
 		suite.Call(t, "podcast_episode_edit", map[string]any{"item": id, "episode": two, "title": "Zzyzx Episode Two, Retitled", "season": "1", "number": "2", "type": "bonus"})
@@ -226,7 +226,7 @@ func TestJourneyPodcastLife(t *testing.T) {
 		}
 		// held by its guid, whatever it is called now
 		out := suite.Call(t, "podcast_episode_download", map[string]any{"item": id, "indexes": []any{1}})
-		if out["queued"] != nil || !slices.Equal(acc.Strs(t, out["already_held"], "already_held"), []string{"Zzyzx Episode Two"}) {
+		if out["queued"] != nil || !slices.Equal(acctest.Strs(t, out["already_held"], "already_held"), []string{"Zzyzx Episode Two"}) {
 			t.Errorf("a retitled episode asked for again: %v", out)
 		}
 	})
@@ -258,19 +258,19 @@ func TestJourneyPodcastLife(t *testing.T) {
 			t.Errorf("downloads.last_check is unset after two checks: %v", got)
 		}
 		suite.Call(t, "podcast_edit", map[string]any{"item": id, "auto_download": false})
-		if got := object(suite.Call(t, "item_get", map[string]any{"item": id})["downloads"]); acc.BoolOf(got["auto_download"]) {
+		if got := object(suite.Call(t, "item_get", map[string]any{"item": id})["downloads"]); acctest.BoolOf(got["auto_download"]) {
 			t.Errorf("auto_download still on: %v", got)
 		}
 	})
 
 	t.Run("an episode queued and in progress, deleted with its file", func(t *testing.T) {
 		var one string
-		for _, e := range acc.Rows(t, suite.Call(t, "podcast_episodes", map[string]any{"item": id})["episodes"], "episodes") {
+		for _, e := range acctest.Rows(t, suite.Call(t, "podcast_episodes", map[string]any{"item": id})["episodes"], "episodes") {
 			if e["title"] == "Zzyzx Episode One" {
-				one = acc.Str(e["id"])
+				one = acctest.Str(e["id"])
 			}
 		}
-		file := acc.Str(suite.Call(t, "podcast_episode_get", map[string]any{"item": id, "episode": one})["file"])
+		file := acctest.Str(suite.Call(t, "podcast_episode_get", map[string]any{"item": id, "episode": one})["file"])
 		if _, err := os.Stat(filepath.Join(folder, file)); err != nil {
 			t.Fatalf("the episode's file %q is not on disk: %v", file, err)
 		}
@@ -284,7 +284,7 @@ func TestJourneyPodcastLife(t *testing.T) {
 
 		// unconfirmed, it says what it would erase and erases nothing
 		preview := suite.Call(t, "podcast_episode_delete", map[string]any{"item": id, "episode": one, "delete_file": true})
-		if deleted := acc.BoolOf(preview["deleted"]); deleted || !strings.HasSuffix(acc.Str(preview["file"]), "/"+file) || !strings.Contains(acc.Str(preview["note"]), file) {
+		if deleted := acctest.BoolOf(preview["deleted"]); deleted || !strings.HasSuffix(acctest.Str(preview["file"]), "/"+file) || !strings.Contains(acctest.Str(preview["note"]), file) {
 			t.Errorf("podcast_episode_delete without confirm = %v, want nothing deleted and the file named", preview)
 		}
 		if _, err := os.Stat(filepath.Join(folder, file)); err != nil {
@@ -302,11 +302,11 @@ func TestJourneyPodcastLife(t *testing.T) {
 		if got := episodeTitles(t, id); len(got) != 3 || slices.Contains(got, "Zzyzx Episode One") {
 			t.Errorf("episodes = %v, want three without One", got)
 		}
-		entries := acc.Rows(t, suite.Call(t, "playlist_get", map[string]any{"playlist": "Zzyzx Feed Queue"})["entries"], "entries")
+		entries := acctest.Rows(t, suite.Call(t, "playlist_get", map[string]any{"playlist": "Zzyzx Feed Queue"})["entries"], "entries")
 		if len(entries) != 1 {
 			t.Errorf("playlist entries = %v, want only Two", entries)
 		}
-		for _, it := range acc.Rows(t, suite.Call(t, "user_in_progress", nil)["items"], "items") {
+		for _, it := range acctest.Rows(t, suite.Call(t, "user_in_progress", nil)["items"], "items") {
 			if ep := object(it["episode"]); ep != nil && ep["id"] == one {
 				t.Errorf("the deleted episode is still being listened to: %v", it)
 			}
@@ -316,7 +316,7 @@ func TestJourneyPodcastLife(t *testing.T) {
 		}
 		// it is still in the feed, and no longer held
 		out := suite.Call(t, "podcast_episode_download", map[string]any{"item": id, "indexes": []any{3}})
-		if got := acc.Strs(t, out["queued"], "queued"); !slices.Equal(got, []string{"Zzyzx Episode One"}) {
+		if got := acctest.Strs(t, out["queued"], "queued"); !slices.Equal(got, []string{"Zzyzx Episode One"}) {
 			t.Errorf("the deleted episode asked for again: %v", out)
 		}
 		waitEpisodes(t, id, 4)
@@ -332,14 +332,14 @@ func TestJourneyPodcastLife(t *testing.T) {
 		}
 		// not held, so it can be asked for again once it is back
 		out := suite.Call(t, "podcast_episode_download", map[string]any{"item": id, "indexes": []any{0}})
-		if got := acc.Strs(t, out["queued"], "queued"); !slices.Equal(got, []string{"Zzyzx Episode Five"}) {
+		if got := acctest.Strs(t, out["queued"], "queued"); !slices.Equal(got, []string{"Zzyzx Episode Five"}) {
 			t.Errorf("a failed episode asked for again: %v", out)
 		}
 		waitEpisodes(t, id, 4)
 	})
 
 	t.Run("not stale, and unsubscribed", func(t *testing.T) {
-		for _, f := range acc.Rows(t, suite.Call(t, "audit_podcasts", map[string]any{"library": "Podcasts"})["findings"], "findings") {
+		for _, f := range acctest.Rows(t, suite.Call(t, "audit_podcasts", map[string]any{"library": "Podcasts"})["findings"], "findings") {
 			if f["id"] == id {
 				t.Errorf("a show published today is stale: %v", f)
 			}
@@ -350,15 +350,15 @@ func TestJourneyPodcastLife(t *testing.T) {
 		if _, err := os.Stat(folder); !os.IsNotExist(err) {
 			t.Errorf("the show's folder is still on disk: %v", err)
 		}
-		if n := acc.Num(t, suite.Call(t, "library_items", map[string]any{"library": "Podcasts", "limit": 1})["total"], "total"); n != shows {
+		if n := acctest.Num(t, suite.Call(t, "library_items", map[string]any{"library": "Podcasts", "limit": 1})["total"], "total"); n != shows {
 			t.Errorf("Podcasts holds %d shows, want %d", n, shows)
 		}
-		for _, e := range acc.Rows(t, suite.Call(t, "podcast_episodes", map[string]any{"library": "Podcasts"})["episodes"], "episodes") {
+		for _, e := range acctest.Rows(t, suite.Call(t, "podcast_episodes", map[string]any{"library": "Podcasts"})["episodes"], "episodes") {
 			if e["podcast_id"] == deleted {
 				t.Errorf("an episode of the deleted show is still listed: %v", e)
 			}
 		}
-		for _, p := range acc.Rows(t, suite.Call(t, "playlist_list", nil)["playlists"], "playlists") {
+		for _, p := range acctest.Rows(t, suite.Call(t, "playlist_list", nil)["playlists"], "playlists") {
 			if p["name"] == "Zzyzx Feed Queue" {
 				t.Errorf("the playlist of the deleted show's episodes is still listed: %v", p)
 			}

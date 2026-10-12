@@ -5,7 +5,7 @@ package tools_test
 import (
 	"testing"
 
-	acc "github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // A session clearing a stray "Ph.D." off the narrators, on a shelf where one
@@ -37,10 +37,10 @@ func TestJourneyANarratorWithACommaInTheName(t *testing.T) {
 
 	fragment := func(t *testing.T) (items int, found bool) {
 		t.Helper()
-		for _, g := range acc.Rows(t, suite.Call(t, "audit_narrators", map[string]any{"library": s.name})["names"], "names") {
-			for _, sp := range acc.Rows(t, g["spellings"], "spellings") {
+		for _, g := range acctest.Rows(t, suite.Call(t, "audit_narrators", map[string]any{"library": s.name})["names"], "names") {
+			for _, sp := range acctest.Rows(t, g["spellings"], "spellings") {
 				if sp["value"] == "Ph.D." && g["kind"] == "fragment" {
-					return acc.Num(t, sp["items"], "items"), true
+					return acctest.Num(t, sp["items"], "items"), true
 				}
 			}
 		}
@@ -52,7 +52,7 @@ func TestJourneyANarratorWithACommaInTheName(t *testing.T) {
 	}
 
 	out := suite.Call(t, "metadata_rename", map[string]any{"library": s.name, "field": "narrators", "from": "Ph.D.", "remove": true, "confirm": true})
-	if n := acc.Num(t, out["items_updated"], "items_updated"); n != 2 {
+	if n := acctest.Num(t, out["items_updated"], "items_updated"); n != 2 {
 		t.Errorf("metadata_rename remove = %v, want the two books changed", out)
 	}
 	if _, found := fragment(t); found {

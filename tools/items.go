@@ -707,7 +707,7 @@ func registerItemTools(r *registry) {
 
 		// a candidate comes from the first store with any, as item_match's
 		// did; an asin or isbn from the first store that holds it
-		if byCandidate := in.Candidate != nil && opts.ASIN == "" && opts.ISBN == ""; byCandidate {
+		if in.Candidate != nil && opts.ASIN == "" && opts.ISBN == "" {
 			var results []abs.BookSearchResult
 			var serr error
 			if provider, results, serr = searchProviders(ctx, client, it, providers, title, author); serr != nil {

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	acc "github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // foundationASIN is the asin the Messy Foundation carries: the recording
@@ -61,7 +61,7 @@ func listOrNone(t *testing.T, v any, field string) []string {
 	if v == nil {
 		return nil
 	}
-	return acc.Strs(t, v, field)
+	return acctest.Strs(t, v, field)
 }
 
 // putBackBook writes a book back to a reading taken before a journey matched
@@ -72,10 +72,10 @@ func listOrNone(t *testing.T, v any, field string) []string {
 func putBackBook(t *testing.T, id string, before map[string]any) {
 	t.Helper()
 
-	args := map[string]any{"item": id, "title": before["title"], "abridged": acc.BoolOf(before["abridged"]), "explicit": acc.BoolOf(before["explicit"])}
+	args := map[string]any{"item": id, "title": before["title"], "abridged": acctest.BoolOf(before["abridged"]), "explicit": acctest.BoolOf(before["explicit"])}
 	var emptied []any
 	for _, k := range []string{"subtitle", "year", "publisher", "description", "isbn", "asin", "language"} {
-		if s := acc.Str(before[k]); s != "" {
+		if s := acctest.Str(before[k]); s != "" {
 			args[k] = s
 		} else {
 			emptied = append(emptied, k)
@@ -85,7 +85,7 @@ func putBackBook(t *testing.T, id string, before map[string]any) {
 		"series": listOrNone(t, before["series"], "series"), "genres": listOrNone(t, before["genres"], "genres"),
 		"tags": listOrNone(t, before["tags"], "tags"),
 	}
-	if narrator := acc.Str(before["narrator"]); narrator != "" {
+	if narrator := acctest.Str(before["narrator"]); narrator != "" {
 		lists["narrators"] = strings.Split(narrator, ", ")
 	}
 	for _, k := range []string{"series", "genres", "tags", "narrators"} {
@@ -95,7 +95,7 @@ func putBackBook(t *testing.T, id string, before map[string]any) {
 			emptied = append(emptied, k)
 		}
 	}
-	wrote := acc.Rows(t, before["authors"], "authors")
+	wrote := acctest.Rows(t, before["authors"], "authors")
 	authors := make([]any, 0, len(wrote))
 	for _, a := range wrote {
 		authors = append(authors, a["name"])
@@ -103,7 +103,7 @@ func putBackBook(t *testing.T, id string, before map[string]any) {
 	args["authors"] = authors
 	args["clear"] = emptied
 	suite.Call(t, "item_edit", args)
-	if acc.BoolOf(before["no_cover"]) && !acc.BoolOf(bookNow(t, id)["no_cover"]) {
+	if acctest.BoolOf(before["no_cover"]) && !acctest.BoolOf(bookNow(t, id)["no_cover"]) {
 		suite.Call(t, "item_cover_edit", map[string]any{"item": id, "remove": true})
 	}
 	if changed := bookChanges(before, bookNow(t, id)); len(changed) > 0 {
@@ -116,8 +116,8 @@ func decisionsByField(t *testing.T, v any) map[string]map[string]any {
 	t.Helper()
 
 	out := map[string]map[string]any{}
-	for _, d := range acc.Rows(t, v, "fields") {
-		out[acc.Str(d["field"])] = d
+	for _, d := range acctest.Rows(t, v, "fields") {
+		out[acctest.Str(d["field"])] = d
 	}
 	return out
 }
@@ -129,13 +129,13 @@ func decidedValue(t *testing.T, book map[string]any, field string) string {
 
 	switch field {
 	case "authors":
-		return acc.Str(book["author"])
+		return acctest.Str(book["author"])
 	case "narrators":
-		return acc.Str(book["narrator"])
+		return acctest.Str(book["narrator"])
 	case "series", "genres":
 		return strings.Join(listOrNone(t, book[field], field), ", ")
 	}
-	return acc.Str(book[field])
+	return acctest.Str(book[field])
 }
 
 // A book matched the way a collector matches one: scored against the store
@@ -155,7 +155,7 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 
 	id := messyID(t, "Isaac Asimov/Foundation")
 	before := bookNow(t, id)
-	if before["asin"] != foundationASIN || before["tags"] != nil || !acc.BoolOf(before["no_cover"]) {
+	if before["asin"] != foundationASIN || before["tags"] != nil || !acctest.BoolOf(before["no_cover"]) {
 		t.Fatalf("the Messy Foundation is not as seeded: %v", before)
 	}
 	t.Cleanup(func() {
@@ -176,10 +176,10 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 		"library": "Messy", "filter": "authors:Isaac Asimov", "providers": []any{"audible"},
 		"candidates": 10, "tolerance": 0.05, "limit": 5,
 	})
-	if total := acc.Num(t, batch["total"], "total"); total != 1 {
+	if total := acctest.Num(t, batch["total"], "total"); total != 1 {
 		t.Fatalf("total = %d, want the one Asimov book in Messy", total)
 	}
-	scoredRows := acc.Rows(t, batch["rows"], "rows")
+	scoredRows := acctest.Rows(t, batch["rows"], "rows")
 	if len(scoredRows) != 1 || scoredRows[0]["id"] != id || scoredRows[0]["provider"] != "audible" {
 		t.Fatalf("rows = %v, want Foundation scored at audible", scoredRows)
 	}
@@ -188,7 +188,7 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 		candidates = append(candidates, best)
 	}
 	if scoredRows[0]["others"] != nil {
-		candidates = append(candidates, acc.Rows(t, scoredRows[0]["others"], "others")...)
+		candidates = append(candidates, acctest.Rows(t, scoredRows[0]["others"], "others")...)
 	}
 	if len(candidates) < 2 {
 		t.Errorf("candidates = %d, want more than the best when ten are asked for", len(candidates))
@@ -197,7 +197,7 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 	if own < 0 {
 		t.Fatalf("the store's own recording is not among the candidates: %v", candidates)
 	}
-	if c := candidates[own]; c["confidence"] != "edition" || !strings.Contains(acc.Str(c["reason"]), "narrator same") || !strings.Contains(acc.Str(c["reason"]), "title same") {
+	if c := candidates[own]; c["confidence"] != "edition" || !strings.Contains(acctest.Str(c["reason"]), "narrator same") || !strings.Contains(acctest.Str(c["reason"]), "title same") {
 		t.Errorf("the book's own recording scored %v (%v), want an edition: the title and reader agree, the length does not", c["confidence"], c["reason"])
 	}
 
@@ -216,8 +216,8 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 	// a lookup takes part of a title; a write needs the whole of it, and
 	// says which book the part was nearest
 	look := suite.Call(t, "item_match", map[string]any{"library": "Messy", "item": "Foundation", "providers": []any{"audible"}, "title": "Foundation", "author": "Isaac Asimov", "limit": 3})
-	if look["item"] != "Foundation (Unabridged)" || len(acc.Rows(t, look["candidates"], "candidates")) != 3 {
-		t.Errorf("item_match by part of the title, limit 3: item %v, %d candidates", look["item"], len(acc.Rows(t, look["candidates"], "candidates")))
+	if look["item"] != "Foundation (Unabridged)" || len(acctest.Rows(t, look["candidates"], "candidates")) != 3 {
+		t.Errorf("item_match by part of the title, limit 3: item %v, %d candidates", look["item"], len(acctest.Rows(t, look["candidates"], "candidates")))
 	}
 	if msg := suite.CallErr(t, "item_match_apply", map[string]any{"library": "Messy", "item": "Foundation", "providers": []any{"audible"}, "asin": foundationASIN, "smart": true}); !strings.Contains(msg, "Foundation (Unabridged)") || !strings.Contains(msg, "whole title") {
 		t.Errorf("a write by part of a title: %s", msg)
@@ -255,7 +255,7 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 	// applied for real: the decisions are the preview's, and the book holds
 	// what each one said
 	applied := suite.Call(t, "item_match_apply", withArgs(smart, map[string]any{"confirm": true}))
-	if updated := acc.BoolOf(applied["updated"]); !updated {
+	if updated := acctest.BoolOf(applied["updated"]); !updated {
 		t.Errorf("updated = %v, want the match to have changed the book: %v", applied["updated"], applied)
 	}
 	if fmt.Sprint(applied["fields"]) != fmt.Sprint(preview["fields"]) {
@@ -265,7 +265,7 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 	for field, d := range decided {
 		switch got := decidedValue(t, after, field); d["action"] {
 		case "filled", "written":
-			if got != acc.Str(d["provider"]) {
+			if got != acctest.Str(d["provider"]) {
 				t.Errorf("%s is %q, want the store's %q (%s)", field, got, d["provider"], d["action"])
 			}
 		case "kept":
@@ -283,17 +283,17 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 	if countOf(tags, storeTag) != 1 || len(tags) < 2 {
 		t.Errorf("tags = %v, want the store's tags with %s once beside them", tags, storeTag)
 	}
-	if acc.BoolOf(after["no_cover"]) {
+	if acctest.BoolOf(after["no_cover"]) {
 		t.Error("the match fetched no cover for a book that had none")
 	}
 
 	// the same match again changes nothing and says so; the preview and a
 	// batch with rows that cannot be matched are counted by what happened
 	again := suite.Call(t, "item_match_apply_batch", map[string]any{"confirm": true, "matches": []any{map[string]any{"item": id, "asin": foundationASIN}}, "providers": []any{"audible"}, "smart": true})
-	if a, u, f := acc.Num(t, again["applied"], "applied"), acc.Num(t, again["unchanged"], "unchanged"), acc.Num(t, again["failed"], "failed"); a != 0 || u != 1 || f != 0 {
+	if a, u, f := acctest.Num(t, again["applied"], "applied"), acctest.Num(t, again["unchanged"], "unchanged"), acctest.Num(t, again["failed"], "failed"); a != 0 || u != 1 || f != 0 {
 		t.Errorf("a second smart match: applied %d, unchanged %d, failed %d, want 0, 1, 0: %v", a, u, f, again)
 	}
-	for _, d := range acc.Rows(t, acc.Rows(t, again["results"], "results")[0]["fields"], "fields") {
+	for _, d := range acctest.Rows(t, acctest.Rows(t, again["results"], "results")[0]["fields"], "fields") {
 		if d["action"] == "written" || d["action"] == "filled" {
 			t.Errorf("the second match decided to write %v", d)
 		}
@@ -302,7 +302,7 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 		t.Errorf("the second match changed the book: %v", changed)
 	}
 	pv := suite.Call(t, "item_match_apply_batch", map[string]any{"matches": []any{map[string]any{"item": id, "asin": foundationASIN}}, "providers": []any{"audible"}, "smart": true})
-	if p, a, u := acc.Num(t, pv["would_apply"], "would_apply"), acc.Num(t, pv["applied"], "applied"), acc.Num(t, pv["unchanged"], "unchanged"); p != 1 || a != 0 || u != 0 {
+	if p, a, u := acctest.Num(t, pv["would_apply"], "would_apply"), acctest.Num(t, pv["applied"], "applied"), acctest.Num(t, pv["unchanged"], "unchanged"); p != 1 || a != 0 || u != 0 {
 		t.Errorf("a batch without confirm: would_apply %d, applied %d, unchanged %d, want 1, 0, 0", p, a, u)
 	}
 	mixed := suite.Call(t, "item_match_apply_batch", map[string]any{"confirm": true, "providers": []any{"audible"}, "matches": []any{
@@ -310,14 +310,14 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 		map[string]any{"item": "Zzyzx Nowhere On The Shelf", "asin": foundationASIN},
 		map[string]any{"item": id},
 	}})
-	if a, u, f := acc.Num(t, mixed["applied"], "applied"), acc.Num(t, mixed["unchanged"], "unchanged"), acc.Num(t, mixed["failed"], "failed"); a != 0 || u != 1 || f != 2 {
+	if a, u, f := acctest.Num(t, mixed["applied"], "applied"), acctest.Num(t, mixed["unchanged"], "unchanged"), acctest.Num(t, mixed["failed"], "failed"); a != 0 || u != 1 || f != 2 {
 		t.Errorf("a batch of one unchanged book and two that cannot be matched: applied %d, unchanged %d, failed %d", a, u, f)
 	}
-	if results := acc.Rows(t, mixed["results"], "results"); len(results) == 3 {
-		if msg := acc.Str(results[1]["error"]); !strings.Contains(msg, "no item titled") {
+	if results := acctest.Rows(t, mixed["results"], "results"); len(results) == 3 {
+		if msg := acctest.Str(results[1]["error"]); !strings.Contains(msg, "no item titled") {
 			t.Errorf("a title nothing has: %q", msg)
 		}
-		if msg := acc.Str(results[2]["error"]); msg != "no asin or isbn" {
+		if msg := acctest.Str(results[2]["error"]); msg != "no asin or isbn" {
 			t.Errorf("a row with no asin: %q", msg)
 		}
 	}
@@ -347,16 +347,16 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 		got := decidedValue(t, fixed, field)
 		switch {
 		case field == "description":
-			if got == acc.Str(fromFiles["description"]) || !strings.Contains(got, "Foundation") {
+			if got == acctest.Str(fromFiles["description"]) || !strings.Contains(got, "Foundation") {
 				t.Errorf("description = %q, want the store's in place of the credit line", got)
 			}
-		case d["action"] == "written" && got != acc.Str(d["provider"]):
+		case d["action"] == "written" && got != acctest.Str(d["provider"]):
 			t.Errorf("%s = %q, want the store's %q", field, got, d["provider"])
 		case d["action"] == "review" && got != decidedValue(t, fromFiles, field):
 			t.Errorf("%s = %q, want it left for review as %q", field, got, decidedValue(t, fromFiles, field))
 		}
 	}
-	if updated := acc.BoolOf(overTags["updated"]); !updated {
+	if updated := acctest.BoolOf(overTags["updated"]); !updated {
 		t.Errorf("updated = %v after writing seven fields", overTags["updated"])
 	}
 
@@ -385,7 +385,7 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 	if overridden["narrator"] != "Zzyzx Reader" || fmt.Sprint(overridden["genres"]) != "[Zzyzx Genre]" {
 		t.Errorf("the kept fields did not survive the override: narrator %v, genres %v", overridden["narrator"], overridden["genres"])
 	}
-	if desc := acc.Str(overridden["description"]); desc == acc.Str(curated["description"]) || !strings.Contains(desc, "Foundation") {
+	if desc := acctest.Str(overridden["description"]); desc == acctest.Str(curated["description"]) || !strings.Contains(desc, "Foundation") {
 		t.Errorf("description = %q, want the store's in place of the one that was there", desc)
 	}
 	if kept := listOrNone(t, overridden["tags"], "tags"); countOf(kept, storeTag) != 1 {
@@ -413,22 +413,22 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 	suite.Call(t, "item_edit", map[string]any{"item": id, "remove_tags": []any{storeTag}})
 	untagged := listOrNone(t, bookNow(t, id)["tags"], "tags")
 	tagged := suite.Call(t, "item_match_tag", map[string]any{"library": "Messy", "providers": []any{"audible"}})
-	if c, n := acc.Num(t, tagged["checked"], "checked"), acc.Num(t, tagged["tagged"], "tagged"); c != 1 || n != 1 {
+	if c, n := acctest.Num(t, tagged["checked"], "checked"), acctest.Num(t, tagged["tagged"], "tagged"); c != 1 || n != 1 {
 		t.Errorf("item_match_tag checked %d and tagged %d, want the one matched book: %v", c, n, tagged)
 	}
-	if tagRows := acc.Rows(t, tagged["rows"], "rows"); len(tagRows) != 1 || tagRows[0]["id"] != id || tagRows[0]["provider"] != "audible" {
+	if tagRows := acctest.Rows(t, tagged["rows"], "rows"); len(tagRows) != 1 || tagRows[0]["id"] != id || tagRows[0]["provider"] != "audible" {
 		t.Errorf("rows = %v, want Foundation found at audible", tagRows)
 	}
 	tags = listOrNone(t, bookNow(t, id)["tags"], "tags")
 	if countOf(tags, storeTag) != 1 || !slices.Equal(slices.DeleteFunc(slices.Clone(tags), func(s string) bool { return s == storeTag }), untagged) {
 		t.Errorf("tags = %v, want %v with %s once", tags, untagged, storeTag)
 	}
-	if again := suite.Call(t, "item_match_tag", map[string]any{"library": "Messy", "providers": []any{"audible"}}); acc.Num(t, again["already_tagged"], "already_tagged") != 1 || acc.Num(t, again["tagged"], "tagged") != 0 {
+	if again := suite.Call(t, "item_match_tag", map[string]any{"library": "Messy", "providers": []any{"audible"}}); acctest.Num(t, again["already_tagged"], "already_tagged") != 1 || acctest.Num(t, again["tagged"], "tagged") != 0 {
 		t.Errorf("a second item_match_tag: %v, want the book counted as already tagged", again)
 	}
 	suite.Call(t, "item_edit", map[string]any{"item": id, "add_tags": []any{"zz-provider:audible.ca"}, "remove_tags": []any{storeTag}})
 	retagged := suite.Call(t, "item_match_tag", map[string]any{"library": "Messy", "providers": []any{"audible"}, "overwrite": true})
-	if n := acc.Num(t, retagged["tagged"], "tagged"); n != 1 {
+	if n := acctest.Num(t, retagged["tagged"], "tagged"); n != 1 {
 		t.Errorf("tagged = %d with overwrite, want 1", n)
 	}
 	if tags := listOrNone(t, bookNow(t, id)["tags"], "tags"); countOf(tags, storeTag) != 1 || slices.Contains(tags, "zz-provider:audible.ca") {
@@ -455,14 +455,14 @@ func TestJourneyMatchDecidedFieldByField(t *testing.T) {
 	suite.Call(t, "item_edit", map[string]any{"item": nowhere, "title": "Qxvzq Wtrpl Jzkfh", "authors": []any{"Qxvzq Jzkfh"}})
 	unmatchable := bookNow(t, nowhere)
 	nothing := suite.Call(t, "item_match_apply_batch", map[string]any{"confirm": true, "matches": []any{map[string]any{"item": nowhere, "asin": "B000000000"}}, "providers": []any{"audible"}})
-	if a, u, f := acc.Num(t, nothing["applied"], "applied"), acc.Num(t, nothing["unchanged"], "unchanged"), acc.Num(t, nothing["failed"], "failed"); a != 0 || u != 1 || f != 0 {
+	if a, u, f := acctest.Num(t, nothing["applied"], "applied"), acctest.Num(t, nothing["unchanged"], "unchanged"), acctest.Num(t, nothing["failed"], "failed"); a != 0 || u != 1 || f != 0 {
 		t.Errorf("a match that found nothing: applied %d, unchanged %d, failed %d, want 0, 1, 0", a, u, f)
 	}
-	if res := acc.Rows(t, nothing["results"], "results")[0]; acc.BoolOf(res["updated"]) || !strings.Contains(acc.Str(res["warning"]), "No audible match found") || strings.Contains(acc.Str(res["warning"]), "asin") {
+	if res := acctest.Rows(t, nothing["results"], "results")[0]; acctest.BoolOf(res["updated"]) || !strings.Contains(acctest.Str(res["warning"]), "No audible match found") || strings.Contains(acctest.Str(res["warning"]), "asin") {
 		t.Errorf("the row = %v, want no update and only the server's warning", res)
 	}
 	single := suite.Call(t, "item_match_apply", map[string]any{"confirm": true, "item": nowhere, "providers": []any{"audible"}, "asin": "B000000000"})
-	if acc.BoolOf(single["updated"]) || !strings.Contains(acc.Str(single["warning"]), "No audible match found") || strings.Contains(acc.Str(single["warning"]), "asin") {
+	if acctest.BoolOf(single["updated"]) || !strings.Contains(acctest.Str(single["warning"]), "No audible match found") || strings.Contains(acctest.Str(single["warning"]), "asin") {
 		t.Errorf("item_match_apply = %v, want no update and only the server's warning", single)
 	}
 	if changed := bookChanges(unmatchable, bookNow(t, nowhere)); len(changed) > 0 {
@@ -496,13 +496,13 @@ func TestJourneyMatchBatchAskAgainAfterApplying(t *testing.T) {
 	batchArgs := map[string]any{"library": "Non-Fiction", "providers": []any{"audible"}, "limit": 2}
 
 	first := suite.Call(t, "item_match_batch", batchArgs)
-	if first["filter"] != "missing:asin" || acc.Num(t, first["total"], "total") != 3 || acc.Num(t, first["offset"], "offset") != 0 || acc.Num(t, first["next_offset"], "next_offset") != 2 {
+	if first["filter"] != "missing:asin" || acctest.Num(t, first["total"], "total") != 3 || acctest.Num(t, first["offset"], "offset") != 0 || acctest.Num(t, first["next_offset"], "next_offset") != 2 {
 		t.Fatalf("offset 0 = filter %v, total %v, offset %v, next_offset %v, want missing:asin, 3, 0, 2", first["filter"], first["total"], first["offset"], first["next_offset"])
 	}
-	if paging := acc.Str(first["paging"]); !strings.Contains(paging, "offset 0 again") {
+	if paging := acctest.Str(first["paging"]); !strings.Contains(paging, "offset 0 again") {
 		t.Errorf("paging = %q, want the advice to ask for offset 0 again after applying", paging)
 	}
-	window := acc.Rows(t, first["rows"], "rows")
+	window := acctest.Rows(t, first["rows"], "rows")
 	if got := titlesIn(t, first["rows"], "rows"); !slices.Equal(got, order[:2]) {
 		t.Fatalf("offset 0 = %v, want %v", got, order[:2])
 	}
@@ -514,16 +514,16 @@ func TestJourneyMatchBatchAskAgainAfterApplying(t *testing.T) {
 	}
 	row := window[i]
 	best := object(row["best"])
-	asin := acc.Str(best["asin"])
+	asin := acctest.Str(best["asin"])
 	if asin == "" {
 		t.Fatalf("no candidate to apply: %v", row)
 	}
-	vice := acc.Str(row["id"])
+	vice := acctest.Str(row["id"])
 	before := bookNow(t, vice)
 	t.Cleanup(func() { putBackBook(t, vice, before) })
 
 	applied := suite.Call(t, "item_match_apply_batch", map[string]any{"confirm": true, "matches": []any{map[string]any{"item": vice, "asin": asin, "provider": row["provider"]}}})
-	if a, u, f := acc.Num(t, applied["applied"], "applied"), acc.Num(t, applied["unchanged"], "unchanged"), acc.Num(t, applied["failed"], "failed"); a != 1 || u != 0 || f != 0 {
+	if a, u, f := acctest.Num(t, applied["applied"], "applied"), acctest.Num(t, applied["unchanged"], "unchanged"), acctest.Num(t, applied["failed"], "failed"); a != 1 || u != 0 || f != 0 {
 		t.Errorf("applied %d, unchanged %d, failed %d, want 1, 0, 0: %v", a, u, f, applied)
 	}
 	after := bookNow(t, vice)
@@ -539,14 +539,14 @@ func TestJourneyMatchBatchAskAgainAfterApplying(t *testing.T) {
 	// next_offset from before now starts past the end, and holds nothing
 	rest := slices.DeleteFunc(slices.Clone(order), func(s string) bool { return s == "A Brief History of Vice" })
 	again := suite.Call(t, "item_match_batch", batchArgs)
-	if got := titlesIn(t, again["rows"], "rows"); acc.Num(t, again["total"], "total") != 2 || !slices.Equal(got, rest) {
+	if got := titlesIn(t, again["rows"], "rows"); acctest.Num(t, again["total"], "total") != 2 || !slices.Equal(got, rest) {
 		t.Errorf("offset 0 again = %v of %v, want %v", got, again["total"], rest)
 	}
 	if again["next_offset"] != nil || again["paging"] != nil {
 		t.Errorf("the last window says there is more: next_offset %v, paging %v", again["next_offset"], again["paging"])
 	}
-	skipped := suite.Call(t, "item_match_batch", withArgs(batchArgs, map[string]any{"offset": acc.Num(t, first["next_offset"], "next_offset")}))
-	if got := acc.Rows(t, skipped["rows"], "rows"); len(got) != 0 {
+	skipped := suite.Call(t, "item_match_batch", withArgs(batchArgs, map[string]any{"offset": acctest.Num(t, first["next_offset"], "next_offset")}))
+	if got := acctest.Rows(t, skipped["rows"], "rows"); len(got) != 0 {
 		t.Errorf("offset 2 = %v, want nothing: the book it held has moved up", got)
 	}
 	// asking again at the same offset after applying reached every book:
@@ -577,8 +577,8 @@ func TestJourneyOneASINOnTwoBooks(t *testing.T) {
 		t.Helper()
 		out := suite.Call(t, "audit_matched", withMessy(withArgs(map[string]any{"providers": []any{"audible"}}, extra)))
 		problems := map[string][]string{}
-		for _, f := range acc.Rows(t, out["findings"], "findings") {
-			problems[acc.Str(f["id"])] = acc.Strs(t, f["problems"], "problems")
+		for _, f := range acctest.Rows(t, out["findings"], "findings") {
+			problems[acctest.Str(f["id"])] = acctest.Strs(t, f["problems"], "problems")
 		}
 		return problems, out
 	}
@@ -588,8 +588,8 @@ func TestJourneyOneASINOnTwoBooks(t *testing.T) {
 		if library != "" {
 			args["library"] = library
 		}
-		for _, g := range acc.Rows(t, suite.Call(t, "audit_duplicates", args)["groups"], "groups") {
-			if strings.Contains(acc.Str(g["key"]), "asin:"+foundationASIN) {
+		for _, g := range acctest.Rows(t, suite.Call(t, "audit_duplicates", args)["groups"], "groups") {
+			if strings.Contains(acctest.Str(g["key"]), "asin:"+foundationASIN) {
 				ids := valuesIn(t, g["items"], "items", "id")
 				slices.Sort(ids)
 				return ids
@@ -603,7 +603,7 @@ func TestJourneyOneASINOnTwoBooks(t *testing.T) {
 	}
 
 	problems, out := matched(t, nil)
-	if acc.Num(t, out["items_scanned"], "items_scanned") != 1 || !slices.Equal(problems[foundation], []string{"duration_off"}) || len(problems) != 1 {
+	if acctest.Num(t, out["items_scanned"], "items_scanned") != 1 || !slices.Equal(problems[foundation], []string{"duration_off"}) || len(problems) != 1 {
 		t.Fatalf("before: %v, want Foundation alone, off only in length", out)
 	}
 	if !slices.Contains(unmatched(t), "The Colour of Magic") {
@@ -613,7 +613,7 @@ func TestJourneyOneASINOnTwoBooks(t *testing.T) {
 	suite.Call(t, "item_edit", map[string]any{"item": colour, "asin": foundationASIN})
 
 	problems, out = matched(t, nil)
-	if n := acc.Num(t, out["items_scanned"], "items_scanned"); n != 2 {
+	if n := acctest.Num(t, out["items_scanned"], "items_scanned"); n != 2 {
 		t.Errorf("items_scanned = %d, want both books with the asin", n)
 	}
 	if got := problems[colour]; !slices.Contains(got, "title_differs") || !slices.Contains(got, "narrator_differs") {
@@ -623,10 +623,10 @@ func TestJourneyOneASINOnTwoBooks(t *testing.T) {
 		t.Errorf("Foundation: %v, want still only duration_off", got)
 	}
 	counts := object(out["counts"])
-	if acc.Num(t, counts["title_differs"], "title_differs") != 1 || acc.Num(t, counts["narrator_differs"], "narrator_differs") != 1 || acc.Num(t, counts["duration_off"], "duration_off") != 2 {
+	if acctest.Num(t, counts["title_differs"], "title_differs") != 1 || acctest.Num(t, counts["narrator_differs"], "narrator_differs") != 1 || acctest.Num(t, counts["duration_off"], "duration_off") != 2 {
 		t.Errorf("counts = %v, want one title and one narrator off, two lengths", counts)
 	}
-	for _, f := range acc.Rows(t, out["findings"], "findings") {
+	for _, f := range acctest.Rows(t, out["findings"], "findings") {
 		if f["id"] != colour {
 			continue
 		}
@@ -637,12 +637,12 @@ func TestJourneyOneASINOnTwoBooks(t *testing.T) {
 	}
 	// with fields, the difference is spelled out: both titles
 	_, withFields := matched(t, map[string]any{"fields": true})
-	for _, f := range acc.Rows(t, withFields["findings"], "findings") {
+	for _, f := range acctest.Rows(t, withFields["findings"], "findings") {
 		if f["id"] != colour {
 			continue
 		}
 		var title map[string]any
-		for _, d := range acc.Rows(t, f["fields"], "fields") {
+		for _, d := range acctest.Rows(t, f["fields"], "fields") {
 			if d["field"] == "title" {
 				title = d
 			}
@@ -669,7 +669,7 @@ func TestJourneyOneASINOnTwoBooks(t *testing.T) {
 	// put right
 	suite.Call(t, "item_edit", map[string]any{"item": colour, "clear": []any{"asin"}})
 	problems, out = matched(t, nil)
-	if acc.Num(t, out["items_scanned"], "items_scanned") != 1 || len(problems) != 1 || !slices.Equal(problems[foundation], []string{"duration_off"}) {
+	if acctest.Num(t, out["items_scanned"], "items_scanned") != 1 || len(problems) != 1 || !slices.Equal(problems[foundation], []string{"duration_off"}) {
 		t.Errorf("after clearing: %v, want Foundation alone again", out)
 	}
 	if got := asinGroup(t, "Messy"); got != nil {
@@ -704,11 +704,11 @@ func TestJourneyDuplicatesJoinCopiesNotEditions(t *testing.T) {
 	// the group holding a book, with what its copies share
 	groupOf := func(t *testing.T, id string) (key string, ids []string) {
 		t.Helper()
-		for _, g := range acc.Rows(t, suite.Call(t, "audit_duplicates", messy)["groups"], "groups") {
+		for _, g := range acctest.Rows(t, suite.Call(t, "audit_duplicates", messy)["groups"], "groups") {
 			members := valuesIn(t, g["items"], "items", "id")
 			if slices.Contains(members, id) {
 				slices.Sort(members)
-				return acc.Str(g["key"]), members
+				return acctest.Str(g["key"]), members
 			}
 		}
 		return "", nil
@@ -750,12 +750,12 @@ func TestJourneyDuplicatesJoinCopiesNotEditions(t *testing.T) {
 		t.Errorf("Red and Blue Mars on one isbn were grouped: %q %v", key, ids)
 	}
 	var split map[string]any
-	for _, row := range acc.Rows(t, suite.Call(t, "audit_duplicates", messy)["split"], "split") {
+	for _, row := range acctest.Rows(t, suite.Call(t, "audit_duplicates", messy)["split"], "split") {
 		if row["key"] == "isbn:9780553560738" {
 			split = row
 		}
 	}
-	if split == nil || acc.Num(t, split["copies"], "copies") != 2 || !strings.Contains(fmt.Sprint(split["why"]), "at different places in one series") {
+	if split == nil || acctest.Num(t, split["copies"], "copies") != 2 || !strings.Contains(fmt.Sprint(split["why"]), "at different places in one series") {
 		t.Errorf("split for the shared isbn = %v, want both books, at different places in one series", split)
 	}
 }

@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	acc "github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // fetch gets a url as a listener would, with no account: the status and the
@@ -68,7 +68,7 @@ func TestFeedEdit(t *testing.T) {
 	server := strings.TrimRight(os.Getenv("ABS_SERVER"), "/")
 
 	col := suite.Call(t, "collection_create", map[string]any{"name": "Zzyzx Feed Collection", "library": "Fiction", "items": []any{"Foundation"}})
-	t.Cleanup(func() { _, _ = suite.Invoke("collection_delete", map[string]any{"collection": acc.Str(col["id"])}) })
+	t.Cleanup(func() { _, _ = suite.Invoke("collection_delete", map[string]any{"collection": acctest.Str(col["id"])}) })
 
 	for _, target := range []map[string]any{
 		{"item": "Foundation", "library": "Fiction"},
@@ -76,8 +76,8 @@ func TestFeedEdit(t *testing.T) {
 		{"collection": "Zzyzx Feed Collection"},
 	} {
 		out := suite.Call(t, "feed_edit", target)
-		url := acc.Str(out["url"])
-		if !acc.BoolOf(out["opened"]) || !strings.HasPrefix(url, server+"/feed/") {
+		url := acctest.Str(out["url"])
+		if !acctest.BoolOf(out["opened"]) || !strings.HasPrefix(url, server+"/feed/") {
 			t.Fatalf("feed_edit %v = %v", target, out)
 		}
 		t.Cleanup(func() {
@@ -88,7 +88,7 @@ func TestFeedEdit(t *testing.T) {
 		if status, body := fetch(t, url); status != http.StatusOK || !strings.Contains(body, "<rss") {
 			t.Errorf("%s answers %d: %.200s", url, status, body)
 		}
-		if again := suite.Call(t, "feed_edit", target); !acc.BoolOf(again["already"]) || again["url"] != url {
+		if again := suite.Call(t, "feed_edit", target); !acctest.BoolOf(again["already"]) || again["url"] != url {
 			t.Errorf("opening it again = %v, want the one open", again)
 		}
 		if listed := valuesIn(t, suite.Call(t, "feed_list", nil)["feeds"], "feeds", "url"); !slices.Contains(listed, url) {
@@ -97,15 +97,15 @@ func TestFeedEdit(t *testing.T) {
 	}
 
 	closeArgs := map[string]any{"item": "Foundation", "library": "Fiction", "close": true}
-	if out := suite.Call(t, "feed_edit", closeArgs); !acc.BoolOf(out["closed"]) || acc.BoolOf(out["already"]) {
+	if out := suite.Call(t, "feed_edit", closeArgs); !acctest.BoolOf(out["closed"]) || acctest.BoolOf(out["already"]) {
 		t.Errorf("close = %v", out)
 	}
-	for _, f := range acc.Rows(t, suite.Call(t, "feed_list", nil)["feeds"], "feeds") {
+	for _, f := range acctest.Rows(t, suite.Call(t, "feed_list", nil)["feeds"], "feeds") {
 		if f["for"] == "item" && f["title"] == "Foundation" {
 			t.Errorf("the book's feed is still listed: %v", f)
 		}
 	}
-	if out := suite.Call(t, "feed_edit", closeArgs); !acc.BoolOf(out["already"]) {
+	if out := suite.Call(t, "feed_edit", closeArgs); !acctest.BoolOf(out["already"]) {
 		t.Errorf("closing it again = %v, want already", out)
 	}
 }
@@ -117,9 +117,9 @@ func TestFeedEditLink(t *testing.T) {
 	book := map[string]any{"item": "Leviathan Wakes", "library": "Fiction", "link": true}
 
 	out := suite.Call(t, "feed_edit", book)
-	url := acc.Str(out["url"])
+	url := acctest.Str(out["url"])
 	slug := strings.TrimPrefix(url, server+"/share/")
-	if !acc.BoolOf(out["opened"]) || len(slug) != 10 || slug == url {
+	if !acctest.BoolOf(out["opened"]) || len(slug) != 10 || slug == url {
 		t.Fatalf("feed_edit link = %v", out)
 	}
 	t.Cleanup(func() {
@@ -128,11 +128,11 @@ func TestFeedEditLink(t *testing.T) {
 	if status, body := fetch(t, server+"/public/share/"+slug); status != http.StatusOK || !strings.Contains(body, `"slug":"`+slug+`"`) {
 		t.Errorf("the link answers %d: %.200s", status, body)
 	}
-	if again := suite.Call(t, "feed_edit", book); !acc.BoolOf(again["already"]) || again["url"] != url {
+	if again := suite.Call(t, "feed_edit", book); !acctest.BoolOf(again["already"]) || again["url"] != url {
 		t.Errorf("a second link = %v, want the one open", again)
 	}
 
-	if out := suite.Call(t, "feed_edit", map[string]any{"item": "Leviathan Wakes", "library": "Fiction", "link": true, "close": true}); !acc.BoolOf(out["closed"]) {
+	if out := suite.Call(t, "feed_edit", map[string]any{"item": "Leviathan Wakes", "library": "Fiction", "link": true, "close": true}); !acctest.BoolOf(out["closed"]) {
 		t.Errorf("close = %v", out)
 	}
 	if status, _ := fetch(t, server+"/public/share/"+slug); status != http.StatusNotFound {
@@ -156,10 +156,10 @@ func TestFeedEditLinkExpiresAndDownloads(t *testing.T) {
 
 	asked := time.Now()
 	out := suite.Call(t, "feed_edit", withArgs(book, map[string]any{"slug": "zzyzx-lent", "expires_days": 2, "downloadable": true}))
-	if !acc.BoolOf(out["opened"]) || out["url"] != server+"/share/zzyzx-lent" {
+	if !acctest.BoolOf(out["opened"]) || out["url"] != server+"/share/zzyzx-lent" {
 		t.Fatalf("feed_edit link = %v", out)
 	}
-	expires, err := time.Parse(time.RFC3339, acc.Str(out["expires"]))
+	expires, err := time.Parse(time.RFC3339, acctest.Str(out["expires"]))
 	if err != nil || expires.Before(asked.Add(48*time.Hour-time.Minute)) || expires.After(time.Now().Add(48*time.Hour+time.Minute)) {
 		t.Errorf("expires = %v (%v), want two days from now", out["expires"], err)
 	}
@@ -167,7 +167,7 @@ func TestFeedEditLinkExpiresAndDownloads(t *testing.T) {
 	if err != nil || share == nil {
 		t.Fatalf("the book's link, as the server holds it: %v %v", share, err)
 	}
-	if share.Slug != "zzyzx-lent" || !share.IsDownloadable || share.ExpiresAt != acc.Str(out["expires"]) {
+	if share.Slug != "zzyzx-lent" || !share.IsDownloadable || share.ExpiresAt != acctest.Str(out["expires"]) {
 		t.Errorf("the server holds %+v, want it downloadable and closing %v", share, out["expires"])
 	}
 	if status, body := download(t, server, "zzyzx-lent"); status != http.StatusOK {
@@ -176,13 +176,13 @@ func TestFeedEditLinkExpiresAndDownloads(t *testing.T) {
 
 	// one link to a book: asked for again, it is the one open, as it is
 	again := suite.Call(t, "feed_edit", withArgs(book, map[string]any{"slug": "zzyzx-other", "expires_days": 9}))
-	if !acc.BoolOf(again["already"]) || again["url"] != out["url"] || again["expires"] != out["expires"] {
+	if !acctest.BoolOf(again["already"]) || again["url"] != out["url"] || again["expires"] != out["expires"] {
 		t.Errorf("a second link = %v, want the one open", again)
 	}
 	suite.Call(t, "feed_edit", withArgs(book, map[string]any{"close": true}))
 
 	out = suite.Call(t, "feed_edit", withArgs(book, map[string]any{"slug": "zzyzx-kept"}))
-	if !acc.BoolOf(out["opened"]) || out["expires"] != nil {
+	if !acctest.BoolOf(out["opened"]) || out["expires"] != nil {
 		t.Fatalf("a link with no end = %v", out)
 	}
 	if share, err = admin.ItemShare(ctx, id); err != nil || share == nil || share.IsDownloadable || share.ExpiresAt != "" {

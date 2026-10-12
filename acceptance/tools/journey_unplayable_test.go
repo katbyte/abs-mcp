@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	acc "github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // A shelf of books that will not play, laid out on disk the way they turn
@@ -89,8 +89,8 @@ func TestJourneyBooksThatWillNotPlay(t *testing.T) {
 
 	byPath := func(out map[string]any) map[string]map[string]any {
 		got := map[string]map[string]any{}
-		for _, r := range acc.Rows(t, out["findings"], "findings") {
-			got[acc.Str(r["path"])+" "+acc.Str(r["problem"])] = r
+		for _, r := range acctest.Rows(t, out["findings"], "findings") {
+			got[acctest.Str(r["path"])+" "+acctest.Str(r["problem"])] = r
 		}
 		return got
 	}
@@ -108,17 +108,17 @@ func TestJourneyBooksThatWillNotPlay(t *testing.T) {
 			t.Errorf("no finding %q in %v", key, out["findings"])
 			continue
 		}
-		if !strings.Contains(acc.Str(r["detail"]), words) {
+		if !strings.Contains(acctest.Str(r["detail"]), words) {
 			t.Errorf("%s says %q, want %q in it", key, r["detail"], words)
 		}
-		if plays := acc.BoolOf(r["plays"]); plays != strings.HasSuffix(key, "wrong_extension") {
+		if plays := acctest.BoolOf(r["plays"]); plays != strings.HasSuffix(key, "wrong_extension") {
 			t.Errorf("%s says plays=%v", key, r["plays"])
 		}
 	}
 	if len(got) != 4 {
 		t.Errorf("findings = %v, want the four above and nothing for the good or the damaged book without decode", out["findings"])
 	}
-	if n := acc.Num(t, out["files_read"], "files_read"); n != 5 {
+	if n := acctest.Num(t, out["files_read"], "files_read"); n != 5 {
 		t.Errorf("files_read = %d, want the five m4b files", n)
 	}
 	if out["unchecked_count"] != nil {
@@ -137,7 +137,7 @@ func TestJourneyBooksThatWillNotPlay(t *testing.T) {
 			t.Errorf("decode reported %s", key)
 		}
 	}
-	if n := acc.Num(t, out["files_played"], "files_played"); n != 3 {
+	if n := acctest.Num(t, out["files_played"], "files_played"); n != 3 {
 		t.Errorf("files_played = %d, want the good, the misnamed and the damaged book's files", n)
 	}
 }

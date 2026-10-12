@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	acc "github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // auditTools is every audit the server registers. TestEveryAuditRuns calls all
@@ -52,7 +52,7 @@ func TestEveryAuditRuns(t *testing.T) {
 		if _, ok := out["total_findings"]; !ok {
 			t.Errorf("%s returned no total_findings: %v", name, out)
 		}
-		acc.Rows(t, out["findings"], name+".findings")
+		acctest.Rows(t, out["findings"], name+".findings")
 	}
 
 	// every field audit_missing accepts must answer too
@@ -61,7 +61,7 @@ func TestEveryAuditRuns(t *testing.T) {
 		if _, ok := out["total_findings"]; !ok {
 			t.Errorf("audit_missing %s returned no total_findings: %v", field, out)
 		}
-		acc.Rows(t, out["findings"], "audit_missing "+field)
+		acctest.Rows(t, out["findings"], "audit_missing "+field)
 	}
 	if msg := suite.CallErr(t, "audit_missing", map[string]any{"library": "Fiction", "field": "nope"}); msg == "" {
 		t.Error("audit_missing should refuse an unknown field")
@@ -92,7 +92,7 @@ func TestEveryAuditRuns(t *testing.T) {
 func TestAuditMissingCover(t *testing.T) {
 	out := suite.Call(t, "audit_missing", map[string]any{"library": "Fiction", "field": "cover"})
 
-	if found := acc.Num(t, out["total_findings"], "total_findings"); found != 7 {
+	if found := acctest.Num(t, out["total_findings"], "total_findings"); found != 7 {
 		t.Errorf("total_findings = %d, want all 7 fiction items", found)
 	}
 }
@@ -101,11 +101,11 @@ func TestAuditMissingCover(t *testing.T) {
 func TestAuditUnmatched(t *testing.T) {
 	out := suite.Call(t, "audit_unmatched", map[string]any{"library": "Non-Fiction"})
 
-	if found := acc.Num(t, out["total_findings"], "total_findings"); found != 3 {
+	if found := acctest.Num(t, out["total_findings"], "total_findings"); found != 3 {
 		t.Errorf("total_findings = %d, want 3", found)
 	}
-	for _, f := range acc.Rows(t, out["findings"], "findings") {
-		if detail := acc.Str(f["detail"]); detail == "" {
+	for _, f := range acctest.Rows(t, out["findings"], "findings") {
+		if detail := acctest.Str(f["detail"]); detail == "" {
 			t.Errorf("finding has no detail saying why: %v", f)
 		}
 	}
@@ -115,12 +115,12 @@ func TestAuditUnmatched(t *testing.T) {
 func TestAuditMissingSeries(t *testing.T) {
 	out := suite.Call(t, "audit_missing", map[string]any{"library": "Non-Fiction", "field": "series"})
 
-	if found := acc.Num(t, out["total_findings"], "total_findings"); found != 3 {
+	if found := acctest.Num(t, out["total_findings"], "total_findings"); found != 3 {
 		t.Errorf("total_findings = %d, want 3", found)
 	}
 	// and fiction, which is all in series, must come back clean
 	out = suite.Call(t, "audit_missing", map[string]any{"library": "Fiction", "field": "series"})
-	if found := acc.Num(t, out["total_findings"], "total_findings"); found != 0 {
+	if found := acctest.Num(t, out["total_findings"], "total_findings"); found != 0 {
 		t.Errorf("Fiction total_findings = %d, want 0 - every book is in a series", found)
 	}
 }
@@ -130,7 +130,7 @@ func TestAuditMissingSeries(t *testing.T) {
 func TestAuditMissingChapters(t *testing.T) {
 	out := suite.Call(t, "audit_missing", map[string]any{"library": "Fiction", "field": "chapters"})
 
-	if found := acc.Num(t, out["total_findings"], "total_findings"); found != 0 {
+	if found := acctest.Num(t, out["total_findings"], "total_findings"); found != 0 {
 		t.Errorf("total_findings = %d, want 0 - the fixtures are too short to need chapters", found)
 	}
 }
@@ -149,10 +149,10 @@ func TestAuditPath(t *testing.T) {
 		}
 	}
 	got := map[string]string{}
-	for _, f := range acc.Rows(t, out["findings"], "findings") {
-		got[acc.Str(f["title"])] = acc.Str(f["detail"])
+	for _, f := range acctest.Rows(t, out["findings"], "findings") {
+		got[acctest.Str(f["title"])] = acctest.Str(f["detail"])
 	}
-	if !maps.Equal(got, want) || acc.Num(t, out["total_findings"], "total_findings") != len(want) {
+	if !maps.Equal(got, want) || acctest.Num(t, out["total_findings"], "total_findings") != len(want) {
 		t.Errorf("audit_path = %v (%v in all), want the %d books in a series their folder does not say: %v", got, out["total_findings"], len(want), want)
 	}
 }
@@ -162,19 +162,19 @@ func TestAuditPodcasts(t *testing.T) {
 	// both shows have episodes, and neither was subscribed from a feed: each
 	// is a stale feed and neither is without episodes
 	out := suite.Call(t, "audit_podcasts", map[string]any{"library": "Podcasts"})
-	found := acc.Rows(t, out["findings"], "findings")
+	found := acctest.Rows(t, out["findings"], "findings")
 	for _, f := range found {
 		if f["problem"] != "stale_feed" || f["detail"] != "no feed url" {
 			t.Errorf("finding %v, want a stale feed for want of a feed url", f)
 		}
 	}
-	if len(found) != len(podcasts) || acc.Num(t, out["total_findings"], "total_findings") != len(podcasts) || acc.Num(t, out["items_scanned"], "items_scanned") != len(podcasts) {
+	if len(found) != len(podcasts) || acctest.Num(t, out["total_findings"], "total_findings") != len(podcasts) || acctest.Num(t, out["items_scanned"], "items_scanned") != len(podcasts) {
 		t.Errorf("audit_podcasts = %v, want the %d shows, each looked at once", out, len(podcasts))
 	}
 
 	// a book library has no podcasts to flag
 	out = suite.Call(t, "audit_podcasts", map[string]any{"library": "Fiction"})
-	if found := acc.Num(t, out["total_findings"], "total_findings"); found != 0 {
+	if found := acctest.Num(t, out["total_findings"], "total_findings"); found != 0 {
 		t.Errorf("audit_podcasts on books = %d, want 0", found)
 	}
 }
@@ -184,28 +184,28 @@ func TestAuditPodcasts(t *testing.T) {
 func TestAuditAll(t *testing.T) {
 	all := suite.Call(t, "audit_all", map[string]any{"library": "Fiction"})
 
-	if scanned := acc.Num(t, all["items_scanned"], "items_scanned"); scanned != 7 {
+	if scanned := acctest.Num(t, all["items_scanned"], "items_scanned"); scanned != 7 {
 		t.Errorf("items_scanned = %d, want 7", scanned)
 	}
 
 	counts := map[string]int{}
 	fields := map[string]int{}
-	for _, row := range acc.Rows(t, all["audits"], "audits") {
-		name := acc.Str(row["audit"])
+	for _, row := range acctest.Rows(t, all["audits"], "audits") {
+		name := acctest.Str(row["audit"])
 		if field, ok := row["field"].(string); ok && field != "" {
-			fields[field] = acc.Num(t, row["found"], "found")
+			fields[field] = acctest.Num(t, row["found"], "found")
 			continue
 		}
-		counts[name] = acc.Num(t, row["found"], "found")
+		counts[name] = acctest.Num(t, row["found"], "found")
 	}
-	clean := acc.Strs(t, all["clean"], "clean")
+	clean := acctest.Strs(t, all["clean"], "clean")
 
 	// every audit appears exactly once, found, clean or not applicable (the
 	// podcast audits, in a library of books); the ones that fetch something
 	// per item are named as skipped instead
 	var notApplicable []string
 	if all["not_applicable"] != nil {
-		notApplicable = acc.Strs(t, all["not_applicable"], "not_applicable")
+		notApplicable = acctest.Strs(t, all["not_applicable"], "not_applicable")
 	}
 	if !slices.Equal(notApplicable, []string{"audit_podcasts"}) {
 		t.Errorf("not_applicable = %v, want the podcast audit", notApplicable)
@@ -224,7 +224,7 @@ func TestAuditAll(t *testing.T) {
 		}
 	}
 	perItem := []string{"audit_covers", "audit_unembedded", "audit_matched", "audit_abridged", "audit_unplayable"}
-	if skipped := acc.Strs(t, all["skipped"], "skipped"); !slices.Equal(skipped, perItem) {
+	if skipped := acctest.Strs(t, all["skipped"], "skipped"); !slices.Equal(skipped, perItem) {
 		t.Errorf("skipped = %v, want %v", skipped, perItem)
 	}
 	for _, name := range perItem {
@@ -239,12 +239,12 @@ func TestAuditAll(t *testing.T) {
 	// set: audit_matched and audit_abridged refuse it, and deep skips them
 	// saying so
 	deep := suite.Call(t, "audit_all", map[string]any{"library": "Fiction", "deep": true})
-	if skipped := acc.Strs(t, deep["skipped"], "skipped"); !slices.Equal(skipped, []string{"audit_matched", "audit_abridged"}) {
+	if skipped := acctest.Strs(t, deep["skipped"], "skipped"); !slices.Equal(skipped, []string{"audit_matched", "audit_abridged"}) {
 		t.Errorf("deep skipped %v, want audit_matched and audit_abridged", skipped)
 	}
 	const onGoogle = `library "Fiction" is on the google provider, which cannot look up an asin`
-	for _, row := range acc.Rows(t, deep["not_run"], "not_run") {
-		if row["audit"] == "audit_matched" && !strings.Contains(acc.Str(row["reason"]), onGoogle) {
+	for _, row := range acctest.Rows(t, deep["not_run"], "not_run") {
+		if row["audit"] == "audit_matched" && !strings.Contains(acctest.Str(row["reason"]), onGoogle) {
 			t.Errorf("audit_matched not run because %q, want %q", row["reason"], onGoogle)
 		}
 	}
@@ -262,14 +262,14 @@ func TestAuditAll(t *testing.T) {
 		}
 	}
 	deepCounts := map[string]int{}
-	for _, row := range acc.Rows(t, deep["audits"], "audits") {
-		if name := acc.Str(row["audit"]); slices.Contains(perItem, name) {
-			deepCounts[name] = acc.Num(t, row["found"], "found")
+	for _, row := range acctest.Rows(t, deep["audits"], "audits") {
+		if name := acctest.Str(row["audit"]); slices.Contains(perItem, name) {
+			deepCounts[name] = acctest.Num(t, row["found"], "found")
 		}
 	}
 	for _, name := range perItem[:2] {
 		one := suite.Call(t, name, map[string]any{"library": "Fiction"})
-		if got := acc.Num(t, one["total_findings"], "total_findings"); got != deepCounts[name] {
+		if got := acctest.Num(t, one["total_findings"], "total_findings"); got != deepCounts[name] {
 			t.Errorf("%s: audit_all deep says %d, the audit itself says %d", name, deepCounts[name], got)
 		}
 	}
@@ -277,13 +277,13 @@ func TestAuditAll(t *testing.T) {
 	// and the counts match what the individual audit says
 	for name, want := range counts {
 		one := suite.Call(t, name, map[string]any{"library": "Fiction"})
-		if got := acc.Num(t, one["total_findings"], "total_findings"); got != want {
+		if got := acctest.Num(t, one["total_findings"], "total_findings"); got != want {
 			t.Errorf("%s: audit_all says %d, the audit itself says %d", name, want, got)
 		}
 	}
 	for field, want := range fields {
 		one := suite.Call(t, "audit_missing", map[string]any{"library": "Fiction", "field": field})
-		if got := acc.Num(t, one["total_findings"], "total_findings"); got != want {
+		if got := acctest.Num(t, one["total_findings"], "total_findings"); got != want {
 			t.Errorf("audit_missing %s: audit_all says %d, the audit itself says %d", field, want, got)
 		}
 	}
@@ -295,9 +295,9 @@ func TestAuditSeriesGaps(t *testing.T) {
 	out := suite.Call(t, "audit_series", nil)
 
 	got := map[string][]string{}
-	for _, row := range acc.Rows(t, out["gaps"], "gaps") {
-		name := acc.Str(row["name"])
-		got[name] = acc.Strs(t, row["missing"], "missing")
+	for _, row := range acctest.Rows(t, out["gaps"], "gaps") {
+		name := acctest.Str(row["name"])
+		got[name] = acctest.Strs(t, row["missing"], "missing")
 	}
 
 	if missing, ok := got["The Expanse"]; !ok {
@@ -323,7 +323,7 @@ func TestAuditSeriesGaps(t *testing.T) {
 func TestAuditDuplicates(t *testing.T) {
 	out := suite.Call(t, "audit_duplicates", map[string]any{"library": "Fiction"})
 
-	if groups := acc.Rows(t, out["groups"], "groups"); len(groups) != 0 {
+	if groups := acctest.Rows(t, out["groups"], "groups"); len(groups) != 0 {
 		t.Errorf("audit_duplicates found %d groups in a clean library: %v", len(groups), groups)
 	}
 }
@@ -335,7 +335,7 @@ func TestAuditDuplicates(t *testing.T) {
 func TestAuditSpelling(t *testing.T) {
 	out := suite.Call(t, "audit_spelling", map[string]any{"library": "Fiction"})
 
-	if groups := acc.Rows(t, out["groups"], "groups"); len(groups) != 0 {
+	if groups := acctest.Rows(t, out["groups"], "groups"); len(groups) != 0 {
 		t.Errorf("audit_spelling found %d groups in a consistent library: %v", len(groups), groups)
 	}
 	// every fixture is English, which the alias table recognizes
@@ -357,21 +357,21 @@ func TestAuditAuthors(t *testing.T) {
 	if !ok {
 		t.Fatalf("counts = %v, want an object", out["counts"])
 	}
-	if got := acc.Num(t, counts["no_photo"], "counts.no_photo"); got != 3 {
+	if got := acctest.Num(t, counts["no_photo"], "counts.no_photo"); got != 3 {
 		t.Errorf("counts.no_photo = %d, want 3", got)
 	}
-	if got := acc.Num(t, counts["unmatched"], "counts.unmatched"); got != 3 {
+	if got := acctest.Num(t, counts["unmatched"], "counts.unmatched"); got != 3 {
 		t.Errorf("counts.unmatched = %d, want 3", got)
 	}
-	records := acc.Rows(t, out["records"], "records")
+	records := acctest.Rows(t, out["records"], "records")
 	if len(records) != 3 {
 		t.Fatalf("records = %d, want 3", len(records))
 	}
 	// most-published first within the same problems
-	if books := acc.Num(t, records[0]["books"], "books"); books != 3 {
+	if books := acctest.Num(t, records[0]["books"], "books"); books != 3 {
 		t.Errorf("first record has %d books, want Asimov's 3 (sorted most first)", books)
 	}
-	if got := acc.Num(t, out["total_findings"], "total_findings"); got != 3 {
+	if got := acctest.Num(t, out["total_findings"], "total_findings"); got != 3 {
 		t.Errorf("total_findings = %d, want the three records and nothing else", got)
 	}
 }
@@ -392,17 +392,17 @@ func TestAuditNarrators(t *testing.T) {
 func TestAuditCovers(t *testing.T) {
 	out := suite.Call(t, "audit_covers", map[string]any{"library": "Non-Fiction"})
 
-	if checked := acc.Num(t, out["covers_checked"], "covers_checked"); checked != 3 {
+	if checked := acctest.Num(t, out["covers_checked"], "covers_checked"); checked != 3 {
 		t.Errorf("covers_checked = %d, want 3", checked)
 	}
-	if found := acc.Num(t, out["total_findings"], "total_findings"); found != 2 {
+	if found := acctest.Num(t, out["total_findings"], "total_findings"); found != 2 {
 		t.Errorf("total_findings = %d, want the jacket and the small one", found)
 	}
 	problems := map[string]string{}
-	for _, row := range acc.Rows(t, out["findings"], "findings") {
-		title := acc.Str(row["title"])
-		problems[title] = acc.Str(row["problem"])
-		if acc.Num(t, row["width"], "width") == 0 {
+	for _, row := range acctest.Rows(t, out["findings"], "findings") {
+		title := acctest.Str(row["title"])
+		problems[title] = acctest.Str(row["problem"])
+		if acctest.Num(t, row["width"], "width") == 0 {
 			t.Errorf("%s: no width measured", title)
 		}
 	}
@@ -418,7 +418,7 @@ func TestAuditCovers(t *testing.T) {
 
 	// Fiction has no covers at all, which is a finding per book
 	out = suite.Call(t, "audit_covers", map[string]any{"library": "Fiction"})
-	if found := acc.Num(t, out["total_findings"], "total_findings"); found != 7 {
+	if found := acctest.Num(t, out["total_findings"], "total_findings"); found != 7 {
 		t.Errorf("Fiction total_findings = %d, want 7 missing covers", found)
 	}
 }
@@ -430,25 +430,25 @@ func TestAuditUnembedded(t *testing.T) {
 	const item = "The Arms of Krupp"
 
 	out := suite.Call(t, "audit_unembedded", map[string]any{"library": "Non-Fiction"})
-	if scanned := acc.Num(t, out["items_scanned"], "items_scanned"); scanned != 3 {
+	if scanned := acctest.Num(t, out["items_scanned"], "items_scanned"); scanned != 3 {
 		t.Errorf("items_scanned = %d, want 3", scanned)
 	}
-	if found := acc.Num(t, out["total_findings"], "total_findings"); found != 3 {
+	if found := acctest.Num(t, out["total_findings"], "total_findings"); found != 3 {
 		t.Fatalf("total_findings = %d, want all 3 untagged fixtures: %v", found, out["findings"])
 	}
-	for _, f := range acc.Rows(t, out["findings"], "findings") {
-		if detail := acc.Str(f["detail"]); !strings.Contains(detail, "no tags") {
+	for _, f := range acctest.Rows(t, out["findings"], "findings") {
+		if detail := acctest.Str(f["detail"]); !strings.Contains(detail, "no tags") {
 			t.Errorf("finding should say the files carry no tags: %v", f)
 		}
 	}
 
 	// a podcast library has nothing to embed
-	if pods := suite.Call(t, "audit_unembedded", map[string]any{"library": "Podcasts"}); acc.Num(t, pods["items_scanned"], "items_scanned") != 0 {
+	if pods := suite.Call(t, "audit_unembedded", map[string]any{"library": "Podcasts"}); acctest.Num(t, pods["items_scanned"], "items_scanned") != 0 {
 		t.Errorf("podcasts were scanned: %v", pods)
 	}
 
 	keepAudioFiles(t, item)
-	if embedded := acc.BoolOf(suite.Call(t, "item_embed_metadata", map[string]any{"item": item})["embedded"]); !embedded {
+	if embedded := acctest.BoolOf(suite.Call(t, "item_embed_metadata", map[string]any{"item": item})["embedded"]); !embedded {
 		t.Fatalf("item_embed_metadata did not embed %s", item)
 	}
 	after := suite.Call(t, "audit_unembedded", map[string]any{"library": "Non-Fiction"})

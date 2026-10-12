@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/katbyte/abs-mcp/sdk/abs"
-	acc "github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
 // there is only the root account, which is also the account the API key acts
@@ -21,7 +21,7 @@ import (
 // with accounts of their own.
 
 func TestUserList(t *testing.T) {
-	users := acc.Rows(t, suite.Call(t, "user_list", nil)["users"], "users")
+	users := acctest.Rows(t, suite.Call(t, "user_list", nil)["users"], "users")
 
 	if len(users) != 1 {
 		t.Fatalf("users = %d, want 1", len(users))
@@ -43,11 +43,11 @@ func TestUserGetSelf(t *testing.T) {
 	if out["type"] != "root" {
 		t.Errorf("type = %v, want root", out["type"])
 	}
-	if self := acc.BoolOf(out["self"]); !self {
+	if self := acctest.BoolOf(out["self"]); !self {
 		t.Error("user_get with no user should report self")
 	}
 	for _, perm := range []string{"can_update", "can_delete", "can_upload"} {
-		if ok := acc.BoolOf(out[perm]); !ok {
+		if ok := acctest.BoolOf(out[perm]); !ok {
 			t.Errorf("root should have %s", perm)
 		}
 	}
@@ -57,15 +57,15 @@ func TestUserGetSelf(t *testing.T) {
 func TestUserGetByName(t *testing.T) {
 	out := suite.Call(t, "user_get", map[string]any{"user": "root"})
 
-	if self := acc.BoolOf(out["self"]); !self {
+	if self := acctest.BoolOf(out["self"]); !self {
 		t.Error("naming the API key's own account should report self")
 	}
 	for _, perm := range []string{"can_update", "can_delete", "can_upload"} {
-		if ok := acc.BoolOf(out[perm]); !ok {
+		if ok := acctest.BoolOf(out[perm]); !ok {
 			t.Errorf("root should have %s", perm)
 		}
 	}
-	if created := acc.Str(out["created"]); created == "" {
+	if created := acctest.Str(out["created"]); created == "" {
 		t.Error("no created timestamp")
 	}
 }
@@ -77,7 +77,7 @@ func TestUserGetSelfToken(t *testing.T) {
 		if out["username"] != "root" {
 			t.Errorf("user=%q gave username %v, want root", token, out["username"])
 		}
-		if self := acc.BoolOf(out["self"]); !self {
+		if self := acctest.BoolOf(out["self"]); !self {
 			t.Errorf("user=%q should report self", token)
 		}
 	}
@@ -98,7 +98,7 @@ func TestUserProgress(t *testing.T) {
 	if !ok {
 		t.Fatalf("progress = %T", got["progress"])
 	}
-	if pct := acc.Num(t, progress["percent"], "percent"); pct != 50 {
+	if pct := acctest.Num(t, progress["percent"], "percent"); pct != 50 {
 		t.Errorf("percent = %d, want 50", pct)
 	}
 
@@ -108,14 +108,14 @@ func TestUserProgress(t *testing.T) {
 	if !ok {
 		t.Fatalf("progress for a named user = %T", other["progress"])
 	}
-	if pct := acc.Num(t, op["percent"], "percent"); pct != 50 {
+	if pct := acctest.Num(t, op["percent"], "percent"); pct != 50 {
 		t.Errorf("named-user percent = %d, want 50", pct)
 	}
 
 	// it now shows on the continue-listening shelf, by either path
 	for _, args := range []map[string]any{nil, {"user": "root"}} {
 		var onShelf bool
-		for _, row := range acc.Rows(t, suite.Call(t, "user_in_progress", args)["items"], "items") {
+		for _, row := range acctest.Rows(t, suite.Call(t, "user_in_progress", args)["items"], "items") {
 			if row["title"] == "Foundation" {
 				onShelf = true
 			}
@@ -129,7 +129,7 @@ func TestUserProgress(t *testing.T) {
 	suite.Call(t, "user_progress_set", map[string]any{"item": "Foundation", "finished": true})
 	fin := suite.Call(t, "user_progress_get", map[string]any{"item": "Foundation"})
 	if p, ok := fin["progress"].(map[string]any); ok {
-		if finished := acc.BoolOf(p["finished"]); !finished {
+		if finished := acctest.BoolOf(p["finished"]); !finished {
 			t.Errorf("finished = %v, want true", p["finished"])
 		}
 	}
@@ -139,7 +139,7 @@ func TestUserProgressRemove(t *testing.T) {
 	suite.Call(t, "user_progress_set", map[string]any{"item": "Second Foundation", "percent": 10})
 	out := suite.Call(t, "user_progress_set", map[string]any{"remove": true, "item": "Second Foundation"})
 
-	if removed := acc.BoolOf(out["removed"]); !removed {
+	if removed := acctest.BoolOf(out["removed"]); !removed {
 		t.Errorf("user_progress_set remove: removed = %v", out["removed"])
 	}
 	got := suite.Call(t, "user_progress_get", map[string]any{"item": "Second Foundation"})
@@ -155,12 +155,12 @@ func TestUserBookmarks(t *testing.T) {
 	t.Cleanup(func() {
 		_, _ = suite.Invoke("user_bookmark_edit", map[string]any{"item": "Leviathan Wakes", "remove_bookmarks": []any{0.25}})
 	})
-	if marks := acc.Rows(t, added["added"], "added"); len(marks) != 1 || marks[0]["title"] != "A good bit" {
+	if marks := acctest.Rows(t, added["added"], "added"); len(marks) != 1 || marks[0]["title"] != "A good bit" {
 		t.Fatalf("added = %v, want the one bookmark", added)
 	}
 
 	out := suite.Call(t, "user_bookmarks", map[string]any{"item": "Leviathan Wakes"})
-	bookmarks := acc.Rows(t, out["bookmarks"], "bookmarks")
+	bookmarks := acctest.Rows(t, out["bookmarks"], "bookmarks")
 	if len(bookmarks) != 1 {
 		t.Fatalf("bookmarks = %d, want 1", len(bookmarks))
 	}
@@ -170,12 +170,12 @@ func TestUserBookmarks(t *testing.T) {
 
 	// the same bookmark through the admin user record
 	named := suite.Call(t, "user_bookmarks", map[string]any{"user": "root", "item": "Leviathan Wakes"})
-	if got := acc.Rows(t, named["bookmarks"], "bookmarks"); len(got) != 1 {
+	if got := acctest.Rows(t, named["bookmarks"], "bookmarks"); len(got) != 1 {
 		t.Errorf("named-user bookmarks = %d, want 1", len(got))
 	}
 
 	// and all of them, unfiltered
-	if all := suite.Call(t, "user_bookmarks", nil); len(acc.Rows(t, all["bookmarks"], "bookmarks")) == 0 {
+	if all := suite.Call(t, "user_bookmarks", nil); len(acctest.Rows(t, all["bookmarks"], "bookmarks")) == 0 {
 		t.Error("user_bookmarks with no item returned nothing")
 	}
 
@@ -184,20 +184,20 @@ func TestUserBookmarks(t *testing.T) {
 	several := suite.Call(t, "user_bookmark_edit", map[string]any{"item": "Leviathan Wakes", "add_bookmarks": []any{
 		map[string]any{"time_s": 0.5, "title": "Another bit"}, map[string]any{"time_s": 0.25, "title": "A better name"},
 	}})
-	if added, renamed := acc.Rows(t, several["added"], "added"), acc.Rows(t, several["renamed"], "renamed"); len(added) != 1 || added[0]["title"] != "Another bit" || len(renamed) != 1 || renamed[0]["title"] != "A better name" || renamed[0]["was_titled"] != "A good bit" {
+	if added, renamed := acctest.Rows(t, several["added"], "added"), acctest.Rows(t, several["renamed"], "renamed"); len(added) != 1 || added[0]["title"] != "Another bit" || len(renamed) != 1 || renamed[0]["title"] != "A better name" || renamed[0]["was_titled"] != "A good bit" {
 		t.Errorf("an add and a rename in one call = %v", several)
 	}
 	if msg := suite.CallErr(t, "user_bookmark_edit", map[string]any{"item": "Leviathan Wakes", "remove_bookmarks": []any{0.25, 0.75}}); !strings.Contains(msg, "no bookmark at 0.75") {
 		t.Errorf("a removal naming one that is not there: %s", msg)
 	}
-	if left := acc.Rows(t, suite.Call(t, "user_bookmarks", map[string]any{"item": "Leviathan Wakes"})["bookmarks"], "bookmarks"); len(left) != 2 {
+	if left := acctest.Rows(t, suite.Call(t, "user_bookmarks", map[string]any{"item": "Leviathan Wakes"})["bookmarks"], "bookmarks"); len(left) != 2 {
 		t.Fatalf("after a refused removal the book has %d bookmarks, want both", len(left))
 	}
 	gone := suite.Call(t, "user_bookmark_edit", map[string]any{"item": "Leviathan Wakes", "remove_bookmarks": []any{0.25, 0.5}})
-	if removed := acc.Rows(t, gone["removed"], "removed"); len(removed) != 2 {
+	if removed := acctest.Rows(t, gone["removed"], "removed"); len(removed) != 2 {
 		t.Errorf("two removed in one call = %v", gone)
 	}
-	if left := acc.Rows(t, suite.Call(t, "user_bookmarks", map[string]any{"item": "Leviathan Wakes"})["bookmarks"], "bookmarks"); len(left) != 0 {
+	if left := acctest.Rows(t, suite.Call(t, "user_bookmarks", map[string]any{"item": "Leviathan Wakes"})["bookmarks"], "bookmarks"); len(left) != 0 {
 		t.Errorf("bookmarks left after both were removed: %v", left)
 	}
 }
@@ -210,8 +210,8 @@ func TestUserHistoryAndStats(t *testing.T) {
 		if history["user"] != "root" {
 			t.Errorf("user = %v (args %v)", history["user"], args)
 		}
-		acc.Rows(t, history["sessions"], "sessions")
-		acc.Num(t, history["total_sessions"], "total_sessions")
+		acctest.Rows(t, history["sessions"], "sessions")
+		acctest.Num(t, history["total_sessions"], "total_sessions")
 
 		stats := suite.Call(t, "user_stats", args)
 		if stats["user"] != "root" {
@@ -261,13 +261,13 @@ func TestUserCreateAndEdit(t *testing.T) {
 	}
 
 	out := suite.Call(t, "user_create", map[string]any{"username": name, "libraries": []any{"Fiction"}})
-	id := acc.Str(out["id"])
+	id := acctest.Str(out["id"])
 	t.Cleanup(func() {
 		eventually(t, "deleting "+name, func() error { return admin.DeleteUser(context.WithoutCancel(ctx), id) })
 	})
-	password := acc.Str(out["password"])
-	if len(password) != 16 || !acc.BoolOf(out["active"]) || out["type"] != "user" || !acc.IsBool(out["all_libraries"], false) ||
-		!slices.Equal(acc.Strs(t, out["libraries"], "libraries"), []string{libraryID(t, "Fiction")}) {
+	password := acctest.Str(out["password"])
+	if len(password) != 16 || !acctest.BoolOf(out["active"]) || out["type"] != "user" || !acctest.IsBool(out["all_libraries"], false) ||
+		!slices.Equal(acctest.Strs(t, out["libraries"], "libraries"), []string{libraryID(t, "Fiction")}) {
 		t.Fatalf("user_create = %v", out)
 	}
 	if err := login(name, password); err != nil {
@@ -278,7 +278,7 @@ func TestUserCreateAndEdit(t *testing.T) {
 	}
 
 	out = suite.Call(t, "user_edit", map[string]any{"user": name, "libraries": []any{"all"}, "can_upload": true, "email": "newcomer@zzyzx.test"})
-	if !acc.BoolOf(out["all_libraries"]) || !acc.BoolOf(out["can_upload"]) || out["email"] != "newcomer@zzyzx.test" {
+	if !acctest.BoolOf(out["all_libraries"]) || !acctest.BoolOf(out["can_upload"]) || out["email"] != "newcomer@zzyzx.test" {
 		t.Errorf("user_edit = %v", out)
 	}
 	got, err := admin.User(ctx, id)
@@ -290,14 +290,14 @@ func TestUserCreateAndEdit(t *testing.T) {
 	}
 
 	out = suite.Call(t, "user_edit", map[string]any{"user": name, "active": false})
-	if acc.BoolOf(out["active"]) {
+	if acctest.BoolOf(out["active"]) {
 		t.Errorf("user_edit active false = %v", out)
 	}
 	if err := login(name, password); err == nil {
 		t.Error("an account stopped from signing in still signs in")
 	}
 	out = suite.Call(t, "user_edit", map[string]any{"user": name, "active": true, "password": "new"})
-	if err := login(name, acc.Str(out["password"])); err != nil {
+	if err := login(name, acctest.Str(out["password"])); err != nil {
 		t.Errorf("the new password does not sign in: %v", err)
 	}
 
@@ -373,18 +373,18 @@ func TestUserProgressSetSeries(t *testing.T) {
 			t.Fatal(err)
 		}
 		s := suite.Call(t, "series_get", map[string]any{"series": "Foundation", "library": "Fiction"})
-		return slices.Contains(me.SeriesHidden, acc.Str(s["id"]))
+		return slices.Contains(me.SeriesHidden, acctest.Str(s["id"]))
 	}
 	t.Cleanup(func() {
 		_, _ = suite.Invoke("user_progress_set", map[string]any{"series": "Foundation", "library": "Fiction", "hide_from_continue": false})
 	})
 
 	out := suite.Call(t, "user_progress_set", map[string]any{"series": "Foundation", "library": "Fiction", "hide_from_continue": true})
-	if out["series"] != "Foundation" || !acc.BoolOf(out["series_hidden"]) || !hidden() {
+	if out["series"] != "Foundation" || !acctest.BoolOf(out["series_hidden"]) || !hidden() {
 		t.Errorf("hide = %v", out)
 	}
 	out = suite.Call(t, "user_progress_set", map[string]any{"series": "Foundation", "library": "Fiction", "hide_from_continue": false})
-	if !acc.IsBool(out["series_hidden"], false) || hidden() {
+	if !acctest.IsBool(out["series_hidden"], false) || hidden() {
 		t.Errorf("show = %v", out)
 	}
 }
@@ -393,7 +393,7 @@ func TestUserProgressSetSeries(t *testing.T) {
 // books were all added this year.
 func TestUserStatsServerYear(t *testing.T) {
 	out := suite.Call(t, "user_stats", map[string]any{"year": time.Now().Year(), "server": true})
-	if out["user"] != "every account" || acc.DecimalOr0(out["books_added"]) < 10 || acc.DecimalOr0(out["books"]) < acc.DecimalOr0(out["books_added"]) || acc.DecimalOr0(out["added_s"]) <= 0 {
+	if out["user"] != "every account" || acctest.DecimalOr0(out["books_added"]) < 10 || acctest.DecimalOr0(out["books"]) < acctest.DecimalOr0(out["books_added"]) || acctest.DecimalOr0(out["added_s"]) <= 0 {
 		t.Errorf("user_stats server = %v", out)
 	}
 	if msg := suite.CallErr(t, "user_stats", map[string]any{"year": 1999, "server": true}); !strings.Contains(strings.ToLower(msg), "year") {
@@ -432,11 +432,11 @@ func TestUserCreateTagsAndType(t *testing.T) {
 	}
 
 	out := suite.Call(t, "user_create", map[string]any{"username": name, "password": name + "-password", "type": "guest", "tags": []any{"classic"}})
-	id := acc.Str(out["id"])
+	id := acctest.Str(out["id"])
 	t.Cleanup(func() {
 		eventually(t, "deleting "+name, func() error { return admin.DeleteUser(context.WithoutCancel(ctx), id) })
 	})
-	if out["type"] != "guest" || !acc.IsBool(out["all_tags"], false) || !slices.Equal(acc.Strs(t, out["tags"], "tags"), []string{"classic"}) || out["denied_tags"] != nil || out["password"] != nil {
+	if out["type"] != "guest" || !acctest.IsBool(out["all_tags"], false) || !slices.Equal(acctest.Strs(t, out["tags"], "tags"), []string{"classic"}) || out["denied_tags"] != nil || out["password"] != nil {
 		t.Fatalf("user_create = %v, want a guest seeing only classic, its password not repeated", out)
 	}
 
@@ -474,7 +474,7 @@ func TestUserCreateTagsAndType(t *testing.T) {
 	}
 
 	out = suite.Call(t, "user_edit", map[string]any{"user": name, "denied_tags": []any{"classic"}})
-	if !acc.IsBool(out["all_tags"], false) || !slices.Equal(acc.Strs(t, out["denied_tags"], "denied_tags"), []string{"classic"}) || out["tags"] != nil {
+	if !acctest.IsBool(out["all_tags"], false) || !slices.Equal(acctest.Strs(t, out["denied_tags"], "denied_tags"), []string{"classic"}) || out["tags"] != nil {
 		t.Errorf("user_edit denied_tags = %v", out)
 	}
 	if got := sees(); !slices.Equal(got, others) {
@@ -482,7 +482,7 @@ func TestUserCreateTagsAndType(t *testing.T) {
 	}
 
 	out = suite.Call(t, "user_edit", map[string]any{"user": name, "all_tags": true})
-	if !acc.BoolOf(out["all_tags"]) || out["tags"] != nil || out["denied_tags"] != nil {
+	if !acctest.BoolOf(out["all_tags"]) || out["tags"] != nil || out["denied_tags"] != nil {
 		t.Errorf("user_edit all_tags = %v", out)
 	}
 	if got := sees(); len(got) != len(classic)+len(others) {
@@ -490,7 +490,7 @@ func TestUserCreateTagsAndType(t *testing.T) {
 	}
 
 	out = suite.Call(t, "user_edit", map[string]any{"user": name, "type": "admin"})
-	if out["type"] != "admin" || acc.BoolOf(out["can_delete"]) {
+	if out["type"] != "admin" || acctest.BoolOf(out["can_delete"]) {
 		t.Errorf("user_edit type admin = %v, want an admin that may not delete", out)
 	}
 	if got, err := admin.User(ctx, id); err != nil || got.Type != "admin" || got.Permissions.Delete {

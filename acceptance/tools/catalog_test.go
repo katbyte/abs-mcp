@@ -6,19 +6,19 @@ import (
 	"slices"
 	"testing"
 
-	acc "github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
 func TestAuthorList(t *testing.T) {
 	out := suite.Call(t, "author_list", map[string]any{"library": "Fiction"})
 
-	if total := acc.Num(t, out["total"], "total"); total != 3 {
+	if total := acctest.Num(t, out["total"], "total"); total != 3 {
 		t.Errorf("total = %d, want 3", total)
 	}
 	names := map[string]int{}
-	for _, row := range acc.Rows(t, out["authors"], "authors") {
-		name := acc.Str(row["name"])
-		names[name] = acc.Num(t, row["books"], "books")
+	for _, row := range acctest.Rows(t, out["authors"], "authors") {
+		name := acctest.Str(row["name"])
+		names[name] = acctest.Num(t, row["books"], "books")
 	}
 	if names["Isaac Asimov"] != 3 {
 		t.Errorf("Isaac Asimov has %d books, want 3 (have %v)", names["Isaac Asimov"], names)
@@ -31,13 +31,13 @@ func TestAuthorList(t *testing.T) {
 func TestAuthorGet(t *testing.T) {
 	out := suite.Call(t, "author_get", map[string]any{"library": "Fiction", "author": "Isaac Asimov"})
 
-	books := acc.Rows(t, out["books"], "books")
+	books := acctest.Rows(t, out["books"], "books")
 	if len(books) != 3 {
 		t.Fatalf("books = %d, want 3", len(books))
 	}
 	titles := make([]string, 0, len(books))
 	for _, b := range books {
-		title := acc.Str(b["title"])
+		title := acctest.Str(b["title"])
 		titles = append(titles, title)
 	}
 	slices.Sort(titles)
@@ -52,7 +52,7 @@ func TestAuthorEditAndMerge(t *testing.T) {
 		"library": "Fiction", "author": "Tad Williams", "description": "Author of Otherland.",
 	})
 	got := suite.Call(t, "author_get", map[string]any{"library": "Fiction", "author": "Tad Williams"})
-	if desc := acc.Str(got["description"]); desc != "Author of Otherland." {
+	if desc := acctest.Str(got["description"]); desc != "Author of Otherland." {
 		t.Errorf("description = %q", desc)
 	}
 
@@ -61,7 +61,7 @@ func TestAuthorEditAndMerge(t *testing.T) {
 		"library": "Fiction", "author": "Tad Williams", "clear": []any{"description"},
 	})
 	got = suite.Call(t, "author_get", map[string]any{"library": "Fiction", "author": "Tad Williams"})
-	if desc := acc.Str(got["description"]); desc != "" {
+	if desc := acctest.Str(got["description"]); desc != "" {
 		t.Errorf("description after clear = %q", desc)
 	}
 
@@ -69,14 +69,14 @@ func TestAuthorEditAndMerge(t *testing.T) {
 	out := suite.Call(t, "author_edit", map[string]any{
 		"library": "Fiction", "author": "Tad Williams", "name": "T. Williams",
 	})
-	if merged := acc.BoolOf(out["merged"]); merged {
+	if merged := acctest.BoolOf(out["merged"]); merged {
 		t.Error("renaming to an unused name should not report a merge")
 	}
 	suite.Call(t, "author_edit", map[string]any{
 		"library": "Fiction", "author": "T. Williams", "name": "Tad Williams",
 	})
 
-	if authors := acc.Rows(t, suite.Call(t, "author_list", map[string]any{"library": "Fiction"})["authors"], "authors"); len(authors) != 3 {
+	if authors := acctest.Rows(t, suite.Call(t, "author_list", map[string]any{"library": "Fiction"})["authors"], "authors"); len(authors) != 3 {
 		t.Errorf("author count drifted to %d after the rename round trip", len(authors))
 	}
 }
@@ -91,11 +91,11 @@ func TestSeriesList(t *testing.T) {
 	out := suite.Call(t, "series_list", map[string]any{"library": "Fiction"})
 
 	byName := map[string]int{}
-	for _, row := range acc.Rows(t, out["series"], "series") {
-		name := acc.Str(row["name"])
-		byName[name] = acc.Num(t, row["books"], "books")
+	for _, row := range acctest.Rows(t, out["series"], "series") {
+		name := acctest.Str(row["name"])
+		byName[name] = acctest.Num(t, row["books"], "books")
 		// the numbers present are how the gap stands out
-		if name == "The Expanse" && (row["sequence"] == nil || !slices.Equal(acc.Strs(t, row["sequence"], "sequence"), []string{"1", "3"})) {
+		if name == "The Expanse" && (row["sequence"] == nil || !slices.Equal(acctest.Strs(t, row["sequence"], "sequence"), []string{"1", "3"})) {
 			t.Errorf("The Expanse sequence = %v, want [1 3]", row["sequence"])
 		}
 	}
@@ -109,15 +109,15 @@ func TestSeriesList(t *testing.T) {
 func TestSeriesGet(t *testing.T) {
 	out := suite.Call(t, "series_get", map[string]any{"library": "Fiction", "series": "The Expanse"})
 
-	books := acc.Rows(t, out["books"], "books")
+	books := acctest.Rows(t, out["books"], "books")
 	if len(books) != 2 {
 		t.Fatalf("books = %d, want 2", len(books))
 	}
 	// in sequence order, and the sequence must survive the projection
-	if seq := acc.Str(books[0]["sequence"]); seq != "1" {
+	if seq := acctest.Str(books[0]["sequence"]); seq != "1" {
 		t.Errorf("first book sequence = %v, want 1", books[0]["sequence"])
 	}
-	if seq := acc.Str(books[1]["sequence"]); seq != "3" {
+	if seq := acctest.Str(books[1]["sequence"]); seq != "3" {
 		t.Errorf("second book sequence = %v, want 3", books[1]["sequence"])
 	}
 }
@@ -131,7 +131,7 @@ func TestSeriesEdit(t *testing.T) {
 	})
 
 	out := suite.Call(t, "series_get", map[string]any{"library": "Fiction", "series": "Otherland"})
-	if desc := acc.Str(out["description"]); desc != "Four volumes, two of them here." {
+	if desc := acctest.Str(out["description"]); desc != "Four volumes, two of them here." {
 		t.Errorf("description = %q", desc)
 	}
 }
@@ -143,7 +143,7 @@ func TestAuthorDelete(t *testing.T) {
 		"library": "Fiction", "author": "Isaac Asimov", "name": "Doomed Author",
 	})
 	out := suite.Call(t, "author_delete", map[string]any{"library": "Fiction", "author": "Doomed Author"})
-	if deleted := acc.Str(out["deleted"]); deleted != "Doomed Author" {
+	if deleted := acctest.Str(out["deleted"]); deleted != "Doomed Author" {
 		t.Errorf("deleted = %v", out["deleted"])
 	}
 	t.Cleanup(func() {
@@ -165,9 +165,9 @@ func TestNarratorListAndRename(t *testing.T) {
 	out := suite.Call(t, "narrator_list", map[string]any{"library": "Fiction"})
 
 	byName := map[string]int{}
-	for _, row := range acc.Rows(t, out["narrators"], "narrators") {
-		name := acc.Str(row["name"])
-		byName[name] = acc.Num(t, row["books"], "books")
+	for _, row := range acctest.Rows(t, out["narrators"], "narrators") {
+		name := acctest.Str(row["name"])
+		byName[name] = acctest.Num(t, row["books"], "books")
 	}
 	if byName["Jefferson Mays"] != 2 {
 		t.Errorf("Jefferson Mays narrates %d, want 2 (have %v)", byName["Jefferson Mays"], byName)
@@ -177,7 +177,7 @@ func TestNarratorListAndRename(t *testing.T) {
 	edited := suite.Call(t, "metadata_rename", map[string]any{
 		"library": "Fiction", "field": "narrators", "from": "Jefferson Mays", "to": "J. Mays",
 	})
-	if n := acc.Num(t, edited["items_updated"], "items_updated"); n != 2 {
+	if n := acctest.Num(t, edited["items_updated"], "items_updated"); n != 2 {
 		t.Errorf("items_updated = %d, want 2", n)
 	}
 	t.Cleanup(func() {
@@ -188,7 +188,7 @@ func TestNarratorListAndRename(t *testing.T) {
 
 	after := suite.Call(t, "narrator_list", map[string]any{"library": "Fiction"})
 	var renamed bool
-	for _, row := range acc.Rows(t, after["narrators"], "narrators") {
+	for _, row := range acctest.Rows(t, after["narrators"], "narrators") {
 		if row["name"] == "J. Mays" {
 			renamed = true
 		}

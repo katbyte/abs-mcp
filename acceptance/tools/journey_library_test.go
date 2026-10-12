@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/katbyte/abs-mcp/sdk/abs"
-	acc "github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
 func TestJourneyLibraryLife(t *testing.T) {
@@ -40,10 +40,10 @@ func TestJourneyLibraryLife(t *testing.T) {
 		}
 	}
 	titles := func(library string) (all, missing []string) {
-		for _, it := range acc.Rows(t, suite.Call(t, "library_items", map[string]any{"library": library, "limit": 50})["items"], "items") {
-			title := acc.Str(it["title"])
+		for _, it := range acctest.Rows(t, suite.Call(t, "library_items", map[string]any{"library": library, "limit": 50})["items"], "items") {
+			title := acctest.Str(it["title"])
 			all = append(all, title)
-			if m := acc.BoolOf(it["missing"]); m {
+			if m := acctest.BoolOf(it["missing"]); m {
 				missing = append(missing, title)
 			}
 		}
@@ -70,11 +70,11 @@ func TestJourneyLibraryLife(t *testing.T) {
 	t.Run("create", func(t *testing.T) {
 		out := suite.Call(t, "library_create", map[string]any{"name": name, "folders": []any{"/scratch/zzyzx-life"}, "media_type": "book"})
 		lib := object(out["library"])
-		libID = acc.Str(lib["id"])
+		libID = acctest.Str(lib["id"])
 		if libID == "" {
 			t.Fatalf("no id: %v", out)
 		}
-		if got := suite.Call(t, "library_get", map[string]any{"library": name}); got["id"] != libID || acc.Num(t, got["items"], "items") != 0 {
+		if got := suite.Call(t, "library_get", map[string]any{"library": name}); got["id"] != libID || acctest.Num(t, got["items"], "items") != 0 {
 			t.Errorf("library_get after create = %v, want it empty", got)
 		}
 	})
@@ -123,7 +123,7 @@ func TestJourneyLibraryLife(t *testing.T) {
 		if !slices.Equal(issues, []string{"Zzyzx First Book"}) {
 			t.Errorf("audit_issues = %v", issues)
 		}
-		if removed := acc.Num(t, suite.Call(t, "library_issues_remove", map[string]any{"library": name, "confirm": true})["removed"], "removed"); removed != 1 {
+		if removed := acctest.Num(t, suite.Call(t, "library_issues_remove", map[string]any{"library": name, "confirm": true})["removed"], "removed"); removed != 1 {
 			t.Errorf("removed = %d, want 1", removed)
 		}
 		if err := waitForItems(name, 1); err != nil {
@@ -139,7 +139,7 @@ func TestJourneyLibraryLife(t *testing.T) {
 		if msg := suite.CallErr(t, "library_get", map[string]any{"library": name}); msg == "" {
 			t.Error("the old name still resolves")
 		}
-		if got := suite.Call(t, "library_get", map[string]any{"library": renamed}); got["id"] != libID || acc.Num(t, got["items"], "items") != 1 {
+		if got := suite.Call(t, "library_get", map[string]any{"library": renamed}); got["id"] != libID || acctest.Num(t, got["items"], "items") != 1 {
 			t.Errorf("by the new name = %v", got)
 		}
 		if msg := suite.CallErr(t, "library_edit", map[string]any{"library": renamed, "name": "Fiction"}); msg == "" {
@@ -168,7 +168,7 @@ func TestJourneyLibraryLife(t *testing.T) {
 		if err := admin.DeleteLibrary(ctx, libID); err != nil {
 			t.Fatal(err)
 		}
-		for _, l := range acc.Rows(t, suite.Call(t, "library_list", nil)["libraries"], "libraries") {
+		for _, l := range acctest.Rows(t, suite.Call(t, "library_list", nil)["libraries"], "libraries") {
 			if l["id"] == libID {
 				t.Errorf("the deleted library is still listed: %v", l)
 			}
