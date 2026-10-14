@@ -15,7 +15,7 @@ The live suites need docker, ffmpeg and jq.
 `make test` needs nothing outside the repo and is fast. It covers:
 
 - **The pure logic.** Filter encoding, formatting, gap arithmetic, the audit rules and tool registration.
-- **The client against a canned server.** The `sdk/abs` requests and answers that have gone wrong before are each pinned in `sdk/abs/fake_server_test.go`. That is not every method, about one in four. What proves every method is the live suite.
+- **The client against a canned server.** The `sdk/abs` requests and answers that have gone wrong before are each pinned in `sdk/abs/fake_server_test.go`. That is only some of the methods. What proves every method is the live suite.
 - **The tools against a canned Audiobookshelf.** They run end to end over an in-memory MCP session, in `tools/fake_abs_test.go`. This is where the cases the live fixtures cannot reach are kept: a library with covers, inconsistent spellings, tagged and untagged audio files, more findings than the limit.
 
 ## Live suites
@@ -70,7 +70,7 @@ They found some thirty tool bugs the per-tool tests had not. The server behaviou
 
 The journeys, like everything else, drive `tools.RegisterAll` in process. That is every line of tool code the binary runs. What they never touch is the thin layer around it, where a breakage is silent. MCP over stdio uses stdout for the protocol, so one stray print or log line corrupts the stream. A client then fails to connect, with the whole suite still green.
 
-So `acceptance/binary_test.go` builds the real binary and speaks to it the way a client does:
+So `acceptance/tools/binary_test.go` builds the real binary and speaks to it the way a client does:
 
 - `serve` over stdio at the most verbose log level, with every line it writes to stdout checked for being a protocol message and nothing else
 - the flags, the environment and a `.abs-mcp` in the working directory, each changing what a client lists
@@ -79,9 +79,9 @@ So `acceptance/binary_test.go` builds the real binary and speaks to it the way a
 
 ## Coverage
 
-Coverage has to span all three suites or it lies. `go test -cover ./...` reports about 40% for `tools/`, because almost everything real happens in the live suites behind the `acceptance` tag.
-
 `make cover` runs each of the three suites into its own coverage directory and merges them with `go tool covdata`. That is standard Go tooling, with no third-party merger. The merged figure is what the badge reports.
+
+A unit-only figure is lower, because some code runs only against a real server.
 
 ## Outside services
 

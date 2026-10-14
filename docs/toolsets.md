@@ -1,26 +1,28 @@
 # Choosing which tools load
 
-**The default is `core`: five read-only tools, about 1,200 tokens.** Every tool is around 29,000 tokens of definitions before anyone asks a question. That is a poor way to spend a client's context by default.
+**The default is `core`: five read-only tools, about 1,200 tokens.** Every tool is around 27,000 tokens of definitions before anyone asks a question. That is a poor way to spend a client's context by default.
 
 `--toolsets` / `ABS_TOOLSETS` loads the groups a session needs. `core` comes along with whatever else is asked for, because nothing else can find a library or open an item.
 
 **Curating a library needs `ABS_TOOLSETS=curation`.** That is the audits and everything that fixes what they find. `ABS_TOOLSETS=all` loads every tool.
 
-| toolset | tools | with core | ~tokens |
-|---|---|---|---|
-| `core` *(default)* | 5 | 5 | 1,200 |
-| `admin` | 16 | 21 | 5,100 |
-| `organise` | 12 | 17 | 3,200 |
-| `podcasts` | 11 | 16 | 3,200 |
-| `listening` | 10 | 15 | 3,300 |
-| `curation` | 46 | 51 | 18,800 |
-| `all` | 100 | 100 | 28,900 |
+| toolset | for | tools | ~tokens | with `--enable-delete` |
+|---|---|---|---|---|
+| `core` *(default)* | finding libraries and books | 5 | 1,200 | 5 / 1,200 |
+| `curation` | the audits and what fixes their findings | 51 | 18,800 | 51 / 18,800 |
+| `listening` | progress, bookmarks and history | 14 | 3,100 | 15 / 3,400 |
+| `podcasts` | shows and episodes | 15 | 3,000 | 16 / 3,200 |
+| `organise` | collections, playlists and feeds | 15 | 3,100 | 17 / 3,200 |
+| `admin` | scans, backups, users and new libraries | 17 | 3,900 | 21 / 5,200 |
+| `all` | everything | 92 | 27,100 | 100 / 29,000 |
 
-Tokens are what the model sees: each tool's name, description and input schema, measured over a real tool listing at four bytes a token. Every tool also carries an output schema, another 38,000 tokens across `all`. Clients keep that to themselves to check results, and do not send it to the model.
+Every row includes `core`.
+
+Tokens are what the model sees: each tool's name, description and input schema, measured over a real tool listing at four bytes a token. Every tool also carries an output schema, another 39,500 tokens across `all`. Clients keep that to themselves to check results, and do not send it to the model.
 
 ## By name prefix
 
-`--toolsets` also takes a resource family, which is every tool with that prefix: `item`, `podcast`, `library`, `user`, `audit`, `author`, `series`, `narrator`, `collection`, `playlist`, `feed`, `server`.
+`--toolsets` also takes a resource family, which is every tool with that prefix: `audit`, `author`, `collection`, `feed`, `item`, `library`, `metadata`, `narrator`, `playlist`, `podcast`, `series`, `server`, `user`.
 
 ```sh
 ABS_TOOLSETS=all                # every tool, which was the default before 0.2.0
