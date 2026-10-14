@@ -1,8 +1,6 @@
-// Package abs is a minimal client for the Audiobookshelf HTTP API. It speaks
-// the "old JSON" shapes the server returns to its own web client (the public
-// API docs are out of date; the server source is the reference, see
-// docs/README.md). Everything above this package works with the typed structs
-// here and never sees raw payloads.
+// Package abs is the hand-written client for the Audiobookshelf HTTP API, kept at sdk/abs-byhand while the client generated from the API document
+// takes its place at sdk/abs. It speaks the "old JSON" shapes the server returns to its own web client (the public API docs are out of date; the
+// server source is the reference, see docs/README.md). Everything above this package works with the typed structs here and never sees raw payloads.
 package abs
 
 import (

@@ -3,7 +3,7 @@ package tools
 import (
 	"github.com/katbyte/go-kt/lock"
 
-	"github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
 )
 
 // The calls of one turn are kept from undoing each other with go-kt's locks.

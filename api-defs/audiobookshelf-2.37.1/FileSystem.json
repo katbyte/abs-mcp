@@ -1,0 +1,153 @@
+{
+  "Name": "FileSystem",
+  "Tag": "FileSystem",
+  "Operations": [
+    {
+      "Name": "FileSystemCheckPathExists",
+      "OperationId": "FileSystemCheckPathExists",
+      "Method": "POST",
+      "Path": "/api/filesystem/pathexists",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "FileSystemCheckPathExistsRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "FileSystemCheckPathExistsAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "FileSystemGetPaths",
+      "OperationId": "FileSystemGetPaths",
+      "Method": "GET",
+      "Path": "/api/filesystem",
+      "Options": [
+        {
+          "Name": "level",
+          "Field": "Level",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "path",
+          "Field": "Path",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "FileSystemGetPathsAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    }
+  ],
+  "Models": [
+    {
+      "Name": "FileSystemCheckPathExistsAnswer",
+      "Fields": [
+        {
+          "Name": "Exists",
+          "JsonName": "exists",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "LibraryItemTitle",
+          "JsonName": "libraryItemTitle",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        }
+      ]
+    },
+    {
+      "Name": "FileSystemCheckPathExistsRequest",
+      "Fields": [
+        {
+          "Name": "Directory",
+          "JsonName": "directory",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "FolderPath",
+          "JsonName": "folderPath",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "FileSystemGetPathsAnswer",
+      "Fields": [
+        {
+          "Name": "Directories",
+          "JsonName": "directories",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "FileSystemGetPathsAnswerDirectories"
+            }
+          }
+        },
+        {
+          "Name": "Posix",
+          "JsonName": "posix",
+          "Type": {
+            "Type": "Boolean"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "FileSystemGetPathsAnswerDirectories",
+      "Fields": [
+        {
+          "Name": "Dirname",
+          "JsonName": "dirname",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Level",
+          "JsonName": "level",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "Path",
+          "JsonName": "path",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    }
+  ]
+}

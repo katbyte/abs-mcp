@@ -1,13 +1,20 @@
 ## Unreleased
 
+### Breaking
+
+- the hand-written Go client moves from `sdk/abs` to `sdk/abs-byhand`, still package `abs`: change the import path. `sdk/abs` is to be the client generated from the API document
+
 ### Changed
 
 - `library_list`, `server_info`, `server_sessions`, `server_backups` and `server_backup_create` take no arguments and now refuse one, as every other tool refuses an argument it does not take
 - an address in an error loses its sign-in, its query values and what follows a `#`, so a stored key cannot come back in one
+- the API coverage check and the calibration download are Go, not Python: `make apicheck` as before, and `go run ./lib/audiosample/calibration` in place of `scripts/calibration-fetch.py`
 
 ### Added
 
 - `api-defs/audiobookshelf-openapi-2.37.1.json`, an OpenAPI document of every Audiobookshelf route, read from the server source by `make spec`
+- `make spec` fills in what the source leaves untyped from the hand-written client, and lists where the two disagree
+- `make pandorest-import` reads the document into pandorest's definitions, with each kind of id its own type and times read as dates
 - at `ABS_LOG=INFO`, a log line for each call of a tool that changes or deletes something, with passwords, keys, and the sign-in and query values of any address blanked
 - a call refused for an argument the tool does not take says which arguments it does take
 

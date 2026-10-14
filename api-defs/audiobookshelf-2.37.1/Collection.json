@@ -1,0 +1,354 @@
+{
+  "Name": "Collection",
+  "Tag": "Collection",
+  "Operations": [
+    {
+      "Name": "CollectionAddBatch",
+      "OperationId": "CollectionAddBatch",
+      "Method": "POST",
+      "Path": "/api/collections/{id}/batch/add",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "CollectionID"
+          }
+        }
+      ],
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "CollectionAddBatchRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "Collection"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "CollectionAddBook",
+      "OperationId": "CollectionAddBook",
+      "Method": "POST",
+      "Path": "/api/collections/{id}/book",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "CollectionID"
+          }
+        }
+      ],
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "CollectionAddBookRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "Collection"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "CollectionCreate",
+      "OperationId": "CollectionCreate",
+      "Method": "POST",
+      "Path": "/api/collections",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "Collection"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "CollectionDelete",
+      "OperationId": "CollectionDelete",
+      "Method": "DELETE",
+      "Path": "/api/collections/{id}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "CollectionID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "CollectionFindAll",
+      "OperationId": "CollectionFindAll",
+      "Method": "GET",
+      "Path": "/api/collections",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "CollectionFindAllAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "CollectionFindOne",
+      "OperationId": "CollectionFindOne",
+      "Method": "GET",
+      "Path": "/api/collections/{id}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "CollectionID"
+          }
+        }
+      ],
+      "Options": [
+        {
+          "Name": "include",
+          "Field": "Include",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "Collection"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "CollectionRemoveBatch",
+      "OperationId": "CollectionRemoveBatch",
+      "Method": "POST",
+      "Path": "/api/collections/{id}/batch/remove",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "CollectionID"
+          }
+        }
+      ],
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "CollectionRemoveBatchRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "Collection"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "CollectionRemoveBook",
+      "OperationId": "CollectionRemoveBook",
+      "Method": "DELETE",
+      "Path": "/api/collections/{id}/book/{bookId}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "CollectionID"
+          }
+        },
+        {
+          "Name": "bookId",
+          "Argument": "bookId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "Collection"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "CollectionUpdate",
+      "OperationId": "CollectionUpdate",
+      "Method": "PATCH",
+      "Path": "/api/collections/{id}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "CollectionID"
+          }
+        }
+      ],
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "CollectionUpdateRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "Collection"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    }
+  ],
+  "Models": [
+    {
+      "Name": "CollectionAddBatchRequest",
+      "Fields": [
+        {
+          "Name": "Books",
+          "JsonName": "books",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "CollectionAddBookRequest",
+      "Fields": [
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "CollectionFindAllAnswer",
+      "Fields": [
+        {
+          "Name": "Collections",
+          "JsonName": "collections",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "Collection"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "CollectionRemoveBatchRequest",
+      "Fields": [
+        {
+          "Name": "Books",
+          "JsonName": "books",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "CollectionUpdateRequest",
+      "Fields": [
+        {
+          "Name": "Books",
+          "JsonName": "books",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "Description",
+          "JsonName": "description",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "Any"
+          }
+        }
+      ]
+    }
+  ]
+}

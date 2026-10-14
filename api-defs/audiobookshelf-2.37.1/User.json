@@ -1,0 +1,1797 @@
+{
+  "Name": "User",
+  "Tag": "User",
+  "Operations": [
+    {
+      "Name": "UserCreate",
+      "OperationId": "UserCreate",
+      "Method": "POST",
+      "Path": "/api/users",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "UserCreateRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "UserCreateAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "UserDelete",
+      "OperationId": "UserDelete",
+      "Method": "DELETE",
+      "Path": "/api/users/{id}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "UserDeleteAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "UserFindAll",
+      "OperationId": "UserFindAll",
+      "Method": "GET",
+      "Path": "/api/users",
+      "Options": [
+        {
+          "Name": "include",
+          "Field": "Include",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "UserFindAllAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "UserFindOne",
+      "OperationId": "UserFindOne",
+      "Method": "GET",
+      "Path": "/api/users/{id}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "UserForBrowser"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "UserGetListeningSessions",
+      "OperationId": "UserGetListeningSessions",
+      "Method": "GET",
+      "Path": "/api/users/{id}/listening-sessions",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          }
+        }
+      ],
+      "Options": [
+        {
+          "Name": "itemsPerPage",
+          "Field": "ItemsPerPage",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "page",
+          "Field": "Page",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "UserGetListeningSessionsAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "UserGetListeningStats",
+      "OperationId": "UserGetListeningStats",
+      "Method": "GET",
+      "Path": "/api/users/{id}/listening-stats",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "UserGetListeningStatsAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "UserGetOnlineUsers",
+      "OperationId": "UserGetOnlineUsers",
+      "Method": "GET",
+      "Path": "/api/users/online",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "UserGetOnlineUsersAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "UserUnlinkFromOpenID",
+      "OperationId": "UserUnlinkFromOpenID",
+      "Method": "PATCH",
+      "Path": "/api/users/{id}/openid-unlink",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "UserUpdate",
+      "OperationId": "UserUpdate",
+      "Method": "PATCH",
+      "Path": "/api/users/{id}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          }
+        }
+      ],
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "UserUpdateRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "UserUpdateAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    }
+  ],
+  "Models": [
+    {
+      "Name": "UserCreateAnswer",
+      "Fields": [
+        {
+          "Name": "User",
+          "JsonName": "user",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "UserForBrowser"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserCreateRequest",
+      "Fields": [
+        {
+          "Name": "Email",
+          "JsonName": "email",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "IsActive",
+          "JsonName": "isActive",
+          "Type": {
+            "Type": "Boolean"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "ItemTagsSelected",
+          "JsonName": "itemTagsSelected",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "LibrariesAccessible",
+          "JsonName": "librariesAccessible",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "Password",
+          "JsonName": "password",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Permissions",
+          "JsonName": "permissions",
+          "Type": {
+            "Type": "Dictionary",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "Type",
+          "JsonName": "type",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Username",
+          "JsonName": "username",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserDeleteAnswer",
+      "Fields": [
+        {
+          "Name": "Success",
+          "JsonName": "success",
+          "Type": {
+            "Type": "Boolean"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserFindAllAnswer",
+      "Fields": [
+        {
+          "Name": "Users",
+          "JsonName": "users",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "UserForBrowser"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserGetListeningSessionsAnswer",
+      "Fields": [
+        {
+          "Name": "ItemsPerPage",
+          "JsonName": "itemsPerPage",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "NumPages",
+          "JsonName": "numPages",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "Page",
+          "JsonName": "page",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Sessions",
+          "JsonName": "sessions",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "UserGetListeningSessionsAnswerSessions"
+            }
+          }
+        },
+        {
+          "Name": "Total",
+          "JsonName": "total",
+          "Type": {
+            "Type": "Integer"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserGetListeningSessionsAnswerSessions",
+      "Fields": [
+        {
+          "Name": "BookId",
+          "JsonName": "bookId",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "CoverPath",
+          "JsonName": "coverPath",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "CurrentTime",
+          "JsonName": "currentTime",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Date",
+          "JsonName": "date",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DayOfWeek",
+          "JsonName": "dayOfWeek",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DeviceInfo",
+          "JsonName": "deviceInfo",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "UserGetListeningSessionsAnswerSessionsDeviceInfo"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "DisplayAuthor",
+          "JsonName": "displayAuthor",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DisplayTitle",
+          "JsonName": "displayTitle",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Duration",
+          "JsonName": "duration",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "EpisodeId",
+          "JsonName": "episodeId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "EpisodeID"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "LibraryId",
+          "JsonName": "libraryId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryID"
+          }
+        },
+        {
+          "Name": "LibraryItemId",
+          "JsonName": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        },
+        {
+          "Name": "MediaMetadata",
+          "JsonName": "mediaMetadata",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "MediaPlayer",
+          "JsonName": "mediaPlayer",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "MediaType",
+          "JsonName": "mediaType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "PlayMethod",
+          "JsonName": "playMethod",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "ServerVersion",
+          "JsonName": "serverVersion",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "StartTime",
+          "JsonName": "startTime",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "StartedAt",
+          "JsonName": "startedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "TimeListening",
+          "JsonName": "timeListening",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "UpdatedAt",
+          "JsonName": "updatedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "User",
+          "JsonName": "user",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "UserGetListeningSessionsAnswerSessionsUser"
+          }
+        },
+        {
+          "Name": "UserId",
+          "JsonName": "userId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserGetListeningSessionsAnswerSessionsDeviceInfo",
+      "Fields": [
+        {
+          "Name": "BrowserName",
+          "JsonName": "browserName",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "BrowserVersion",
+          "JsonName": "browserVersion",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ClientName",
+          "JsonName": "clientName",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ClientVersion",
+          "JsonName": "clientVersion",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DeviceId",
+          "JsonName": "deviceId",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DeviceName",
+          "JsonName": "deviceName",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DeviceType",
+          "JsonName": "deviceType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "IpAddress",
+          "JsonName": "ipAddress",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Manufacturer",
+          "JsonName": "manufacturer",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Model",
+          "JsonName": "model",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "OsName",
+          "JsonName": "osName",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "OsVersion",
+          "JsonName": "osVersion",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "SdkVersion",
+          "JsonName": "sdkVersion",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserGetListeningSessionsAnswerSessionsUser",
+      "Fields": [
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Username",
+          "JsonName": "username",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        }
+      ]
+    },
+    {
+      "Name": "UserGetListeningStatsAnswer",
+      "Fields": [
+        {
+          "Name": "DayOfWeek",
+          "JsonName": "dayOfWeek",
+          "Type": {
+            "Type": "Dictionary",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "Days",
+          "JsonName": "days",
+          "Type": {
+            "Type": "Dictionary",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "Items",
+          "JsonName": "items",
+          "Type": {
+            "Type": "Dictionary",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "RecentSessions",
+          "JsonName": "recentSessions",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "PlaybackSession"
+            }
+          }
+        },
+        {
+          "Name": "Today",
+          "JsonName": "today",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "TotalTime",
+          "JsonName": "totalTime",
+          "Type": {
+            "Type": "Double"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserGetOnlineUsersAnswer",
+      "Fields": [
+        {
+          "Name": "OpenSessions",
+          "JsonName": "openSessions",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "UserGetOnlineUsersAnswerOpenSessions"
+            }
+          }
+        },
+        {
+          "Name": "UsersOnline",
+          "JsonName": "usersOnline",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "UserGetOnlineUsersAnswerUsersOnline"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserGetOnlineUsersAnswerOpenSessions",
+      "Fields": [
+        {
+          "Name": "BookId",
+          "JsonName": "bookId",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "CoverPath",
+          "JsonName": "coverPath",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "CurrentTime",
+          "JsonName": "currentTime",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Date",
+          "JsonName": "date",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DayOfWeek",
+          "JsonName": "dayOfWeek",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DeviceInfo",
+          "JsonName": "deviceInfo",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "UserGetOnlineUsersAnswerOpenSessionsDeviceInfo"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "DisplayAuthor",
+          "JsonName": "displayAuthor",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DisplayTitle",
+          "JsonName": "displayTitle",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Duration",
+          "JsonName": "duration",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "EpisodeId",
+          "JsonName": "episodeId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "EpisodeID"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "LibraryId",
+          "JsonName": "libraryId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryID"
+          }
+        },
+        {
+          "Name": "LibraryItemId",
+          "JsonName": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        },
+        {
+          "Name": "MediaMetadata",
+          "JsonName": "mediaMetadata",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "MediaPlayer",
+          "JsonName": "mediaPlayer",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "MediaType",
+          "JsonName": "mediaType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "PlayMethod",
+          "JsonName": "playMethod",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "ServerVersion",
+          "JsonName": "serverVersion",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "StartTime",
+          "JsonName": "startTime",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "StartedAt",
+          "JsonName": "startedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "TimeListening",
+          "JsonName": "timeListening",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "UpdatedAt",
+          "JsonName": "updatedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "User",
+          "JsonName": "user",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "UserGetOnlineUsersAnswerOpenSessionsUser"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "UserId",
+          "JsonName": "userId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserGetOnlineUsersAnswerOpenSessionsDeviceInfo",
+      "Fields": [
+        {
+          "Name": "BrowserName",
+          "JsonName": "browserName",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "BrowserVersion",
+          "JsonName": "browserVersion",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ClientName",
+          "JsonName": "clientName",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ClientVersion",
+          "JsonName": "clientVersion",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DeviceId",
+          "JsonName": "deviceId",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DeviceName",
+          "JsonName": "deviceName",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DeviceType",
+          "JsonName": "deviceType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "IpAddress",
+          "JsonName": "ipAddress",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Manufacturer",
+          "JsonName": "manufacturer",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Model",
+          "JsonName": "model",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "OsName",
+          "JsonName": "osName",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "OsVersion",
+          "JsonName": "osVersion",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "SdkVersion",
+          "JsonName": "sdkVersion",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserGetOnlineUsersAnswerOpenSessionsUser",
+      "Fields": [
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserGetOnlineUsersAnswerUsersOnline",
+      "Fields": [
+        {
+          "Name": "Bookmarks",
+          "JsonName": "bookmarks",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "UserGetOnlineUsersAnswerUsersOnlineBookmarks"
+            }
+          }
+        },
+        {
+          "Name": "CreatedAt",
+          "JsonName": "createdAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "Email",
+          "JsonName": "email",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "HasOpenIDLink",
+          "JsonName": "hasOpenIDLink",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "IsActive",
+          "JsonName": "isActive",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "IsLocked",
+          "JsonName": "isLocked",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "ItemTagsSelected",
+          "JsonName": "itemTagsSelected",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "LastSeen",
+          "JsonName": "lastSeen",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "LatestSession",
+          "JsonName": "latestSession",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "UserGetOnlineUsersAnswerUsersOnlineLatestSession"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "LibrariesAccessible",
+          "JsonName": "librariesAccessible",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "MediaProgress",
+          "JsonName": "mediaProgress",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "UserGetOnlineUsersAnswerUsersOnlineMediaProgress"
+            }
+          }
+        },
+        {
+          "Name": "Permissions",
+          "JsonName": "permissions",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "UserGetOnlineUsersAnswerUsersOnlinePermissions"
+          }
+        },
+        {
+          "Name": "SeriesHideFromContinueListening",
+          "JsonName": "seriesHideFromContinueListening",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "Type",
+          "JsonName": "type",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Username",
+          "JsonName": "username",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserGetOnlineUsersAnswerUsersOnlineBookmarks",
+      "Fields": [
+        {
+          "Name": "CreatedAt",
+          "JsonName": "createdAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "LibraryItemId",
+          "JsonName": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        },
+        {
+          "Name": "Time",
+          "JsonName": "time",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserGetOnlineUsersAnswerUsersOnlineLatestSession",
+      "Fields": [
+        {
+          "Name": "BookId",
+          "JsonName": "bookId",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "CoverPath",
+          "JsonName": "coverPath",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "CurrentTime",
+          "JsonName": "currentTime",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Date",
+          "JsonName": "date",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DayOfWeek",
+          "JsonName": "dayOfWeek",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DeviceInfo",
+          "JsonName": "deviceInfo",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "UserGetOnlineUsersAnswerUsersOnlineLatestSessionDeviceInfo"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "DisplayAuthor",
+          "JsonName": "displayAuthor",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DisplayTitle",
+          "JsonName": "displayTitle",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Duration",
+          "JsonName": "duration",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "EpisodeId",
+          "JsonName": "episodeId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "EpisodeID"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "LibraryId",
+          "JsonName": "libraryId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryID"
+          }
+        },
+        {
+          "Name": "LibraryItemId",
+          "JsonName": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        },
+        {
+          "Name": "MediaMetadata",
+          "JsonName": "mediaMetadata",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "MediaPlayer",
+          "JsonName": "mediaPlayer",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "MediaType",
+          "JsonName": "mediaType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "PlayMethod",
+          "JsonName": "playMethod",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "ServerVersion",
+          "JsonName": "serverVersion",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "StartTime",
+          "JsonName": "startTime",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "StartedAt",
+          "JsonName": "startedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "TimeListening",
+          "JsonName": "timeListening",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "UpdatedAt",
+          "JsonName": "updatedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "User",
+          "JsonName": "user",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "UserGetOnlineUsersAnswerUsersOnlineLatestSessionUser"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "UserId",
+          "JsonName": "userId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserGetOnlineUsersAnswerUsersOnlineLatestSessionDeviceInfo",
+      "Fields": [
+        {
+          "Name": "BrowserName",
+          "JsonName": "browserName",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "BrowserVersion",
+          "JsonName": "browserVersion",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ClientName",
+          "JsonName": "clientName",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ClientVersion",
+          "JsonName": "clientVersion",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DeviceId",
+          "JsonName": "deviceId",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DeviceName",
+          "JsonName": "deviceName",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DeviceType",
+          "JsonName": "deviceType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "IpAddress",
+          "JsonName": "ipAddress",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Manufacturer",
+          "JsonName": "manufacturer",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Model",
+          "JsonName": "model",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "OsName",
+          "JsonName": "osName",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "OsVersion",
+          "JsonName": "osVersion",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "SdkVersion",
+          "JsonName": "sdkVersion",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserGetOnlineUsersAnswerUsersOnlineLatestSessionUser",
+      "Fields": [
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserGetOnlineUsersAnswerUsersOnlineMediaProgress",
+      "Fields": [
+        {
+          "Name": "CurrentTime",
+          "JsonName": "currentTime",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Duration",
+          "JsonName": "duration",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "EbookLocation",
+          "JsonName": "ebookLocation",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "EbookProgress",
+          "JsonName": "ebookProgress",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "EpisodeId",
+          "JsonName": "episodeId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "EpisodeID"
+          }
+        },
+        {
+          "Name": "FinishedAt",
+          "JsonName": "finishedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "HideFromContinueListening",
+          "JsonName": "hideFromContinueListening",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "IsFinished",
+          "JsonName": "isFinished",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "LastUpdate",
+          "JsonName": "lastUpdate",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "LibraryItemId",
+          "JsonName": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        },
+        {
+          "Name": "MediaItemId",
+          "JsonName": "mediaItemId",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "MediaItemType",
+          "JsonName": "mediaItemType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Progress",
+          "JsonName": "progress",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "StartedAt",
+          "JsonName": "startedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "UserId",
+          "JsonName": "userId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserGetOnlineUsersAnswerUsersOnlinePermissions",
+      "Fields": [
+        {
+          "Name": "AccessAllLibraries",
+          "JsonName": "accessAllLibraries",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "AccessAllTags",
+          "JsonName": "accessAllTags",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "AccessExplicitContent",
+          "JsonName": "accessExplicitContent",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "CreateEreader",
+          "JsonName": "createEreader",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Delete",
+          "JsonName": "delete",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Download",
+          "JsonName": "download",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "SelectedTagsNotAccessible",
+          "JsonName": "selectedTagsNotAccessible",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Update",
+          "JsonName": "update",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Upload",
+          "JsonName": "upload",
+          "Type": {
+            "Type": "Boolean"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserUpdateAnswer",
+      "Fields": [
+        {
+          "Name": "Success",
+          "JsonName": "success",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "User",
+          "JsonName": "user",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "UserForBrowser"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserUpdateRequest",
+      "Fields": [
+        {
+          "Name": "Type",
+          "JsonName": "type",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        }
+      ]
+    }
+  ]
+}

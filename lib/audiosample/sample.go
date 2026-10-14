@@ -36,7 +36,7 @@ import (
 
 	"github.com/katbyte/go-kt/chttp"
 
-	"github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
 )
 
 // ErrNoFFmpeg is returned by New when ffmpeg is not on the PATH.

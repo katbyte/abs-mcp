@@ -1,0 +1,216 @@
+{
+  "Name": "Server",
+  "Tag": "Server",
+  "Operations": [
+    {
+      "Name": "ServerGetFeed",
+      "OperationId": "ServerGetFeed",
+      "Method": "GET",
+      "Path": "/feed/{slug}",
+      "PathParameters": [
+        {
+          "Name": "slug",
+          "Argument": "slug",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "ServerGetHealthcheck",
+      "OperationId": "ServerGetHealthcheck",
+      "Method": "GET",
+      "Path": "/healthcheck",
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "ServerGetPing",
+      "OperationId": "ServerGetPing",
+      "Method": "GET",
+      "Path": "/ping",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "ServerGetPingAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "ServerGetStatus",
+      "OperationId": "ServerGetStatus",
+      "Method": "GET",
+      "Path": "/status",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "ServerGetStatusAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "ServerPostInit",
+      "OperationId": "ServerPostInit",
+      "Method": "POST",
+      "Path": "/init",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "ServerPostInitRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    }
+  ],
+  "Models": [
+    {
+      "Name": "ServerGetPingAnswer",
+      "Fields": [
+        {
+          "Name": "Success",
+          "JsonName": "success",
+          "Type": {
+            "Type": "Boolean"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "ServerGetStatusAnswer",
+      "Fields": [
+        {
+          "Name": "ConfigPath",
+          "JsonName": "ConfigPath",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "MetadataPath",
+          "JsonName": "MetadataPath",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "App",
+          "JsonName": "app",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "AuthFormData",
+          "JsonName": "authFormData",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "ServerGetStatusAnswerAuthFormData"
+          }
+        },
+        {
+          "Name": "AuthMethods",
+          "JsonName": "authMethods",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "IsInit",
+          "JsonName": "isInit",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Language",
+          "JsonName": "language",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ServerVersion",
+          "JsonName": "serverVersion",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "ServerGetStatusAnswerAuthFormData",
+      "Fields": [
+        {
+          "Name": "AuthLoginCustomMessage",
+          "JsonName": "authLoginCustomMessage",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "AuthOpenIDAutoLaunch",
+          "JsonName": "authOpenIDAutoLaunch",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "AuthOpenIDButtonText",
+          "JsonName": "authOpenIDButtonText",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "ServerPostInitRequest",
+      "Fields": [
+        {
+          "Name": "NewRoot",
+          "JsonName": "newRoot",
+          "Type": {
+            "Type": "Any"
+          }
+        }
+      ]
+    }
+  ]
+}

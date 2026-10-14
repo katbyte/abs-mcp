@@ -1,0 +1,2589 @@
+{
+  "Name": "Me",
+  "Tag": "Me",
+  "Operations": [
+    {
+      "Name": "MeBatchUpdateMediaProgress",
+      "OperationId": "MeBatchUpdateMediaProgress",
+      "Method": "PATCH",
+      "Path": "/api/me/progress/batch/update",
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeCreateBookmark",
+      "OperationId": "MeCreateBookmark",
+      "Method": "POST",
+      "Path": "/api/me/item/{id}/bookmark",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          }
+        }
+      ],
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MeCreateBookmarkRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MeCreateBookmarkAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeCreateUpdateMediaProgress",
+      "OperationId": "MeCreateUpdateMediaProgress",
+      "Method": "PATCH",
+      "Path": "/api/me/progress/{libraryItemId}/{episodeId}",
+      "PathParameters": [
+        {
+          "Name": "libraryItemId",
+          "Argument": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        },
+        {
+          "Name": "episodeId",
+          "Argument": "episodeId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "EpisodeID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeCreateUpdateMediaProgress2",
+      "OperationId": "MeCreateUpdateMediaProgress2",
+      "Method": "PATCH",
+      "Path": "/api/me/progress/{libraryItemId}",
+      "PathParameters": [
+        {
+          "Name": "libraryItemId",
+          "Argument": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeDeleteSession",
+      "OperationId": "MeDeleteSession",
+      "Method": "DELETE",
+      "Path": "/api/me/sessions/{id}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeGetAllBookmarks",
+      "OperationId": "MeGetAllBookmarks",
+      "Method": "GET",
+      "Path": "/api/me/bookmarks",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MeGetAllBookmarksAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeGetAllLibraryItemsInProgress",
+      "OperationId": "MeGetAllLibraryItemsInProgress",
+      "Method": "GET",
+      "Path": "/api/me/items-in-progress",
+      "Options": [
+        {
+          "Name": "limit",
+          "Field": "Limit",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MeGetAllLibraryItemsInProgressAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeGetAllMediaProgress",
+      "OperationId": "MeGetAllMediaProgress",
+      "Method": "GET",
+      "Path": "/api/me/progress",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MeGetAllMediaProgressAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeGetBookmarksForLibraryItem",
+      "OperationId": "MeGetBookmarksForLibraryItem",
+      "Method": "GET",
+      "Path": "/api/me/bookmarks/{libraryItemId}",
+      "PathParameters": [
+        {
+          "Name": "libraryItemId",
+          "Argument": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MeGetBookmarksForLibraryItemAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeGetCurrentUser",
+      "OperationId": "MeGetCurrentUser",
+      "Method": "GET",
+      "Path": "/api/me",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "UserForBrowser"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeGetItemListeningSessions",
+      "OperationId": "MeGetItemListeningSessions",
+      "Method": "GET",
+      "Path": "/api/me/item/listening-sessions/{libraryItemId}/{episodeId}",
+      "PathParameters": [
+        {
+          "Name": "libraryItemId",
+          "Argument": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        },
+        {
+          "Name": "episodeId",
+          "Argument": "episodeId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "EpisodeID"
+          }
+        }
+      ],
+      "Options": [
+        {
+          "Name": "itemsPerPage",
+          "Field": "ItemsPerPage",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "page",
+          "Field": "Page",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MeGetItemListeningSessionsAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeGetItemListeningSessions2",
+      "OperationId": "MeGetItemListeningSessions2",
+      "Method": "GET",
+      "Path": "/api/me/item/listening-sessions/{libraryItemId}",
+      "PathParameters": [
+        {
+          "Name": "libraryItemId",
+          "Argument": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        }
+      ],
+      "Options": [
+        {
+          "Name": "itemsPerPage",
+          "Field": "ItemsPerPage",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "page",
+          "Field": "Page",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MeGetItemListeningSessions2Answer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeGetListeningSessions",
+      "OperationId": "MeGetListeningSessions",
+      "Method": "GET",
+      "Path": "/api/me/listening-sessions",
+      "Options": [
+        {
+          "Name": "itemsPerPage",
+          "Field": "ItemsPerPage",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "page",
+          "Field": "Page",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MeGetListeningSessionsAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeGetListeningStats",
+      "OperationId": "MeGetListeningStats",
+      "Method": "GET",
+      "Path": "/api/me/listening-stats",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MeGetListeningStatsAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeGetMediaProgress",
+      "OperationId": "MeGetMediaProgress",
+      "Method": "GET",
+      "Path": "/api/me/progress/{id}/{episodeId}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          }
+        },
+        {
+          "Name": "episodeId",
+          "Argument": "episodeId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "EpisodeID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MeGetMediaProgressAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeGetMediaProgress2",
+      "OperationId": "MeGetMediaProgress2",
+      "Method": "GET",
+      "Path": "/api/me/progress/{id}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MeGetMediaProgress2Answer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeGetSessions",
+      "OperationId": "MeGetSessions",
+      "Method": "GET",
+      "Path": "/api/me/sessions",
+      "Options": [
+        {
+          "Name": "itemsPerPage",
+          "Field": "ItemsPerPage",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "page",
+          "Field": "Page",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MeGetSessionsAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeGetStatsForYear",
+      "OperationId": "MeGetStatsForYear",
+      "Method": "GET",
+      "Path": "/api/me/stats/year/{year}",
+      "PathParameters": [
+        {
+          "Name": "year",
+          "Argument": "year",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MeGetStatsForYearAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeReaddSeriesFromContinueListening",
+      "OperationId": "MeReaddSeriesFromContinueListening",
+      "Method": "GET",
+      "Path": "/api/me/series/{id}/readd-to-continue-listening",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "UserForBrowser"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeRemoveBookmark",
+      "OperationId": "MeRemoveBookmark",
+      "Method": "DELETE",
+      "Path": "/api/me/item/{id}/bookmark/{time}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          }
+        },
+        {
+          "Name": "time",
+          "Argument": "time",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeRemoveItemFromContinueListening",
+      "OperationId": "MeRemoveItemFromContinueListening",
+      "Method": "GET",
+      "Path": "/api/me/progress/{id}/remove-from-continue-listening",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "UserForBrowser"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeRemoveMediaProgress",
+      "OperationId": "MeRemoveMediaProgress",
+      "Method": "DELETE",
+      "Path": "/api/me/progress/{id}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeRemoveSeriesFromContinueListening",
+      "OperationId": "MeRemoveSeriesFromContinueListening",
+      "Method": "GET",
+      "Path": "/api/me/series/{id}/remove-from-continue-listening",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "UserForBrowser"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeUpdateBookmark",
+      "OperationId": "MeUpdateBookmark",
+      "Method": "PATCH",
+      "Path": "/api/me/item/{id}/bookmark",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          }
+        }
+      ],
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MeUpdateBookmarkRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MeUpdateBookmarkAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeUpdatePassword",
+      "OperationId": "MeUpdatePassword",
+      "Method": "PATCH",
+      "Path": "/api/me/password",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MeUpdatePasswordRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MeUpdatePasswordAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MeUpdateUserEReaderDevices",
+      "OperationId": "MeUpdateUserEReaderDevices",
+      "Method": "POST",
+      "Path": "/api/me/ereader-devices",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MeUpdateUserEReaderDevicesRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MeUpdateUserEReaderDevicesAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    }
+  ],
+  "Models": [
+    {
+      "Name": "MeCreateBookmarkAnswer",
+      "Fields": [
+        {
+          "Name": "CreatedAt",
+          "JsonName": "createdAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "LibraryItemId",
+          "JsonName": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        },
+        {
+          "Name": "Time",
+          "JsonName": "time",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeCreateBookmarkRequest",
+      "Fields": [
+        {
+          "Name": "Time",
+          "JsonName": "time",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeGetAllBookmarksAnswer",
+      "Fields": [
+        {
+          "Name": "Bookmarks",
+          "JsonName": "bookmarks",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "MeGetAllBookmarksAnswerBookmarks"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeGetAllBookmarksAnswerBookmarks",
+      "Fields": [
+        {
+          "Name": "CreatedAt",
+          "JsonName": "createdAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "LibraryItemId",
+          "JsonName": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        },
+        {
+          "Name": "Time",
+          "JsonName": "time",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeGetAllLibraryItemsInProgressAnswer",
+      "Fields": [
+        {
+          "Name": "LibraryItems",
+          "JsonName": "libraryItems",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "MeGetAllLibraryItemsInProgressAnswerLibraryItems"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeGetAllLibraryItemsInProgressAnswerLibraryItems",
+      "Fields": [
+        {
+          "Name": "AddedAt",
+          "JsonName": "addedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "BirthtimeMs",
+          "JsonName": "birthtimeMs",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "CtimeMs",
+          "JsonName": "ctimeMs",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "FolderId",
+          "JsonName": "folderId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "FolderID"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Ino",
+          "JsonName": "ino",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "IsFile",
+          "JsonName": "isFile",
+          "Type": {
+            "Type": "Boolean"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "IsInvalid",
+          "JsonName": "isInvalid",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "IsMissing",
+          "JsonName": "isMissing",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "LibraryId",
+          "JsonName": "libraryId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryID"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Media",
+          "JsonName": "media",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MeGetAllLibraryItemsInProgressAnswerLibraryItemsMedia"
+          }
+        },
+        {
+          "Name": "MediaType",
+          "JsonName": "mediaType",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "MtimeMs",
+          "JsonName": "mtimeMs",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "NumFiles",
+          "JsonName": "numFiles",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "OldLibraryItemId",
+          "JsonName": "oldLibraryItemId",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Path",
+          "JsonName": "path",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "ProgressLastUpdate",
+          "JsonName": "progressLastUpdate",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "RecentEpisode",
+          "JsonName": "recentEpisode",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "PodcastEpisode"
+          }
+        },
+        {
+          "Name": "RelPath",
+          "JsonName": "relPath",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Size",
+          "JsonName": "size",
+          "Type": {
+            "Type": "Integer"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "UpdatedAt",
+          "JsonName": "updatedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeGetAllLibraryItemsInProgressAnswerLibraryItemsMedia",
+      "Fields": [
+        {
+          "Name": "AutoDownloadEpisodes",
+          "JsonName": "autoDownloadEpisodes",
+          "Type": {
+            "Type": "Boolean"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "AutoDownloadSchedule",
+          "JsonName": "autoDownloadSchedule",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "CoverPath",
+          "JsonName": "coverPath",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Duration",
+          "JsonName": "duration",
+          "Type": {
+            "Type": "Double"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "EbookFormat",
+          "JsonName": "ebookFormat",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "LastEpisodeCheck",
+          "JsonName": "lastEpisodeCheck",
+          "Type": {
+            "Type": "UnixMillis"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "MaxEpisodesToKeep",
+          "JsonName": "maxEpisodesToKeep",
+          "Type": {
+            "Type": "Integer"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "MaxNewEpisodesToDownload",
+          "JsonName": "maxNewEpisodesToDownload",
+          "Type": {
+            "Type": "Integer"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Metadata",
+          "JsonName": "metadata",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MeGetAllLibraryItemsInProgressAnswerLibraryItemsMediaMetadata"
+          }
+        },
+        {
+          "Name": "NumAudioFiles",
+          "JsonName": "numAudioFiles",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "NumChapters",
+          "JsonName": "numChapters",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "NumEpisodes",
+          "JsonName": "numEpisodes",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "NumTracks",
+          "JsonName": "numTracks",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "Size",
+          "JsonName": "size",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Tags",
+          "JsonName": "tags",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeGetAllLibraryItemsInProgressAnswerLibraryItemsMediaMetadata",
+      "Fields": [
+        {
+          "Name": "Abridged",
+          "JsonName": "abridged",
+          "Type": {
+            "Type": "Boolean"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Asin",
+          "JsonName": "asin",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Author",
+          "JsonName": "author",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "AuthorName",
+          "JsonName": "authorName",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "AuthorNameLF",
+          "JsonName": "authorNameLF",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Description",
+          "JsonName": "description",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Explicit",
+          "JsonName": "explicit",
+          "Type": {
+            "Type": "Boolean"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "FeedUrl",
+          "JsonName": "feedUrl",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Genres",
+          "JsonName": "genres",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "ImageUrl",
+          "JsonName": "imageUrl",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Isbn",
+          "JsonName": "isbn",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "ItunesArtistId",
+          "JsonName": "itunesArtistId",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "ItunesId",
+          "JsonName": "itunesId",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "ItunesPageUrl",
+          "JsonName": "itunesPageUrl",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Language",
+          "JsonName": "language",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "NarratorName",
+          "JsonName": "narratorName",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "PublishedDate",
+          "JsonName": "publishedDate",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "PublishedYear",
+          "JsonName": "publishedYear",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Publisher",
+          "JsonName": "publisher",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "ReleaseDate",
+          "JsonName": "releaseDate",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "SeriesName",
+          "JsonName": "seriesName",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Subtitle",
+          "JsonName": "subtitle",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "TitleIgnorePrefix",
+          "JsonName": "titleIgnorePrefix",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Type",
+          "JsonName": "type",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        }
+      ]
+    },
+    {
+      "Name": "MeGetAllMediaProgressAnswer",
+      "Fields": [
+        {
+          "Name": "MediaProgress",
+          "JsonName": "mediaProgress",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "MeGetAllMediaProgressAnswerMediaProgress"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeGetAllMediaProgressAnswerMediaProgress",
+      "Fields": [
+        {
+          "Name": "CurrentTime",
+          "JsonName": "currentTime",
+          "Type": {
+            "Type": "Double"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Duration",
+          "JsonName": "duration",
+          "Type": {
+            "Type": "Double"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "EbookLocation",
+          "JsonName": "ebookLocation",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "EbookProgress",
+          "JsonName": "ebookProgress",
+          "Type": {
+            "Type": "Double"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "EpisodeId",
+          "JsonName": "episodeId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "EpisodeID"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "FinishedAt",
+          "JsonName": "finishedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "HideFromContinueListening",
+          "JsonName": "hideFromContinueListening",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "IsFinished",
+          "JsonName": "isFinished",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "LastUpdate",
+          "JsonName": "lastUpdate",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "LibraryItemId",
+          "JsonName": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "MediaItemId",
+          "JsonName": "mediaItemId",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "MediaItemType",
+          "JsonName": "mediaItemType",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Progress",
+          "JsonName": "progress",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "StartedAt",
+          "JsonName": "startedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "UserId",
+          "JsonName": "userId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          },
+          "Nullable": true
+        }
+      ]
+    },
+    {
+      "Name": "MeGetBookmarksForLibraryItemAnswer",
+      "Fields": [
+        {
+          "Name": "Bookmarks",
+          "JsonName": "bookmarks",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "MeGetBookmarksForLibraryItemAnswerBookmarks"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeGetBookmarksForLibraryItemAnswerBookmarks",
+      "Fields": [
+        {
+          "Name": "CreatedAt",
+          "JsonName": "createdAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "LibraryItemId",
+          "JsonName": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        },
+        {
+          "Name": "Time",
+          "JsonName": "time",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeGetItemListeningSessions2Answer",
+      "Fields": [
+        {
+          "Name": "ItemsPerPage",
+          "JsonName": "itemsPerPage",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "NumPages",
+          "JsonName": "numPages",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "Page",
+          "JsonName": "page",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Sessions",
+          "JsonName": "sessions",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "PlaybackSession"
+            }
+          }
+        },
+        {
+          "Name": "Total",
+          "JsonName": "total",
+          "Type": {
+            "Type": "Integer"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeGetItemListeningSessionsAnswer",
+      "Fields": [
+        {
+          "Name": "ItemsPerPage",
+          "JsonName": "itemsPerPage",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "NumPages",
+          "JsonName": "numPages",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "Page",
+          "JsonName": "page",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Sessions",
+          "JsonName": "sessions",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "PlaybackSession"
+            }
+          }
+        },
+        {
+          "Name": "Total",
+          "JsonName": "total",
+          "Type": {
+            "Type": "Integer"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeGetListeningSessionsAnswer",
+      "Fields": [
+        {
+          "Name": "ItemsPerPage",
+          "JsonName": "itemsPerPage",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "NumPages",
+          "JsonName": "numPages",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "Page",
+          "JsonName": "page",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Sessions",
+          "JsonName": "sessions",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "PlaybackSession"
+            }
+          }
+        },
+        {
+          "Name": "Total",
+          "JsonName": "total",
+          "Type": {
+            "Type": "Integer"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeGetListeningStatsAnswer",
+      "Fields": [
+        {
+          "Name": "DayOfWeek",
+          "JsonName": "dayOfWeek",
+          "Type": {
+            "Type": "Dictionary",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "Days",
+          "JsonName": "days",
+          "Type": {
+            "Type": "Dictionary",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "Items",
+          "JsonName": "items",
+          "Type": {
+            "Type": "Dictionary",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "RecentSessions",
+          "JsonName": "recentSessions",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "PlaybackSession"
+            }
+          }
+        },
+        {
+          "Name": "Today",
+          "JsonName": "today",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "TotalTime",
+          "JsonName": "totalTime",
+          "Type": {
+            "Type": "Double"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeGetMediaProgress2Answer",
+      "Fields": [
+        {
+          "Name": "CurrentTime",
+          "JsonName": "currentTime",
+          "Type": {
+            "Type": "Double"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Duration",
+          "JsonName": "duration",
+          "Type": {
+            "Type": "Double"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "EbookLocation",
+          "JsonName": "ebookLocation",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "EbookProgress",
+          "JsonName": "ebookProgress",
+          "Type": {
+            "Type": "Double"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "EpisodeId",
+          "JsonName": "episodeId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "EpisodeID"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "FinishedAt",
+          "JsonName": "finishedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "HideFromContinueListening",
+          "JsonName": "hideFromContinueListening",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "IsFinished",
+          "JsonName": "isFinished",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "LastUpdate",
+          "JsonName": "lastUpdate",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "LibraryItemId",
+          "JsonName": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "MediaItemId",
+          "JsonName": "mediaItemId",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "MediaItemType",
+          "JsonName": "mediaItemType",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Progress",
+          "JsonName": "progress",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "StartedAt",
+          "JsonName": "startedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "UserId",
+          "JsonName": "userId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          },
+          "Nullable": true
+        }
+      ]
+    },
+    {
+      "Name": "MeGetMediaProgressAnswer",
+      "Fields": [
+        {
+          "Name": "CurrentTime",
+          "JsonName": "currentTime",
+          "Type": {
+            "Type": "Double"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Duration",
+          "JsonName": "duration",
+          "Type": {
+            "Type": "Double"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "EbookLocation",
+          "JsonName": "ebookLocation",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "EbookProgress",
+          "JsonName": "ebookProgress",
+          "Type": {
+            "Type": "Double"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "EpisodeId",
+          "JsonName": "episodeId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "EpisodeID"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "FinishedAt",
+          "JsonName": "finishedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "HideFromContinueListening",
+          "JsonName": "hideFromContinueListening",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "IsFinished",
+          "JsonName": "isFinished",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "LastUpdate",
+          "JsonName": "lastUpdate",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "LibraryItemId",
+          "JsonName": "libraryItemId",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "MediaItemId",
+          "JsonName": "mediaItemId",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "MediaItemType",
+          "JsonName": "mediaItemType",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Progress",
+          "JsonName": "progress",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "StartedAt",
+          "JsonName": "startedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "UserId",
+          "JsonName": "userId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          },
+          "Nullable": true
+        }
+      ]
+    },
+    {
+      "Name": "MeGetSessionsAnswer",
+      "Fields": [
+        {
+          "Name": "ItemsPerPage",
+          "JsonName": "itemsPerPage",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "NumPages",
+          "JsonName": "numPages",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "Page",
+          "JsonName": "page",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Sessions",
+          "JsonName": "sessions",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "MeGetSessionsAnswerSessions"
+            }
+          }
+        },
+        {
+          "Name": "Total",
+          "JsonName": "total",
+          "Type": {
+            "Type": "Integer"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeGetSessionsAnswerSessions",
+      "Fields": [
+        {
+          "Name": "CreatedAt",
+          "JsonName": "createdAt",
+          "Type": {
+            "Type": "UnixMillis"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Current",
+          "JsonName": "current",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "DeviceInfo",
+          "JsonName": "deviceInfo",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MeGetSessionsAnswerSessionsDeviceInfo"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "IpAddress",
+          "JsonName": "ipAddress",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "UpdatedAt",
+          "JsonName": "updatedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "UserAgent",
+          "JsonName": "userAgent",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        }
+      ]
+    },
+    {
+      "Name": "MeGetSessionsAnswerSessionsDeviceInfo",
+      "Fields": [
+        {
+          "Name": "BrowserName",
+          "JsonName": "browserName",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "BrowserVersion",
+          "JsonName": "browserVersion",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "DeviceType",
+          "JsonName": "deviceType",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Model",
+          "JsonName": "model",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "OsName",
+          "JsonName": "osName",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "OsVersion",
+          "JsonName": "osVersion",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Vendor",
+          "JsonName": "vendor",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        }
+      ]
+    },
+    {
+      "Name": "MeGetStatsForYearAnswer",
+      "Fields": [
+        {
+          "Name": "BooksWithCovers",
+          "JsonName": "booksWithCovers",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "FinishedBooksWithCovers",
+          "JsonName": "finishedBooksWithCovers",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "LongestAudiobookFinished",
+          "JsonName": "longestAudiobookFinished",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MeGetStatsForYearAnswerLongestAudiobookFinished"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "MostListenedMonth",
+          "JsonName": "mostListenedMonth",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MeGetStatsForYearAnswerMostListenedMonth"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "MostListenedNarrator",
+          "JsonName": "mostListenedNarrator",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MeGetStatsForYearAnswerMostListenedNarrator"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "NumBooksFinished",
+          "JsonName": "numBooksFinished",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "NumBooksListened",
+          "JsonName": "numBooksListened",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "TopAuthors",
+          "JsonName": "topAuthors",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "MeGetStatsForYearAnswerTopAuthors"
+            }
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "TopGenres",
+          "JsonName": "topGenres",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "MeGetStatsForYearAnswerTopGenres"
+            }
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "TotalBookListeningTime",
+          "JsonName": "totalBookListeningTime",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "TotalListeningSessions",
+          "JsonName": "totalListeningSessions",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "TotalListeningTime",
+          "JsonName": "totalListeningTime",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "TotalPodcastListeningTime",
+          "JsonName": "totalPodcastListeningTime",
+          "Type": {
+            "Type": "Integer"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeGetStatsForYearAnswerLongestAudiobookFinished",
+      "Fields": [
+        {
+          "Name": "Duration",
+          "JsonName": "duration",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "FinishedAt",
+          "JsonName": "finishedAt",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "Any"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeGetStatsForYearAnswerMostListenedMonth",
+      "Fields": [
+        {
+          "Name": "Month",
+          "JsonName": "month",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Time",
+          "JsonName": "time",
+          "Type": {
+            "Type": "Integer"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeGetStatsForYearAnswerMostListenedNarrator",
+      "Fields": [
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Time",
+          "JsonName": "time",
+          "Type": {
+            "Type": "Integer"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeGetStatsForYearAnswerTopAuthors",
+      "Fields": [
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Time",
+          "JsonName": "time",
+          "Type": {
+            "Type": "Integer"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeGetStatsForYearAnswerTopGenres",
+      "Fields": [
+        {
+          "Name": "Genre",
+          "JsonName": "genre",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Time",
+          "JsonName": "time",
+          "Type": {
+            "Type": "Integer"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeUpdateBookmarkAnswer",
+      "Fields": [
+        {
+          "Name": "CreatedAt",
+          "JsonName": "createdAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "LibraryItemId",
+          "JsonName": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        },
+        {
+          "Name": "Time",
+          "JsonName": "time",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeUpdateBookmarkRequest",
+      "Fields": [
+        {
+          "Name": "Time",
+          "JsonName": "time",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeUpdatePasswordAnswer",
+      "Fields": [
+        {
+          "Name": "Success",
+          "JsonName": "success",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "User",
+          "JsonName": "user",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MeUpdatePasswordAnswerUser"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeUpdatePasswordAnswerUser",
+      "Fields": [
+        {
+          "Name": "AccessToken",
+          "JsonName": "accessToken",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "RefreshToken",
+          "JsonName": "refreshToken",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        }
+      ]
+    },
+    {
+      "Name": "MeUpdatePasswordRequest",
+      "Fields": [
+        {
+          "Name": "NewPassword",
+          "JsonName": "newPassword",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Password",
+          "JsonName": "password",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeUpdateUserEReaderDevicesAnswer",
+      "Fields": [
+        {
+          "Name": "EreaderDevices",
+          "JsonName": "ereaderDevices",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "MeUpdateUserEReaderDevicesAnswerEreaderDevices"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeUpdateUserEReaderDevicesAnswerEreaderDevices",
+      "Fields": [
+        {
+          "Name": "AvailabilityOption",
+          "JsonName": "availabilityOption",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Email",
+          "JsonName": "email",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Users",
+          "JsonName": "users",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeUpdateUserEReaderDevicesRequest",
+      "Fields": [
+        {
+          "Name": "EreaderDevices",
+          "JsonName": "ereaderDevices",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "MeUpdateUserEReaderDevicesRequestEreaderDevices"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeUpdateUserEReaderDevicesRequestEreaderDevices",
+      "Fields": [
+        {
+          "Name": "AvailabilityOption",
+          "JsonName": "availabilityOption",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Email",
+          "JsonName": "email",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Users",
+          "JsonName": "users",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

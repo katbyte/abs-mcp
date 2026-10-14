@@ -122,17 +122,17 @@ func (e *evaluator) instanceMember(t *jsType, name string) *jsType {
 		if m := cl.methods[name]; m != nil {
 			return &jsType{kind: funcKind, fn: &jsFunc{params: m.Params, body: m.Body.List, scope: fileScope(cl.file), this: t, name: cl.name + "." + name}}
 		}
-		if f, ok := cl.fields[name]; ok {
-			return e.field(cl, f, t, name)
+		if fs, ok := cl.fields[name]; ok {
+			return e.field(cl, fs, t, name)
 		}
 	}
 
 	return unknown
 }
 
-// field is the value a method gives a field, worked out in that method with its locals, and for the constructor with the arguments the
+// field is every value the methods give a field, each worked out in its method with its locals, and for the constructor with the arguments the
 // instance was made with: ApiRouter's this.backupManager = Server.backupManager, where Server is what new ApiRouter(this) was given.
-func (e *evaluator) field(cl *jsClass, f classField, t *jsType, name string) *jsType {
+func (e *evaluator) field(cl *jsClass, fs []classField, t *jsType, name string) *jsType {
 	sig := make([]string, 0, len(t.ctorArgs))
 	for _, a := range t.ctorArgs {
 		sig = append(sig, typeKey(a))
@@ -148,17 +148,26 @@ func (e *evaluator) field(cl *jsClass, f classField, t *jsType, name string) *js
 	e.active[key] = true
 	defer delete(e.active, key)
 
-	s := &scope{parent: fileScope(cl.file), file: cl.file, vars: map[string]*binding{}, this: t, sets: map[string][]fieldSet{}}
-	if f.method != nil {
-		var args []*jsType
-		if f.method == cl.methods["constructor"] {
-			args = t.ctorArgs
+	var v *jsType
+	for _, f := range fs {
+		s := &scope{parent: fileScope(cl.file), file: cl.file, vars: map[string]*binding{}, this: t, sets: map[string][]fieldSet{}}
+		if f.method != nil {
+			var args []*jsType
+			if f.method == cl.methods["constructor"] {
+				args = t.ctorArgs
+			}
+			e.bindParams(f.method.Params, args, s)
+			declare(e, f.method.Body.List, s)
 		}
-		e.bindParams(f.method.Params, args, s)
-		declare(e, f.method.Body.List, s)
+		fv := e.eval(f.init, s)
+		if f.op != 0 {
+			fv = compoundType(fv, f.op)
+		}
+		v = merge(v, fv)
 	}
-
-	v := e.eval(f.init, s)
+	if v == nil {
+		v = unknown
+	}
 	e.cache[key] = v
 
 	return v

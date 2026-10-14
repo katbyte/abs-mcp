@@ -1,0 +1,68 @@
+{
+  "Name": "Series",
+  "Tag": "Series",
+  "Operations": [
+    {
+      "Name": "SeriesFindOne",
+      "OperationId": "SeriesFindOne",
+      "Method": "GET",
+      "Path": "/api/series/{id}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "SeriesID"
+          }
+        }
+      ],
+      "Options": [
+        {
+          "Name": "include",
+          "Field": "Include",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "Series"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "SeriesUpdate",
+      "OperationId": "SeriesUpdate",
+      "Method": "PATCH",
+      "Path": "/api/series/{id}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "SeriesID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "Series"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    }
+  ]
+}

@@ -13,10 +13,10 @@ import (
 func TestSpec(t *testing.T) {
 	t.Parallel()
 
-	src, out := writeFakeSource(t), t.TempDir()
+	src, client, out := writeFakeSource(t), writeFS(t, fakeClient), t.TempDir()
 
 	var report bytes.Buffer
-	if err := spec([]string{"-v", src}, out, &report); err != nil {
+	if err := spec([]string{"-v", "-client", client, src}, out, &report); err != nil {
 		t.Fatal(err)
 	}
 
@@ -86,7 +86,7 @@ func TestSpec(t *testing.T) {
 		t.Errorf("download: %+v, want a file", download.Responses)
 	}
 
-	for _, line := range []string{"Audiobookshelf 9.9.9: 10 routes, 11 operations", "answer a file", "/api/items/:id/play/:episodeId", "wrote " + filepath.Join(out, "audiobookshelf-openapi-9.9.9.json")} {
+	for _, line := range []string{"Audiobookshelf 9.9.9: 10 routes, 11 operations", "answer a file", "/api/items/{id}/play/{episodeId}", "wrote " + filepath.Join(out, "audiobookshelf-openapi-9.9.9.json")} {
 		if !strings.Contains(report.String(), line) {
 			t.Errorf("report has no %q:\n%s", line, report.String())
 		}
@@ -97,7 +97,7 @@ func TestSpecTrace(t *testing.T) {
 	t.Parallel()
 
 	var report bytes.Buffer
-	if err := spec([]string{"-trace", "LibraryController.findOne", writeFakeSource(t)}, t.TempDir(), &report); err != nil {
+	if err := spec([]string{"-client", "", "-trace", "LibraryController.findOne", writeFakeSource(t)}, t.TempDir(), &report); err != nil {
 		t.Fatal(err)
 	}
 
@@ -121,7 +121,8 @@ func TestSpecRefuses(t *testing.T) {
 	}
 
 	for name, args := range map[string][]string{
-		"no checkout":                nil,
+		"no checkout":                {"-client", ""},
+		"a client that is not there": {"-client", filepath.Join(empty, "missing"), writeFakeSource(t)},
 		"two checkouts":              {empty, empty},
 		"a folder that is not there": {filepath.Join(empty, "missing")},
 		"a file":                     {file},
@@ -144,6 +145,51 @@ func TestPackageVersion(t *testing.T) {
 	for _, b := range []string{`{}`, `not json`} {
 		if _, err := packageVersion([]byte(b)); err == nil {
 			t.Errorf("packageVersion(%s): no error", b)
+		}
+	}
+}
+
+// What the source leaves untyped the hand-written client types; what the two type differently stays as the source has it.
+func TestSpecFillsFromClient(t *testing.T) {
+	t.Parallel()
+
+	src, client, out := writeFakeSource(t), writeFS(t, fakeClient), t.TempDir()
+
+	var report bytes.Buffer
+	if err := spec([]string{"-v", "-client", client, src}, out, &report); err != nil {
+		t.Fatal(err)
+	}
+
+	b, err := fs.ReadFile(os.DirFS(out), "audiobookshelf-openapi-9.9.9.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc document
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+
+	// a JSON column the source cannot type, read by the client into a struct
+	settings := doc.Components.Schemas["Library"].Properties["settings"]
+	if settings.Type != "object" || settings.Properties["coverAspectRatio"].Type != "integer" || !settings.Properties["skipMatchingMediaWithAsin"].Nullable || settings.Properties["Ratio"].Type != "number" {
+		t.Errorf("Library.settings: %+v", settings)
+	}
+	if _, ok := doc.Components.Schemas["Library"].Properties["raw"]; ok {
+		t.Error("a field the client reads that the source never writes was added")
+	}
+
+	body := doc.Paths["/api/libraries/{id}"]["patch"].RequestBody.Content["application/json"].Schema
+	if body.Properties["name"].Type != "string" || body.Properties["displayOrder"].Type != "integer" {
+		t.Errorf("PATCH body: %+v %+v", body.Properties["name"], body.Properties["displayOrder"])
+	}
+
+	if isInit := doc.Paths["/status"]["get"].Responses["200"].Content["application/json"].Schema.Properties["isInit"]; isInit.Type != "boolean" {
+		t.Errorf("isInit: %+v, want the source's boolean", isInit)
+	}
+
+	for _, line := range []string{"filled from " + client + "   ", "; 1 it types otherwise are left as the source has them; 1 of its requests match no operation", "differs: GET /status answer.isInit: the source says boolean, the client integer", "no operation for GET /api/nothing (Nothing)"} {
+		if !strings.Contains(report.String(), line) {
+			t.Errorf("report has no %q:\n%s", line, report.String())
 		}
 	}
 }

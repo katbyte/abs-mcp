@@ -1,0 +1,472 @@
+{
+  "Name": "Backup",
+  "Tag": "Backup",
+  "Operations": [
+    {
+      "Name": "BackupApply",
+      "OperationId": "BackupApply",
+      "Method": "GET",
+      "Path": "/api/backups/{id}/apply",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "BackupCreate",
+      "OperationId": "BackupCreate",
+      "Method": "POST",
+      "Path": "/api/backups",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "BackupCreateAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "BackupDelete",
+      "OperationId": "BackupDelete",
+      "Method": "DELETE",
+      "Path": "/api/backups/{id}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "BackupDeleteAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "BackupDownload",
+      "OperationId": "BackupDownload",
+      "Method": "GET",
+      "Path": "/api/backups/{id}/download",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/octet-stream",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200,
+        204
+      ]
+    },
+    {
+      "Name": "BackupGetAll",
+      "OperationId": "BackupGetAll",
+      "Method": "GET",
+      "Path": "/api/backups",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "BackupGetAllAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "BackupUpdatePath",
+      "OperationId": "BackupUpdatePath",
+      "Method": "PATCH",
+      "Path": "/api/backups/path",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "BackupUpdatePathRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "BackupUpload",
+      "OperationId": "BackupUpload",
+      "Method": "POST",
+      "Path": "/api/backups/upload",
+      "Request": {
+        "ContentType": "multipart/form-data",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "BackupUploadAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    }
+  ],
+  "Models": [
+    {
+      "Name": "BackupCreateAnswer",
+      "Fields": [
+        {
+          "Name": "Backups",
+          "JsonName": "backups",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "BackupCreateAnswerBackups"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "BackupCreateAnswerBackups",
+      "Fields": [
+        {
+          "Name": "BackupDirPath",
+          "JsonName": "backupDirPath",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "CreatedAt",
+          "JsonName": "createdAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "DatePretty",
+          "JsonName": "datePretty",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "FileSize",
+          "JsonName": "fileSize",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "Filename",
+          "JsonName": "filename",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "FullPath",
+          "JsonName": "fullPath",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Key",
+          "JsonName": "key",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Path",
+          "JsonName": "path",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ServerVersion",
+          "JsonName": "serverVersion",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "BackupDeleteAnswer",
+      "Fields": [
+        {
+          "Name": "Backups",
+          "JsonName": "backups",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "BackupDeleteAnswerBackups"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "BackupDeleteAnswerBackups",
+      "Fields": [
+        {
+          "Name": "BackupDirPath",
+          "JsonName": "backupDirPath",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "CreatedAt",
+          "JsonName": "createdAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "DatePretty",
+          "JsonName": "datePretty",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "FileSize",
+          "JsonName": "fileSize",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "Filename",
+          "JsonName": "filename",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "FullPath",
+          "JsonName": "fullPath",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Key",
+          "JsonName": "key",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Path",
+          "JsonName": "path",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ServerVersion",
+          "JsonName": "serverVersion",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "BackupGetAllAnswer",
+      "Fields": [
+        {
+          "Name": "BackupLocation",
+          "JsonName": "backupLocation",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "BackupPathEnvSet",
+          "JsonName": "backupPathEnvSet",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Backups",
+          "JsonName": "backups",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "BackupGetAllAnswerBackups"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "BackupGetAllAnswerBackups",
+      "Fields": [
+        {
+          "Name": "BackupDirPath",
+          "JsonName": "backupDirPath",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "CreatedAt",
+          "JsonName": "createdAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "DatePretty",
+          "JsonName": "datePretty",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "FileSize",
+          "JsonName": "fileSize",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "Filename",
+          "JsonName": "filename",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "FullPath",
+          "JsonName": "fullPath",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Key",
+          "JsonName": "key",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Path",
+          "JsonName": "path",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ServerVersion",
+          "JsonName": "serverVersion",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "BackupUpdatePathRequest",
+      "Fields": [
+        {
+          "Name": "Path",
+          "JsonName": "path",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "BackupUploadAnswer",
+      "Fields": [
+        {
+          "Name": "Backups",
+          "JsonName": "backups",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

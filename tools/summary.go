@@ -1,7 +1,7 @@
 package tools
 
 import (
-	"github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
 )
 
 // progressSummary is the trimmed view of a listening-progress record.

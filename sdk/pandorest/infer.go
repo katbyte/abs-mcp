@@ -45,6 +45,7 @@ type jsType struct {
 	req      *reqInfo  // the request a handler is given
 	ctorArgs []*jsType // what an instance was made with, for the fields its constructor sets from them
 	literals []string  // the strings a value is seen to take, such as a mediaType's 'book' and 'podcast'
+	written  bool      // a whole number written out in the source, such as the 0 of total = 0, which says nothing of what else the value takes
 }
 
 type prop struct {
@@ -68,8 +69,10 @@ var (
 	str     = &jsType{kind: stringKind}
 	num     = &jsType{kind: numberKind}
 	integer = &jsType{kind: integerKind}
-	boolean = &jsType{kind: booleanKind}
-	date    = &jsType{kind: dateKind}
+	// a whole number written out, which another value of the same name may not be
+	writtenInt = &jsType{kind: integerKind, written: true}
+	boolean    = &jsType{kind: booleanKind}
+	date       = &jsType{kind: dateKind}
 )
 
 func listOf(t *jsType) *jsType { return &jsType{kind: arrayKind, elem: t} }
@@ -129,6 +132,19 @@ func (t *jsType) notNull() *jsType {
 	return &out
 }
 
+// widen is a value merged with one the scan could not tell: a whole number written out, as the 0 of x || 0, then says only that it is a
+// number, since what it stands in for may have a fraction.
+func widen(t *jsType) *jsType {
+	if t.kind != integerKind || !t.written {
+		return t
+	}
+	if t.nullable {
+		return num.orNull()
+	}
+
+	return num
+}
+
 // merge is what a value is when it may be either a or b.
 func merge(a, b *jsType) *jsType {
 	switch {
@@ -137,9 +153,9 @@ func merge(a, b *jsType) *jsType {
 	case b == nil:
 		return a
 	case a.kind == unknownKind:
-		return b
+		return widen(b)
 	case b.kind == unknownKind:
-		return a
+		return widen(a)
 	case a.kind == nullKind:
 		return b.orNull()
 	case b.kind == nullKind:
@@ -192,6 +208,13 @@ func mergeKinds(a, b *jsType) *jsType {
 			out := *a
 			out.literals = mergeLiterals(a.literals, b.literals)
 			return &out
+
+		case integerKind:
+			// a whole number the code works out is one whatever was written beside it
+			if a.written && !b.written {
+				return b
+			}
+			return a
 
 		default:
 			return a
@@ -259,11 +282,127 @@ type binding struct {
 	done   bool
 }
 
-// fieldSet is one name.field = value, or with no field one name.push(value).
+// fieldSet is one name.field = value or name.field += value, or with no field one name.push(value).
 type fieldSet struct {
 	field  string
 	value  js.IExpr
 	spread bool
+	op     js.TokenType  // for name.field += value, the operator; 0 for =
+	in     func() *scope // for one written in a callback, the callback's scope; nil for the function's own
+}
+
+// scope is where the value is worked out, or nil when the callback it is written in has a name of its own that hides the one set.
+func (fs fieldSet) scope(name string, home *scope) *scope {
+	if fs.in == nil {
+		return home
+	}
+
+	in := fs.in()
+	for sc := in; sc != nil && sc != home; sc = sc.parent {
+		if _, ok := sc.vars[name]; ok {
+			return nil
+		}
+	}
+
+	return in
+}
+
+// fieldSets are what x does to a name's fields or items, and the name: name.field = value, name.field += value, name.push(value).
+func fieldSets(x js.IExpr) (string, []fieldSet) {
+	switch x := x.(type) {
+	case *js.CallExpr:
+		dot, ok := x.X.(*js.DotExpr)
+		if !ok || identName(dot.Y) != "push" && identName(dot.Y) != "unshift" {
+			return "", nil
+		}
+
+		v, ok := dot.X.(*js.Var)
+		if !ok {
+			return "", nil
+		}
+
+		sets := make([]fieldSet, 0, len(x.Args.List))
+		for _, a := range x.Args.List {
+			sets = append(sets, fieldSet{value: a.Value, spread: a.Rest})
+		}
+
+		return string(v.Name()), sets
+
+	case *js.BinaryExpr:
+		to, ok := x.X.(*js.DotExpr)
+		if !ok || x.Op != js.EqToken && !compound(x.Op) {
+			return "", nil
+		}
+
+		v, ok := to.X.(*js.Var)
+		if !ok {
+			return "", nil
+		}
+
+		fs := fieldSet{field: identName(to.Y), value: x.Y}
+		if x.Op != js.EqToken {
+			fs.op = x.Op
+		}
+
+		return string(v.Name()), []fieldSet{fs}
+	}
+
+	return "", nil
+}
+
+// outerSets records what a function written as an argument does to names outside it, such as list.forEach(s => { stats.today += s.time }), so
+// they gain it as they would from a loop. Its values are worked out in its own scope, its first parameter an item of the list it is called on.
+func outerSets(e *evaluator, call *js.CallExpr, arg js.IExpr, home *scope, parent func() *scope) {
+	var params js.Params
+	var body []js.IStmt
+	switch f := arg.(type) {
+	case *js.ArrowFunc:
+		params, body = f.Params, f.Body.List
+	case *js.FuncDecl:
+		params, body = f.Params, f.Body.List
+	default:
+		return
+	}
+
+	var inner *scope
+	in := func() *scope {
+		if inner != nil {
+			return inner
+		}
+
+		p := parent()
+		inner = &scope{parent: p, file: p.file, vars: map[string]*binding{}, this: p.this, sets: map[string][]fieldSet{}}
+
+		var args []*jsType
+		if dot, ok := call.X.(*js.DotExpr); ok {
+			if t := e.eval(dot.X, p); t.kind == arrayKind {
+				args = []*jsType{t.elem, integer}
+			}
+		}
+		e.bindParams(params, args, inner)
+		declare(e, body, inner)
+
+		return inner
+	}
+
+	walkStmts(body, func(st js.IStmt) {
+		for _, x := range stmtExprs(st) {
+			walkExpr(x, func(x js.IExpr) {
+				if n, sets := fieldSets(x); n != "" {
+					for i := range sets {
+						sets[i].in = in
+					}
+					home.sets[n] = append(home.sets[n], sets...)
+				}
+
+				if c, ok := x.(*js.CallExpr); ok {
+					for _, a := range c.Args.List {
+						outerSets(e, c, a.Value, home, in)
+					}
+				}
+			})
+		}
+	})
 }
 
 func (s *scope) lookup(name string) *binding {
@@ -411,7 +550,7 @@ func literal(x *js.LiteralExpr, s *scope) *jsType {
 		v, _ := stringValue(x)
 		return &jsType{kind: stringKind, literals: []string{v}}
 	case js.IntegerToken, js.BinaryToken, js.OctalToken, js.HexadecimalToken:
-		return integer
+		return writtenInt
 	case js.DecimalToken:
 		return num
 	case js.TrueToken, js.FalseToken:
@@ -641,7 +780,11 @@ func (e *evaluator) binary(x *js.BinaryExpr, s *scope) *jsType {
 		return v
 
 	case js.OrToken, js.NullishToken:
-		return merge(e.eval(x.X, s).notNull(), e.eval(x.Y, s))
+		left, right := e.eval(x.X, s), e.eval(x.Y, s)
+		if left.kind == nullKind {
+			return right // null || 2 is always 2
+		}
+		return merge(left.notNull(), right)
 
 	case js.AndToken:
 		left := e.eval(x.X, s)
@@ -981,34 +1124,62 @@ func declare(e *evaluator, body []js.IStmt, s *scope) {
 
 		for _, x := range stmtExprs(st) {
 			walkExpr(x, func(x js.IExpr) {
-				// list.push(item): the list's items are what is pushed
+				if n, sets := fieldSets(x); n != "" {
+					s.sets[n] = append(s.sets[n], sets...)
+				}
+
 				if call, ok := x.(*js.CallExpr); ok {
-					if dot, ok := call.X.(*js.DotExpr); ok && (identName(dot.Y) == "push" || identName(dot.Y) == "unshift") {
-						if v, ok := dot.X.(*js.Var); ok {
-							n := string(v.Name())
-							for _, a := range call.Args.List {
-								s.sets[n] = append(s.sets[n], fieldSet{value: a.Value, spread: a.Rest})
-							}
-						}
+					for _, a := range call.Args.List {
+						outerSets(e, call, a.Value, s, func() *scope { return s })
 					}
 					return
 				}
 
 				set, ok := x.(*js.BinaryExpr)
-				if !ok || set.Op != js.EqToken {
+				if !ok {
 					return
 				}
 
-				switch to := set.X.(type) {
-				case *js.Var:
-					value := set.Y
-					s.bind(string(to.Name()), func() *jsType { return e.eval(value, s) })
+				// total += x: the total takes the type of what is added
+				if to, ok := set.X.(*js.Var); ok && compound(set.Op) {
+					value, op := set.Y, set.Op
+					s.bind(string(to.Name()), func() *jsType { return compoundType(e.eval(value, s), op) })
+					return
+				}
 
-				case *js.DotExpr:
-					if v, ok := to.X.(*js.Var); ok {
-						n := string(v.Name())
-						s.sets[n] = append(s.sets[n], fieldSet{field: identName(to.Y), value: set.Y})
+				if set.Op != js.EqToken {
+					return
+				}
+
+				if to, ok := set.X.(*js.Var); ok {
+					name, value := string(to.Name()), set.Y
+
+					// x = x.map(...): the new value replaces the one it is made from, rather than joining it
+					if b, ok := s.vars[name]; ok && refersTo(value, name) {
+						prev := b.inits
+						b.inits = []func() *jsType{func() *jsType {
+							var t *jsType
+							for _, p := range prev {
+								t = merge(t, p())
+							}
+							if t == nil {
+								t = unknown
+							}
+
+							inner := &scope{parent: s, file: s.file, vars: map[string]*binding{}, this: s.this, sets: map[string][]fieldSet{}}
+							inner.bindType(name, t)
+
+							// sort(x).slice(0, n) from a package the scan cannot follow leaves x as it was
+							if v := e.eval(value, inner); v.kind != unknownKind {
+								return v
+							}
+
+							return t
+						}}
+						return
 					}
+
+					s.bind(name, func() *jsType { return e.eval(value, s) })
 				}
 			})
 		}
@@ -1027,17 +1198,32 @@ func declare(e *evaluator, body []js.IStmt, s *scope) {
 			for _, init := range inits {
 				t = merge(t, init())
 			}
+			// a name pushed onto is a list, whatever the scan made of its value
+			if t != nil && t.kind == unknownKind && slices.ContainsFunc(sets, func(fs fieldSet) bool { return fs.field == "" }) {
+				t = listOf(unknown)
+			}
 			if t != nil && t.kind == arrayKind {
-				elem := t.elem
+				var pushed *jsType
 				for _, fs := range sets {
-					if fs.field != "" {
+					in := fs.scope(n, s)
+					if fs.field != "" || in == nil {
 						continue
 					}
-					v := e.eval(fs.value, s)
+					v := e.eval(fs.value, in)
 					if fs.spread && v.kind == arrayKind {
 						v = v.elem
 					}
-					elem = merge(elem, v)
+					pushed = merge(pushed, v)
+				}
+
+				// a list whose items are not known, such as [], holds what is pushed onto it
+				elem := t.elem
+				switch {
+				case pushed == nil:
+				case elem.kind == unknownKind:
+					elem = pushed
+				default:
+					elem = merge(elem, pushed)
 				}
 				out := listOf(elem)
 				out.nullable = t.nullable
@@ -1050,10 +1236,14 @@ func declare(e *evaluator, body []js.IStmt, s *scope) {
 				t = &jsType{kind: objectKind, open: true}
 			}
 			for _, fs := range sets {
-				if fs.field == "" {
+				in := fs.scope(n, s)
+				if fs.field == "" || in == nil {
 					continue
 				}
-				ft := e.eval(fs.value, s)
+				ft := e.eval(fs.value, in)
+				if fs.op != 0 {
+					ft = compoundType(ft, fs.op)
+				}
 				if t.name != "" {
 					e.extra[t.name] = appendProp(e.extra[t.name], fs.field, ft)
 				}
@@ -1062,6 +1252,40 @@ func declare(e *evaluator, body []js.IStmt, s *scope) {
 			return t
 		}}
 	}
+}
+
+// compound is whether an operator assigns the result of arithmetic on the name: +=, -= and the rest.
+func compound(op js.TokenType) bool {
+	switch op {
+	case js.AddEqToken, js.SubEqToken, js.MulEqToken, js.DivEqToken, js.ModEqToken, js.ExpEqToken:
+		return true
+	default:
+		return false
+	}
+}
+
+// compoundType is what x op= value leaves x holding: text for text added, a whole number for whole numbers, a number otherwise.
+func compoundType(value *jsType, op js.TokenType) *jsType {
+	switch {
+	case op == js.AddEqToken && value.kind == stringKind:
+		return str
+	case value.kind == integerKind && op != js.DivEqToken:
+		return integer
+	default:
+		return num
+	}
+}
+
+// refersTo is whether an expression uses a name, outside any function written in it.
+func refersTo(x js.IExpr, name string) bool {
+	found := false
+	walkExpr(x, func(y js.IExpr) {
+		if v, ok := y.(*js.Var); ok && string(v.Name()) == name {
+			found = true
+		}
+	})
+
+	return found
 }
 
 func appendProp(list []prop, name string, t *jsType) []prop {

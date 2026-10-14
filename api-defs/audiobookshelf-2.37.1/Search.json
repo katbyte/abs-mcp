@@ -1,0 +1,577 @@
+{
+  "Name": "Search",
+  "Tag": "Search",
+  "Operations": [
+    {
+      "Name": "SearchFindAuthor",
+      "OperationId": "SearchFindAuthor",
+      "Method": "GET",
+      "Path": "/api/search/authors",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "SearchFindAuthorAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "SearchFindBooks",
+      "OperationId": "SearchFindBooks",
+      "Method": "GET",
+      "Path": "/api/search/books",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "List",
+          "NestedItem": {
+            "Type": "Reference",
+            "ReferenceName": "SearchFindBooksAnswer"
+          }
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "SearchFindChapters",
+      "OperationId": "SearchFindChapters",
+      "Method": "GET",
+      "Path": "/api/search/chapters",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "SearchFindChaptersAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "SearchFindCovers",
+      "OperationId": "SearchFindCovers",
+      "Method": "GET",
+      "Path": "/api/search/covers",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "SearchFindCoversAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "SearchFindPodcasts",
+      "OperationId": "SearchFindPodcasts",
+      "Method": "GET",
+      "Path": "/api/search/podcast",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "List",
+          "NestedItem": {
+            "Type": "Reference",
+            "ReferenceName": "SearchFindPodcastsAnswer"
+          }
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "SearchGetAllProviders",
+      "OperationId": "SearchGetAllProviders",
+      "Method": "GET",
+      "Path": "/api/search/providers",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "SearchGetAllProvidersAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    }
+  ],
+  "Models": [
+    {
+      "Name": "SearchFindAuthorAnswer",
+      "Fields": [
+        {
+          "Name": "Asin",
+          "JsonName": "asin",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Description",
+          "JsonName": "description",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Error",
+          "JsonName": "error",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Image",
+          "JsonName": "image",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "SearchFindBooksAnswer",
+      "Fields": [
+        {
+          "Name": "Abridged",
+          "JsonName": "abridged",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Asin",
+          "JsonName": "asin",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Author",
+          "JsonName": "author",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Cover",
+          "JsonName": "cover",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Description",
+          "JsonName": "description",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Duration",
+          "JsonName": "duration",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Genres",
+          "JsonName": "genres",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Isbn",
+          "JsonName": "isbn",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Language",
+          "JsonName": "language",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Narrator",
+          "JsonName": "narrator",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "PublishedYear",
+          "JsonName": "publishedYear",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Publisher",
+          "JsonName": "publisher",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Rating",
+          "JsonName": "rating",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Region",
+          "JsonName": "region",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Series",
+          "JsonName": "series",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "SearchFindBooksAnswerSeries"
+            }
+          }
+        },
+        {
+          "Name": "Subtitle",
+          "JsonName": "subtitle",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Tags",
+          "JsonName": "tags",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "SearchFindBooksAnswerSeries",
+      "Fields": [
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Sequence",
+          "JsonName": "sequence",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Series",
+          "JsonName": "series",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "SearchFindChaptersAnswer",
+      "Fields": [
+        {
+          "Name": "Error",
+          "JsonName": "error",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "StringKey",
+          "JsonName": "stringKey",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "SearchFindCoversAnswer",
+      "Fields": [
+        {
+          "Name": "Error",
+          "JsonName": "error",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Results",
+          "JsonName": "results",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          },
+          "Nullable": true
+        }
+      ]
+    },
+    {
+      "Name": "SearchFindPodcastsAnswer",
+      "Fields": [
+        {
+          "Name": "ArtistId",
+          "JsonName": "artistId",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "ArtistName",
+          "JsonName": "artistName",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Cover",
+          "JsonName": "cover",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Description",
+          "JsonName": "description",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DescriptionPlain",
+          "JsonName": "descriptionPlain",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Explicit",
+          "JsonName": "explicit",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "FeedUrl",
+          "JsonName": "feedUrl",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Genres",
+          "JsonName": "genres",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "PageUrl",
+          "JsonName": "pageUrl",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ReleaseDate",
+          "JsonName": "releaseDate",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TrackCount",
+          "JsonName": "trackCount",
+          "Type": {
+            "Type": "Integer"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "SearchGetAllProvidersAnswer",
+      "Fields": [
+        {
+          "Name": "Providers",
+          "JsonName": "providers",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "SearchGetAllProvidersAnswerProviders"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "SearchGetAllProvidersAnswerProviders",
+      "Fields": [
+        {
+          "Name": "Books",
+          "JsonName": "books",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "SearchGetAllProvidersAnswerProvidersBooks"
+            }
+          }
+        },
+        {
+          "Name": "BooksCovers",
+          "JsonName": "booksCovers",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "SearchGetAllProvidersAnswerProvidersBooksCovers"
+            }
+          }
+        },
+        {
+          "Name": "Podcasts",
+          "JsonName": "podcasts",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "SearchGetAllProvidersAnswerProvidersPodcasts"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "SearchGetAllProvidersAnswerProvidersBooks",
+      "Fields": [
+        {
+          "Name": "Text",
+          "JsonName": "text",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Value",
+          "JsonName": "value",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "SearchGetAllProvidersAnswerProvidersBooksCovers",
+      "Fields": [
+        {
+          "Name": "Text",
+          "JsonName": "text",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Value",
+          "JsonName": "value",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "SearchGetAllProvidersAnswerProvidersPodcasts",
+      "Fields": [
+        {
+          "Name": "Text",
+          "JsonName": "text",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Value",
+          "JsonName": "value",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    }
+  ]
+}

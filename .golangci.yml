@@ -88,7 +88,7 @@ linters:
           - goconst
       # tool schemas, filter groups, audit check names and API query keys repeat the same short
       # words (title, series, genres, include...) by design; constants would only add indirection
-      - path: '(tools|sdk/abs|sdk/pandorest|acceptance)/.*\.go'
+      - path: '(tools|sdk|lib/audiosample/calibration|acceptance)/.*\.go'
         linters:
           - goconst
       # the live suites share one server and its seeded libraries, so their tests run one after another;
@@ -114,6 +114,12 @@ linters:
       # and then exits with the suite's code, as redundant-test-main-exit below allows a TestMain
       - path: 'acceptance/tools/harness_test\.go'
         text: 'deep-exit'
+        linters:
+          - revive
+      # the hand-written client keeps its package name, abs, in sdk/abs-byhand, so a program that uses it changes
+      # only the import path; it goes when the client generated into sdk/abs takes its place
+      - path: 'sdk/abs-byhand/'
+        text: 'package-directory-mismatch'
         linters:
           - revive
       # the idiomatic `if err := f(); err != nil` scoping shadows err on purpose; still flag other variables

@@ -11,7 +11,7 @@ package abs_test
 import (
 	"testing"
 
-	"github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
 )
 
 const feedURL = "https://feed.podbean.com/wtyppod/feed.xml"

@@ -1,0 +1,385 @@
+{
+  "Name": "Author",
+  "Tag": "Author",
+  "Operations": [
+    {
+      "Name": "AuthorDelete",
+      "OperationId": "AuthorDelete",
+      "Method": "DELETE",
+      "Path": "/api/authors/{id}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "AuthorID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "AuthorDeleteImage",
+      "OperationId": "AuthorDeleteImage",
+      "Method": "DELETE",
+      "Path": "/api/authors/{id}/image",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "AuthorID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "AuthorDeleteImageAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "AuthorFindOne",
+      "OperationId": "AuthorFindOne",
+      "Method": "GET",
+      "Path": "/api/authors/{id}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "AuthorID"
+          }
+        }
+      ],
+      "Options": [
+        {
+          "Name": "include",
+          "Field": "Include",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "Author"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "AuthorGetImage",
+      "OperationId": "AuthorGetImage",
+      "Method": "GET",
+      "Path": "/api/authors/{id}/image",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "AuthorID"
+          }
+        }
+      ],
+      "Options": [
+        {
+          "Name": "format",
+          "Field": "Format",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "height",
+          "Field": "Height",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "width",
+          "Field": "Width",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/octet-stream",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "AuthorMatch",
+      "OperationId": "AuthorMatch",
+      "Method": "POST",
+      "Path": "/api/authors/{id}/match",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "AuthorID"
+          }
+        }
+      ],
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "AuthorMatchRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "AuthorMatchAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "AuthorUpdate",
+      "OperationId": "AuthorUpdate",
+      "Method": "PATCH",
+      "Path": "/api/authors/{id}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "AuthorID"
+          }
+        }
+      ],
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "AuthorUpdateRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "AuthorUpdateAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "AuthorUploadImage",
+      "OperationId": "AuthorUploadImage",
+      "Method": "POST",
+      "Path": "/api/authors/{id}/image",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "AuthorID"
+          }
+        }
+      ],
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "AuthorUploadImageRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "AuthorUploadImageAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    }
+  ],
+  "Models": [
+    {
+      "Name": "AuthorDeleteImageAnswer",
+      "Fields": [
+        {
+          "Name": "Author",
+          "JsonName": "author",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "Author"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "AuthorMatchAnswer",
+      "Fields": [
+        {
+          "Name": "Author",
+          "JsonName": "author",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "Author"
+          }
+        },
+        {
+          "Name": "Updated",
+          "JsonName": "updated",
+          "Type": {
+            "Type": "Boolean"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "AuthorMatchRequest",
+      "Fields": [
+        {
+          "Name": "Asin",
+          "JsonName": "asin",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Q",
+          "JsonName": "q",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Region",
+          "JsonName": "region",
+          "Type": {
+            "Type": "Any"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "AuthorUpdateAnswer",
+      "Fields": [
+        {
+          "Name": "Author",
+          "JsonName": "author",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "Author"
+          }
+        },
+        {
+          "Name": "Merged",
+          "JsonName": "merged",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Updated",
+          "JsonName": "updated",
+          "Type": {
+            "Type": "Boolean"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "AuthorUpdateRequest",
+      "Fields": [
+        {
+          "Name": "Asin",
+          "JsonName": "asin",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Description",
+          "JsonName": "description",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        }
+      ]
+    },
+    {
+      "Name": "AuthorUploadImageAnswer",
+      "Fields": [
+        {
+          "Name": "Author",
+          "JsonName": "author",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "Author"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "AuthorUploadImageRequest",
+      "Fields": [
+        {
+          "Name": "Url",
+          "JsonName": "url",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    }
+  ]
+}

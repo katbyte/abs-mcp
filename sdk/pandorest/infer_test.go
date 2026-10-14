@@ -135,6 +135,23 @@ func TestEval(t *testing.T) {
 		`(() => { let out = null; for (const n of [1]) { out = n } return out })()`: "integer?",
 		`(() => { function f() { return 'a' } return f() })()`:                      "string",
 		`((a = 3) => a)()`: "integer",
+
+		// a 0 written in the source is a number when nothing else says what the name holds
+		`(() => { let x = 0; x = unknownCall(); return x })()`: "number",
+
+		// totals and lists built up a step at a time
+		`(() => { let t = 0; t += 1.5; return t })()`:                                         "number",
+		`(() => { let t = 0; t += 1; return t })()`:                                           "integer",
+		`(() => { let s = ''; s += 'a'; return s })()`:                                        "string",
+		`(() => { const o = { t: 0 }; o.t += 1.5; return o })().t`:                            "number",
+		`(() => { const o = { t: 0 }; [1.5].forEach((n) => { o.t += n }); return o })().t`:    "number",
+		`(() => { const o = { t: 0 }; [1].forEach((o) => { o.t += 1.5 }); return o })().t`:    "integer",
+		`(() => { const a = []; [1].forEach((n) => { a.push('x') }); return a })()`:           "list of string",
+		`(() => { const a = unknownCall(); a.push(1); return a })()`:                          "list of integer",
+		`(() => { const a = []; a.push(1); return a })()`:                                     "list of integer",
+		`(() => { let a = [1]; a = a.map((n) => 'x'); return a })()`:                          "list of string",
+		`(() => { let a = [1]; a = unknownCall(a); return a })()`:                             "list of integer",
+		`new (class { constructor() { this.t = 0 } add(n) { this.t += parseFloat(n) } })().t`: "number",
 	}
 	for src, want := range cases {
 		if got := shape(evalJS(t, "module.exports = "+src)); got != want {

@@ -15,7 +15,7 @@ import (
 
 	"github.com/katbyte/abs-mcp/lib/audioprobe"
 	"github.com/katbyte/abs-mcp/lib/audiosample"
-	"github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

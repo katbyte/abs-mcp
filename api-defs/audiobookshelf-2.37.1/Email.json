@@ -1,0 +1,411 @@
+{
+  "Name": "Email",
+  "Tag": "Email",
+  "Operations": [
+    {
+      "Name": "EmailGetSettings",
+      "OperationId": "EmailGetSettings",
+      "Method": "GET",
+      "Path": "/api/emails/settings",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "EmailGetSettingsAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "EmailSendEBookToDevice",
+      "OperationId": "EmailSendEBookToDevice",
+      "Method": "POST",
+      "Path": "/api/emails/send-ebook-to-device",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "EmailSendEBookToDeviceRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "EmailSendTest",
+      "OperationId": "EmailSendTest",
+      "Method": "POST",
+      "Path": "/api/emails/test",
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "EmailUpdateEReaderDevices",
+      "OperationId": "EmailUpdateEReaderDevices",
+      "Method": "POST",
+      "Path": "/api/emails/ereader-devices",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "EmailUpdateEReaderDevicesRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "EmailUpdateEReaderDevicesAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "EmailUpdateSettings",
+      "OperationId": "EmailUpdateSettings",
+      "Method": "PATCH",
+      "Path": "/api/emails/settings",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "EmailUpdateSettingsRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "EmailUpdateSettingsAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    }
+  ],
+  "Models": [
+    {
+      "Name": "EmailGetSettingsAnswer",
+      "Fields": [
+        {
+          "Name": "Settings",
+          "JsonName": "settings",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "EmailSettings"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "EmailSendEBookToDeviceRequest",
+      "Fields": [
+        {
+          "Name": "DeviceName",
+          "JsonName": "deviceName",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "LibraryItemId",
+          "JsonName": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "EmailSettings",
+      "SchemaName": "EmailSettings",
+      "Fields": [
+        {
+          "Name": "EreaderDevices",
+          "JsonName": "ereaderDevices",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "EmailSettingsEreaderDevices"
+            }
+          }
+        },
+        {
+          "Name": "FromAddress",
+          "JsonName": "fromAddress",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Host",
+          "JsonName": "host",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Pass",
+          "JsonName": "pass",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Port",
+          "JsonName": "port",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "RejectUnauthorized",
+          "JsonName": "rejectUnauthorized",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Secure",
+          "JsonName": "secure",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "TestAddress",
+          "JsonName": "testAddress",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "User",
+          "JsonName": "user",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        }
+      ]
+    },
+    {
+      "Name": "EmailSettingsEreaderDevices",
+      "Fields": [
+        {
+          "Name": "AvailabilityOption",
+          "JsonName": "availabilityOption",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Email",
+          "JsonName": "email",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Users",
+          "JsonName": "users",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "EmailUpdateEReaderDevicesAnswer",
+      "Fields": [
+        {
+          "Name": "EreaderDevices",
+          "JsonName": "ereaderDevices",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "EmailUpdateEReaderDevicesAnswerEreaderDevices"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "EmailUpdateEReaderDevicesAnswerEreaderDevices",
+      "Fields": [
+        {
+          "Name": "AvailabilityOption",
+          "JsonName": "availabilityOption",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Email",
+          "JsonName": "email",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Users",
+          "JsonName": "users",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "EmailUpdateEReaderDevicesRequest",
+      "Fields": [
+        {
+          "Name": "EreaderDevices",
+          "JsonName": "ereaderDevices",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "EmailUpdateEReaderDevicesRequestEreaderDevices"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "EmailUpdateEReaderDevicesRequestEreaderDevices",
+      "Fields": [
+        {
+          "Name": "AvailabilityOption",
+          "JsonName": "availabilityOption",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Email",
+          "JsonName": "email",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Users",
+          "JsonName": "users",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "EmailUpdateSettingsAnswer",
+      "Fields": [
+        {
+          "Name": "Settings",
+          "JsonName": "settings",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "EmailSettings"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "EmailUpdateSettingsRequest",
+      "Fields": [
+        {
+          "Name": "EreaderDevices",
+          "JsonName": "ereaderDevices",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Port",
+          "JsonName": "port",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "RejectUnauthorized",
+          "JsonName": "rejectUnauthorized",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Secure",
+          "JsonName": "secure",
+          "Type": {
+            "Type": "Any"
+          }
+        }
+      ]
+    }
+  ]
+}

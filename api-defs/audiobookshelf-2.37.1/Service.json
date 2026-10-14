@@ -1,0 +1,61 @@
+{
+  "Name": "audiobookshelf",
+  "Package": "abs",
+  "Title": "Audiobookshelf API",
+  "ApiVersion": "2.37.1",
+  "Source": "api-defs/audiobookshelf-openapi-2.37.1.json",
+  "Auth": "Bearer",
+  "Workarounds": [
+    "audiobookshelf-unix-dates"
+  ],
+  "IDs": [
+    {
+      "Name": "LibraryID",
+      "Base": "String"
+    },
+    {
+      "Name": "LibraryItemID",
+      "Base": "String"
+    },
+    {
+      "Name": "AuthorID",
+      "Base": "String"
+    },
+    {
+      "Name": "SeriesID",
+      "Base": "String"
+    },
+    {
+      "Name": "CollectionID",
+      "Base": "String"
+    },
+    {
+      "Name": "PlaylistID",
+      "Base": "String"
+    },
+    {
+      "Name": "EpisodeID",
+      "Base": "String"
+    },
+    {
+      "Name": "FeedID",
+      "Base": "String"
+    },
+    {
+      "Name": "FolderID",
+      "Base": "String"
+    },
+    {
+      "Name": "UserID",
+      "Base": "String"
+    },
+    {
+      "Name": "APIKeyID",
+      "Base": "String"
+    },
+    {
+      "Name": "ProviderID",
+      "Base": "String"
+    }
+  ]
+}

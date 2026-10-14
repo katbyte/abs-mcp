@@ -1,0 +1,1339 @@
+{
+  "Name": "Podcast",
+  "Tag": "Podcast",
+  "Operations": [
+    {
+      "Name": "PodcastBulkCreatePodcastsFromOpmlFeedUrls",
+      "OperationId": "PodcastBulkCreatePodcastsFromOpmlFeedUrls",
+      "Method": "POST",
+      "Path": "/api/podcasts/opml/create",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "PodcastBulkCreatePodcastsFromOpmlFeedUrlsRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "PodcastCheckNewEpisodes",
+      "OperationId": "PodcastCheckNewEpisodes",
+      "Method": "GET",
+      "Path": "/api/podcasts/{id}/checknew",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        }
+      ],
+      "Options": [
+        {
+          "Name": "limit",
+          "Field": "Limit",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "PodcastCheckNewEpisodesAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "PodcastClearEpisodeDownloadQueue",
+      "OperationId": "PodcastClearEpisodeDownloadQueue",
+      "Method": "GET",
+      "Path": "/api/podcasts/{id}/clear-queue",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "PodcastCreate",
+      "OperationId": "PodcastCreate",
+      "Method": "POST",
+      "Path": "/api/podcasts",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "PodcastCreateRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "LibraryItemExpanded"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "PodcastDownloadEpisodes",
+      "OperationId": "PodcastDownloadEpisodes",
+      "Method": "POST",
+      "Path": "/api/podcasts/{id}/download-episodes",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "PodcastFindEpisode",
+      "OperationId": "PodcastFindEpisode",
+      "Method": "GET",
+      "Path": "/api/podcasts/{id}/search-episode",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        }
+      ],
+      "Options": [
+        {
+          "Name": "title",
+          "Field": "Title",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "PodcastFindEpisodeAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "PodcastGetEpisode",
+      "OperationId": "PodcastGetEpisode",
+      "Method": "GET",
+      "Path": "/api/podcasts/{id}/episode/{episodeId}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        },
+        {
+          "Name": "episodeId",
+          "Argument": "episodeId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "EpisodeID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "PodcastEpisode"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "PodcastGetEpisodeDownloads",
+      "OperationId": "PodcastGetEpisodeDownloads",
+      "Method": "GET",
+      "Path": "/api/podcasts/{id}/downloads",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "PodcastGetEpisodeDownloadsAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "PodcastGetFeedsFromOPMLText",
+      "OperationId": "PodcastGetFeedsFromOPMLText",
+      "Method": "POST",
+      "Path": "/api/podcasts/opml/parse",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "PodcastGetFeedsFromOPMLTextRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "PodcastGetFeedsFromOPMLTextAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "PodcastGetPodcastFeed",
+      "OperationId": "PodcastGetPodcastFeed",
+      "Method": "POST",
+      "Path": "/api/podcasts/feed",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "PodcastGetPodcastFeedRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "PodcastGetPodcastFeedAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "PodcastQuickMatchEpisodes",
+      "OperationId": "PodcastQuickMatchEpisodes",
+      "Method": "POST",
+      "Path": "/api/podcasts/{id}/match-episodes",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        }
+      ],
+      "Options": [
+        {
+          "Name": "override",
+          "Field": "Override",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "PodcastQuickMatchEpisodesAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "PodcastRemoveEpisode",
+      "OperationId": "PodcastRemoveEpisode",
+      "Method": "DELETE",
+      "Path": "/api/podcasts/{id}/episode/{episodeId}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        },
+        {
+          "Name": "episodeId",
+          "Argument": "episodeId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "EpisodeID"
+          }
+        }
+      ],
+      "Options": [
+        {
+          "Name": "hard",
+          "Field": "Hard",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "LibraryItem"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "PodcastUpdateEpisode",
+      "OperationId": "PodcastUpdateEpisode",
+      "Method": "PATCH",
+      "Path": "/api/podcasts/{id}/episode/{episodeId}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        },
+        {
+          "Name": "episodeId",
+          "Argument": "episodeId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "EpisodeID"
+          }
+        }
+      ],
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "PodcastUpdateEpisodeRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "LibraryItemExpanded"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    }
+  ],
+  "Models": [
+    {
+      "Name": "PodcastBulkCreatePodcastsFromOpmlFeedUrlsRequest",
+      "Fields": [
+        {
+          "Name": "AutoDownloadEpisodes",
+          "JsonName": "autoDownloadEpisodes",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Feeds",
+          "JsonName": "feeds",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "FolderId",
+          "JsonName": "folderId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "FolderID"
+          }
+        },
+        {
+          "Name": "LibraryId",
+          "JsonName": "libraryId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryID"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "PodcastCheckNewEpisodesAnswer",
+      "Fields": [
+        {
+          "Name": "Episodes",
+          "JsonName": "episodes",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "PodcastCheckNewEpisodesAnswerEpisodes"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "PodcastCheckNewEpisodesAnswerEpisodes",
+      "Fields": [
+        {
+          "Name": "Author",
+          "JsonName": "author",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Chapters",
+          "JsonName": "chapters",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "ChaptersType",
+          "JsonName": "chaptersType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ChaptersUrl",
+          "JsonName": "chaptersUrl",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Description",
+          "JsonName": "description",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DescriptionPlain",
+          "JsonName": "descriptionPlain",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Duration",
+          "JsonName": "duration",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "DurationSeconds",
+          "JsonName": "durationSeconds",
+          "Type": {
+            "Type": "Double"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Enclosure",
+          "JsonName": "enclosure",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "PodcastCheckNewEpisodesAnswerEpisodesEnclosure"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Episode",
+          "JsonName": "episode",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "EpisodeType",
+          "JsonName": "episodeType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Explicit",
+          "JsonName": "explicit",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Guid",
+          "JsonName": "guid",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "PubDate",
+          "JsonName": "pubDate",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "PublishedAt",
+          "JsonName": "publishedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "Season",
+          "JsonName": "season",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Subtitle",
+          "JsonName": "subtitle",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "PodcastCheckNewEpisodesAnswerEpisodesEnclosure",
+      "Fields": [
+        {
+          "Name": "Length",
+          "JsonName": "length",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Type",
+          "JsonName": "type",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Url",
+          "JsonName": "url",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "PodcastCreateRequest",
+      "Fields": [
+        {
+          "Name": "LibraryId",
+          "JsonName": "libraryId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryID"
+          }
+        },
+        {
+          "Name": "Media",
+          "JsonName": "media",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "PodcastCreateRequestMedia"
+          }
+        },
+        {
+          "Name": "Path",
+          "JsonName": "path",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "PodcastCreateRequestMedia",
+      "Fields": [
+        {
+          "Name": "AutoDownloadEpisodes",
+          "JsonName": "autoDownloadEpisodes",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Metadata",
+          "JsonName": "metadata",
+          "Type": {
+            "Type": "Dictionary",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "PodcastFindEpisodeAnswer",
+      "Fields": [
+        {
+          "Name": "Episodes",
+          "JsonName": "episodes",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "PodcastFindEpisodeAnswerEpisodes"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "PodcastFindEpisodeAnswerEpisodes",
+      "Fields": [
+        {
+          "Name": "Episode",
+          "JsonName": "episode",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "PodcastFindEpisodeAnswerEpisodesEpisode"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "PodcastFindEpisodeAnswerEpisodesEpisode",
+      "Fields": [
+        {
+          "Name": "Author",
+          "JsonName": "author",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Chapters",
+          "JsonName": "chapters",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "ChaptersType",
+          "JsonName": "chaptersType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ChaptersUrl",
+          "JsonName": "chaptersUrl",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Description",
+          "JsonName": "description",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DescriptionPlain",
+          "JsonName": "descriptionPlain",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Duration",
+          "JsonName": "duration",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "DurationSeconds",
+          "JsonName": "durationSeconds",
+          "Type": {
+            "Type": "Double"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Enclosure",
+          "JsonName": "enclosure",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "PodcastFindEpisodeAnswerEpisodesEpisodeEnclosure"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Episode",
+          "JsonName": "episode",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "EpisodeType",
+          "JsonName": "episodeType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Explicit",
+          "JsonName": "explicit",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Guid",
+          "JsonName": "guid",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "PubDate",
+          "JsonName": "pubDate",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "PublishedAt",
+          "JsonName": "publishedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "Season",
+          "JsonName": "season",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Subtitle",
+          "JsonName": "subtitle",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "PodcastFindEpisodeAnswerEpisodesEpisodeEnclosure",
+      "Fields": [
+        {
+          "Name": "Length",
+          "JsonName": "length",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Type",
+          "JsonName": "type",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Url",
+          "JsonName": "url",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "PodcastGetEpisodeDownloadsAnswer",
+      "Fields": [
+        {
+          "Name": "Downloads",
+          "JsonName": "downloads",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "PodcastGetEpisodeDownloadsAnswerDownloads"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "PodcastGetEpisodeDownloadsAnswerDownloads",
+      "Fields": [
+        {
+          "Name": "CreatedAt",
+          "JsonName": "createdAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "Episode",
+          "JsonName": "episode",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "EpisodeDisplayTitle",
+          "JsonName": "episodeDisplayTitle",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "EpisodeType",
+          "JsonName": "episodeType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Failed",
+          "JsonName": "failed",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "FinishedAt",
+          "JsonName": "finishedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "IsFinished",
+          "JsonName": "isFinished",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "LibraryId",
+          "JsonName": "libraryId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryID"
+          }
+        },
+        {
+          "Name": "LibraryItemId",
+          "JsonName": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        },
+        {
+          "Name": "PodcastTitle",
+          "JsonName": "podcastTitle",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "PublishedAt",
+          "JsonName": "publishedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "Season",
+          "JsonName": "season",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "StartedAt",
+          "JsonName": "startedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "Url",
+          "JsonName": "url",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "PodcastGetFeedsFromOPMLTextAnswer",
+      "Fields": [
+        {
+          "Name": "Feeds",
+          "JsonName": "feeds",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Dictionary",
+              "NestedItem": {
+                "Type": "Any"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "PodcastGetFeedsFromOPMLTextRequest",
+      "Fields": [
+        {
+          "Name": "OpmlText",
+          "JsonName": "opmlText",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "PodcastGetPodcastFeedAnswer",
+      "Fields": [
+        {
+          "Name": "Podcast",
+          "JsonName": "podcast",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "PodcastGetPodcastFeedAnswerPodcast"
+          },
+          "Nullable": true
+        }
+      ]
+    },
+    {
+      "Name": "PodcastGetPodcastFeedAnswerPodcast",
+      "Fields": [
+        {
+          "Name": "Episodes",
+          "JsonName": "episodes",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "PodcastGetPodcastFeedAnswerPodcastEpisodes"
+            }
+          }
+        },
+        {
+          "Name": "Metadata",
+          "JsonName": "metadata",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "PodcastGetPodcastFeedAnswerPodcastMetadata"
+          }
+        },
+        {
+          "Name": "NumEpisodes",
+          "JsonName": "numEpisodes",
+          "Type": {
+            "Type": "Integer"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "PodcastGetPodcastFeedAnswerPodcastEpisodes",
+      "Fields": [
+        {
+          "Name": "Author",
+          "JsonName": "author",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Chapters",
+          "JsonName": "chapters",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "ChaptersType",
+          "JsonName": "chaptersType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ChaptersUrl",
+          "JsonName": "chaptersUrl",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Description",
+          "JsonName": "description",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DescriptionPlain",
+          "JsonName": "descriptionPlain",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Duration",
+          "JsonName": "duration",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "DurationSeconds",
+          "JsonName": "durationSeconds",
+          "Type": {
+            "Type": "Double"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Enclosure",
+          "JsonName": "enclosure",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "PodcastGetPodcastFeedAnswerPodcastEpisodesEnclosure"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Episode",
+          "JsonName": "episode",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "EpisodeType",
+          "JsonName": "episodeType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Explicit",
+          "JsonName": "explicit",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Guid",
+          "JsonName": "guid",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "PubDate",
+          "JsonName": "pubDate",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "PublishedAt",
+          "JsonName": "publishedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "Season",
+          "JsonName": "season",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Subtitle",
+          "JsonName": "subtitle",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "PodcastGetPodcastFeedAnswerPodcastEpisodesEnclosure",
+      "Fields": [
+        {
+          "Name": "Length",
+          "JsonName": "length",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Type",
+          "JsonName": "type",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Url",
+          "JsonName": "url",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "PodcastGetPodcastFeedAnswerPodcastMetadata",
+      "Fields": [
+        {
+          "Name": "Author",
+          "JsonName": "author",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Categories",
+          "JsonName": "categories",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "Description",
+          "JsonName": "description",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Explicit",
+          "JsonName": "explicit",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "FeedUrl",
+          "JsonName": "feedUrl",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Image",
+          "JsonName": "image",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Language",
+          "JsonName": "language",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Link",
+          "JsonName": "link",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "PubDate",
+          "JsonName": "pubDate",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Type",
+          "JsonName": "type",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "PodcastGetPodcastFeedRequest",
+      "Fields": [
+        {
+          "Name": "RssFeed",
+          "JsonName": "rssFeed",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "PodcastQuickMatchEpisodesAnswer",
+      "Fields": [
+        {
+          "Name": "NumEpisodesUpdated",
+          "JsonName": "numEpisodesUpdated",
+          "Type": {
+            "Type": "Integer"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "PodcastUpdateEpisodeRequest",
+      "Fields": [
+        {
+          "Name": "Enclosure",
+          "JsonName": "enclosure",
+          "Type": {
+            "Type": "Any"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
 	"github.com/katbyte/go-kt/mcp/acctest"
 )
 

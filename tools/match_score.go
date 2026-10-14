@@ -10,7 +10,7 @@ import (
 
 	ktspelling "github.com/katbyte/go-kt/spelling"
 
-	"github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
 )
 
 // The comparator behind item_match_batch and audit_matched: does a provider's

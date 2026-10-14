@@ -1,0 +1,36 @@
+{
+  "Name": "Cache",
+  "Tag": "Cache",
+  "Operations": [
+    {
+      "Name": "CachePurgeCache",
+      "OperationId": "CachePurgeCache",
+      "Method": "POST",
+      "Path": "/api/cache/purge",
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "CachePurgeItemsCache",
+      "OperationId": "CachePurgeItemsCache",
+      "Method": "POST",
+      "Path": "/api/cache/items/purge",
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    }
+  ]
+}

@@ -15,7 +15,7 @@ The live suites need docker, ffmpeg and jq.
 `make test` needs nothing outside the repo and is fast. It covers:
 
 - **The pure logic.** Filter encoding, formatting, gap arithmetic, the audit rules and tool registration.
-- **The client against a canned server.** The `sdk/abs` requests and answers that have gone wrong before are each pinned in `sdk/abs/fake_server_test.go`. That is only some of the methods. What proves every method is the live suite.
+- **The client against a canned server.** The `sdk/abs-byhand` requests and answers that have gone wrong before are each pinned in `sdk/abs-byhand/fake_server_test.go`. That is only some of the methods. What proves every method is the live suite.
 - **The tools against a canned Audiobookshelf.** They run end to end over an in-memory MCP session, in `tools/fake_abs_test.go`. This is where the cases the live fixtures cannot reach are kept: a library with covers, inconsistent spellings, tagged and untagged audio files, more findings than the limit.
 
 ## Live suites
@@ -24,7 +24,7 @@ Everything else runs against a real Audiobookshelf in Docker, because a canned s
 
 | | Covers | Command |
 |---|---|---|
-| `acceptance/abs/` | the `sdk/abs` client: that every response decodes with its fields filled | `make testacc-sdk` |
+| `acceptance/abs/` | the `sdk/abs-byhand` client: that every response decodes with its fields filled | `make testacc-sdk` |
 | `acceptance/tools/` | the tools: name lookup, trimmed answers, audits, provider flows, journeys, and a test of the built binary | `make testacc-tools` |
 
 With `ABS_SERVER` and `ABS_TOKEN` unset the suites skip, so they never fail for want of Docker.

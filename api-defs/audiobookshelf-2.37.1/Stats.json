@@ -1,0 +1,327 @@
+{
+  "Name": "Stats",
+  "Tag": "Stats",
+  "Operations": [
+    {
+      "Name": "StatsGetAdminStatsForYear",
+      "OperationId": "StatsGetAdminStatsForYear",
+      "Method": "GET",
+      "Path": "/api/stats/year/{year}",
+      "PathParameters": [
+        {
+          "Name": "year",
+          "Argument": "year",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "StatsGetAdminStatsForYearAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "StatsGetServerStats",
+      "OperationId": "StatsGetServerStats",
+      "Method": "GET",
+      "Path": "/api/stats/server",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "StatsGetServerStatsAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    }
+  ],
+  "Models": [
+    {
+      "Name": "StatsGetAdminStatsForYearAnswer",
+      "Fields": [
+        {
+          "Name": "BooksAddedWithCovers",
+          "JsonName": "booksAddedWithCovers",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "NumAuthorsAdded",
+          "JsonName": "numAuthorsAdded",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "NumBooks",
+          "JsonName": "numBooks",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "NumBooksAdded",
+          "JsonName": "numBooksAdded",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "NumListeningSessions",
+          "JsonName": "numListeningSessions",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "TopAuthors",
+          "JsonName": "topAuthors",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "StatsGetAdminStatsForYearAnswerTopAuthors"
+            }
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "TopGenres",
+          "JsonName": "topGenres",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "StatsGetAdminStatsForYearAnswerTopGenres"
+            }
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "TopNarrators",
+          "JsonName": "topNarrators",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "StatsGetAdminStatsForYearAnswerTopNarrators"
+            }
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "TotalBooksAddedDuration",
+          "JsonName": "totalBooksAddedDuration",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "TotalBooksAddedSize",
+          "JsonName": "totalBooksAddedSize",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "TotalBooksDuration",
+          "JsonName": "totalBooksDuration",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "TotalBooksSize",
+          "JsonName": "totalBooksSize",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "TotalListeningTime",
+          "JsonName": "totalListeningTime",
+          "Type": {
+            "Type": "Double"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "StatsGetAdminStatsForYearAnswerTopAuthors",
+      "Fields": [
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Time",
+          "JsonName": "time",
+          "Type": {
+            "Type": "Integer"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "StatsGetAdminStatsForYearAnswerTopGenres",
+      "Fields": [
+        {
+          "Name": "Genre",
+          "JsonName": "genre",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Time",
+          "JsonName": "time",
+          "Type": {
+            "Type": "Integer"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "StatsGetAdminStatsForYearAnswerTopNarrators",
+      "Fields": [
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Time",
+          "JsonName": "time",
+          "Type": {
+            "Type": "Integer"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "StatsGetServerStatsAnswer",
+      "Fields": [
+        {
+          "Name": "Books",
+          "JsonName": "books",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "StatsGetServerStatsAnswerBooks"
+          }
+        },
+        {
+          "Name": "Podcasts",
+          "JsonName": "podcasts",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "StatsGetServerStatsAnswerPodcasts"
+          }
+        },
+        {
+          "Name": "Total",
+          "JsonName": "total",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "StatsGetServerStatsAnswerTotal"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "StatsGetServerStatsAnswerBooks",
+      "Fields": [
+        {
+          "Name": "NumAudioFiles",
+          "JsonName": "numAudioFiles",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "NumItems",
+          "JsonName": "numItems",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "TotalSize",
+          "JsonName": "totalSize",
+          "Type": {
+            "Type": "Double"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "StatsGetServerStatsAnswerPodcasts",
+      "Fields": [
+        {
+          "Name": "NumAudioFiles",
+          "JsonName": "numAudioFiles",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "NumItems",
+          "JsonName": "numItems",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "TotalSize",
+          "JsonName": "totalSize",
+          "Type": {
+            "Type": "Double"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "StatsGetServerStatsAnswerTotal",
+      "Fields": [
+        {
+          "Name": "NumAudioFiles",
+          "JsonName": "numAudioFiles",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "NumItems",
+          "JsonName": "numItems",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "TotalSize",
+          "JsonName": "totalSize",
+          "Type": {
+            "Type": "Double"
+          }
+        }
+      ]
+    }
+  ]
+}

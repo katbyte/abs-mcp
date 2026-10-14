@@ -187,7 +187,7 @@ depscheck: ## Check that go.mod/go.sum and vendor/ are in sync
 test: build ## Run the unit tests, with the race detector
 	go test -race ./... -timeout ${TEST_TIMEOUT}
 
-test-sdk: ## Run the SDK tests (sdk/abs shapes) against an already-running server
+test-sdk: ## Run the SDK tests (sdk/abs-byhand shapes) against an already-running server
 	@[ -n "${ABS_SERVER}" ] && [ -n "${ABS_TOKEN}" ] || \
 		(echo 'ABS_SERVER and ABS_TOKEN must be set; or use "make testacc"'; exit 1)
 	go test -tags acceptance -count=1 ./acceptance/abs/... -timeout ${TEST_TIMEOUT} -v
@@ -302,13 +302,20 @@ testenv-up: ## Start and seed a throwaway Audiobookshelf container
 testenv-down: ## Remove the throwaway Audiobookshelf container
 	@.scripts/abs-testenv.sh down
 
-apicheck: ## Report how much of the Audiobookshelf API sdk/abs covers
-	@python3 .scripts/apicheck.py --list
+apicheck: ## Report how much of the Audiobookshelf API sdk/abs-byhand covers
+	@go run ./sdk/apicheck -list
 
 spec: ## Write api-defs/audiobookshelf-openapi-<version>.json from an Audiobookshelf checkout: make spec SOURCE=../audiobookshelf
 	@test -n "$(SOURCE)" || (echo "SOURCE is the Audiobookshelf checkout to read: make spec SOURCE=../audiobookshelf" && exit 1)
 	@go run ./sdk/pandorest spec $(SOURCE)
 
+pandorest-import: ## Import api-defs/audiobookshelf-openapi-<version>.json into api-defs/audiobookshelf-<version>/, applying the fixes
+	@echo "==> importing the API document into api-defs/audiobookshelf-<version>/..."
+	go run ./sdk/pandorest import
+
+pandorest-diff: ## Report what the API document changes against its checked-in definitions
+	@go run ./sdk/pandorest diff -quiet
+
 check-all: build test testacc lint actionlint yamllint shellcheck typos markdownlint depscheck apicheck ## Run build + tests (incl. the live suites) + all linters + depscheck
 
-.PHONY: default all help fmt goimports build docker lint lint-fix actionlint yamllint shellcheck zizmor typos typos-fix markdownlint depscheck check-all install tools test test-sdk test-tools testacc testacc-sdk testacc-tools cover cover-html record record-sdk record-check testenv-up testenv-down apicheck spec
+.PHONY: default all help fmt goimports build docker lint lint-fix actionlint yamllint shellcheck zizmor typos typos-fix markdownlint depscheck check-all install tools test test-sdk test-tools testacc testacc-sdk testacc-tools cover cover-html record record-sdk record-check testenv-up testenv-down apicheck spec pandorest-import pandorest-diff

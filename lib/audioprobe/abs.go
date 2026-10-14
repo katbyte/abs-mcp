@@ -11,7 +11,7 @@ import (
 
 	"github.com/katbyte/go-kt/chttp"
 
-	"github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
 )
 
 // ItemFile is a Fetch over one file of an item, through the server's file

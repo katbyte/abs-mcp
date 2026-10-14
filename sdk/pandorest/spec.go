@@ -84,11 +84,12 @@ func spec(args []string, dir string, w io.Writer) error {
 	fs := flag.NewFlagSet("spec", flag.ContinueOnError)
 	verbose := fs.Bool("v", false, "list every operation and how much of its answer is typed")
 	trace := fs.String("trace", "", "print what the scan works out for the handlers named, such as LibraryController.stats")
+	client := fs.String("client", "sdk/abs-byhand", "the hand-written client, whose types fill what the source leaves untyped; empty for none")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return errors.New("usage: go run ./sdk/pandorest spec [-v] <audiobookshelf checkout>")
+		return errors.New("usage: go run ./sdk/pandorest spec [-v] [-client dir] <audiobookshelf checkout>")
 	}
 
 	root, err := checkout(fs.Arg(0))
@@ -106,9 +107,20 @@ func spec(args []string, dir string, w io.Writer) error {
 		return err
 	}
 
-	doc, rep := build(prog, version, *trace, w)
+	doc, b, routes := build(prog, version, *trace, w)
 
-	b, err := json.MarshalIndent(doc, "", "  ")
+	// what the source leaves untyped, the hand-written client may type: it is proved against a running server
+	var hand *byhand
+	if *client != "" {
+		if hand, err = readClient(os.DirFS(*client), "."); err != nil {
+			return fmt.Errorf("reading the hand-written client: %w", err)
+		}
+		hand.fill(doc)
+	}
+
+	rep := measure(doc, b, routes)
+
+	js, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -118,11 +130,14 @@ func spec(args []string, dir string, w io.Writer) error {
 	}
 
 	out := filepath.Join(dir, "audiobookshelf-openapi-"+version+".json")
-	if err := os.WriteFile(out, append(b, '\n'), 0o600); err != nil {
+	if err := os.WriteFile(out, append(js, '\n'), 0o600); err != nil {
 		return err
 	}
 
 	rep.write(w, version, *verbose)
+	if hand != nil {
+		hand.write(w, *client, *verbose)
+	}
 	_, _ = fmt.Fprintln(w, "wrote", out)
 
 	return nil
@@ -151,12 +166,11 @@ type builder struct {
 }
 
 // build scans every route and makes the document from what it finds.
-func build(prog *program, version, trace string, w io.Writer) (*document, *report) {
+func build(prog *program, version, trace string, w io.Writer) (doc *document, b *builder, routes int) {
 	e := newEvaluator(prog, readModels(prog))
-	b := &builder{e: e, schemas: map[string]*schema{}, building: map[string]bool{}}
-	rep := &report{}
+	b = &builder{e: e, schemas: map[string]*schema{}, building: map[string]bool{}}
 
-	doc := &document{
+	doc = &document{
 		OpenAPI: "3.0.3",
 		Info: info{
 			Title:       "Audiobookshelf API",
@@ -168,9 +182,8 @@ func build(prog *program, version, trace string, w io.Writer) (*document, *repor
 		Components: components{Schemas: b.schemas, SecuritySchemes: map[string]securityScheme{"bearer": {Type: "http", Scheme: "bearer"}}},
 	}
 
-	routes := readRoutes(e)
 	ids := map[string]int{}
-	for _, r := range routes {
+	for _, r := range readRoutes(e) {
 		ans, req := e.analyze(r)
 		if trace != "" && slices.Contains(strings.Split(trace, ","), r.handler) {
 			for _, n := range ans.statuses() {
@@ -179,7 +192,7 @@ func build(prog *program, version, trace string, w io.Writer) (*document, *repor
 				}
 			}
 		}
-		rep.routes++
+		routes++
 
 		for _, v := range variants(r.path) {
 			p, params := openAPIPath(v)
@@ -190,13 +203,23 @@ func build(prog *program, version, trace string, w io.Writer) (*document, *repor
 				doc.Paths[p] = map[string]*operation{}
 			}
 			doc.Paths[p][r.verb] = op
-			rep.add(r, v, op, b)
 		}
 	}
 
+	return doc, b, routes
+}
+
+// measure is how much of a document is typed, once the hand-written client has filled what it can.
+func measure(doc *document, b *builder, routes int) *report {
+	rep := &report{routes: routes}
+	for _, p := range sortedKeys(doc.Paths) {
+		for _, verb := range sortedKeys(doc.Paths[p]) {
+			rep.add(verb, p, doc.Paths[p][verb], b)
+		}
+	}
 	rep.schemas(b)
 
-	return doc, rep
+	return rep
 }
 
 // operation is one route as OpenAPI writes it.
@@ -439,7 +462,7 @@ type report struct {
 	lines                                []string
 }
 
-func (r *report) add(rt *route, p string, op *operation, b *builder) {
+func (r *report) add(verb, p string, op *operation, b *builder) {
 	r.ops++
 	r.query += len(slices.DeleteFunc(slices.Clone(op.Parameters), func(p parameter) bool { return p.In != "query" }))
 	if op.RequestBody != nil {
@@ -486,7 +509,7 @@ func (r *report) add(rt *route, p string, op *operation, b *builder) {
 		break
 	}
 
-	r.lines = append(r.lines, fmt.Sprintf("  %-6s %-60s %-55s %s", strings.ToUpper(rt.verb), p, rt.handler, state))
+	r.lines = append(r.lines, fmt.Sprintf("  %-6s %-60s %-55s %s", strings.ToUpper(verb), p, op.Handler, state))
 }
 
 // count is how many values a schema holds and how many of them have no type, following references once.

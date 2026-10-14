@@ -1,0 +1,968 @@
+{
+  "Name": "Notification",
+  "Tag": "Notification",
+  "Operations": [
+    {
+      "Name": "NotificationCreateNotification",
+      "OperationId": "NotificationCreateNotification",
+      "Method": "POST",
+      "Path": "/api/notifications",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "NotificationCreateNotificationRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "NotificationSettings"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "NotificationDeleteNotification",
+      "OperationId": "NotificationDeleteNotification",
+      "Method": "DELETE",
+      "Path": "/api/notifications/{id}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "NotificationSettings"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "NotificationFireTestEvent",
+      "OperationId": "NotificationFireTestEvent",
+      "Method": "GET",
+      "Path": "/api/notifications/test",
+      "Options": [
+        {
+          "Name": "fail",
+          "Field": "Fail",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "NotificationGet",
+      "OperationId": "NotificationGet",
+      "Method": "GET",
+      "Path": "/api/notifications",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "NotificationGetAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "NotificationGetData",
+      "OperationId": "NotificationGetData",
+      "Method": "GET",
+      "Path": "/api/notificationdata",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "NotificationGetDataAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "NotificationSendNotificationTest",
+      "OperationId": "NotificationSendNotificationTest",
+      "Method": "GET",
+      "Path": "/api/notifications/{id}/test",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "NotificationUpdate",
+      "OperationId": "NotificationUpdate",
+      "Method": "PATCH",
+      "Path": "/api/notifications",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "NotificationUpdateRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "NotificationUpdateNotification",
+      "OperationId": "NotificationUpdateNotification",
+      "Method": "PATCH",
+      "Path": "/api/notifications/{id}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "NotificationUpdateNotificationRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "NotificationSettings"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    }
+  ],
+  "Models": [
+    {
+      "Name": "Notification",
+      "SchemaName": "Notification",
+      "Fields": [
+        {
+          "Name": "BodyTemplate",
+          "JsonName": "bodyTemplate",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "CreatedAt",
+          "JsonName": "createdAt",
+          "Type": {
+            "Type": "UnixMillis"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Enabled",
+          "JsonName": "enabled",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "EventName",
+          "JsonName": "eventName",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "LastAttemptFailed",
+          "JsonName": "lastAttemptFailed",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "LastFiredAt",
+          "JsonName": "lastFiredAt",
+          "Type": {
+            "Type": "Integer"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "LibraryId",
+          "JsonName": "libraryId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryID"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "NumConsecutiveFailedAttempts",
+          "JsonName": "numConsecutiveFailedAttempts",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "NumTimesFired",
+          "JsonName": "numTimesFired",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "TitleTemplate",
+          "JsonName": "titleTemplate",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Type",
+          "JsonName": "type",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Urls",
+          "JsonName": "urls",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "NotificationCreateNotificationRequest",
+      "Fields": [
+        {
+          "Name": "EventName",
+          "JsonName": "eventName",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Urls",
+          "JsonName": "urls",
+          "Type": {
+            "Type": "Any"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "NotificationGetAnswer",
+      "Fields": [
+        {
+          "Name": "Data",
+          "JsonName": "data",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "NotificationGetAnswerData"
+          }
+        },
+        {
+          "Name": "Settings",
+          "JsonName": "settings",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "NotificationSettings"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "NotificationGetAnswerData",
+      "Fields": [
+        {
+          "Name": "Events",
+          "JsonName": "events",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "NotificationGetAnswerDataEvents"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "NotificationGetAnswerDataEvents",
+      "Fields": [
+        {
+          "Name": "Defaults",
+          "JsonName": "defaults",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "NotificationGetAnswerDataEventsDefaults"
+          }
+        },
+        {
+          "Name": "Description",
+          "JsonName": "description",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DescriptionKey",
+          "JsonName": "descriptionKey",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "LibraryMediaType",
+          "JsonName": "libraryMediaType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "RequiresLibrary",
+          "JsonName": "requiresLibrary",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "TestData",
+          "JsonName": "testData",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "NotificationGetAnswerDataEventsTestData"
+          }
+        },
+        {
+          "Name": "Variables",
+          "JsonName": "variables",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "NotificationGetAnswerDataEventsDefaults",
+      "Fields": [
+        {
+          "Name": "Body",
+          "JsonName": "body",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "NotificationGetAnswerDataEventsTestData",
+      "Fields": [
+        {
+          "Name": "BackupCount",
+          "JsonName": "backupCount",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "BackupPath",
+          "JsonName": "backupPath",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "BackupSize",
+          "JsonName": "backupSize",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "CompletionTime",
+          "JsonName": "completionTime",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "EpisodeDescription",
+          "JsonName": "episodeDescription",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "EpisodeId",
+          "JsonName": "episodeId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "EpisodeID"
+          }
+        },
+        {
+          "Name": "EpisodeSubtitle",
+          "JsonName": "episodeSubtitle",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "EpisodeTitle",
+          "JsonName": "episodeTitle",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ErrorMsg",
+          "JsonName": "errorMsg",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "FeedUrl",
+          "JsonName": "feedUrl",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "LibraryId",
+          "JsonName": "libraryId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryID"
+          }
+        },
+        {
+          "Name": "LibraryItemId",
+          "JsonName": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        },
+        {
+          "Name": "LibraryName",
+          "JsonName": "libraryName",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "MediaTags",
+          "JsonName": "mediaTags",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "NumFailed",
+          "JsonName": "numFailed",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "PodcastAuthor",
+          "JsonName": "podcastAuthor",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "PodcastDescription",
+          "JsonName": "podcastDescription",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "PodcastGenres",
+          "JsonName": "podcastGenres",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "PodcastTitle",
+          "JsonName": "podcastTitle",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "RemovedOldest",
+          "JsonName": "removedOldest",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Version",
+          "JsonName": "version",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "NotificationGetDataAnswer",
+      "Fields": [
+        {
+          "Name": "Events",
+          "JsonName": "events",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "NotificationGetDataAnswerEvents"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "NotificationGetDataAnswerEvents",
+      "Fields": [
+        {
+          "Name": "Defaults",
+          "JsonName": "defaults",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "NotificationGetDataAnswerEventsDefaults"
+          }
+        },
+        {
+          "Name": "Description",
+          "JsonName": "description",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DescriptionKey",
+          "JsonName": "descriptionKey",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "LibraryMediaType",
+          "JsonName": "libraryMediaType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "RequiresLibrary",
+          "JsonName": "requiresLibrary",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "TestData",
+          "JsonName": "testData",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "NotificationGetDataAnswerEventsTestData"
+          }
+        },
+        {
+          "Name": "Variables",
+          "JsonName": "variables",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "NotificationGetDataAnswerEventsDefaults",
+      "Fields": [
+        {
+          "Name": "Body",
+          "JsonName": "body",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "NotificationGetDataAnswerEventsTestData",
+      "Fields": [
+        {
+          "Name": "BackupCount",
+          "JsonName": "backupCount",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "BackupPath",
+          "JsonName": "backupPath",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "BackupSize",
+          "JsonName": "backupSize",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "CompletionTime",
+          "JsonName": "completionTime",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "EpisodeDescription",
+          "JsonName": "episodeDescription",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "EpisodeId",
+          "JsonName": "episodeId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "EpisodeID"
+          }
+        },
+        {
+          "Name": "EpisodeSubtitle",
+          "JsonName": "episodeSubtitle",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "EpisodeTitle",
+          "JsonName": "episodeTitle",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ErrorMsg",
+          "JsonName": "errorMsg",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "FeedUrl",
+          "JsonName": "feedUrl",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "LibraryId",
+          "JsonName": "libraryId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryID"
+          }
+        },
+        {
+          "Name": "LibraryItemId",
+          "JsonName": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        },
+        {
+          "Name": "LibraryName",
+          "JsonName": "libraryName",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "MediaTags",
+          "JsonName": "mediaTags",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "NumFailed",
+          "JsonName": "numFailed",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "PodcastAuthor",
+          "JsonName": "podcastAuthor",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "PodcastDescription",
+          "JsonName": "podcastDescription",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "PodcastGenres",
+          "JsonName": "podcastGenres",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "PodcastTitle",
+          "JsonName": "podcastTitle",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "RemovedOldest",
+          "JsonName": "removedOldest",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Version",
+          "JsonName": "version",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "NotificationSettings",
+      "SchemaName": "NotificationSettings",
+      "Fields": [
+        {
+          "Name": "AppriseApiUrl",
+          "JsonName": "appriseApiUrl",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "AppriseType",
+          "JsonName": "appriseType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "MaxFailedAttempts",
+          "JsonName": "maxFailedAttempts",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "MaxNotificationQueue",
+          "JsonName": "maxNotificationQueue",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "NotificationDelay",
+          "JsonName": "notificationDelay",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Notifications",
+          "JsonName": "notifications",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "Notification"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "NotificationUpdateNotificationRequest",
+      "Fields": [
+        {
+          "Name": "Enabled",
+          "JsonName": "enabled",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "Any"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "NotificationUpdateRequest",
+      "Fields": [
+        {
+          "Name": "AppriseApiUrl",
+          "JsonName": "appriseApiUrl",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "MaxFailedAttempts",
+          "JsonName": "maxFailedAttempts",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "MaxNotificationQueue",
+          "JsonName": "maxNotificationQueue",
+          "Type": {
+            "Type": "Any"
+          }
+        }
+      ]
+    }
+  ]
+}

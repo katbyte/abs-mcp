@@ -3,7 +3,7 @@ package tools
 import (
 	"testing"
 
-	"github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
 )
 
 func TestFieldDiffs(t *testing.T) {

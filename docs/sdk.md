@@ -1,9 +1,11 @@
 # Using the Go client on its own
 
-`sdk/abs` is a plain Go client for the Audiobookshelf API. It knows nothing about MCP. If you only want to talk to Audiobookshelf from Go, take it and ignore the rest.
+`sdk/abs-byhand` is a plain Go client for the Audiobookshelf API, written by hand. It knows nothing about MCP. If you only want to talk to Audiobookshelf from Go, take it and ignore the rest.
+
+`sdk/abs` is to be the client generated from the API document below, and will take its place.
 
 ```go
-import "github.com/katbyte/abs-mcp/sdk/abs"
+import "github.com/katbyte/abs-mcp/sdk/abs-byhand"
 
 client, err := abs.New("http://nas:13378", os.Getenv("ABS_TOKEN"))
 items, err := client.Items(ctx, libraryID, abs.ItemsOptions{Limit: 50})
@@ -38,6 +40,6 @@ Audiobookshelf's own OpenAPI file covers under a quarter of its routes and stopp
 make spec SOURCE=../audiobookshelf   # a checkout of the release to read
 ```
 
-It covers every route. Where an answer comes from a stored JSON column or an object the code fills in later, the source does not say its shape, and the document leaves that value untyped. The command reports how many answers it typed in full.
+It covers every route. Where an answer comes from a stored JSON column or an object the code fills in later, the source does not say its shape. The hand-written client's types fill those in, and `make spec` lists every place the two disagree. What neither says is left untyped. The command reports how many answers it typed in full.
 
-It is the first step towards generating this client with [pandorest](https://github.com/katbyte/pandorest), as the other katbyte clients are.
+It is the first step towards generating this client with [pandorest](https://github.com/katbyte/pandorest), as the other katbyte clients are. `make pandorest-import` reads it into pandorest's definitions under `api-defs/audiobookshelf-<version>/`, with each kind of id a type of its own and the times read as the dates they are. No client is generated from them yet.

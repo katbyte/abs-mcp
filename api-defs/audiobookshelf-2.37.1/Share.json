@@ -1,0 +1,334 @@
+{
+  "Name": "Share",
+  "Tag": "Share",
+  "Operations": [
+    {
+      "Name": "ShareCreateMediaItemShare",
+      "OperationId": "ShareCreateMediaItemShare",
+      "Method": "POST",
+      "Path": "/api/share/mediaitem",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "ShareCreateMediaItemShareRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MediaItemShareForClient"
+        }
+      },
+      "ExpectedStatusCodes": [
+        201
+      ]
+    },
+    {
+      "Name": "ShareDeleteMediaItemShare",
+      "OperationId": "ShareDeleteMediaItemShare",
+      "Method": "DELETE",
+      "Path": "/api/share/mediaitem/{id}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        204
+      ]
+    },
+    {
+      "Name": "ShareDownloadMediaItemShare",
+      "OperationId": "ShareDownloadMediaItemShare",
+      "Method": "GET",
+      "Path": "/public/share/{slug}/download",
+      "PathParameters": [
+        {
+          "Name": "slug",
+          "Argument": "slug",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/octet-stream",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "ShareGetMediaItemShareAudioTrack",
+      "OperationId": "ShareGetMediaItemShareAudioTrack",
+      "Method": "GET",
+      "Path": "/public/share/{slug}/track/{index}",
+      "PathParameters": [
+        {
+          "Name": "slug",
+          "Argument": "slug",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "index",
+          "Argument": "index",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/octet-stream",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200,
+        204
+      ]
+    },
+    {
+      "Name": "ShareGetMediaItemShareBySlug",
+      "OperationId": "ShareGetMediaItemShareBySlug",
+      "Method": "GET",
+      "Path": "/public/share/{slug}",
+      "PathParameters": [
+        {
+          "Name": "slug",
+          "Argument": "slug",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Options": [
+        {
+          "Name": "t",
+          "Field": "T",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "ShareGetMediaItemShareBySlugAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "ShareGetMediaItemShareCoverImage",
+      "OperationId": "ShareGetMediaItemShareCoverImage",
+      "Method": "GET",
+      "Path": "/public/share/{slug}/cover",
+      "PathParameters": [
+        {
+          "Name": "slug",
+          "Argument": "slug",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/octet-stream",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200,
+        204
+      ]
+    },
+    {
+      "Name": "ShareUpdateMediaItemShareProgress",
+      "OperationId": "ShareUpdateMediaItemShareProgress",
+      "Method": "PATCH",
+      "Path": "/public/share/{slug}/progress",
+      "PathParameters": [
+        {
+          "Name": "slug",
+          "Argument": "slug",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "ShareUpdateMediaItemShareProgressRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        204
+      ]
+    }
+  ],
+  "Models": [
+    {
+      "Name": "MediaItemShareForClient",
+      "SchemaName": "MediaItemShareForClient",
+      "Fields": [
+        {
+          "Name": "CreatedAt",
+          "JsonName": "createdAt",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ExpiresAt",
+          "JsonName": "expiresAt",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "IsDownloadable",
+          "JsonName": "isDownloadable",
+          "Type": {
+            "Type": "Boolean"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "MediaItemId",
+          "JsonName": "mediaItemId",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "MediaItemType",
+          "JsonName": "mediaItemType",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Slug",
+          "JsonName": "slug",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "UpdatedAt",
+          "JsonName": "updatedAt",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "ShareCreateMediaItemShareRequest",
+      "Fields": [
+        {
+          "Name": "ExpiresAt",
+          "JsonName": "expiresAt",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "IsDownloadable",
+          "JsonName": "isDownloadable",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "MediaItemId",
+          "JsonName": "mediaItemId",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "MediaItemType",
+          "JsonName": "mediaItemType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Slug",
+          "JsonName": "slug",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "ShareGetMediaItemShareBySlugAnswer",
+      "Fields": [
+        {
+          "Name": "PlaybackSession",
+          "JsonName": "playbackSession",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "PlaybackSessionForClient"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "ShareUpdateMediaItemShareProgressRequest",
+      "Fields": [
+        {
+          "Name": "CurrentTime",
+          "JsonName": "currentTime",
+          "Type": {
+            "Type": "Any"
+          }
+        }
+      ]
+    }
+  ]
+}

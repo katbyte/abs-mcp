@@ -2,7 +2,7 @@
 
 // The server-administration surface: notifications, email, API keys, custom
 // providers, settings, sharing, sessions and the filesystem browser. None of
-// this is wrapped as an MCP tool, but sdk/abs is a general Audiobookshelf
+// this is wrapped as an MCP tool, but sdk/abs-byhand is a general Audiobookshelf
 // client, so it is covered here like everything else.
 package abs_test
 
@@ -18,7 +18,7 @@ import (
 
 	"github.com/katbyte/go-kt/chttp"
 
-	"github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
 )
 
 func TestNotifications(t *testing.T) {

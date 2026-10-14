@@ -1,0 +1,154 @@
+{
+  "Name": "Tools",
+  "Tag": "Tools",
+  "Operations": [
+    {
+      "Name": "ToolsBatchEmbedMetadata",
+      "OperationId": "ToolsBatchEmbedMetadata",
+      "Method": "POST",
+      "Path": "/api/tools/batch/embed-metadata",
+      "Options": [
+        {
+          "Name": "backup",
+          "Field": "Backup",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "forceEmbedChapters",
+          "Field": "ForceEmbedChapters",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "ToolsBatchEmbedMetadataRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "ToolsCancelM4bEncode",
+      "OperationId": "ToolsCancelM4bEncode",
+      "Method": "DELETE",
+      "Path": "/api/tools/item/{id}/encode-m4b",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "ToolsEmbedAudioFileMetadata",
+      "OperationId": "ToolsEmbedAudioFileMetadata",
+      "Method": "POST",
+      "Path": "/api/tools/item/{id}/embed-metadata",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Options": [
+        {
+          "Name": "backup",
+          "Field": "Backup",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "forceEmbedChapters",
+          "Field": "ForceEmbedChapters",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "ToolsEncodeM4b",
+      "OperationId": "ToolsEncodeM4b",
+      "Method": "POST",
+      "Path": "/api/tools/item/{id}/encode-m4b",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    }
+  ],
+  "Models": [
+    {
+      "Name": "ToolsBatchEmbedMetadataRequest",
+      "Fields": [
+        {
+          "Name": "LibraryItemIds",
+          "JsonName": "libraryItemIds",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "ID",
+              "ReferenceName": "LibraryItemID"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

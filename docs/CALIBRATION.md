@@ -23,12 +23,12 @@ Everything in the corpus is in the public domain.
 - **The texts.** Carroll died in 1898 and Stevenson in 1894. Both books are out of copyright in every country.
 - **The recordings.** LibriVox accepts only recordings its volunteers release into the public domain; that is the project's founding rule, stated at <https://librivox.org/pages/public-domain/>. Each recording's page on archive.org carries the dedication in its metadata, as the Creative Commons public-domain dedication or the Public Domain Mark. LibriVox adds that its recordings are public domain in the USA and that listeners elsewhere should check their own country; for texts this old there is nothing to check.
 
-The repo holds none of the audio. `.scripts/calibration-fetch.py` holds the LibriVox ids and fetches the files into a cache outside the repo, by default `~/.cache/abs-mcp/calibration`, and writes a manifest there naming every reader against their chapters. Nothing is copied into the repo or redistributed.
+The repo holds none of the audio. `lib/audiosample/calibration` holds the LibriVox ids and fetches the files into a cache outside the repo, by default `~/.cache/abs-mcp/calibration`, and writes a manifest there naming every reader against their chapters. Nothing is copied into the repo or redistributed.
 
 ## Running it
 
 ```bash
-.scripts/calibration-fetch.py            # about 925 MB, once; run again if archive.org drops a file
+go run ./lib/audiosample/calibration     # about 925 MB, once; run again if archive.org drops a file
 ABS_CALIBRATION_DIR=~/.cache/abs-mcp/calibration go test -tags calibration -run Calibration -v -timeout 2h ./tools/
 ```
 

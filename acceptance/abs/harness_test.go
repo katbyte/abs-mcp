@@ -7,7 +7,7 @@
 // assertions about projection, name resolution or worklists - those are the
 // tool layer's job and are covered in ../tools.
 //
-// The split matters because sdk/abs is typed against an API with no OpenAPI
+// The split matters because sdk/abs-byhand is typed against an API with no OpenAPI
 // spec and no versioning (the published docs say outright that they are
 // unmaintained), so this is the layer that notices when the server changes
 // shape underneath us. Every bug found in the first pass of these suites was
@@ -27,7 +27,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
 	"github.com/katbyte/go-kt/test/env"
 	"github.com/katbyte/go-kt/test/replayproxy"
 )

@@ -1,6 +1,6 @@
 //go:build calibration
 
-// The by-ear check against real speech. .scripts/calibration-fetch.py fetches
+// The by-ear check against real speech. go run ./lib/audiosample/calibration fetches
 // LibriVox's readings of Alice's Adventures in Wonderland - six complete solo
 // readings, two abridged, a full cast, a group reading, and one of the solo
 // readers on Treasure Island - into ABS_CALIBRATION_DIR. This makes copies
@@ -14,7 +14,7 @@
 // of each kind are reported so the thresholds in compare_audio.go can be
 // read off them with a margin, and checked whenever the method changes.
 //
-//	.scripts/calibration-fetch.py
+//	go run ./lib/audiosample/calibration
 //	ABS_CALIBRATION_DIR=~/.cache/abs-mcp/calibration go test -tags calibration -run Calibration -v -timeout 2h ./tools/
 //
 // ABS_CALIBRATION_POINTS, _STRETCH, _REACH and _SPEED try another
@@ -104,7 +104,7 @@ const calHour = 3600.0
 func TestCalibration(t *testing.T) {
 	dir := os.Getenv("ABS_CALIBRATION_DIR")
 	if dir == "" {
-		t.Skip("ABS_CALIBRATION_DIR is not set: run .scripts/calibration-fetch.py and point it at the corpus")
+		t.Skip("ABS_CALIBRATION_DIR is not set: fetch the corpus with go run ./lib/audiosample/calibration and point it there")
 	}
 	for _, bin := range []string{"ffmpeg", "ffprobe"} {
 		if _, err := exec.LookPath(bin); err != nil {
@@ -148,7 +148,7 @@ func TestCalibration(t *testing.T) {
 		for _, f := range r.Files {
 			if _, err := os.Stat(filepath.Join(dir, r.Folder, f.Name)); err != nil {
 				if os.Getenv("ABS_CALIBRATION_PARTIAL") == "" {
-					t.Fatalf("%s is missing %s: run .scripts/calibration-fetch.py again, or set ABS_CALIBRATION_PARTIAL=1 to leave the recording out", r.Title, f.Name)
+					t.Fatalf("%s is missing %s: fetch it with go run ./lib/audiosample/calibration, or set ABS_CALIBRATION_PARTIAL=1 to leave the recording out", r.Title, f.Name)
 				}
 				t.Logf("left out: %s (%s) is missing %s", r.Title, r.reader(), f.Name)
 				return true

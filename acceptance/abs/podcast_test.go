@@ -5,7 +5,7 @@ package abs_test
 import (
 	"testing"
 
-	"github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
 )
 
 // The episode endpoints have no book equivalent: a podcast is one item whose

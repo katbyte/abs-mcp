@@ -1,0 +1,1407 @@
+{
+  "Name": "Misc",
+  "Tag": "Misc",
+  "Operations": [
+    {
+      "Name": "MiscAuthorize",
+      "OperationId": "MiscAuthorize",
+      "Method": "POST",
+      "Path": "/api/authorize",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MiscAuthorizeAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MiscDeleteGenre",
+      "OperationId": "MiscDeleteGenre",
+      "Method": "DELETE",
+      "Path": "/api/genres/{genre}",
+      "PathParameters": [
+        {
+          "Name": "genre",
+          "Argument": "genre",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MiscDeleteGenreAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MiscDeleteTag",
+      "OperationId": "MiscDeleteTag",
+      "Method": "DELETE",
+      "Path": "/api/tags/{tag}",
+      "PathParameters": [
+        {
+          "Name": "tag",
+          "Argument": "tag",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MiscDeleteTagAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MiscGetAllGenres",
+      "OperationId": "MiscGetAllGenres",
+      "Method": "GET",
+      "Path": "/api/genres",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MiscGetAllGenresAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MiscGetAllTags",
+      "OperationId": "MiscGetAllTags",
+      "Method": "GET",
+      "Path": "/api/tags",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MiscGetAllTagsAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MiscGetAuthSettings",
+      "OperationId": "MiscGetAuthSettings",
+      "Method": "GET",
+      "Path": "/api/auth-settings",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MiscGetAuthSettingsAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MiscGetLoggerData",
+      "OperationId": "MiscGetLoggerData",
+      "Method": "GET",
+      "Path": "/api/logger-data",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MiscGetLoggerDataAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MiscGetTasks",
+      "OperationId": "MiscGetTasks",
+      "Method": "GET",
+      "Path": "/api/tasks",
+      "Options": [
+        {
+          "Name": "include",
+          "Field": "Include",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MiscGetTasksAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MiscHandleUpload",
+      "OperationId": "MiscHandleUpload",
+      "Method": "POST",
+      "Path": "/api/upload",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MiscHandleUploadRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MiscRenameGenre",
+      "OperationId": "MiscRenameGenre",
+      "Method": "POST",
+      "Path": "/api/genres/rename",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MiscRenameGenreRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MiscRenameGenreAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MiscRenameTag",
+      "OperationId": "MiscRenameTag",
+      "Method": "POST",
+      "Path": "/api/tags/rename",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MiscRenameTagRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MiscRenameTagAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MiscUpdateAuthSettings",
+      "OperationId": "MiscUpdateAuthSettings",
+      "Method": "PATCH",
+      "Path": "/api/auth-settings",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MiscUpdateAuthSettingsAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MiscUpdateServerSettings",
+      "OperationId": "MiscUpdateServerSettings",
+      "Method": "PATCH",
+      "Path": "/api/settings",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MiscUpdateServerSettingsAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MiscUpdateSortingPrefixes",
+      "OperationId": "MiscUpdateSortingPrefixes",
+      "Method": "PATCH",
+      "Path": "/api/sorting-prefixes",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MiscUpdateSortingPrefixesRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MiscUpdateSortingPrefixesAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MiscUpdateWatchedPath",
+      "OperationId": "MiscUpdateWatchedPath",
+      "Method": "POST",
+      "Path": "/api/watcher/update",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MiscUpdateWatchedPathRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "MiscValidateCronExpression",
+      "OperationId": "MiscValidateCronExpression",
+      "Method": "POST",
+      "Path": "/api/validate-cron",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MiscValidateCronExpressionRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    }
+  ],
+  "Models": [
+    {
+      "Name": "MiscAuthorizeAnswer",
+      "Fields": [
+        {
+          "Name": "Source",
+          "JsonName": "Source",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "EreaderDevices",
+          "JsonName": "ereaderDevices",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "MiscAuthorizeAnswerEreaderDevices"
+            }
+          }
+        },
+        {
+          "Name": "ServerSettings",
+          "JsonName": "serverSettings",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "ServerSettings"
+          }
+        },
+        {
+          "Name": "User",
+          "JsonName": "user",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "UserForBrowser"
+          }
+        },
+        {
+          "Name": "UserDefaultLibraryId",
+          "JsonName": "userDefaultLibraryId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryID"
+          },
+          "Nullable": true
+        }
+      ]
+    },
+    {
+      "Name": "MiscAuthorizeAnswerEreaderDevices",
+      "Fields": [
+        {
+          "Name": "AvailabilityOption",
+          "JsonName": "availabilityOption",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Email",
+          "JsonName": "email",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Users",
+          "JsonName": "users",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscDeleteGenreAnswer",
+      "Fields": [
+        {
+          "Name": "NumItemsUpdated",
+          "JsonName": "numItemsUpdated",
+          "Type": {
+            "Type": "Integer"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscDeleteTagAnswer",
+      "Fields": [
+        {
+          "Name": "NumItemsUpdated",
+          "JsonName": "numItemsUpdated",
+          "Type": {
+            "Type": "Integer"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetAllGenresAnswer",
+      "Fields": [
+        {
+          "Name": "Genres",
+          "JsonName": "genres",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetAllTagsAnswer",
+      "Fields": [
+        {
+          "Name": "Tags",
+          "JsonName": "tags",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetAuthSettingsAnswer",
+      "Fields": [
+        {
+          "Name": "AuthActiveAuthMethods",
+          "JsonName": "authActiveAuthMethods",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "AuthLoginCustomMessage",
+          "JsonName": "authLoginCustomMessage",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "AuthOpenIDAdvancedPermsClaim",
+          "JsonName": "authOpenIDAdvancedPermsClaim",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "AuthOpenIDAuthorizationURL",
+          "JsonName": "authOpenIDAuthorizationURL",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "AuthOpenIDAutoLaunch",
+          "JsonName": "authOpenIDAutoLaunch",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "AuthOpenIDAutoRegister",
+          "JsonName": "authOpenIDAutoRegister",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "AuthOpenIDButtonText",
+          "JsonName": "authOpenIDButtonText",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "AuthOpenIDClientID",
+          "JsonName": "authOpenIDClientID",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "AuthOpenIDClientSecret",
+          "JsonName": "authOpenIDClientSecret",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "AuthOpenIDGroupClaim",
+          "JsonName": "authOpenIDGroupClaim",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "AuthOpenIDIssuerURL",
+          "JsonName": "authOpenIDIssuerURL",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "AuthOpenIDJwksURL",
+          "JsonName": "authOpenIDJwksURL",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "AuthOpenIDLogoutURL",
+          "JsonName": "authOpenIDLogoutURL",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "AuthOpenIDMatchExistingBy",
+          "JsonName": "authOpenIDMatchExistingBy",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "AuthOpenIDMobileRedirectURIs",
+          "JsonName": "authOpenIDMobileRedirectURIs",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "AuthOpenIDSamplePermissions",
+          "JsonName": "authOpenIDSamplePermissions",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "AuthOpenIDSubfolderForRedirectURLs",
+          "JsonName": "authOpenIDSubfolderForRedirectURLs",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "AuthOpenIDTokenSigningAlgorithm",
+          "JsonName": "authOpenIDTokenSigningAlgorithm",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "AuthOpenIDTokenURL",
+          "JsonName": "authOpenIDTokenURL",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "AuthOpenIDUserInfoURL",
+          "JsonName": "authOpenIDUserInfoURL",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetLoggerDataAnswer",
+      "Fields": [
+        {
+          "Name": "CurrentDailyLogs",
+          "JsonName": "currentDailyLogs",
+          "Type": {
+            "Type": "Any"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswer",
+      "Fields": [
+        {
+          "Name": "QueuedTaskData",
+          "JsonName": "queuedTaskData",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerQueuedTaskData"
+          }
+        },
+        {
+          "Name": "Tasks",
+          "JsonName": "tasks",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "MiscGetTasksAnswerTasks"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerQueuedTaskData",
+      "Fields": [
+        {
+          "Name": "EmbedMetadata",
+          "JsonName": "embedMetadata",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "MiscGetTasksAnswerQueuedTaskDataEmbedMetadata"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerQueuedTaskDataEmbedMetadata",
+      "Fields": [
+        {
+          "Name": "LibraryItemId",
+          "JsonName": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasks",
+      "Fields": [
+        {
+          "Name": "Action",
+          "JsonName": "action",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Data",
+          "JsonName": "data",
+          "Type": {
+            "Type": "Dictionary",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "Description",
+          "JsonName": "description",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Error",
+          "JsonName": "error",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "FinishedAt",
+          "JsonName": "finishedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "IsFailed",
+          "JsonName": "isFailed",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "IsFinished",
+          "JsonName": "isFinished",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "ShowSuccess",
+          "JsonName": "showSuccess",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "StartedAt",
+          "JsonName": "startedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscHandleUploadRequest",
+      "Fields": [
+        {
+          "Name": "Author",
+          "JsonName": "author",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Folder",
+          "JsonName": "folder",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Library",
+          "JsonName": "library",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Series",
+          "JsonName": "series",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "Any"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscRenameGenreAnswer",
+      "Fields": [
+        {
+          "Name": "GenreMerged",
+          "JsonName": "genreMerged",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "NumItemsUpdated",
+          "JsonName": "numItemsUpdated",
+          "Type": {
+            "Type": "Integer"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscRenameGenreRequest",
+      "Fields": [
+        {
+          "Name": "Genre",
+          "JsonName": "genre",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "NewGenre",
+          "JsonName": "newGenre",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscRenameTagAnswer",
+      "Fields": [
+        {
+          "Name": "NumItemsUpdated",
+          "JsonName": "numItemsUpdated",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "TagMerged",
+          "JsonName": "tagMerged",
+          "Type": {
+            "Type": "Boolean"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscRenameTagRequest",
+      "Fields": [
+        {
+          "Name": "NewTag",
+          "JsonName": "newTag",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Tag",
+          "JsonName": "tag",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscUpdateAuthSettingsAnswer",
+      "Fields": [
+        {
+          "Name": "ServerSettings",
+          "JsonName": "serverSettings",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "ServerSettings"
+          }
+        },
+        {
+          "Name": "Updated",
+          "JsonName": "updated",
+          "Type": {
+            "Type": "Boolean"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscUpdateServerSettingsAnswer",
+      "Fields": [
+        {
+          "Name": "ServerSettings",
+          "JsonName": "serverSettings",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "ServerSettings"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscUpdateSortingPrefixesAnswer",
+      "Fields": [
+        {
+          "Name": "RowsUpdated",
+          "JsonName": "rowsUpdated",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "ServerSettings",
+          "JsonName": "serverSettings",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "ServerSettings"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscUpdateSortingPrefixesRequest",
+      "Fields": [
+        {
+          "Name": "SortingPrefixes",
+          "JsonName": "sortingPrefixes",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscUpdateWatchedPathRequest",
+      "Fields": [
+        {
+          "Name": "LibraryId",
+          "JsonName": "libraryId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryID"
+          }
+        },
+        {
+          "Name": "OldPath",
+          "JsonName": "oldPath",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Path",
+          "JsonName": "path",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Type",
+          "JsonName": "type",
+          "Type": {
+            "Type": "Any"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscValidateCronExpressionRequest",
+      "Fields": [
+        {
+          "Name": "Expression",
+          "JsonName": "expression",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "ServerSettings",
+      "SchemaName": "ServerSettings",
+      "Fields": [
+        {
+          "Name": "AllowIframe",
+          "JsonName": "allowIframe",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "AllowedOrigins",
+          "JsonName": "allowedOrigins",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "AuthActiveAuthMethods",
+          "JsonName": "authActiveAuthMethods",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "AuthLoginCustomMessage",
+          "JsonName": "authLoginCustomMessage",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "AuthOpenIDAdvancedPermsClaim",
+          "JsonName": "authOpenIDAdvancedPermsClaim",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "AuthOpenIDAuthorizationURL",
+          "JsonName": "authOpenIDAuthorizationURL",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "AuthOpenIDAutoLaunch",
+          "JsonName": "authOpenIDAutoLaunch",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "AuthOpenIDAutoRegister",
+          "JsonName": "authOpenIDAutoRegister",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "AuthOpenIDButtonText",
+          "JsonName": "authOpenIDButtonText",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "AuthOpenIDClientID",
+          "JsonName": "authOpenIDClientID",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "AuthOpenIDClientSecret",
+          "JsonName": "authOpenIDClientSecret",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "AuthOpenIDGroupClaim",
+          "JsonName": "authOpenIDGroupClaim",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "AuthOpenIDIssuerURL",
+          "JsonName": "authOpenIDIssuerURL",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "AuthOpenIDJwksURL",
+          "JsonName": "authOpenIDJwksURL",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "AuthOpenIDLogoutURL",
+          "JsonName": "authOpenIDLogoutURL",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "AuthOpenIDMatchExistingBy",
+          "JsonName": "authOpenIDMatchExistingBy",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "AuthOpenIDMobileRedirectURIs",
+          "JsonName": "authOpenIDMobileRedirectURIs",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "AuthOpenIDSubfolderForRedirectURLs",
+          "JsonName": "authOpenIDSubfolderForRedirectURLs",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "AuthOpenIDTokenSigningAlgorithm",
+          "JsonName": "authOpenIDTokenSigningAlgorithm",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "AuthOpenIDTokenURL",
+          "JsonName": "authOpenIDTokenURL",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "AuthOpenIDUserInfoURL",
+          "JsonName": "authOpenIDUserInfoURL",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "BackupPath",
+          "JsonName": "backupPath",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "BackupSchedule",
+          "JsonName": "backupSchedule",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "BackupsToKeep",
+          "JsonName": "backupsToKeep",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "BookshelfView",
+          "JsonName": "bookshelfView",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "BuildNumber",
+          "JsonName": "buildNumber",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "ChromecastEnabled",
+          "JsonName": "chromecastEnabled",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "DateFormat",
+          "JsonName": "dateFormat",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "HomeBookshelfView",
+          "JsonName": "homeBookshelfView",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Language",
+          "JsonName": "language",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "LogLevel",
+          "JsonName": "logLevel",
+          "Type": {
+            "Type": "Double"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "LoggerDailyLogsToKeep",
+          "JsonName": "loggerDailyLogsToKeep",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "LoggerScannerLogsToKeep",
+          "JsonName": "loggerScannerLogsToKeep",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "MaxBackupSize",
+          "JsonName": "maxBackupSize",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "MetadataFileFormat",
+          "JsonName": "metadataFileFormat",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "PodcastEpisodeSchedule",
+          "JsonName": "podcastEpisodeSchedule",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "RateLimitLoginRequests",
+          "JsonName": "rateLimitLoginRequests",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "RateLimitLoginWindow",
+          "JsonName": "rateLimitLoginWindow",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "ScannerCoverProvider",
+          "JsonName": "scannerCoverProvider",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ScannerDisableWatcher",
+          "JsonName": "scannerDisableWatcher",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "ScannerFindCovers",
+          "JsonName": "scannerFindCovers",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "ScannerParseSubtitle",
+          "JsonName": "scannerParseSubtitle",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "ScannerPreferMatchedMetadata",
+          "JsonName": "scannerPreferMatchedMetadata",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "SortingIgnorePrefix",
+          "JsonName": "sortingIgnorePrefix",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "SortingPrefixes",
+          "JsonName": "sortingPrefixes",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "StoreCoverWithItem",
+          "JsonName": "storeCoverWithItem",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "StoreMetadataWithItem",
+          "JsonName": "storeMetadataWithItem",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "TimeFormat",
+          "JsonName": "timeFormat",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TimeZone",
+          "JsonName": "timeZone",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TokenSecret",
+          "JsonName": "tokenSecret",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Version",
+          "JsonName": "version",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        }
+      ]
+    }
+  ]
+}

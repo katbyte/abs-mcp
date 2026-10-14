@@ -1,0 +1,200 @@
+{
+  "Name": "CustomMetadataProvider",
+  "Tag": "CustomMetadataProvider",
+  "Operations": [
+    {
+      "Name": "CustomMetadataProviderCreate",
+      "OperationId": "CustomMetadataProviderCreate",
+      "Method": "POST",
+      "Path": "/api/custom-metadata-providers",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "CustomMetadataProviderCreateRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "CustomMetadataProviderCreateAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "CustomMetadataProviderDelete",
+      "OperationId": "CustomMetadataProviderDelete",
+      "Method": "DELETE",
+      "Path": "/api/custom-metadata-providers/{id}",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "CustomMetadataProviderGetAll",
+      "OperationId": "CustomMetadataProviderGetAll",
+      "Method": "GET",
+      "Path": "/api/custom-metadata-providers",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "CustomMetadataProviderGetAllAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    }
+  ],
+  "Models": [
+    {
+      "Name": "CustomMetadataProviderCreateAnswer",
+      "Fields": [
+        {
+          "Name": "Provider",
+          "JsonName": "provider",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "CustomMetadataProviderRecord"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "CustomMetadataProviderCreateRequest",
+      "Fields": [
+        {
+          "Name": "AuthHeaderValue",
+          "JsonName": "authHeaderValue",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "MediaType",
+          "JsonName": "mediaType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Url",
+          "JsonName": "url",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "CustomMetadataProviderGetAllAnswer",
+      "Fields": [
+        {
+          "Name": "Providers",
+          "JsonName": "providers",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "CustomMetadataProviderRecord"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "CustomMetadataProviderRecord",
+      "SchemaName": "CustomMetadataProviderRecord",
+      "Fields": [
+        {
+          "Name": "AuthHeaderValue",
+          "JsonName": "authHeaderValue",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "CreatedAt",
+          "JsonName": "createdAt",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ExtraData",
+          "JsonName": "extraData",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "ProviderID"
+          }
+        },
+        {
+          "Name": "MediaType",
+          "JsonName": "mediaType",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "UpdatedAt",
+          "JsonName": "updatedAt",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Url",
+          "JsonName": "url",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        }
+      ]
+    }
+  ]
+}

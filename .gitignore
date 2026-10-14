@@ -6,7 +6,6 @@ abs-mcp
 .tools/bin/
 .tools/venv/
 .tools/npm/
-__pycache__/
 .env
 .abs-mcp
 .testenv.sh

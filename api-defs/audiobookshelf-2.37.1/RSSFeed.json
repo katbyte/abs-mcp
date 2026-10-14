@@ -1,0 +1,225 @@
+{
+  "Name": "RSSFeed",
+  "Tag": "RSSFeed",
+  "Operations": [
+    {
+      "Name": "RSSFeedCloseRSSFeed",
+      "OperationId": "RSSFeedCloseRSSFeed",
+      "Method": "POST",
+      "Path": "/api/feeds/{id}/close",
+      "PathParameters": [
+        {
+          "Name": "id",
+          "Argument": "id",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "text/plain",
+        "Type": {
+          "Type": "RawFile"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "RSSFeedGetAll",
+      "OperationId": "RSSFeedGetAll",
+      "Method": "GET",
+      "Path": "/api/feeds",
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "RSSFeedGetAllAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "RSSFeedOpenRSSFeedForCollection",
+      "OperationId": "RSSFeedOpenRSSFeedForCollection",
+      "Method": "POST",
+      "Path": "/api/feeds/collection/{collectionId}/open",
+      "PathParameters": [
+        {
+          "Name": "collectionId",
+          "Argument": "collectionId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "CollectionID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "RSSFeedOpenRSSFeedForCollectionAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "RSSFeedOpenRSSFeedForItem",
+      "OperationId": "RSSFeedOpenRSSFeedForItem",
+      "Method": "POST",
+      "Path": "/api/feeds/item/{itemId}/open",
+      "PathParameters": [
+        {
+          "Name": "itemId",
+          "Argument": "itemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        }
+      ],
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "RSSFeedOpenRSSFeedForItemAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    },
+    {
+      "Name": "RSSFeedOpenRSSFeedForSeries",
+      "OperationId": "RSSFeedOpenRSSFeedForSeries",
+      "Method": "POST",
+      "Path": "/api/feeds/series/{seriesId}/open",
+      "PathParameters": [
+        {
+          "Name": "seriesId",
+          "Argument": "seriesId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "SeriesID"
+          }
+        }
+      ],
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "RSSFeedOpenRSSFeedForSeriesRequest"
+        }
+      },
+      "Response": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "RSSFeedOpenRSSFeedForSeriesAnswer"
+        }
+      },
+      "ExpectedStatusCodes": [
+        200
+      ]
+    }
+  ],
+  "Models": [
+    {
+      "Name": "RSSFeedGetAllAnswer",
+      "Fields": [
+        {
+          "Name": "Feeds",
+          "JsonName": "feeds",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "Feed"
+            }
+          }
+        },
+        {
+          "Name": "Minified",
+          "JsonName": "minified",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "FeedMinified"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "RSSFeedOpenRSSFeedForCollectionAnswer",
+      "Fields": [
+        {
+          "Name": "Feed",
+          "JsonName": "feed",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "FeedMinified"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "RSSFeedOpenRSSFeedForItemAnswer",
+      "Fields": [
+        {
+          "Name": "Feed",
+          "JsonName": "feed",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "FeedMinified"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "RSSFeedOpenRSSFeedForSeriesAnswer",
+      "Fields": [
+        {
+          "Name": "Feed",
+          "JsonName": "feed",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "FeedMinified"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "RSSFeedOpenRSSFeedForSeriesRequest",
+      "Fields": [
+        {
+          "Name": "MetadataDetails",
+          "JsonName": "metadataDetails",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "ServerAddress",
+          "JsonName": "serverAddress",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "Slug",
+          "JsonName": "slug",
+          "Type": {
+            "Type": "Any"
+          }
+        }
+      ]
+    }
+  ]
+}

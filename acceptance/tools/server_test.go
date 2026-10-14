@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
 	"github.com/katbyte/abs-mcp/tools"
 	"github.com/katbyte/go-kt/mcp/acctest"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -193,7 +193,7 @@ func TestServerInfoNonAdmin(t *testing.T) {
 	// Audiobookshelf will not honour an API key for an account that has never
 	// logged in: the key is created, and then every authenticated route answers
 	// 401 rather than 403. One login activates it. /login is a root-level route
-	// rather than an /api/ one, so it is outside ApiRouter and sdk/abs.
+	// rather than an /api/ one, so it is outside ApiRouter and sdk/abs-byhand.
 	if err := login("plainuser", "plainuser-password"); err != nil {
 		t.Fatalf("activating the account with a login: %v", err)
 	}

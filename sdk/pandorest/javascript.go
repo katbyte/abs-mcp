@@ -44,13 +44,14 @@ type jsClass struct {
 	methods map[string]*js.MethodDecl
 	getters map[string]*js.MethodDecl
 	statics map[string]*js.MethodDecl
-	fields  map[string]classField
+	fields  map[string][]classField
 }
 
-// classField is a field a class declares, or sets with this.name = value in a method, the constructor before any other.
+// classField is one value a class gives a field: a declared field, or this.name = value in a method, the constructor's first.
 type classField struct {
 	init   js.IExpr
 	method *js.MethodDecl // the method that sets it, or nil for a declared field
+	op     js.TokenType   // for this.name += value, the operator; 0 for =
 }
 
 // load parses every .js file under dir, which is a path from the checkout's root.
@@ -199,11 +200,12 @@ func readClass(f *jsFile, c *js.ClassDecl) *jsClass {
 		name = string(c.Name.Name())
 	}
 
-	cl := &jsClass{name: name, file: f, extends: c.Extends, methods: map[string]*js.MethodDecl{}, getters: map[string]*js.MethodDecl{}, statics: map[string]*js.MethodDecl{}, fields: map[string]classField{}}
+	cl := &jsClass{name: name, file: f, extends: c.Extends, methods: map[string]*js.MethodDecl{}, getters: map[string]*js.MethodDecl{}, statics: map[string]*js.MethodDecl{}, fields: map[string][]classField{}}
 	for _, el := range c.List {
 		if el.Method == nil {
 			if el.Init != nil && !el.Static {
-				cl.fields[propertyName(&el.Name.PropertyName)] = classField{init: el.Init}
+				n := propertyName(&el.Name.PropertyName)
+				cl.fields[n] = append(cl.fields[n], classField{init: el.Init})
 			}
 			continue
 		}
@@ -221,7 +223,7 @@ func readClass(f *jsFile, c *js.ClassDecl) *jsClass {
 		}
 	}
 
-	// the fields the methods set, the constructor's first, which is where most plain classes declare them
+	// every value the methods give a field, the constructor's first: a field set to 0 there and to a fraction later holds both
 	names := sortedKeys(cl.methods)
 	if i := slices.Index(names, "constructor"); i > 0 {
 		names = slices.Insert(slices.Delete(names, i, i+1), 0, "constructor")
@@ -235,15 +237,17 @@ func readClass(f *jsFile, c *js.ClassDecl) *jsClass {
 			}
 
 			set, ok := es.Value.(*js.BinaryExpr)
-			if !ok || set.Op != js.EqToken {
+			if !ok || set.Op != js.EqToken && !compound(set.Op) {
 				return
 			}
 
 			if dot, ok := set.X.(*js.DotExpr); ok && isThis(dot.X) {
 				if n := identName(dot.Y); n != "" {
-					if _, seen := cl.fields[n]; !seen {
-						cl.fields[n] = classField{init: set.Y, method: m}
+					f := classField{init: set.Y, method: m}
+					if set.Op != js.EqToken {
+						f.op = set.Op
 					}
+					cl.fields[n] = append(cl.fields[n], f)
 				}
 			}
 		})
