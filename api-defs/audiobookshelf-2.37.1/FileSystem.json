@@ -36,7 +36,7 @@
           "Field": "Level",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         },
         {

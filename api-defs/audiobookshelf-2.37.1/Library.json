@@ -193,7 +193,7 @@
           "Field": "Limit",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         },
         {
@@ -209,7 +209,7 @@
           "Field": "Page",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         },
         {
@@ -230,7 +230,19 @@
       },
       "ExpectedStatusCodes": [
         200
-      ]
+      ],
+      "Pageable": {
+        "StartIndexOption": "Page",
+        "LimitOption": "Limit",
+        "ByPage": true,
+        "FirstPage": 0,
+        "ItemsField": "Results",
+        "TotalField": "Total",
+        "ItemType": {
+          "Type": "Reference",
+          "ReferenceName": "Series"
+        }
+      }
     },
     {
       "Name": "LibraryGetAuthors",
@@ -277,7 +289,7 @@
           "Field": "Limit",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         },
         {
@@ -293,7 +305,7 @@
           "Field": "Page",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         },
         {
@@ -314,7 +326,19 @@
       },
       "ExpectedStatusCodes": [
         200
-      ]
+      ],
+      "Pageable": {
+        "StartIndexOption": "Page",
+        "LimitOption": "Limit",
+        "ByPage": true,
+        "FirstPage": 0,
+        "ItemsField": "Results",
+        "TotalField": "Total",
+        "ItemType": {
+          "Type": "Reference",
+          "ReferenceName": "Author"
+        }
+      }
     },
     {
       "Name": "LibraryGetCollectionsForLibrary",
@@ -361,7 +385,7 @@
           "Field": "Limit",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         },
         {
@@ -377,7 +401,7 @@
           "Field": "Page",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         },
         {
@@ -398,7 +422,19 @@
       },
       "ExpectedStatusCodes": [
         200
-      ]
+      ],
+      "Pageable": {
+        "StartIndexOption": "Page",
+        "LimitOption": "Limit",
+        "ByPage": true,
+        "FirstPage": 0,
+        "ItemsField": "Results",
+        "TotalField": "Total",
+        "ItemType": {
+          "Type": "Reference",
+          "ReferenceName": "Collection"
+        }
+      }
     },
     {
       "Name": "LibraryGetEpisodeDownloadQueue",
@@ -505,7 +541,7 @@
           "Field": "Limit",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         },
         {
@@ -521,7 +557,7 @@
           "Field": "Page",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         },
         {
@@ -542,7 +578,19 @@
       },
       "ExpectedStatusCodes": [
         200
-      ]
+      ],
+      "Pageable": {
+        "StartIndexOption": "Page",
+        "LimitOption": "Limit",
+        "ByPage": true,
+        "FirstPage": 0,
+        "ItemsField": "Results",
+        "TotalField": "Total",
+        "ItemType": {
+          "Type": "Reference",
+          "ReferenceName": "LibraryItemMinified"
+        }
+      }
     },
     {
       "Name": "LibraryGetNarrators",
@@ -642,7 +690,7 @@
           "Field": "Limit",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         },
         {
@@ -650,7 +698,7 @@
           "Field": "Page",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         }
       ],
@@ -738,7 +786,7 @@
           "Field": "Limit",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         }
       ],
@@ -777,7 +825,7 @@
           "Field": "Limit",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         },
         {
@@ -785,7 +833,7 @@
           "Field": "Page",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         }
       ],
@@ -798,7 +846,18 @@
       },
       "ExpectedStatusCodes": [
         200
-      ]
+      ],
+      "Pageable": {
+        "StartIndexOption": "Page",
+        "LimitOption": "Limit",
+        "ByPage": true,
+        "FirstPage": 0,
+        "ItemsField": "Results",
+        "TotalField": "Total",
+        "ItemType": {
+          "Type": "Any"
+        }
+      }
     },
     {
       "Name": "LibraryMatchAll",
@@ -991,7 +1050,7 @@
           "Field": "Limit",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         },
         {
@@ -3450,7 +3509,7 @@
           "Name": "Total",
           "JsonName": "total",
           "Type": {
-            "Type": "Any"
+            "Type": "Integer"
           }
         }
       ]

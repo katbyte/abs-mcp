@@ -44,6 +44,7 @@ func (a *answer) statuses() []int {
 // middleware attaches, such as req.libraryItem.
 type reqInfo struct {
 	query     []string
+	numbers   map[string]string // the query parameters the code turns into numbers, each "integer" or "number"
 	body      []string
 	files     []string
 	bodyWhole bool
@@ -60,7 +61,7 @@ type reqUse struct {
 }
 
 func newReqInfo() *reqInfo {
-	return &reqInfo{attached: map[string]*jsType{}}
+	return &reqInfo{attached: map[string]*jsType{}, numbers: map[string]string{}}
 }
 
 func (r *reqInfo) addQuery(n string) { r.query = addName(r.query, n) }
@@ -168,12 +169,63 @@ func readRequest(use reqUse, req *reqInfo) {
 					req.bodyWhole = true
 				}
 			}
+
+			// toNumber(req.query.page, 0): a query value made a number
+			if t := numberCall(identName(n.X)); t != "" && len(n.Args.List) > 0 {
+				if name := queryName(n.Args.List[0].Value, from); name != "" {
+					req.numbers[name] = t
+				}
+			}
+
+		case *js.BinaryExpr:
+			// req.query.limit || 0: a query value whose default is a number
+			if n.Op != js.OrToken && n.Op != js.NullishToken {
+				return
+			}
+			if name := queryName(n.X, from); name != "" {
+				if lit, ok := n.Y.(*js.LiteralExpr); ok && lit.TokenType == js.IntegerToken {
+					req.numbers[name] = "integer"
+				} else if ok && lit.TokenType == js.DecimalToken {
+					req.numbers[name] = "number"
+				}
+			}
 		}
 	})
 
 	for _, st := range use.body {
 		js.Walk(v, st)
 	}
+}
+
+// queryName is the query parameter x reads, req.query.page or req.query['page'], or "" when it reads none.
+func queryName(x js.IExpr, from func(js.IExpr, string) bool) string {
+	switch x := x.(type) {
+	case *js.DotExpr:
+		if from(x.X, "query") {
+			return identName(x.Y)
+		}
+	case *js.IndexExpr:
+		if from(x.X, "query") {
+			k, _ := stringValue(x.Y)
+			return k
+		}
+	}
+
+	return ""
+}
+
+// numberCall is the type of number a call of the function named makes of text: every number Audiobookshelf reads from a query is whole,
+// a page, a limit, a folder depth or a start time in seconds, and parseFloat, which it never uses, is the one way to ask for a fraction.
+// toNumber is its own helper.
+func numberCall(name string) string {
+	switch name {
+	case "Number", "parseInt", "isNaN", "toNumber":
+		return "integer"
+	case "parseFloat":
+		return "number"
+	}
+
+	return ""
 }
 
 // visitor walks every node, into functions too, calling fn on each.

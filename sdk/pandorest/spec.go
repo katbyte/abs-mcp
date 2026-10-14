@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -230,7 +231,8 @@ func (b *builder) operation(r *route, params []string, ans *answer, req *reqInfo
 		op.Parameters = append(op.Parameters, parameter{Name: n, In: "path", Required: true, Schema: &schema{Type: "string"}})
 	}
 	for _, n := range req.query {
-		op.Parameters = append(op.Parameters, parameter{Name: n, In: "query", Schema: &schema{Type: "string"}})
+		t := cmp.Or(req.numbers[n], "string")
+		op.Parameters = append(op.Parameters, parameter{Name: n, In: "query", Schema: &schema{Type: t}})
 	}
 
 	if r.verb != "get" && (len(req.body) > 0 || req.bodyWhole || len(req.files) > 0) {

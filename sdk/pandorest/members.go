@@ -24,7 +24,8 @@ func (e *evaluator) member(t *jsType, name string, optional bool) *jsType {
 	case objectKind:
 		out = e.objectMember(t, name)
 
-	case arrayKind, stringKind:
+	// a list's or a text's length, even one from a call the scan cannot follow, is a count
+	case arrayKind, stringKind, unknownKind:
 		if name == "length" {
 			out = integer
 		}

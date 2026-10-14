@@ -45,7 +45,7 @@
           "Field": "Limit",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         }
       ],

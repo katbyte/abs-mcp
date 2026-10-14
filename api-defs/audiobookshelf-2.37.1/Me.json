@@ -160,7 +160,7 @@
           "Field": "Limit",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         }
       ],
@@ -262,7 +262,7 @@
           "Field": "ItemsPerPage",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         },
         {
@@ -270,7 +270,7 @@
           "Field": "Page",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         }
       ],
@@ -283,7 +283,19 @@
       },
       "ExpectedStatusCodes": [
         200
-      ]
+      ],
+      "Pageable": {
+        "StartIndexOption": "Page",
+        "LimitOption": "ItemsPerPage",
+        "ByPage": true,
+        "FirstPage": 0,
+        "ItemsField": "Sessions",
+        "TotalField": "Total",
+        "ItemType": {
+          "Type": "Reference",
+          "ReferenceName": "PlaybackSession"
+        }
+      }
     },
     {
       "Name": "MeGetItemListeningSessions2",
@@ -306,7 +318,7 @@
           "Field": "ItemsPerPage",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         },
         {
@@ -314,7 +326,7 @@
           "Field": "Page",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         }
       ],
@@ -327,7 +339,19 @@
       },
       "ExpectedStatusCodes": [
         200
-      ]
+      ],
+      "Pageable": {
+        "StartIndexOption": "Page",
+        "LimitOption": "ItemsPerPage",
+        "ByPage": true,
+        "FirstPage": 0,
+        "ItemsField": "Sessions",
+        "TotalField": "Total",
+        "ItemType": {
+          "Type": "Reference",
+          "ReferenceName": "PlaybackSession"
+        }
+      }
     },
     {
       "Name": "MeGetListeningSessions",
@@ -340,7 +364,7 @@
           "Field": "ItemsPerPage",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         },
         {
@@ -348,7 +372,7 @@
           "Field": "Page",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         }
       ],
@@ -361,7 +385,19 @@
       },
       "ExpectedStatusCodes": [
         200
-      ]
+      ],
+      "Pageable": {
+        "StartIndexOption": "Page",
+        "LimitOption": "ItemsPerPage",
+        "ByPage": true,
+        "FirstPage": 0,
+        "ItemsField": "Sessions",
+        "TotalField": "Total",
+        "ItemType": {
+          "Type": "Reference",
+          "ReferenceName": "PlaybackSession"
+        }
+      }
     },
     {
       "Name": "MeGetListeningStats",
@@ -450,7 +486,7 @@
           "Field": "ItemsPerPage",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         },
         {
@@ -458,7 +494,7 @@
           "Field": "Page",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         }
       ],
@@ -471,7 +507,19 @@
       },
       "ExpectedStatusCodes": [
         200
-      ]
+      ],
+      "Pageable": {
+        "StartIndexOption": "Page",
+        "LimitOption": "ItemsPerPage",
+        "ByPage": true,
+        "FirstPage": 0,
+        "ItemsField": "Sessions",
+        "TotalField": "Total",
+        "ItemType": {
+          "Type": "Reference",
+          "ReferenceName": "MeGetSessionsAnswerSessions"
+        }
+      }
     },
     {
       "Name": "MeGetStatsForYear",
@@ -1083,14 +1131,14 @@
           "Name": "NumAudioFiles",
           "JsonName": "numAudioFiles",
           "Type": {
-            "Type": "Double"
+            "Type": "Integer"
           }
         },
         {
           "Name": "NumChapters",
           "JsonName": "numChapters",
           "Type": {
-            "Type": "Double"
+            "Type": "Integer"
           }
         },
         {

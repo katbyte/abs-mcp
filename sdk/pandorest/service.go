@@ -24,8 +24,10 @@ var services = []config.Service{{
 	// the ids that travel between calls are told apart by the compiler
 	IDs:   absIDs,
 	Plain: absPlainIDs,
-	// lists page by limit and page and answer results and total, but count pages from 0, which pandorest's pager does not, so none is
-	// declared a list yet
+	// lists take a page, counted from 0, and a limit, and answer results and total; lists of listening sessions take itemsPerPage and
+	// answer sessions
+	Paging:  &config.Paging{Start: "page", Limit: "limit", Items: "results", Total: "total", ByPage: true, FirstPage: new(0)},
+	Pagings: []config.Paging{{Start: "page", Limit: "itemsPerPage", Items: "sessions", Total: "total", ByPage: true, FirstPage: new(0)}},
 }}
 
 // fixes say what the document spec writes cannot: the source holds the value as a number and the server means a date by it.

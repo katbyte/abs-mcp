@@ -51,6 +51,7 @@ class ApiRouter {
     this.router.post('/libraries/:id/cover', LibraryController.middleware.bind(this), LibraryController.uploadCover.bind(this))
     this.router.get('/libraries/:id/raw', LibraryController.middleware.bind(this), LibraryController.raw.bind(this))
     this.router.get('/libraries/:id/label', LibraryController.middleware.bind(this), LibraryController.label.bind(this))
+    this.router.get('/libraries/:id/search', LibraryController.middleware.bind(this), LibraryController.search.bind(this))
     this.router.get('/items/:id/play/:episodeId?', ItemController.play.bind(this))
     this.router.get('/items/:id/download', ItemController.download.bind(this))
     this.router.get('/files/*', ItemController.download.bind(this))
@@ -129,6 +130,14 @@ class LibraryController {
   label(req, res) {
     const who = req.query.who ? req.user : req.library
     res.json({ label: who.label() })
+  }
+
+  search(req, res) {
+    const page = toNumber(req.query.page, 0)
+    const limit = req.query.limit || 10
+    const near = parseFloat(req.query.near)
+    const found = searchIndex(req.query.q, page, limit, near)
+    res.json({ results: found, total: found.length, page, limit })
   }
 }
 module.exports = new LibraryController()

@@ -2295,7 +2295,7 @@
             "name": "level",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           },
           {
@@ -3357,10 +3357,10 @@
                           }
                         },
                         "numAudioFiles": {
-                          "type": "number"
+                          "type": "integer"
                         },
                         "numChapters": {
-                          "type": "number"
+                          "type": "integer"
                         },
                         "numEpisodes": {
                           "type": "integer"
@@ -5374,7 +5374,7 @@
             "name": "limit",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           },
           {
@@ -5388,7 +5388,7 @@
             "name": "page",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           },
           {
@@ -5502,7 +5502,7 @@
             "name": "limit",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           },
           {
@@ -5516,7 +5516,7 @@
             "name": "page",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           },
           {
@@ -5984,7 +5984,7 @@
             "name": "limit",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           },
           {
@@ -5998,7 +5998,7 @@
             "name": "page",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           },
           {
@@ -6365,7 +6365,7 @@
             "name": "limit",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           }
         ],
@@ -6440,14 +6440,14 @@
             "name": "limit",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           },
           {
             "name": "page",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           }
         ],
@@ -6465,7 +6465,9 @@
                       "type": "array",
                       "items": {}
                     },
-                    "total": {}
+                    "total": {
+                      "type": "integer"
+                    }
                   }
                 }
               }
@@ -6570,14 +6572,14 @@
             "name": "limit",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           },
           {
             "name": "page",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           }
         ],
@@ -7058,7 +7060,7 @@
             "name": "limit",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           },
           {
@@ -8471,7 +8473,7 @@
             "name": "limit",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           },
           {
@@ -8485,7 +8487,7 @@
             "name": "page",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           },
           {
@@ -8994,14 +8996,14 @@
             "name": "itemsPerPage",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           },
           {
             "name": "page",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           }
         ],
@@ -9074,14 +9076,14 @@
             "name": "itemsPerPage",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           },
           {
             "name": "page",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           }
         ],
@@ -9332,7 +9334,7 @@
             "name": "limit",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           }
         ],
@@ -9524,10 +9526,10 @@
                                 }
                               },
                               "numAudioFiles": {
-                                "type": "number"
+                                "type": "integer"
                               },
                               "numChapters": {
-                                "type": "number"
+                                "type": "integer"
                               },
                               "numEpisodes": {
                                 "type": "integer"
@@ -9604,14 +9606,14 @@
             "name": "itemsPerPage",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           },
           {
             "name": "page",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           }
         ],
@@ -10293,14 +10295,14 @@
             "name": "itemsPerPage",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           },
           {
             "name": "page",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           }
         ],
@@ -11937,7 +11939,7 @@
             "name": "limit",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           }
         ],
@@ -13446,14 +13448,14 @@
             "name": "itemsPerPage",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           },
           {
             "name": "page",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           },
           {
@@ -15456,14 +15458,14 @@
             "name": "itemsPerPage",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           },
           {
             "name": "page",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           }
         ],
@@ -16015,7 +16017,7 @@
             "name": "t",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           }
         ],
@@ -19113,10 +19115,10 @@
                 }
               },
               "numAudioFiles": {
-                "type": "number"
+                "type": "integer"
               },
               "numChapters": {
-                "type": "number"
+                "type": "integer"
               },
               "numEpisodes": {
                 "type": "integer"
@@ -19497,10 +19499,10 @@
                 }
               },
               "numAudioFiles": {
-                "type": "number"
+                "type": "integer"
               },
               "numChapters": {
-                "type": "number"
+                "type": "integer"
               },
               "numEpisodes": {
                 "type": "integer"

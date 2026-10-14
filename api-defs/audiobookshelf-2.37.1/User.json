@@ -124,7 +124,7 @@
           "Field": "ItemsPerPage",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         },
         {
@@ -132,7 +132,7 @@
           "Field": "Page",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         }
       ],
@@ -145,7 +145,19 @@
       },
       "ExpectedStatusCodes": [
         200
-      ]
+      ],
+      "Pageable": {
+        "StartIndexOption": "Page",
+        "LimitOption": "ItemsPerPage",
+        "ByPage": true,
+        "FirstPage": 0,
+        "ItemsField": "Sessions",
+        "TotalField": "Total",
+        "ItemType": {
+          "Type": "Reference",
+          "ReferenceName": "UserGetListeningSessionsAnswerSessions"
+        }
+      }
     },
     {
       "Name": "UserGetListeningStats",

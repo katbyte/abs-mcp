@@ -1410,14 +1410,14 @@
           "Name": "NumAudioFiles",
           "JsonName": "numAudioFiles",
           "Type": {
-            "Type": "Double"
+            "Type": "Integer"
           }
         },
         {
           "Name": "NumChapters",
           "JsonName": "numChapters",
           "Type": {
-            "Type": "Double"
+            "Type": "Integer"
           }
         },
         {

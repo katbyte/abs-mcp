@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -81,12 +82,27 @@ func TestSpec(t *testing.T) {
 		}
 	}
 
+	// a query value the code makes a number is one, and the length of a list from a call the scan cannot follow is a count
+	search := doc.Paths["/api/libraries/{id}/search"]["get"]
+	query := map[string]string{}
+	for _, p := range search.Parameters {
+		if p.In == "query" {
+			query[p.Name] = p.Schema.Type
+		}
+	}
+	if want := map[string]string{"page": "integer", "limit": "integer", "near": "number", "q": "string"}; !maps.Equal(query, want) {
+		t.Errorf("search query: %v, want %v", query, want)
+	}
+	if total := search.Responses["200"].Content["application/json"].Schema.Properties["total"]; total == nil || total.Type != "integer" {
+		t.Errorf("search total: %+v, want a whole number", total)
+	}
+
 	download := doc.Paths["/api/items/{id}/download"]["get"]
 	if download.Responses["200"].Content["application/octet-stream"].Schema == nil {
 		t.Errorf("download: %+v, want a file", download.Responses)
 	}
 
-	for _, line := range []string{"Audiobookshelf 9.9.9: 10 routes, 11 operations", "answer a file", "/api/items/{id}/play/{episodeId}", "wrote " + filepath.Join(out, "audiobookshelf-openapi-9.9.9.json")} {
+	for _, line := range []string{"Audiobookshelf 9.9.9: 11 routes, 12 operations", "answer a file", "/api/items/{id}/play/{episodeId}", "wrote " + filepath.Join(out, "audiobookshelf-openapi-9.9.9.json")} {
 		if !strings.Contains(report.String(), line) {
 			t.Errorf("report has no %q:\n%s", line, report.String())
 		}

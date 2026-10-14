@@ -125,7 +125,7 @@
           "Field": "T",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Integer"
           }
         }
       ],
