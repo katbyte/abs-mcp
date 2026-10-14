@@ -28,4 +28,16 @@ It has 214 methods covering every one of Audiobookshelf's 202 API routes: librar
 
 ## Where its shapes come from
 
-Audiobookshelf publishes no OpenAPI spec, and its [public API docs say they are unmaintained](https://api.audiobookshelf.org). So the types here are written against the server source, as described in [README.md](README.md). They are then proved against a running server, which is the only thing that catches the server changing shape underneath you. See [testing.md](testing.md).
+Audiobookshelf's own OpenAPI file covers under a quarter of its routes and stopped in 2024, and its [public API docs say they are unmaintained](https://api.audiobookshelf.org). So the types here are written against the server source, as described in [README.md](README.md). They are then proved against a running server, which is the only thing that catches the server changing shape underneath you. See [testing.md](testing.md).
+
+## An API document read from the source
+
+`api-defs/audiobookshelf-openapi-<version>.json` is an OpenAPI document of the whole API, written by reading the server source: every route, its parameters, its body fields, and what it answers, as far as the code says.
+
+```bash
+make spec SOURCE=../audiobookshelf   # a checkout of the release to read
+```
+
+It covers every route. Where an answer comes from a stored JSON column or an object the code fills in later, the source does not say its shape, and the document leaves that value untyped. The command reports how many answers it typed in full.
+
+It is the first step towards generating this client with [pandorest](https://github.com/katbyte/pandorest), as the other katbyte clients are.

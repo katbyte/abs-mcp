@@ -8,6 +8,7 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
+	github.com/tdewolff/parse/v2 v2.8.17
 )
 
 require (

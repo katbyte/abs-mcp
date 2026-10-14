@@ -1,0 +1,274 @@
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+	"testing/fstest"
+)
+
+// fakeSource is a small Audiobookshelf checkout in the shapes the scan reads: a router built by the server with the server's managers, a
+// controller with middleware, a manager that answers for a handler, two records linked one to many, and routes written in place.
+var fakeSource = fstest.MapFS{
+	"package.json": {Data: []byte(`{"name": "audiobookshelf", "version": "9.9.9"}`)},
+
+	"server/Server.js": {Data: []byte(`
+const ApiRouter = require('./routers/ApiRouter')
+const PlaybackManager = require('./managers/PlaybackManager')
+
+class Server {
+  constructor() {
+    this.playbackManager = new PlaybackManager()
+    this.apiRouter = new ApiRouter(this)
+  }
+
+  start(router) {
+    router.get('/status', (req, res) => {
+      res.json({ isInit: true, version: '9.9.9' })
+    })
+    router.get('/healthcheck', (req, res) => res.sendStatus(200))
+  }
+}
+module.exports = Server
+`)},
+
+	"server/routers/ApiRouter.js": {Data: []byte(`
+const express = require('express')
+const LibraryController = require('../controllers/LibraryController')
+const ItemController = require('../controllers/ItemController')
+
+class ApiRouter {
+  constructor(Server) {
+    this.playbackManager = Server.playbackManager
+    this.router = express()
+    this.init()
+  }
+
+  init() {
+    this.router.get('/libraries', LibraryController.findAll.bind(this))
+    this.router.get('/libraries/:id', LibraryController.middleware.bind(this), LibraryController.findOne.bind(this))
+    this.router.patch('/libraries/:id', LibraryController.middleware.bind(this), LibraryController.update.bind(this))
+    this.router.post('/libraries/:id/cover', LibraryController.middleware.bind(this), LibraryController.uploadCover.bind(this))
+    this.router.get('/libraries/:id/raw', LibraryController.middleware.bind(this), LibraryController.raw.bind(this))
+    this.router.get('/libraries/:id/label', LibraryController.middleware.bind(this), LibraryController.label.bind(this))
+    this.router.get('/items/:id/play/:episodeId?', ItemController.play.bind(this))
+    this.router.get('/items/:id/download', ItemController.download.bind(this))
+    this.router.get('/files/*', ItemController.download.bind(this))
+  }
+}
+module.exports = ApiRouter
+`)},
+
+	"server/managers/PlaybackManager.js": {Data: []byte(`
+class PlaybackManager {
+  start(req, res, episodeId) {
+    if (!req.query.force) return res.status(400).send('not forced')
+    res.json({ episodeId, started: Date.now() })
+  }
+}
+module.exports = PlaybackManager
+`)},
+
+	"server/controllers/LibraryController.js": {Data: []byte(`
+const Database = require('../Database')
+
+class LibraryController {
+  constructor() {}
+
+  async middleware(req, res, next) {
+    req.library = await Database.libraryModel.findByPk(req.params.id)
+    if (!req.library) return res.sendStatus(404)
+    if (!req.user.isAdmin) return res.sendStatus(403)
+    next()
+  }
+
+  async findAll(req, res) {
+    const { limit, page } = req.query
+    const libraries = await Database.libraryModel.findAll()
+    const payload = { results: libraries.map((l) => l.toOldJSON()), total: libraries.length }
+    payload.limit = Number(limit) || 0
+    res.json(payload)
+  }
+
+  findOne(req, res) {
+    const out = req.library.toOldJSON()
+    out.extra = 'yes'
+    res.json(out)
+  }
+
+  async update(req, res) {
+    await req.library.updateFromRequest(req.body)
+    res.sendStatus(200)
+  }
+
+  async uploadCover(req, res) {
+    if (!req.files?.cover) return res.status(400).send('no cover')
+    if (req.library.isPublic) return res.status(409).send('public')
+    try {
+      switch (req.query.kind) {
+        case 'jpg':
+          break
+        default:
+          while (req.query.wait) {
+            await req.library.reload()
+          }
+      }
+    } catch (error) {
+      return res.status(500).send(error.message)
+    } finally {
+      req.library.changed('settings', true)
+    }
+    if (req.query.back) return res.redirect('/library')
+    res.status(201).end()
+  }
+
+  raw(req, res) {
+    res.json(req.library)
+  }
+
+  label(req, res) {
+    const who = req.query.who ? req.user : req.library
+    res.json({ label: who.label() })
+  }
+}
+module.exports = new LibraryController()
+`)},
+
+	"server/controllers/ItemController.js": {Data: []byte(`
+class ItemController {
+  play(req, res) {
+    return this.playbackManager.start(req, res, req.params.episodeId)
+  }
+
+  download(req, res) {
+    res.download('/tmp/book.m4b')
+  }
+}
+module.exports = new ItemController()
+`)},
+
+	"server/Database.js": {Data: []byte(`
+class Database {
+  get models() {
+    return this.sequelize.models
+  }
+
+  get libraryModel() {
+    return this.models.library
+  }
+}
+module.exports = new Database()
+`)},
+
+	"server/models/Library.js": {Data: []byte(`
+const { DataTypes, Model } = require('sequelize')
+
+class Library extends Model {
+  static init(sequelize) {
+    super.init(
+      {
+        id: { type: DataTypes.UUID, primaryKey: true },
+        name: DataTypes.STRING,
+        displayOrder: { type: DataTypes.INTEGER, allowNull: false },
+        settings: DataTypes.JSON,
+        isPublic: DataTypes.BOOLEAN,
+        lastScan: DataTypes.DATE
+      },
+      { sequelize, modelName: 'library' }
+    )
+  }
+
+  static associate() {
+    const { folder } = this.sequelize.models
+    Library.hasMany(folder)
+    Library.hasOne(folder, { as: 'mainFolder', foreignKey: { name: 'mainLibraryId' } })
+    folder.belongsTo(Library)
+  }
+
+  toOldJSON() {
+    return {
+      id: this.id,
+      name: this.name,
+      displayOrder: this.displayOrder,
+      folders: this.folders.map((f) => f.toOldJSON()),
+      lastScan: this.lastScan?.valueOf() || null,
+      settings: this.settings
+    }
+  }
+
+  label() {
+    return this.name || 'library'
+  }
+
+  async updateFromRequest(payload) {
+    if (payload.name) this.name = payload.name
+    if (payload.displayOrder !== undefined) this.displayOrder = payload.displayOrder
+  }
+}
+module.exports = Library
+`)},
+
+	"server/models/Folder.js": {Data: []byte(`
+const { DataTypes, Model } = require('sequelize')
+
+class Folder extends Model {
+  static init(sequelize) {
+    super.init({ id: { type: DataTypes.UUID, primaryKey: true }, path: DataTypes.STRING }, { sequelize, modelName: 'folder', timestamps: false })
+  }
+
+  toOldJSON() {
+    return { id: this.id, fullPath: this.path, libraryId: this.libraryId }
+  }
+}
+module.exports = Folder
+`)},
+
+	"server/models/User.js": {Data: []byte(`
+const { DataTypes, Model } = require('sequelize')
+
+class User extends Model {
+  static init(sequelize) {
+    super.init({ id: { type: DataTypes.UUID, primaryKey: true }, type: DataTypes.STRING }, { sequelize, modelName: 'user' })
+  }
+
+  get isAdmin() {
+    return this.type === 'admin'
+  }
+
+  label() {
+    return 'user ' + this.id
+  }
+}
+module.exports = User
+`)},
+}
+
+// fakeProgram is fakeSource parsed, with the evaluator that scans it.
+func fakeProgram(t *testing.T) *evaluator {
+	t.Helper()
+
+	prog, err := load(fakeSource, "server")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return newEvaluator(prog, readModels(prog))
+}
+
+// writeFakeSource writes fakeSource into a folder, for the command that reads a checkout from disk.
+func writeFakeSource(t *testing.T) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	for name, f := range fakeSource {
+		p := filepath.Join(dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, f.Data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	return dir
+}

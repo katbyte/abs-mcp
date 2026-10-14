@@ -7,6 +7,7 @@
 
 ### Added
 
+- `api-defs/audiobookshelf-openapi-2.37.1.json`, an OpenAPI document of every Audiobookshelf route, read from the server source by `make spec`
 - at `ABS_LOG=INFO`, a log line for each call of a tool that changes or deletes something, with passwords, keys, and the sign-in and query values of any address blanked
 - a call refused for an argument the tool does not take says which arguments it does take
 

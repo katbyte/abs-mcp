@@ -305,6 +305,10 @@ testenv-down: ## Remove the throwaway Audiobookshelf container
 apicheck: ## Report how much of the Audiobookshelf API sdk/abs covers
 	@python3 .scripts/apicheck.py --list
 
+spec: ## Write api-defs/audiobookshelf-openapi-<version>.json from an Audiobookshelf checkout: make spec SOURCE=../audiobookshelf
+	@test -n "$(SOURCE)" || (echo "SOURCE is the Audiobookshelf checkout to read: make spec SOURCE=../audiobookshelf" && exit 1)
+	@go run ./sdk/pandorest spec $(SOURCE)
+
 check-all: build test testacc lint actionlint yamllint shellcheck typos markdownlint depscheck apicheck ## Run build + tests (incl. the live suites) + all linters + depscheck
 
-.PHONY: default all help fmt goimports build docker lint lint-fix actionlint yamllint shellcheck zizmor typos typos-fix markdownlint depscheck check-all install tools test test-sdk test-tools testacc testacc-sdk testacc-tools cover cover-html record record-sdk record-check testenv-up testenv-down apicheck
+.PHONY: default all help fmt goimports build docker lint lint-fix actionlint yamllint shellcheck zizmor typos typos-fix markdownlint depscheck check-all install tools test test-sdk test-tools testacc testacc-sdk testacc-tools cover cover-html record record-sdk record-check testenv-up testenv-down apicheck spec
