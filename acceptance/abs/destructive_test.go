@@ -4,6 +4,7 @@ package abs_test
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -52,7 +53,7 @@ func TestDeleteItemAndRemoveIssues(t *testing.T) {
 	}))
 	id := scratch.ID
 	t.Cleanup(func() {
-		_ = client.DeleteLibrary(t.Context(), id)
+		_ = client.DeleteLibrary(context.WithoutCancel(t.Context()), id)
 		_ = os.RemoveAll(filepath.Join(data, "nonfiction", "SDK Author"))
 	})
 
@@ -124,7 +125,7 @@ func TestDeleteAuthor(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_, _ = client.UpdateMedia(t.Context(), item.ID, abs.MediaUpdate{
+		_, _ = client.UpdateMedia(context.WithoutCancel(t.Context()), item.ID, abs.MediaUpdate{
 			Metadata: &abs.MetadataUpdate{Authors: []abs.NameRef{{Name: original}}},
 		})
 	})
@@ -167,7 +168,7 @@ func TestRemoveNarrator(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_, _ = client.UpdateMedia(t.Context(), item.ID, abs.MediaUpdate{
+		_, _ = client.UpdateMedia(context.WithoutCancel(t.Context()), item.ID, abs.MediaUpdate{
 			Metadata: &abs.MetadataUpdate{Narrators: []string{"SDK Reader"}},
 		})
 	})
@@ -220,7 +221,7 @@ func TestSetCoverFromFile(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		_ = os.Remove(cover)
-		_ = client.RemoveCover(t.Context(), item.ID)
+		_ = client.RemoveCover(context.WithoutCancel(t.Context()), item.ID)
 	})
 
 	if _, err := client.ScanItem(ctx, item.ID); err != nil {
@@ -246,7 +247,7 @@ func TestUploadCoverAndReadItBack(t *testing.T) {
 	id := library(t)
 
 	item := must(client.Items(ctx, id, abs.ItemsOptions{Limit: 1})).Results[0]
-	t.Cleanup(func() { _ = client.RemoveCover(t.Context(), item.ID) })
+	t.Cleanup(func() { _ = client.RemoveCover(context.WithoutCancel(t.Context()), item.ID) })
 	if err := client.UploadCover(ctx, item.ID, "cover.jpg", bytes.NewReader(tinyJPEG())); err != nil {
 		t.Fatalf("UploadCover: %v", err)
 	}
@@ -313,7 +314,7 @@ func TestBatchDelete(t *testing.T) {
 		Folders: []abs.Folder{{FullPath: "/nonfiction"}},
 	}))
 	t.Cleanup(func() {
-		_ = client.DeleteLibrary(t.Context(), scratch.ID)
+		_ = client.DeleteLibrary(context.WithoutCancel(t.Context()), scratch.ID)
 		_ = os.RemoveAll(filepath.Join(data, "nonfiction", "SDK Batch"))
 	})
 
@@ -380,7 +381,7 @@ func TestDeleteItemFile(t *testing.T) {
 		Name: "SDK File Delete", MediaType: "book", Folders: []abs.Folder{{FullPath: "/scratch/sdk-file-delete"}},
 	}))
 	t.Cleanup(func() {
-		_ = client.DeleteLibrary(t.Context(), scratch.ID)
+		_ = client.DeleteLibrary(context.WithoutCancel(t.Context()), scratch.ID)
 		_ = os.RemoveAll(root)
 	})
 	if err := client.ScanLibrary(ctx, scratch.ID, false); err != nil {

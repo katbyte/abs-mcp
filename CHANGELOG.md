@@ -22,6 +22,7 @@
 
 ### Fixed
 
+- the Go client live suite removes what its tests make: its clean-up ran after the test had ended, and did nothing
 - the Go client's `UpdateAPIKey` refuses a key's name or expiry, which Audiobookshelf cannot change and quietly ignored, rather than send it
 
 ## 0.7.0 (2026-10-09)

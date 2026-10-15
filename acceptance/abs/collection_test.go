@@ -3,6 +3,7 @@
 package abs_test
 
 import (
+	"context"
 	"slices"
 	"testing"
 
@@ -19,7 +20,7 @@ func TestCollectionsAndPlaylists(t *testing.T) {
 	ids := []string{items[0].ID, items[1].ID}
 
 	col := must(client.CreateCollection(ctx, id, "SDK Collection", "", ids))
-	t.Cleanup(func() { _ = client.DeleteCollection(t.Context(), col.ID) })
+	t.Cleanup(func() { _ = client.DeleteCollection(context.WithoutCancel(t.Context()), col.ID) })
 	if len(col.Books) != 2 {
 		t.Errorf("collection has %d books, want 2", len(col.Books))
 	}
@@ -30,13 +31,13 @@ func TestCollectionsAndPlaylists(t *testing.T) {
 	}
 
 	pl := must(client.CreatePlaylist(ctx, id, "SDK Playlist", "", []abs.PlaylistEntry{{LibraryItemID: ids[0]}}))
-	t.Cleanup(func() { _ = client.DeletePlaylist(t.Context(), pl.ID) })
+	t.Cleanup(func() { _ = client.DeletePlaylist(context.WithoutCancel(t.Context()), pl.ID) })
 	if len(pl.Items) != 1 {
 		t.Errorf("playlist has %d entries, want 1", len(pl.Items))
 	}
 
 	fromCol := must(client.CreatePlaylistFromCollection(ctx, col.ID))
-	t.Cleanup(func() { _ = client.DeletePlaylist(t.Context(), fromCol.ID) })
+	t.Cleanup(func() { _ = client.DeletePlaylist(context.WithoutCancel(t.Context()), fromCol.ID) })
 	if len(fromCol.Items) != 2 {
 		t.Errorf("playlist from collection has %d entries, want 2", len(fromCol.Items))
 	}
@@ -50,7 +51,7 @@ func TestCollectionMethods(t *testing.T) {
 	ids := []string{items[0].ID, items[1].ID}
 
 	col := must(client.CreateCollection(ctx, id, "SDK Methods", "first", ids))
-	t.Cleanup(func() { _ = client.DeleteCollection(t.Context(), col.ID) })
+	t.Cleanup(func() { _ = client.DeleteCollection(context.WithoutCancel(t.Context()), col.ID) })
 
 	got := must(client.Collection(ctx, col.ID))
 	if got.Name != "SDK Methods" || len(got.Books) != 2 {
@@ -79,7 +80,7 @@ func TestPlaylistMethods(t *testing.T) {
 
 	items := must(client.Items(ctx, id, abs.ItemsOptions{Limit: 2})).Results
 	pl := must(client.CreatePlaylist(ctx, id, "SDK Methods", "", []abs.PlaylistEntry{{LibraryItemID: items[0].ID}}))
-	t.Cleanup(func() { _ = client.DeletePlaylist(t.Context(), pl.ID) })
+	t.Cleanup(func() { _ = client.DeletePlaylist(context.WithoutCancel(t.Context()), pl.ID) })
 
 	got := must(client.Playlist(ctx, pl.ID))
 	if got.Name != "SDK Methods" {
@@ -114,7 +115,7 @@ func TestCollectionAndPlaylistOrder(t *testing.T) {
 	first, second, third := items[0].ID, items[1].ID, items[2].ID
 
 	col := must(client.CreateCollection(ctx, id, "SDK Order", "", []string{first, second, third}))
-	t.Cleanup(func() { _ = client.DeleteCollection(t.Context(), col.ID) })
+	t.Cleanup(func() { _ = client.DeleteCollection(context.WithoutCancel(t.Context()), col.ID) })
 	if _, err := client.OrderCollection(ctx, col.ID, []string{third, first, second}); err != nil {
 		t.Fatalf("OrderCollection: %v", err)
 	}
@@ -127,7 +128,7 @@ func TestCollectionAndPlaylistOrder(t *testing.T) {
 	}
 
 	pl := must(client.CreatePlaylist(ctx, id, "SDK Order Playlist", "", []abs.PlaylistEntry{{LibraryItemID: first}, {LibraryItemID: second}, {LibraryItemID: third}}))
-	t.Cleanup(func() { _ = client.DeletePlaylist(t.Context(), pl.ID) })
+	t.Cleanup(func() { _ = client.DeletePlaylist(context.WithoutCancel(t.Context()), pl.ID) })
 	if _, err := client.OrderPlaylist(ctx, pl.ID, []abs.PlaylistEntry{{LibraryItemID: third}, {LibraryItemID: first}, {LibraryItemID: second}}); err != nil {
 		t.Fatalf("OrderPlaylist: %v", err)
 	}
@@ -148,7 +149,7 @@ func TestSingleItemCollectionAndPlaylist(t *testing.T) {
 	items := must(client.Items(ctx, id, abs.ItemsOptions{Limit: 2})).Results
 
 	col := must(client.CreateCollection(ctx, id, "SDK Single", "", []string{items[0].ID}))
-	t.Cleanup(func() { _ = client.DeleteCollection(t.Context(), col.ID) })
+	t.Cleanup(func() { _ = client.DeleteCollection(context.WithoutCancel(t.Context()), col.ID) })
 
 	added := must(client.AddBookToCollection(ctx, col.ID, items[1].ID))
 	if len(added.Books) != 2 {
@@ -160,7 +161,7 @@ func TestSingleItemCollectionAndPlaylist(t *testing.T) {
 	}
 
 	pl := must(client.CreatePlaylist(ctx, id, "SDK Single Playlist", "", []abs.PlaylistEntry{{LibraryItemID: items[0].ID}}))
-	t.Cleanup(func() { _ = client.DeletePlaylist(t.Context(), pl.ID) })
+	t.Cleanup(func() { _ = client.DeletePlaylist(context.WithoutCancel(t.Context()), pl.ID) })
 
 	plAdded := must(client.AddItemToPlaylist(ctx, pl.ID, abs.PlaylistEntry{LibraryItemID: items[1].ID}))
 	if len(plAdded.Items) != 2 {

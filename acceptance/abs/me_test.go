@@ -3,6 +3,7 @@
 package abs_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
@@ -81,7 +82,7 @@ func TestProgressKeepsTheDatesItIsGiven(t *testing.T) {
 	if p == nil {
 		t.Fatal("no progress after setting it")
 	}
-	t.Cleanup(func() { _ = client.RemoveProgress(t.Context(), p.ID) })
+	t.Cleanup(func() { _ = client.RemoveProgress(context.WithoutCancel(t.Context()), p.ID) })
 	if !p.IsFinished || p.FinishedAt != finished || p.LastUpdate != listened || p.CurrentTime != at {
 		t.Errorf("progress = finished %v at %d, last update %d, position %v; want finished at %d, last update %d, position %v",
 			p.IsFinished, p.FinishedAt, p.LastUpdate, p.CurrentTime, finished, listened, at)
@@ -96,7 +97,7 @@ func TestBookmarkUpdateAndGenreRename(t *testing.T) {
 	if _, err := client.CreateBookmark(ctx, item.ID, 0.4, "first"); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = client.DeleteBookmark(t.Context(), item.ID, 0.4) })
+	t.Cleanup(func() { _ = client.DeleteBookmark(context.WithoutCancel(t.Context()), item.ID, 0.4) })
 
 	renamed, err := client.UpdateBookmark(ctx, item.ID, 0.4, "second")
 	if err != nil {
@@ -139,8 +140,8 @@ func TestProgressAndBookmarkExtras(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		for _, it := range items {
-			if p, err := client.Progress(t.Context(), it.ID, ""); err == nil && p != nil {
-				_ = client.RemoveProgress(t.Context(), p.ID)
+			if p, err := client.Progress(context.WithoutCancel(t.Context()), it.ID, ""); err == nil && p != nil {
+				_ = client.RemoveProgress(context.WithoutCancel(t.Context()), p.ID)
 			}
 		}
 	})
@@ -153,7 +154,7 @@ func TestProgressAndBookmarkExtras(t *testing.T) {
 	if _, err := client.CreateBookmark(ctx, items[0].ID, 0.3, "extras"); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = client.DeleteBookmark(t.Context(), items[0].ID, 0.3) })
+	t.Cleanup(func() { _ = client.DeleteBookmark(context.WithoutCancel(t.Context()), items[0].ID, 0.3) })
 	if bs := must(client.ItemBookmarks(ctx, items[0].ID)); len(bs) == 0 {
 		t.Error("ItemBookmarks returned nothing for an item with one")
 	}

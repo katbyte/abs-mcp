@@ -3,6 +3,7 @@
 package abs_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
@@ -46,7 +47,7 @@ func TestAuthorsAndNarrators(t *testing.T) {
 	if changed == 0 {
 		t.Error("RenameNarrator reported no items changed")
 	}
-	t.Cleanup(func() { _, _ = client.RenameNarrator(t.Context(), id, "SDK Narrator", from) })
+	t.Cleanup(func() { _, _ = client.RenameNarrator(context.WithoutCancel(t.Context()), id, "SDK Narrator", from) })
 }
 
 func TestSeries(t *testing.T) {

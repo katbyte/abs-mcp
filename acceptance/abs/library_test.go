@@ -3,6 +3,7 @@
 package abs_test
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -34,7 +35,7 @@ func TestLibraryLifecycle(t *testing.T) {
 	second := must(client.CreateLibrary(ctx, abs.LibraryCreate{
 		Name: "SDK Second", MediaType: "book", Folders: []abs.Folder{{FullPath: "/nonfiction"}},
 	}))
-	t.Cleanup(func() { _ = client.DeleteLibrary(t.Context(), second.ID) })
+	t.Cleanup(func() { _ = client.DeleteLibrary(context.WithoutCancel(t.Context()), second.ID) })
 	if second.ID == id {
 		t.Error("the second library reused the first library's id")
 	}
@@ -292,7 +293,7 @@ func TestRemoveLibraryMetadata(t *testing.T) {
 		Name: "SDK Metadata Scratch", MediaType: "book",
 		Folders: []abs.Folder{{FullPath: "/nonfiction"}},
 	}))
-	t.Cleanup(func() { _ = client.DeleteLibrary(t.Context(), scratch.ID) })
+	t.Cleanup(func() { _ = client.DeleteLibrary(context.WithoutCancel(t.Context()), scratch.ID) })
 
 	if err := client.RemoveLibraryMetadata(ctx, scratch.ID, "json"); err != nil {
 		t.Errorf("RemoveLibraryMetadata: %v", err)

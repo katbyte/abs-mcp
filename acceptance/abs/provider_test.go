@@ -9,6 +9,7 @@
 package abs_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
@@ -104,7 +105,7 @@ func TestProviderCoverFromURL(t *testing.T) {
 	if err := client.SetCoverFromURL(ctx, item.ID, cover); err != nil {
 		t.Fatalf("SetCoverFromURL: %v", err)
 	}
-	t.Cleanup(func() { _ = client.RemoveCover(t.Context(), item.ID) })
+	t.Cleanup(func() { _ = client.RemoveCover(context.WithoutCancel(t.Context()), item.ID) })
 
 	if _, _, err := client.CoverSize(ctx, item.ID); err != nil {
 		t.Errorf("CoverSize after setting one from a url: %v", err)
@@ -132,7 +133,7 @@ func TestProviderFeeds(t *testing.T) {
 		"feedUrl": feedURL,
 	}
 	created := must(client.CreatePodcast(ctx, newPodcast))
-	t.Cleanup(func() { _ = client.DeleteItem(t.Context(), created.ID, false) })
+	t.Cleanup(func() { _ = client.DeleteItem(context.WithoutCancel(t.Context()), created.ID, false) })
 
 	// an empty title is a 500 from the server, not an empty result
 	if _, err := client.SearchFeedEpisodes(ctx, created.ID, feed.Episodes[0].Title); err != nil {

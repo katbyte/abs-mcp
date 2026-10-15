@@ -8,6 +8,7 @@ package abs_test
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"os"
 	"path/filepath"
@@ -45,7 +46,7 @@ func TestNotifications(t *testing.T) {
 	if id == "" {
 		t.Fatalf("the new notification is not in the settings: %+v", created)
 	}
-	t.Cleanup(func() { _ = client.DeleteNotification(t.Context(), id) })
+	t.Cleanup(func() { _ = client.DeleteNotification(context.WithoutCancel(t.Context()), id) })
 
 	if _, err := client.UpdateNotification(ctx, id, map[string]any{"id": id, "enabled": false, "eventName": "onTest"}); err != nil {
 		t.Errorf("UpdateNotification: %v", err)
@@ -79,7 +80,7 @@ func TestEmailSettings(t *testing.T) {
 	if len(got) != 1 || got[0].Name != "SDK Reader" {
 		t.Errorf("devices = %+v", got)
 	}
-	t.Cleanup(func() { _, _ = client.UpdateEReaderDevices(t.Context(), nil) })
+	t.Cleanup(func() { _, _ = client.UpdateEReaderDevices(context.WithoutCancel(t.Context()), nil) })
 
 	// TestEmail and SendEbookToDevice both need a working SMTP server, which a
 	// throwaway container has not got: assert they fail cleanly rather than
@@ -97,7 +98,7 @@ func TestAPIKeyAdmin(t *testing.T) {
 	if created.Key == "" {
 		t.Fatal("the plaintext key is only returned on creation and was empty")
 	}
-	t.Cleanup(func() { _ = client.DeleteAPIKey(t.Context(), created.ID) })
+	t.Cleanup(func() { _ = client.DeleteAPIKey(context.WithoutCancel(t.Context()), created.ID) })
 
 	// the new key actually works, for the same client acting as its account
 	other, err := client.As(created.Key)
@@ -156,7 +157,7 @@ func TestCustomMetadataProviders(t *testing.T) {
 	if created.ID == "" {
 		t.Fatalf("created provider = %+v", created)
 	}
-	t.Cleanup(func() { _ = client.DeleteCustomMetadataProvider(t.Context(), created.ID) })
+	t.Cleanup(func() { _ = client.DeleteCustomMetadataProvider(context.WithoutCancel(t.Context()), created.ID) })
 
 	var found bool
 	for _, p := range must(client.CustomMetadataProviders(ctx)) {
@@ -311,7 +312,7 @@ func TestSharing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ShareMediaItem: %v", err)
 	}
-	t.Cleanup(func() { _ = client.UnshareMediaItem(t.Context(), share.ID) })
+	t.Cleanup(func() { _ = client.UnshareMediaItem(context.WithoutCancel(t.Context()), share.ID) })
 	if share.Slug != "sdk-share" {
 		t.Errorf("slug = %q", share.Slug)
 	}
@@ -384,6 +385,12 @@ func TestOPMLAndUpload(t *testing.T) {
 	ctx := skipUnlessLive(t)
 	podcasts := podcastLibrary(t)
 
+	// the OPML lists a show by its feed, which the fixture shows have none of, so one is made with one and removed, files and all, after
+	show := abs.NewPodcast{LibraryID: podcasts, FolderID: folderOf(t, podcasts), Path: "/podcasts/SDK OPML Podcast"}
+	show.Media.Metadata = map[string]any{"title": "SDK OPML Podcast", "feedUrl": feedURL}
+	created := must(client.CreatePodcast(ctx, show))
+	t.Cleanup(func() { _ = client.DeleteItem(context.WithoutCancel(t.Context()), created.ID, true) })
+
 	body, err := client.LibraryOPML(ctx, podcasts)
 	if err != nil {
 		t.Fatalf("LibraryOPML: %v", err)
@@ -401,7 +408,7 @@ func TestOPMLAndUpload(t *testing.T) {
 	if err != nil {
 		t.Errorf("ParseOPML on the server's own output: %v", err)
 	} else if len(feeds) == 0 {
-		t.Error("ParseOPML found no feeds in a document listing two shows")
+		t.Error("ParseOPML found no feeds in a document listing a show with one")
 	}
 
 	// Upload creates an item folder from a file the caller streams up
@@ -469,7 +476,7 @@ func TestRemainingAdminSurface(t *testing.T) {
 			t.Errorf("devices = %+v, want the new one among them", got)
 		}
 	}
-	t.Cleanup(func() { _, _ = client.MeUpdateEReaderDevices(t.Context(), nil) })
+	t.Cleanup(func() { _, _ = client.MeUpdateEReaderDevices(context.WithoutCancel(t.Context()), nil) })
 
 	// what a sign-in answers: the devices this account may send to, its own
 	// among them
@@ -528,7 +535,7 @@ func TestBackupFiles(t *testing.T) {
 		t.Fatal("no backup to work with")
 	}
 	backup := made[len(made)-1]
-	t.Cleanup(func() { _, _ = client.DeleteBackup(t.Context(), backup.ID) })
+	t.Cleanup(func() { _, _ = client.DeleteBackup(context.WithoutCancel(t.Context()), backup.ID) })
 
 	body, err := client.DownloadBackup(ctx, backup.ID)
 	if err != nil {
@@ -620,7 +627,7 @@ func TestCreatePodcastsFromOPML(t *testing.T) {
 			for i := range res.Results {
 				// the podcast the OPML names is new; take it away again
 				if res.Results[i].Title() != "Well There's Your Problem" && res.Results[i].Title() != "Behind the Bastards" {
-					t.Cleanup(func() { _ = client.DeleteItem(t.Context(), res.Results[i].ID, false) })
+					t.Cleanup(func() { _ = client.DeleteItem(context.WithoutCancel(t.Context()), res.Results[i].ID, false) })
 				}
 			}
 			return
@@ -648,7 +655,7 @@ func TestUploadCreatesAnItem(t *testing.T) {
 		Folders: []abs.Folder{{FullPath: "/nonfiction"}},
 	}))
 	t.Cleanup(func() {
-		_ = client.DeleteLibrary(t.Context(), scratch.ID)
+		_ = client.DeleteLibrary(context.WithoutCancel(t.Context()), scratch.ID)
 		_ = os.RemoveAll(filepath.Join(data, "nonfiction", "SDK Uploader"))
 	})
 

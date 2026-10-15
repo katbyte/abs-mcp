@@ -3,6 +3,7 @@
 package abs_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -21,7 +22,7 @@ func TestUserAdmin(t *testing.T) {
 	if created.ID == "" || created.Username != "sdk-user" {
 		t.Fatalf("created user = %+v", created)
 	}
-	t.Cleanup(func() { _ = client.DeleteUser(t.Context(), created.ID) })
+	t.Cleanup(func() { _ = client.DeleteUser(context.WithoutCancel(t.Context()), created.ID) })
 	if created.Type != "user" {
 		t.Errorf("type = %q, want user", created.Type)
 	}
@@ -106,7 +107,7 @@ func TestDeleteTagAndGenre(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_, _ = client.UpdateMedia(t.Context(), item.ID, abs.MediaUpdate{
+		_, _ = client.UpdateMedia(context.WithoutCancel(t.Context()), item.ID, abs.MediaUpdate{
 			Tags: []string{"sdk"}, Metadata: &abs.MetadataUpdate{Genres: []string{"Science Fiction"}},
 		})
 	})
@@ -141,15 +142,15 @@ func TestFeeds(t *testing.T) {
 	if feed.ID == "" {
 		t.Fatalf("OpenItemFeed returned %+v", feed)
 	}
-	t.Cleanup(func() { _ = client.CloseFeed(t.Context(), feed.ID) })
+	t.Cleanup(func() { _ = client.CloseFeed(context.WithoutCancel(t.Context()), feed.ID) })
 	if feed.EntityType != "libraryItem" && feed.EntityType != "item" {
 		t.Errorf("entityType = %q", feed.EntityType)
 	}
 
 	col := must(client.CreateCollection(ctx, id, "SDK Feed Collection", "", []string{item.ID}))
-	t.Cleanup(func() { _ = client.DeleteCollection(t.Context(), col.ID) })
+	t.Cleanup(func() { _ = client.DeleteCollection(context.WithoutCancel(t.Context()), col.ID) })
 	colFeed := must(client.OpenCollectionFeed(ctx, col.ID, "sdk-collection-feed", address))
-	t.Cleanup(func() { _ = client.CloseFeed(t.Context(), colFeed.ID) })
+	t.Cleanup(func() { _ = client.CloseFeed(context.WithoutCancel(t.Context()), colFeed.ID) })
 
 	series, _, err := client.SeriesList(ctx, id, abs.ListOptions{Limit: 1})
 	if err != nil {
@@ -157,7 +158,7 @@ func TestFeeds(t *testing.T) {
 	}
 	if len(series) > 0 {
 		seriesFeed := must(client.OpenSeriesFeed(ctx, series[0].ID, "sdk-series-feed", address))
-		t.Cleanup(func() { _ = client.CloseFeed(t.Context(), seriesFeed.ID) })
+		t.Cleanup(func() { _ = client.CloseFeed(context.WithoutCancel(t.Context()), seriesFeed.ID) })
 	}
 
 	open := must(client.Feeds(ctx))

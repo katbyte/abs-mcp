@@ -3,6 +3,7 @@
 package abs_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
@@ -38,7 +39,7 @@ func TestEpisodeMethods(t *testing.T) {
 		t.Errorf("after update title = %q, want %q", after.Title, title)
 	}
 	t.Cleanup(func() {
-		_, _ = client.UpdateEpisode(t.Context(), show.ID, episode.ID, abs.EpisodeUpdate{Title: new(episode.Title)})
+		_, _ = client.UpdateEpisode(context.WithoutCancel(t.Context()), show.ID, episode.ID, abs.EpisodeUpdate{Title: new(episode.Title)})
 	})
 }
 
@@ -86,7 +87,7 @@ func TestDeleteEpisode(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_ = client.ScanLibrary(t.Context(), id, false)
+		_ = client.ScanLibrary(context.WithoutCancel(t.Context()), id, false)
 	})
 
 	after := must(client.Item(ctx, show.ID))
