@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
+	"slices"
 
 	"github.com/katbyte/go-kt/chttp"
 )
@@ -247,8 +249,18 @@ func (c *Client) CreateAPIKey(ctx context.Context, name, userID string, expiresI
 	return &resp.APIKey, nil
 }
 
-// UpdateAPIKey changes a key's name or whether it is active.
+// apiKeyFields are what an update can change about a key. Its name and expiry are part of the key itself, so the server cannot change them.
+var apiKeyFields = []string{"isActive", "userId"}
+
+// UpdateAPIKey changes whether a key is active, or which user it belongs to, from isActive and userId in fields. Any other field, such as the
+// name, is refused before anything is sent, because the server would quietly ignore it; a new key is the way to rename one.
 func (c *Client) UpdateAPIKey(ctx context.Context, id string, fields map[string]any) (*APIKey, error) {
+	for _, k := range slices.Sorted(maps.Keys(fields)) {
+		if !slices.Contains(apiKeyFields, k) {
+			return nil, fmt.Errorf("an API key's %s cannot be changed, only isActive and userId: its name and expiry are part of the key, so make a new key to change them", k)
+		}
+	}
+
 	var resp struct {
 		APIKey APIKey `json:"apiKey"`
 	}

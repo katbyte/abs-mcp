@@ -27,6 +27,29 @@ func TestCreateAPIKeyExpiry(t *testing.T) {
 	}
 }
 
+// A key's name is part of the key, so a rename is refused before it is sent rather than quietly ignored by the server.
+func TestUpdateAPIKeyRefusesWhatCannotChange(t *testing.T) {
+	t.Parallel()
+
+	s := newJSONServer(t, always(http.StatusOK, `{"apiKey":{"id":"k1","isActive":false}}`))
+	c := newClient(t, s)
+
+	if _, err := c.UpdateAPIKey(t.Context(), "k1", map[string]any{"name": "renamed", "isActive": false}); err == nil || !strings.Contains(err.Error(), "an API key's name cannot be changed") {
+		t.Errorf("err = %v, want the name refused", err)
+	}
+	if got := s.requests(); len(got) != 0 {
+		t.Errorf("requests %q, want none sent", got)
+	}
+
+	key, err := c.UpdateAPIKey(t.Context(), "k1", map[string]any{"isActive": false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body := s.sent(t); body["isActive"] != any(false) || key.IsActive {
+		t.Errorf("sent %v, answered %+v, want the key made inactive", body, key)
+	}
+}
+
 // Both default to "book" when the caller leaves the type out, and the server
 // rejects the request without it.
 func TestMediaTypeDefaults(t *testing.T) {

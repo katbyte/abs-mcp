@@ -114,8 +114,21 @@ func TestAPIKeyAdmin(t *testing.T) {
 		t.Error("a client was made to act as an account with no key")
 	}
 
-	if _, err := client.UpdateAPIKey(ctx, created.ID, map[string]any{"name": "sdk-key-renamed", "isActive": true}); err != nil {
-		t.Errorf("UpdateAPIKey: %v", err)
+	// a key's name is part of the key, so the client refuses a rename rather than send one the server would ignore
+	if _, err := client.UpdateAPIKey(ctx, created.ID, map[string]any{"name": "sdk-key-renamed"}); err == nil {
+		t.Error("UpdateAPIKey sent a rename, which the server ignores")
+	}
+
+	// what an update can change is whether the key works
+	updated, err := client.UpdateAPIKey(ctx, created.ID, map[string]any{"isActive": false})
+	if err != nil {
+		t.Fatalf("UpdateAPIKey: %v", err)
+	}
+	if updated.IsActive {
+		t.Error("the answer to making the key inactive says it is still active")
+	}
+	if _, err := other.Me(ctx); err == nil {
+		t.Error("the key still authenticates after it was made inactive")
 	}
 
 	var listed bool
@@ -124,10 +137,8 @@ func TestAPIKeyAdmin(t *testing.T) {
 			continue
 		}
 		listed = true
-		// the server accepts the PATCH but does not appear to apply a rename
-		// through it, so this only records what it actually does
-		if k.Name != "sdk-key-renamed" && k.Name != "sdk-key" {
-			t.Errorf("name = %q, want one of the two", k.Name)
+		if k.Name != "sdk-key" || k.IsActive {
+			t.Errorf("listed as %q, active %v, want sdk-key, inactive", k.Name, k.IsActive)
 		}
 		if k.Key != "" {
 			t.Error("the listing exposed a plaintext key, which it should never do")

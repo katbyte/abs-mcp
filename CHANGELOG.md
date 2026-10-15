@@ -18,6 +18,10 @@
 - at `ABS_LOG=INFO`, a log line for each call of a tool that changes or deletes something, with passwords, keys, and the sign-in and query values of any address blanked
 - a call refused for an argument the tool does not take says which arguments it does take
 
+### Fixed
+
+- the Go client's `UpdateAPIKey` refuses a key's name or expiry, which Audiobookshelf cannot change and quietly ignored, rather than send it
+
 ## 0.7.0 (2026-10-09)
 
 ### Breaking
