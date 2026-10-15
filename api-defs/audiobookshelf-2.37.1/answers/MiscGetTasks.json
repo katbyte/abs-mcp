@@ -1,0 +1,366 @@
+{
+  "operation": "MiscGetTasks",
+  "method": "GET",
+  "path": "/api/tasks",
+  "answers": {
+    "200": [
+      {
+        "tasks": [
+          {
+            "action": "watcher-scan",
+            "data": {
+              "libraryId": "3380c0a1-5c84-4d03-aad1-89022a5532d0",
+              "libraryName": "SDK File Delete"
+            },
+            "description": null,
+            "descriptionKey": null,
+            "descriptionSubs": null,
+            "error": null,
+            "errorKey": null,
+            "errorSubs": null,
+            "finishedAt": null,
+            "id": "1ce4a95b-7aaa-4117-ac1f-cc155c74ea1e",
+            "isFailed": false,
+            "isFinished": false,
+            "showSuccess": true,
+            "startedAt": 1792029533582,
+            "title": "Scanning file changes in \"SDK File Delete\"",
+            "titleKey": "MessageTaskScanningFileChanges",
+            "titleSubs": [
+              "SDK File Delete"
+            ]
+          }
+        ]
+      },
+      {
+        "queuedTaskData": {
+          "embedMetadata": []
+        }
+      },
+      {
+        "tasks": [
+          {
+            "data": {
+              "audioFiles": [
+                {
+                  "cachePath": "/metadata/cache/items/f9aea369-7047-4d60-895e-b5031b70458c/01.mp3",
+                  "duration": 1,
+                  "filename": "01.mp3",
+                  "index": 1,
+                  "ino": "1462927",
+                  "path": "/fiction/Isaac Asimov/Second Foundation/01.mp3"
+                }
+              ],
+              "chapters": [
+                {
+                  "end": 0.5,
+                  "id": 0,
+                  "start": 0,
+                  "title": "One"
+                },
+                {
+                  "end": 1,
+                  "start": 0.5
+                }
+              ],
+              "coverPath": "/metadata/items/f9aea369-7047-4d60-895e-b5031b70458c/cover.jpg",
+              "duration": 1,
+              "itemCachePath": "/metadata/cache/items/f9aea369-7047-4d60-895e-b5031b70458c",
+              "libraryItemDir": "/fiction/Isaac Asimov/Second Foundation",
+              "libraryItemId": "f9aea369-7047-4d60-895e-b5031b70458c",
+              "metadataObject": {
+                "TIT3": "Ciclo de la Fundación 5 [Foundation Cycle, Book 5]",
+                "TRACKTOTAL": "1",
+                "album": "Second Foundation: Ciclo de la Fundación 5 [Foundation Cycle, Book 5]",
+                "album_artist": "Isaac Asimov",
+                "artist": "Isaac Asimov",
+                "comment": "<p><b><i>Segunda Fundación</i></b><b> es el quinto volumen del «Ciclo de la Fundación», pero también es el cierre de la original «Trilogía de la Fundación» o «Ciclo de Trántor», que puede leerse independientemente y que fue galardonada con el Premio Hugo a la mejor serie de ciencia ficción de todos los tiempos.</b></p> <p>La Fundación yace en ruinas, arrasada por la inteligencia mutante del Mulo. Sin embargo, se rumorea que Hari Seldon, el científico que lo inició todo, ha establecido una Segunda Fundación al otro lado de la galaxia, cuya ubicación exacta es un secreto guardado desde hace tiempo. Obligada a revelar su existencia, la Segunda Fundación deberá enfrentarse a la voluntad destructora del Mulo, con el añadido de que los supervivientes de la Primera Fundación también quieren acabar con ella…</p> <p>«Un talento de proporciones cósmicas».<br /> <i>Chicago Tribune</i></p> <p><b>Please note: This audiobook is in Spanish.</b></p>",
+                "composer": "SDK Doomed Narrator",
+                "copyright": "Penguin Random House Audio",
+                "date": "1999",
+                "description": "<p><b><i>Segunda Fundación</i></b><b> es el quinto volumen del «Ciclo de la Fundación», pero también es el cierre de la original «Trilogía de la Fundación» o «Ciclo de Trántor», que puede leerse independientemente y que fue galardonada con el Premio Hugo a la mejor serie de ciencia ficción de todos los tiempos.</b></p> <p>La Fundación yace en ruinas, arrasada por la inteligencia mutante del Mulo. Sin embargo, se rumorea que Hari Seldon, el científico que lo inició todo, ha establecido una Segunda Fundación al otro lado de la galaxia, cuya ubicación exacta es un secreto guardado desde hace tiempo. Obligada a revelar su existencia, la Segunda Fundación deberá enfrentarse a la voluntad destructora del Mulo, con el añadido de que los supervivientes de la Primera Fundación también quieren acabar con ella…</p> <p>«Un talento de proporciones cósmicas».<br /> <i>Chicago Tribune</i></p> <p><b>Please note: This audiobook is in Spanish.</b></p>",
+                "genre": "Science Fiction & Fantasy",
+                "grouping": "SDK Series #1",
+                "publisher": "Penguin Random House Audio",
+                "title": "Second Foundation"
+              },
+              "mimeType": "audio/mpeg",
+              "options": {
+                "backupFiles": false,
+                "forceEmbedChapters": true
+              },
+              "userId": "e2682b5d-a1fb-4847-b7e2-39b7c7564f87"
+            },
+            "description": "Embedding metadata in audiobook \"Second Foundation\".",
+            "descriptionKey": "MessageTaskEmbeddingMetadataDescription",
+            "descriptionSubs": [
+              "Second Foundation"
+            ],
+            "titleSubs": null
+          }
+        ]
+      },
+      {
+        "tasks": [
+          {
+            "data": {
+              "coverPath": null
+            }
+          }
+        ]
+      },
+      {
+        "tasks": [
+          {
+            "data": {
+              "libraryMediaType": "book"
+            }
+          }
+        ]
+      },
+      {
+        "tasks": [
+          {
+            "data": {
+              "encodeOptions": {
+                "bitrate": "32k",
+                "channels": "1"
+              },
+              "ffmetadataObject": {
+                "TRACKTOTAL": "1",
+                "album": "Zzyzx Merge Book",
+                "album_artist": "Zzyzx Merge Author",
+                "artist": "Zzyzx Merge Author",
+                "title": "Zzyzx Merge Book"
+              },
+              "ffmetadataPath": "/metadata/cache/items/07aca248-a585-4172-9b49-5c5df7e1510d/ffmetadata.txt",
+              "inos": [
+                "1465065"
+              ],
+              "originalTrackPaths": [
+                "/scratch/zzyzx-merge/Zzyzx Merge Author/Zzyzx Merge Book/01.mp3"
+              ],
+              "targetFilename": "Zzyzx Merge Book.m4b",
+              "targetFilepath": "/scratch/zzyzx-merge/Zzyzx Merge Author/Zzyzx Merge Book/Zzyzx Merge Book.m4b",
+              "tempFilepath": "/metadata/cache/items/07aca248-a585-4172-9b49-5c5df7e1510d/Zzyzx Merge Book.m4b"
+            }
+          }
+        ]
+      },
+      {
+        "tasks": [
+          {
+            "data": {
+              "ffmpeg": {
+                "_currentInput": {
+                  "isFile": true,
+                  "isStream": false,
+                  "source": "/metadata/cache/items/387aa02d-ced9-4cb4-a074-9cea7960750e/files.txt"
+                },
+                "_currentOutput": {
+                  "flags": {},
+                  "isFile": true,
+                  "pipeopts": {},
+                  "target": "/metadata/cache/items/387aa02d-ced9-4cb4-a074-9cea7960750e/Zzyzx Halt Book.m4b"
+                },
+                "_events": {},
+                "_eventsCount": 4,
+                "_inputs": [
+                  {
+                    "isFile": true,
+                    "isStream": false,
+                    "source": "/metadata/cache/items/387aa02d-ced9-4cb4-a074-9cea7960750e/files.txt"
+                  }
+                ],
+                "_outputs": [
+                  {
+                    "flags": {},
+                    "isFile": true,
+                    "pipeopts": {},
+                    "target": "/metadata/cache/items/387aa02d-ced9-4cb4-a074-9cea7960750e/Zzyzx Halt Book.m4b"
+                  }
+                ],
+                "ffmpegProc": {
+                  "_closesGot": 0,
+                  "_closesNeeded": 3,
+                  "_events": {},
+                  "_eventsCount": 2,
+                  "_handle": {
+                    "pid": 203
+                  },
+                  "connected": false,
+                  "exitCode": null,
+                  "killed": false,
+                  "pid": 203,
+                  "signalCode": null,
+                  "spawnargs": [
+                    "/usr/bin/ffmpeg"
+                  ],
+                  "spawnfile": "/usr/bin/ffmpeg",
+                  "stderr": {
+                    "_closeAfterHandlingError": false,
+                    "_events": {
+                      "close": [
+                        null
+                      ]
+                    },
+                    "_eventsCount": 3,
+                    "_hadError": false,
+                    "_host": null,
+                    "_parent": null,
+                    "_pendingData": null,
+                    "_pendingEncoding": "",
+                    "_readableState": {
+                      "awaitDrainWriters": null,
+                      "buffer": [],
+                      "bufferIndex": 0,
+                      "highWaterMark": 65536,
+                      "length": 0,
+                      "pipes": []
+                    },
+                    "_server": null,
+                    "_sockname": null,
+                    "_writableState": {
+                      "bufferedIndex": 0,
+                      "corked": 0,
+                      "highWaterMark": 65536,
+                      "length": 0,
+                      "pendingcb": 0,
+                      "writelen": 0
+                    },
+                    "allowHalfOpen": false,
+                    "connecting": false,
+                    "server": null
+                  },
+                  "stdin": {
+                    "_closeAfterHandlingError": false,
+                    "_events": {},
+                    "_eventsCount": 1,
+                    "_hadError": false,
+                    "_host": null,
+                    "_parent": null,
+                    "_pendingData": null,
+                    "_pendingEncoding": "",
+                    "_readableState": {
+                      "awaitDrainWriters": null,
+                      "buffer": [],
+                      "bufferIndex": 0,
+                      "highWaterMark": 65536,
+                      "length": 0,
+                      "pipes": [],
+                      "readable": false
+                    },
+                    "_server": null,
+                    "_sockname": null,
+                    "_writableState": {
+                      "bufferedIndex": 0,
+                      "corked": 0,
+                      "highWaterMark": 65536,
+                      "length": 0,
+                      "pendingcb": 0,
+                      "writelen": 0
+                    },
+                    "allowHalfOpen": false,
+                    "connecting": false,
+                    "server": null
+                  },
+                  "stdio": [
+                    {
+                      "_closeAfterHandlingError": false,
+                      "_events": {},
+                      "_eventsCount": 1,
+                      "_hadError": false,
+                      "_host": null,
+                      "_parent": null,
+                      "_pendingData": null,
+                      "_pendingEncoding": "",
+                      "_readableState": {
+                        "awaitDrainWriters": null,
+                        "buffer": [],
+                        "bufferIndex": 0,
+                        "highWaterMark": 65536,
+                        "length": 0,
+                        "pipes": [],
+                        "readable": false
+                      },
+                      "_server": null,
+                      "_sockname": null,
+                      "_writableState": {
+                        "bufferedIndex": 0,
+                        "corked": 0,
+                        "highWaterMark": 65536,
+                        "length": 0,
+                        "pendingcb": 0,
+                        "writelen": 0
+                      },
+                      "allowHalfOpen": false,
+                      "connecting": false,
+                      "server": null
+                    },
+                    {
+                      "_events": {
+                        "close": [
+                          null
+                        ]
+                      }
+                    }
+                  ],
+                  "stdout": {
+                    "_closeAfterHandlingError": false,
+                    "_events": {
+                      "close": [
+                        null
+                      ]
+                    },
+                    "_eventsCount": 3,
+                    "_hadError": false,
+                    "_host": null,
+                    "_parent": null,
+                    "_pendingData": null,
+                    "_pendingEncoding": "",
+                    "_readableState": {
+                      "awaitDrainWriters": null,
+                      "buffer": [],
+                      "bufferIndex": 0,
+                      "highWaterMark": 65536,
+                      "length": 0,
+                      "pipes": []
+                    },
+                    "_server": null,
+                    "_sockname": null,
+                    "_writableState": {
+                      "bufferedIndex": 0,
+                      "corked": 0,
+                      "highWaterMark": 65536,
+                      "length": 0,
+                      "pendingcb": 0,
+                      "writelen": 0
+                    },
+                    "allowHalfOpen": false,
+                    "connecting": false,
+                    "server": null
+                  }
+                },
+                "logger": {},
+                "options": {
+                  "niceness": 0,
+                  "presets": "/app/dist-server/server/libs/fluentFfmpeg/presets",
+                  "stdoutLines": 100
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "tasks": [
+          {
+            "error": "Task canceled by user",
+            "errorKey": "MessageTaskCanceledByUser",
+            "finishedAt": 1792029644154
+          }
+        ]
+      }
+    ]
+  }
+}

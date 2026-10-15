@@ -1,0 +1,30 @@
+{
+  "operation": "RSSFeedOpenRSSFeedForItem",
+  "method": "POST",
+  "path": "/api/feeds/item/{itemId}/open",
+  "sent": [
+    {
+      "serverAddress": "http://localhost:13379",
+      "slug": "sdk-item-feed"
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "feed": {
+          "entityId": "f9aea369-7047-4d60-895e-b5031b70458c",
+          "entityType": "libraryItem",
+          "feedUrl": "/feed/sdk-item-feed",
+          "id": "a5fa1cf8-f9fb-4206-8cdc-038a8bb51ca9",
+          "meta": {
+            "description": null,
+            "ownerEmail": null,
+            "ownerName": null,
+            "preventIndexing": true,
+            "title": "Second Foundation"
+          }
+        }
+      }
+    ]
+  }
+}

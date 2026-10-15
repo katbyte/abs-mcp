@@ -1,0 +1,31 @@
+{
+  "operation": "SearchGetAllProviders",
+  "method": "GET",
+  "path": "/api/search/providers",
+  "answers": {
+    "200": [
+      {
+        "providers": {
+          "books": [
+            {
+              "text": "Google Books",
+              "value": "google"
+            }
+          ],
+          "booksCovers": [
+            {
+              "text": "Best",
+              "value": "best"
+            }
+          ],
+          "podcasts": [
+            {
+              "text": "iTunes",
+              "value": "itunes"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

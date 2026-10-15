@@ -28,14 +28,16 @@ import (
 	"testing"
 
 	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	"github.com/katbyte/abs-mcp/sdk/pandorest/answers"
 	"github.com/katbyte/go-kt/test/env"
 	"github.com/katbyte/go-kt/test/replayproxy"
 )
 
 var (
 	client   *abs.Client
-	fiction  string // the book library these tests create and scan
-	podcasts string // the podcast library, for the episode endpoints
+	recorder *answers.Recorder // saves what the server answers when ABS_TEST_ANSWERS is set, for the API document; nil otherwise
+	fiction  string            // the book library these tests create and scan
+	podcasts string            // the podcast library, for the episode endpoints
 )
 
 var (
@@ -92,7 +94,13 @@ func TestMain(m *testing.M) {
 	}
 
 	var err error
-	if client, err = abs.New(server, token); err != nil {
+	if os.Getenv(answers.Env) != "" {
+		if recorder, err = answers.Open(context.Background(), server, "../.."); err != nil {
+			fmt.Fprintln(os.Stderr, "answers:", err)
+			os.Exit(1)
+		}
+	}
+	if client, err = abs.New(server, token, recorder.Option()); err != nil {
 		panic(err)
 	}
 	if err := startProxy(); err != nil {
@@ -119,6 +127,12 @@ func TestMain(m *testing.M) {
 			fmt.Fprintln(os.Stderr, "  "+d.String())
 		}
 		fmt.Fprintln(os.Stderr, "\nreview the changes, then run `make record-sdk` to accept them")
+		if code == 0 {
+			code = 1
+		}
+	}
+	if err := recorder.Report(os.Stderr); err != nil {
+		fmt.Fprintln(os.Stderr, "\nanswers:", err)
 		if code == 0 {
 			code = 1
 		}

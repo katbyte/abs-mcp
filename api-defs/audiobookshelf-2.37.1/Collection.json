@@ -338,14 +338,14 @@
           "Name": "Description",
           "JsonName": "description",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           }
         },
         {
           "Name": "Name",
           "JsonName": "name",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           }
         }
       ]

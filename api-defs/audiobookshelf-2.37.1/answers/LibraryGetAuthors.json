@@ -1,0 +1,48 @@
+{
+  "operation": "LibraryGetAuthors",
+  "method": "GET",
+  "path": "/api/libraries/{id}/authors",
+  "answers": {
+    "200": [
+      {
+        "limit": 100,
+        "minified": false,
+        "page": 0,
+        "results": [
+          {
+            "addedAt": 1792029519328,
+            "asin": null,
+            "description": null,
+            "id": "3539e469-e573-4845-9783-7d55f1e5b269",
+            "imagePath": null,
+            "lastFirst": "Williams, Tad",
+            "libraryId": "d9204ade-9fe6-4681-99d9-26075fdeb94a",
+            "name": "Tad Williams",
+            "numBooks": 2,
+            "updatedAt": 1792029519328
+          }
+        ],
+        "sortDesc": false,
+        "total": 3
+      },
+      {
+        "results": [
+          {
+            "description": "Written by the SDK suite."
+          }
+        ]
+      },
+      {
+        "results": [
+          {
+            "asin": "B003RY2ISS",
+            "imagePath": "/metadata/authors/3539e469-e573-4845-9783-7d55f1e5b269.jpg"
+          }
+        ]
+      },
+      {
+        "sortBy": "numBooks"
+      }
+    ]
+  }
+}

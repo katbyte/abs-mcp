@@ -1,0 +1,12 @@
+{
+  "operation": "PodcastQuickMatchEpisodes",
+  "method": "POST",
+  "path": "/api/podcasts/{id}/match-episodes",
+  "answers": {
+    "200": [
+      {
+        "numEpisodesUpdated": 0
+      }
+    ]
+  }
+}

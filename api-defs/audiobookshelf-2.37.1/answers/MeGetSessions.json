@@ -1,0 +1,26 @@
+{
+  "operation": "MeGetSessions",
+  "method": "GET",
+  "path": "/api/me/sessions",
+  "answers": {
+    "200": [
+      {
+        "itemsPerPage": 10,
+        "numPages": 1,
+        "page": 0,
+        "sessions": [
+          {
+            "createdAt": 1792029516938,
+            "current": false,
+            "deviceInfo": null,
+            "id": "42ecfab3-5fdd-4722-b50e-dd7be1a7db67",
+            "ipAddress": "::ffff:172.17.0.1",
+            "updatedAt": 1792029516938,
+            "userAgent": "curl/8.7.1"
+          }
+        ],
+        "total": 1
+      }
+    ]
+  }
+}

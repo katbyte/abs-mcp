@@ -1,0 +1,141 @@
+{
+  "operation": "UserFindAll",
+  "method": "GET",
+  "path": "/api/users",
+  "answers": {
+    "200": [
+      {
+        "users": [
+          {
+            "createdAt": 1792029516882,
+            "email": null,
+            "hasOpenIDLink": false,
+            "id": "e2682b5d-a1fb-4847-b7e2-39b7c7564f87",
+            "isActive": true,
+            "isLocked": false,
+            "itemTagsSelected": [],
+            "lastSeen": null,
+            "librariesAccessible": [],
+            "permissions": {
+              "accessAllLibraries": true,
+              "accessAllTags": true,
+              "accessExplicitContent": true,
+              "createEreader": true,
+              "delete": true,
+              "download": true,
+              "selectedTagsNotAccessible": false,
+              "update": true,
+              "upload": true
+            },
+            "seriesHideFromContinueListening": [],
+            "token": "REDACTED",
+            "type": "root",
+            "username": "root"
+          },
+          {
+            "email": "sdk@example.invalid"
+          }
+        ]
+      },
+      {
+        "users": [
+          {
+            "latestSession": null
+          }
+        ]
+      },
+      {
+        "users": [
+          {
+            "itemTagsSelected": [
+              "cyberpunk"
+            ]
+          }
+        ]
+      },
+      {
+        "users": [
+          {
+            "latestSession": {
+              "bookId": "f5f7b288-bc60-414d-a9f3-cc82762b1e15",
+              "chapters": [],
+              "coverPath": null,
+              "currentTime": 0.6,
+              "date": "2026-10-15",
+              "dayOfWeek": "Thursday",
+              "deviceInfo": {
+                "clientName": "Zzyzx Client",
+                "clientVersion": "2.37.1",
+                "deviceId": "434de96f-5949-4c67-bace-9c318a6cb31c",
+                "deviceName": "",
+                "id": "434de96f-5949-4c67-bace-9c318a6cb31c",
+                "ipAddress": "::ffff:172.17.0.1",
+                "manufacturer": "",
+                "model": "",
+                "sdkVersion": "",
+                "userId": "89f0a4bf-abdb-45e3-b34e-8d39d9b6519c"
+              },
+              "displayAuthor": "Tad Williams",
+              "displayTitle": "Sea of Silver Light",
+              "duration": 1,
+              "episodeId": null,
+              "id": "c6a5e52d-5cf1-45fc-8707-6f0a50962fca",
+              "libraryId": "bc5ad08d-b2fe-402d-af4f-04846bf11cad",
+              "libraryItemId": "a2143a8f-5922-45e0-bc55-79102a9d1fdd",
+              "mediaMetadata": {
+                "abridged": false,
+                "asin": null,
+                "authors": [
+                  {
+                    "id": "4ea8538c-b74d-4945-af03-3d2dc36ad328",
+                    "name": "Tad Williams"
+                  }
+                ],
+                "description": null,
+                "explicit": false,
+                "genres": [
+                  "Science Fiction"
+                ],
+                "isbn": null,
+                "language": "English",
+                "narrators": [
+                  "George Newbern"
+                ],
+                "publishedDate": null,
+                "publishedYear": "2001",
+                "publisher": "DAW",
+                "series": [
+                  {
+                    "id": "7ea83159-fd9a-4ca1-8015-fb151af1f2fd",
+                    "name": "Otherland",
+                    "sequence": "4"
+                  }
+                ],
+                "subtitle": null,
+                "title": "Sea of Silver Light"
+              },
+              "mediaPlayer": "zzyzx-player",
+              "mediaType": "book",
+              "playMethod": 0,
+              "serverVersion": "2.37.1",
+              "startTime": 0,
+              "startedAt": 1792029695878,
+              "timeListening": 0.6,
+              "updatedAt": 1792029696042,
+              "userId": "89f0a4bf-abdb-45e3-b34e-8d39d9b6519c"
+            }
+          }
+        ]
+      },
+      {
+        "users": [
+          {
+            "librariesAccessible": [
+              "bc5ad08d-b2fe-402d-af4f-04846bf11cad"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

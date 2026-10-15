@@ -1,0 +1,18 @@
+{
+  "operation": "LibraryItemUploadCover",
+  "method": "POST",
+  "path": "/api/items/{id}/cover",
+  "sent": [
+    {
+      "url": "https://m.media-amazon.com/images/I/81Sr4Ms8SaL.jpg"
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "cover": "/metadata/items/f9aea369-7047-4d60-895e-b5031b70458c/cover.jpg",
+        "success": true
+      }
+    ]
+  }
+}

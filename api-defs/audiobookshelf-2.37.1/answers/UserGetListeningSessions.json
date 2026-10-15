@@ -1,0 +1,109 @@
+{
+  "operation": "UserGetListeningSessions",
+  "method": "GET",
+  "path": "/api/users/{id}/listening-sessions",
+  "answers": {
+    "200": [
+      {
+        "itemsPerPage": 10,
+        "numPages": 0,
+        "page": 0,
+        "sessions": [],
+        "total": 0
+      },
+      {
+        "sessions": [
+          {
+            "audioTracks": [],
+            "bookId": "92e5172f-6c9f-4e09-8a35-5872723a7a9b",
+            "chapters": [],
+            "coverAspectRatio": null,
+            "coverPath": null,
+            "currentTime": 0.3,
+            "date": "2026-10-15",
+            "dayOfWeek": "Thursday",
+            "deviceInfo": {
+              "clientName": "Unknown",
+              "clientVersion": "2.37.1",
+              "deviceId": "91d8fd6e-9fa2-436e-9c20-1a6846ebd8f1",
+              "deviceName": "",
+              "id": "91d8fd6e-9fa2-436e-9c20-1a6846ebd8f1",
+              "ipAddress": "::ffff:172.17.0.1",
+              "manufacturer": "",
+              "model": "",
+              "sdkVersion": "",
+              "userId": "734b4c6f-8c54-43ec-b1a5-7c4544da2f58"
+            },
+            "displayAuthor": "Isaac Asimov",
+            "displayTitle": "Foundation and Empire",
+            "duration": 1,
+            "episodeId": null,
+            "id": "946b7de6-f2a1-4b33-a22d-cc296dea5b79",
+            "lastSave": 0,
+            "libraryId": "bc5ad08d-b2fe-402d-af4f-04846bf11cad",
+            "libraryItemId": "6f58db71-9fe1-4b97-97ff-4e17eba41c9f",
+            "mediaItemShareId": null,
+            "mediaMetadata": {
+              "abridged": false,
+              "asin": null,
+              "authors": [
+                {
+                  "id": "d663841d-4fae-48f2-9538-46cf545129b7",
+                  "name": "Isaac Asimov"
+                }
+              ],
+              "description": null,
+              "explicit": false,
+              "genres": [
+                "Science Fiction"
+              ],
+              "isbn": null,
+              "language": "English",
+              "narrators": [
+                "Scott Brick"
+              ],
+              "publishedDate": null,
+              "publishedYear": "1952",
+              "publisher": "Bantam",
+              "series": [
+                {
+                  "id": "fc878528-d25b-40b8-b0e1-66e437df7dc1",
+                  "name": "Foundation",
+                  "sequence": "2"
+                }
+              ],
+              "subtitle": null,
+              "title": "Foundation and Empire"
+            },
+            "mediaPlayer": "zzyzx-player",
+            "mediaType": "book",
+            "playMethod": 0,
+            "serverVersion": "2.37.1",
+            "shareSessionId": null,
+            "startTime": 0,
+            "startedAt": 1792029570750,
+            "stream": null,
+            "timeListening": 0.30000000000000004,
+            "updatedAt": 1792029570772,
+            "user": {
+              "id": "734b4c6f-8c54-43ec-b1a5-7c4544da2f58",
+              "username": "zzyzx-own-listening"
+            },
+            "userId": "734b4c6f-8c54-43ec-b1a5-7c4544da2f58"
+          }
+        ]
+      },
+      {
+        "sessions": [
+          {
+            "mediaMetadata": {
+              "language": null,
+              "publishedYear": null,
+              "publisher": null
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

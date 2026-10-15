@@ -1,0 +1,35 @@
+{
+  "operation": "LibraryGetLibraryFilterData",
+  "method": "GET",
+  "path": "/api/libraries/{id}/filterdata",
+  "answers": {
+    "200": [
+      {
+        "authorCount": 0,
+        "authors": [
+          {
+            "id": "3539e469-e573-4845-9783-7d55f1e5b269",
+            "name": "Tad Williams"
+          }
+        ],
+        "bookCount": 0,
+        "genres": [],
+        "languages": [],
+        "loadedAt": 1792029519263,
+        "narrators": [],
+        "numIssues": 0,
+        "podcastCount": 0,
+        "publishedDecades": [],
+        "publishers": [],
+        "series": [
+          {
+            "id": "21a8b758-65da-4d6d-8987-1f913eba0054",
+            "name": "SDK Series"
+          }
+        ],
+        "seriesCount": 0,
+        "tags": []
+      }
+    ]
+  }
+}

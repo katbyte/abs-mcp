@@ -1,0 +1,12 @@
+{
+  "operation": "BackupDelete",
+  "method": "DELETE",
+  "path": "/api/backups/{id}",
+  "answers": {
+    "200": [
+      {
+        "backups": []
+      }
+    ]
+  }
+}

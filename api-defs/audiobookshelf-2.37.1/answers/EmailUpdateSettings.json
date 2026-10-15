@@ -1,0 +1,28 @@
+{
+  "operation": "EmailUpdateSettings",
+  "method": "PATCH",
+  "path": "/api/emails/settings",
+  "sent": [
+    {
+      "fromAddress": "sdk@example.invalid"
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "settings": {
+          "ereaderDevices": [],
+          "fromAddress": "sdk@example.invalid",
+          "host": null,
+          "id": "email-settings",
+          "pass": null,
+          "port": 465,
+          "rejectUnauthorized": true,
+          "secure": true,
+          "testAddress": null,
+          "user": null
+        }
+      }
+    ]
+  }
+}

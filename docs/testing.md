@@ -94,6 +94,16 @@ make record-check   # check the cassettes still match, without rewriting them
 
 `record-check` compares the shape of live responses against the recordings: renamed fields, vanished fields, changed types. It ignores values. So it goes red when a provider changes its contract, not when a chart position moves.
 
+## Saving what Audiobookshelf answers
+
+The live suites can save every request they send Audiobookshelf and every answer it gives, for the [API document](sdk.md#an-api-document-read-from-the-source). `make spec` then types the document from what the server really sent, rather than only from what its source suggests.
+
+```bash
+ABS_TEST_ANSWERS=1 make testacc
+```
+
+The answers go in `api-defs/audiobookshelf-<version>/answers/`, one file per operation of the document, and are committed. Tokens, keys and passwords are blanked first. A file keeps its first answer whole, and from each later one only what is new, so a second run against the same server changes nothing. A request that matches no operation of the document is listed at the end of the run, as a route the document lacks.
+
 ## Audio comparison
 
 `item_compare_audio` has a fourth kind of test. Its thresholds are read off real speech: LibriVox's public-domain readings of one book by six different readers, beside copies of one reading re-encoded, resampled, cut and split.

@@ -1,0 +1,68 @@
+{
+  "operation": "MeRemoveSeriesFromContinueListening",
+  "method": "GET",
+  "path": "/api/me/series/{id}/remove-from-continue-listening",
+  "answers": {
+    "200": [
+      {
+        "bookmarks": [
+          {
+            "createdAt": 1792029533845,
+            "libraryItemId": "f9aea369-7047-4d60-895e-b5031b70458c",
+            "time": 0.4,
+            "title": "second"
+          }
+        ],
+        "createdAt": 1792029516882,
+        "email": null,
+        "hasOpenIDLink": false,
+        "id": "e2682b5d-a1fb-4847-b7e2-39b7c7564f87",
+        "isActive": true,
+        "isLocked": false,
+        "itemTagsSelected": [],
+        "lastSeen": null,
+        "librariesAccessible": [],
+        "mediaProgress": [
+          {
+            "currentTime": 0.5,
+            "duration": 1,
+            "ebookLocation": null,
+            "ebookProgress": 0,
+            "episodeId": null,
+            "finishedAt": 1700000000000,
+            "hideFromContinueListening": false,
+            "id": "daffbde6-83e8-4c73-9780-35e2af478f61",
+            "isFinished": true,
+            "lastUpdate": 1700000500000,
+            "libraryItemId": "f9aea369-7047-4d60-895e-b5031b70458c",
+            "mediaItemId": "fbadb453-d559-4670-925c-a6b8134e827d",
+            "mediaItemType": "book",
+            "progress": 1,
+            "startedAt": 1792029533819,
+            "userId": "e2682b5d-a1fb-4847-b7e2-39b7c7564f87"
+          },
+          {
+            "currentTime": 0
+          }
+        ],
+        "permissions": {
+          "accessAllLibraries": true,
+          "accessAllTags": true,
+          "accessExplicitContent": true,
+          "createEreader": true,
+          "delete": true,
+          "download": true,
+          "selectedTagsNotAccessible": false,
+          "update": true,
+          "upload": true
+        },
+        "seriesHideFromContinueListening": [
+          "21a8b758-65da-4d6d-8987-1f913eba0054"
+        ],
+        "token": "REDACTED",
+        "type": "root",
+        "username": "root"
+      }
+    ]
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "operation": "LibraryGetSeriesForLibrary",
+  "method": "GET",
+  "path": "/api/libraries/{id}/series/{seriesId}",
+  "answers": {
+    "200": [
+      {
+        "addedAt": 1792029521361,
+        "description": "A series, per the SDK suite.",
+        "id": "21a8b758-65da-4d6d-8987-1f913eba0054",
+        "libraryId": "d9204ade-9fe6-4681-99d9-26075fdeb94a",
+        "name": "SDK Series",
+        "nameIgnorePrefix": "SDK Series",
+        "progress": {
+          "isFinished": false,
+          "libraryItemIds": [
+            "f9aea369-7047-4d60-895e-b5031b70458c"
+          ],
+          "libraryItemIdsFinished": []
+        },
+        "rssFeed": {
+          "entityId": "21a8b758-65da-4d6d-8987-1f913eba0054",
+          "entityType": "series",
+          "feedUrl": "/feed/sdk-series-feed",
+          "id": "72d60e12-8ee6-414e-a5f9-409c7924f249",
+          "meta": {
+            "description": "",
+            "ownerEmail": null,
+            "ownerName": null,
+            "preventIndexing": true,
+            "title": "SDK Series"
+          }
+        },
+        "updatedAt": 1792029521902
+      }
+    ]
+  }
+}

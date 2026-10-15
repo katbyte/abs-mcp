@@ -1,0 +1,14 @@
+{
+  "operation": "MiscGetAllTags",
+  "method": "GET",
+  "path": "/api/tags",
+  "answers": {
+    "200": [
+      {
+        "tags": [
+          "sdk"
+        ]
+      }
+    ]
+  }
+}

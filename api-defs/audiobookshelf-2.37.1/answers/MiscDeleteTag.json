@@ -1,0 +1,12 @@
+{
+  "operation": "MiscDeleteTag",
+  "method": "DELETE",
+  "path": "/api/tags/{tag}",
+  "answers": {
+    "200": [
+      {
+        "numItemsUpdated": 1
+      }
+    ]
+  }
+}

@@ -16,6 +16,7 @@
 - `api-defs/audiobookshelf-openapi-2.37.1.json`, an OpenAPI document of every Audiobookshelf route, read from the server source by `make spec`
 - `make spec` fills in what the source leaves untyped from the hand-written client, and lists where the two disagree
 - `make pandorest-import` reads the document into pandorest's definitions, with each kind of id its own type, times read as dates, and the lists that page marked so every page can be read
+- `ABS_TEST_ANSWERS=1 make testacc` saves what Audiobookshelf answers, and `make spec` fills in and corrects the API document from it
 - at `ABS_LOG=INFO`, a log line for each call of a tool that changes or deletes something, with passwords, keys, and the sign-in and query values of any address blanked
 - a call refused for an argument the tool does not take says which arguments it does take
 

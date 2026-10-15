@@ -1,0 +1,12 @@
+{
+  "operation": "PodcastGetEpisodeDownloads",
+  "method": "GET",
+  "path": "/api/podcasts/{id}/downloads",
+  "answers": {
+    "200": [
+      {
+        "downloads": []
+      }
+    ]
+  }
+}

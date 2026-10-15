@@ -13,6 +13,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/katbyte/abs-mcp/sdk/pandorest/answers"
 )
 
 // document is the OpenAPI document the scan writes, in the parts pandorest reads.
@@ -68,6 +70,11 @@ type schema struct {
 	Items                *schema            `json:"items,omitempty"`
 	Properties           map[string]*schema `json:"properties,omitempty"`
 	AdditionalProperties bool               `json:"additionalProperties,omitempty"`
+
+	// whole is set on a number typed from answers that were all whole, which the hand-written client may settle as a whole number
+	whole bool
+	// sampled is set on a record typed from answers, which show only the fields that happened to be sent, so the hand-written client may add more
+	sampled bool
 }
 
 type components struct {
@@ -86,11 +93,12 @@ func spec(args []string, dir string, w io.Writer) error {
 	verbose := fs.Bool("v", false, "list every operation and how much of its answer is typed")
 	trace := fs.String("trace", "", "print what the scan works out for the handlers named, such as LibraryController.stats")
 	client := fs.String("client", "sdk/abs-byhand", "the hand-written client, whose types fill what the source leaves untyped; empty for none")
+	answerFlag := fs.String("answers", "", "a folder of answers saved from a real server by the live suites, which fill and correct the document; empty for <dir>/audiobookshelf-<version>/answers")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return errors.New("usage: go run ./sdk/pandorest spec [-v] [-client dir] <audiobookshelf checkout>")
+		return errors.New("usage: go run ./sdk/pandorest spec [-v] [-answers dir] [-client dir] <audiobookshelf checkout>")
 	}
 
 	root, err := checkout(fs.Arg(0))
@@ -110,7 +118,19 @@ func spec(args []string, dir string, w io.Writer) error {
 
 	doc, b, routes := build(prog, version, *trace, w)
 
-	// what the source leaves untyped, the hand-written client may type: it is proved against a running server
+	// what a real server answered fills what the source leaves untyped and corrects what it gets wrong, before anything else has a say
+	answerDir := cmp.Or(*answerFlag, answers.Dir(dir, version))
+	saved, err := answers.Read(answerDir)
+	if err != nil {
+		return fmt.Errorf("reading the answers saved from a server: %w", err)
+	}
+	var heard *answerFill
+	if len(saved) > 0 {
+		heard = newAnswerFill()
+		heard.fill(doc, saved)
+	}
+
+	// what is still untyped, the hand-written client may type: it is proved against a running server
 	var hand *byhand
 	if *client != "" {
 		if hand, err = readClient(os.DirFS(*client), "."); err != nil {
@@ -136,6 +156,9 @@ func spec(args []string, dir string, w io.Writer) error {
 	}
 
 	rep.write(w, version, *verbose)
+	if heard != nil {
+		heard.write(w, answerDir, *verbose)
+	}
 	if hand != nil {
 		hand.write(w, *client, *verbose)
 	}
@@ -235,17 +258,20 @@ func (b *builder) operation(r *route, params []string, ans *answer, req *reqInfo
 		op.Parameters = append(op.Parameters, parameter{Name: n, In: "query", Schema: &schema{Type: t}})
 	}
 
-	if r.verb != "get" && (len(req.body) > 0 || req.bodyWhole || len(req.files) > 0) {
+	if r.verb != "get" && (len(req.body) > 0 || req.bodyWhole || req.bodyList || len(req.files) > 0) {
 		props := map[string]*schema{}
 		for _, n := range req.body {
 			props[n] = &schema{}
 		}
-		if len(req.files) > 0 {
+		switch {
+		case len(req.files) > 0:
 			for _, n := range req.files {
 				props[n] = &schema{Type: "string", Format: "binary"}
 			}
 			op.RequestBody = &body{Content: map[string]media{"multipart/form-data": {Schema: &schema{Type: "object", Properties: props}}}}
-		} else {
+		case req.bodyList:
+			op.RequestBody = &body{Content: map[string]media{"application/json": {Schema: &schema{Type: "array", Items: &schema{}}}}}
+		default:
 			op.RequestBody = &body{Content: map[string]media{"application/json": {Schema: &schema{Type: "object", Properties: props, AdditionalProperties: req.bodyWhole}}}}
 		}
 	}

@@ -1,0 +1,54 @@
+{
+  "operation": "MeGetStatsForYear",
+  "method": "GET",
+  "path": "/api/me/stats/year/{year}",
+  "answers": {
+    "200": [
+      {
+        "booksWithCovers": [],
+        "finishedBooksWithCovers": [
+          "336944bb-dcc6-4d14-bebe-2b9163a064e5"
+        ],
+        "longestAudiobookFinished": null,
+        "mostListenedMonth": null,
+        "mostListenedNarrator": null,
+        "numBooksFinished": 1,
+        "numBooksListened": 0,
+        "topAuthors": [],
+        "topGenres": [],
+        "totalBookListeningTime": 0,
+        "totalListeningSessions": 0,
+        "totalListeningTime": 0,
+        "totalPodcastListeningTime": 0
+      },
+      {
+        "longestAudiobookFinished": {
+          "duration": 1,
+          "finishedAt": "2026-10-15T01:59:30.698Z",
+          "id": "92e5172f-6c9f-4e09-8a35-5872723a7a9b",
+          "title": "Foundation and Empire"
+        },
+        "mostListenedMonth": {
+          "month": 9,
+          "time": 1
+        },
+        "mostListenedNarrator": {
+          "name": "Scott Brick",
+          "time": 1
+        },
+        "topAuthors": [
+          {
+            "name": "Isaac Asimov",
+            "time": 1
+          }
+        ],
+        "topGenres": [
+          {
+            "genre": "Science Fiction",
+            "time": 2
+          }
+        ]
+      }
+    ]
+  }
+}

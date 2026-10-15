@@ -1,0 +1,19 @@
+{
+  "operation": "FileSystemGetPaths",
+  "method": "GET",
+  "path": "/api/filesystem",
+  "answers": {
+    "200": [
+      {
+        "directories": [
+          {
+            "dirname": "app",
+            "level": 0,
+            "path": "/app"
+          }
+        ],
+        "posix": true
+      }
+    ]
+  }
+}

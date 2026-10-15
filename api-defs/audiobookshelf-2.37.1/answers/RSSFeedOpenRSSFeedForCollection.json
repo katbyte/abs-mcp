@@ -1,0 +1,30 @@
+{
+  "operation": "RSSFeedOpenRSSFeedForCollection",
+  "method": "POST",
+  "path": "/api/feeds/collection/{collectionId}/open",
+  "sent": [
+    {
+      "serverAddress": "http://localhost:13379",
+      "slug": "sdk-collection-feed"
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "feed": {
+          "entityId": "48e0fd5e-4b6f-4df1-954d-c79b1a9e08dd",
+          "entityType": "collection",
+          "feedUrl": "/feed/sdk-collection-feed",
+          "id": "3489e6c0-b96e-495b-b3ce-e7c3fd006d9e",
+          "meta": {
+            "description": "",
+            "ownerEmail": null,
+            "ownerName": null,
+            "preventIndexing": true,
+            "title": "SDK Feed Collection"
+          }
+        }
+      }
+    ]
+  }
+}

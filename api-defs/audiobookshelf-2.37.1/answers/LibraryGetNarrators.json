@@ -1,0 +1,18 @@
+{
+  "operation": "LibraryGetNarrators",
+  "method": "GET",
+  "path": "/api/libraries/{id}/narrators",
+  "answers": {
+    "200": [
+      {
+        "narrators": [
+          {
+            "id": "U0RLIFJlYWRlcg%3D%3D",
+            "name": "SDK Reader",
+            "numBooks": 7
+          }
+        ]
+      }
+    ]
+  }
+}

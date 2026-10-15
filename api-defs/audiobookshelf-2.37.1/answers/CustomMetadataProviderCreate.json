@@ -1,0 +1,28 @@
+{
+  "operation": "CustomMetadataProviderCreate",
+  "method": "POST",
+  "path": "/api/custom-metadata-providers",
+  "sent": [
+    {
+      "authHeaderValue": "",
+      "mediaType": "book",
+      "name": "SDK Provider",
+      "url": "http://localhost:9/sdk"
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "provider": {
+          "authHeaderValue": null,
+          "createdAt": "2026-10-15T01:58:55.950Z",
+          "id": "3027fe0a-9519-4744-bbf1-8949bd4443a1",
+          "mediaType": "book",
+          "name": "SDK Provider",
+          "updatedAt": "2026-10-15T01:58:55.950Z",
+          "url": "http://localhost:9/sdk"
+        }
+      }
+    ]
+  }
+}

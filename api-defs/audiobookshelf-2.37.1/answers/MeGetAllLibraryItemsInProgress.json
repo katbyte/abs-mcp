@@ -1,0 +1,100 @@
+{
+  "operation": "MeGetAllLibraryItemsInProgress",
+  "method": "GET",
+  "path": "/api/me/items-in-progress",
+  "answers": {
+    "200": [
+      {
+        "libraryItems": [
+          {
+            "addedAt": 1792029519518,
+            "birthtimeMs": 1792029512417,
+            "ctimeMs": 1792029531321,
+            "folderId": "2599fce3-0201-4289-8106-f2cfb98fb689",
+            "id": "f9aea369-7047-4d60-895e-b5031b70458c",
+            "ino": "1462919",
+            "isFile": false,
+            "isInvalid": false,
+            "isMissing": false,
+            "libraryId": "d9204ade-9fe6-4681-99d9-26075fdeb94a",
+            "media": {
+              "coverPath": null,
+              "duration": 1,
+              "id": "fbadb453-d559-4670-925c-a6b8134e827d",
+              "metadata": {
+                "abridged": false,
+                "asin": null,
+                "authorName": "Isaac Asimov",
+                "authorNameLF": "Asimov, Isaac",
+                "description": null,
+                "explicit": false,
+                "genres": [],
+                "isbn": null,
+                "language": null,
+                "narratorName": "SDK Doomed Narrator",
+                "publishedDate": null,
+                "publishedYear": "1999",
+                "publisher": null,
+                "seriesName": "SDK Series #1",
+                "subtitle": null,
+                "title": "Second Foundation",
+                "titleIgnorePrefix": "Second Foundation"
+              },
+              "numAudioFiles": 1,
+              "numChapters": 2,
+              "numTracks": 1,
+              "size": 4516,
+              "tags": [
+                "sdk-test"
+              ]
+            },
+            "mediaType": "book",
+            "mtimeMs": 1792029531321,
+            "numFiles": 1,
+            "oldLibraryItemId": null,
+            "path": "/fiction/Isaac Asimov/Second Foundation",
+            "progressLastUpdate": 1792029533767,
+            "relPath": "Isaac Asimov/Second Foundation",
+            "size": 4516,
+            "updatedAt": 1792029531581
+          }
+        ]
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "metadata": {
+                "publishedYear": null
+              }
+            }
+          }
+        ]
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "metadata": {
+                "genres": [
+                  "Science Fiction"
+                ],
+                "language": "English",
+                "publisher": "DAW"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "ebookFormat": "epub"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

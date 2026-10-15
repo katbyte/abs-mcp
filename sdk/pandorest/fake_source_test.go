@@ -52,6 +52,8 @@ class ApiRouter {
     this.router.get('/libraries/:id/raw', LibraryController.middleware.bind(this), LibraryController.raw.bind(this))
     this.router.get('/libraries/:id/label', LibraryController.middleware.bind(this), LibraryController.label.bind(this))
     this.router.get('/libraries/:id/search', LibraryController.middleware.bind(this), LibraryController.search.bind(this))
+    this.router.post('/libraries/:id/notes', LibraryController.middleware.bind(this), LibraryController.notes.bind(this))
+    this.router.post('/libraries/order', LibraryController.order.bind(this))
     this.router.get('/items/:id/play/:episodeId?', ItemController.play.bind(this))
     this.router.get('/items/:id/download', ItemController.download.bind(this))
     this.router.get('/files/*', ItemController.download.bind(this))
@@ -130,6 +132,22 @@ class LibraryController {
   label(req, res) {
     const who = req.query.who ? req.user : req.library
     res.json({ label: who.label() })
+  }
+
+  notes(req, res) {
+    const payload = req.body
+    if (!payload.text) return res.sendStatus(400)
+    for (const key in req.body) {
+      if (key.startsWith('_')) return res.sendStatus(400)
+    }
+    res.sendStatus(200)
+  }
+
+  order(req, res) {
+    const orders = req.body
+    if (!orders?.length) return res.sendStatus(400)
+    orders.forEach((o) => o.id)
+    res.sendStatus(200)
   }
 
   search(req, res) {

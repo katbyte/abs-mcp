@@ -53,6 +53,13 @@
           }
         }
       ],
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "SeriesUpdateRequest"
+        }
+      },
       "Response": {
         "ContentType": "application/json",
         "Type": {
@@ -62,6 +69,27 @@
       },
       "ExpectedStatusCodes": [
         200
+      ]
+    }
+  ],
+  "Models": [
+    {
+      "Name": "SeriesUpdateRequest",
+      "Fields": [
+        {
+          "Name": "Description",
+          "JsonName": "description",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        }
       ]
     }
   ]

@@ -50,9 +50,9 @@ func TestDefinitionsCurrent(t *testing.T) {
 func TestUntypedIDs(t *testing.T) {
 	t.Parallel()
 
-	got := untypedIDs("libraryId")
-	if want := []string{"PlaybackSessionForClient .libraryId", "SessionSyncLocalRequest .libraryId"}; !slices.Equal(got, want) {
-		t.Errorf("untypedIDs(libraryId) = %q, want %q", got, want)
+	got := untypedIDs("libraryId", "userId")
+	if want := []string{"ApiKeyUpdateRequest .userId", "SessionSyncLocalRequest .libraryId", "SessionSyncLocalRequest .userId"}; !slices.Equal(got, want) {
+		t.Errorf("untypedIDs(libraryId, userId) = %q, want %q", got, want)
 	}
 
 	if got := untypedIDs("authorId"); got != nil {

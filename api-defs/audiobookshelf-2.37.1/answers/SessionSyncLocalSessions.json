@@ -1,0 +1,17 @@
+{
+  "operation": "SessionSyncLocalSessions",
+  "method": "POST",
+  "path": "/api/session/local-all",
+  "sent": [
+    {
+      "sessions": null
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "results": []
+      }
+    ]
+  }
+}

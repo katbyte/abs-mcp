@@ -1,0 +1,150 @@
+{
+  "operation": "LibraryGetRecentEpisodes",
+  "method": "GET",
+  "path": "/api/libraries/{id}/recent-episodes",
+  "answers": {
+    "200": [
+      {
+        "episodes": [
+          {
+            "addedAt": 1792029531755,
+            "audioFile": {
+              "addedAt": 1792029531750,
+              "bitRate": 32000,
+              "channelLayout": "mono",
+              "channels": 1,
+              "chapters": [],
+              "codec": "mp3",
+              "discNumFromFilename": null,
+              "discNumFromMeta": null,
+              "duration": 1,
+              "embeddedCoverArt": null,
+              "error": null,
+              "exclude": false,
+              "format": "MP2/3 (MPEG audio layer 2/3)",
+              "index": 1,
+              "ino": "1463223",
+              "language": null,
+              "manuallyVerified": false,
+              "metaTags": {
+                "tagEncoder": "Lavf63.1.102"
+              },
+              "metadata": {
+                "birthtimeMs": 1792029514453,
+                "ctimeMs": 1792029514480,
+                "ext": ".mp3",
+                "filename": "Episode 2.mp3",
+                "mtimeMs": 1792029514463,
+                "path": "/podcasts/Behind the Bastards/Episode 2.mp3",
+                "relPath": "Episode 2.mp3",
+                "size": 4386
+              },
+              "mimeType": "audio/mpeg",
+              "timeBase": "1/14112000",
+              "trackNumFromFilename": null,
+              "trackNumFromMeta": null,
+              "updatedAt": 1792029531750
+            },
+            "audioTrack": {
+              "addedAt": 1792029531750,
+              "bitRate": 32000,
+              "channelLayout": "mono",
+              "channels": 1,
+              "chapters": [],
+              "codec": "mp3",
+              "contentUrl": "/api/items/51118d57-a409-4ca2-992a-4b2fc6d50c91/file/1463223",
+              "discNumFromFilename": null,
+              "discNumFromMeta": null,
+              "duration": 1,
+              "embeddedCoverArt": null,
+              "error": null,
+              "exclude": false,
+              "format": "MP2/3 (MPEG audio layer 2/3)",
+              "index": 1,
+              "ino": "1463223",
+              "language": null,
+              "manuallyVerified": false,
+              "metaTags": {
+                "tagEncoder": "Lavf63.1.102"
+              },
+              "metadata": {
+                "birthtimeMs": 1792029514453,
+                "ctimeMs": 1792029514480,
+                "ext": ".mp3",
+                "filename": "Episode 2.mp3",
+                "mtimeMs": 1792029514463,
+                "path": "/podcasts/Behind the Bastards/Episode 2.mp3",
+                "relPath": "Episode 2.mp3",
+                "size": 4386
+              },
+              "mimeType": "audio/mpeg",
+              "startOffset": 0,
+              "timeBase": "1/14112000",
+              "title": "Episode 2.mp3",
+              "trackNumFromFilename": null,
+              "trackNumFromMeta": null,
+              "updatedAt": 1792029531750
+            },
+            "chapters": [],
+            "description": null,
+            "duration": 1,
+            "enclosure": null,
+            "episode": null,
+            "episodeType": null,
+            "guid": null,
+            "id": "24a717b1-88c6-4932-bfa4-5f999ef65484",
+            "index": null,
+            "libraryId": "5745c0fc-0e6c-4f44-9ae3-20a8d4e8bb2d",
+            "libraryItemId": "51118d57-a409-4ca2-992a-4b2fc6d50c91",
+            "oldEpisodeId": null,
+            "podcast": {
+              "autoDownloadEpisodes": false,
+              "autoDownloadSchedule": "0 * * * *",
+              "coverPath": null,
+              "episodes": [],
+              "id": "9889da29-8a51-4496-940e-898c9014b057",
+              "lastEpisodeCheck": null,
+              "libraryItemId": "51118d57-a409-4ca2-992a-4b2fc6d50c91",
+              "maxEpisodesToKeep": 0,
+              "maxNewEpisodesToDownload": 3,
+              "metadata": {
+                "author": null,
+                "description": null,
+                "explicit": false,
+                "feedUrl": null,
+                "genres": [],
+                "imageUrl": null,
+                "itunesArtistId": null,
+                "itunesId": null,
+                "itunesPageUrl": null,
+                "language": null,
+                "releaseDate": null,
+                "title": "Behind the Bastards",
+                "type": "episodic"
+              },
+              "tags": []
+            },
+            "podcastId": "9889da29-8a51-4496-940e-898c9014b057",
+            "pubDate": null,
+            "publishedAt": null,
+            "season": null,
+            "size": 4386,
+            "subtitle": null,
+            "title": "Episode 2",
+            "updatedAt": 1792029531755
+          }
+        ],
+        "limit": 10,
+        "page": 0
+      },
+      {
+        "episodes": [
+          {
+            "episode": "1",
+            "season": "1"
+          }
+        ]
+      }
+    ]
+  }
+}

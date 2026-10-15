@@ -1,0 +1,12 @@
+{
+  "operation": "LibraryRemoveAllMetadataFiles",
+  "method": "POST",
+  "path": "/api/libraries/{id}/remove-metadata",
+  "answers": {
+    "200": [
+      {
+        "found": 0
+      }
+    ]
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "operation": "MeGetItemListeningSessions2",
+  "method": "GET",
+  "path": "/api/me/item/listening-sessions/{libraryItemId}",
+  "answers": {
+    "200": [
+      {
+        "itemsPerPage": 10,
+        "numPages": 0,
+        "page": 0,
+        "sessions": [],
+        "total": 0
+      },
+      {
+        "sessions": [
+          {
+            "bookId": "e728d685-7c98-4d60-b1b9-800ace84ea35",
+            "chapters": [],
+            "coverPath": null,
+            "currentTime": 0.3,
+            "date": "2026-10-15",
+            "dayOfWeek": "Thursday",
+            "deviceInfo": {
+              "clientName": "Unknown",
+              "clientVersion": "2.37.1",
+              "deviceId": "3f8a0a95-fee0-46c6-ab9b-ad4b2cd840dd",
+              "deviceName": "",
+              "id": "3f8a0a95-fee0-46c6-ab9b-ad4b2cd840dd",
+              "ipAddress": "::ffff:172.17.0.1",
+              "manufacturer": "",
+              "model": "",
+              "sdkVersion": "",
+              "userId": "734b4c6f-8c54-43ec-b1a5-7c4544da2f58"
+            },
+            "displayAuthor": "James S. A. Corey",
+            "displayTitle": "Leviathan Wakes",
+            "duration": 1,
+            "episodeId": null,
+            "id": "46777606-ae1e-4c4d-9f68-d3fa87420a25",
+            "libraryId": "bc5ad08d-b2fe-402d-af4f-04846bf11cad",
+            "libraryItemId": "a45e21b1-9a07-4e3f-a4d5-6db83e18a556",
+            "mediaMetadata": {
+              "abridged": false,
+              "asin": null,
+              "authors": [
+                {
+                  "id": "09a38daa-d753-4780-a4b2-ab530149bf81",
+                  "name": "James S. A. Corey"
+                }
+              ],
+              "description": null,
+              "explicit": false,
+              "genres": [
+                "Science Fiction"
+              ],
+              "isbn": null,
+              "language": "English",
+              "narrators": [
+                "Jefferson Mays"
+              ],
+              "publishedDate": null,
+              "publishedYear": "2011",
+              "publisher": "Orbit",
+              "series": [
+                {
+                  "id": "18c84b21-c866-449a-beb8-a85f679bd807",
+                  "name": "The Expanse",
+                  "sequence": "1"
+                }
+              ],
+              "subtitle": null,
+              "title": "Leviathan Wakes"
+            },
+            "mediaPlayer": "zzyzx-player",
+            "mediaType": "book",
+            "playMethod": 0,
+            "serverVersion": "2.37.1",
+            "startTime": 0,
+            "startedAt": 1792029570624,
+            "timeListening": 0.30000000000000004,
+            "updatedAt": 1792029570649,
+            "userId": "734b4c6f-8c54-43ec-b1a5-7c4544da2f58"
+          }
+        ]
+      }
+    ]
+  }
+}

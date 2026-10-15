@@ -1,0 +1,129 @@
+{
+  "operation": "LibraryFindOne",
+  "method": "GET",
+  "path": "/api/libraries/{id}",
+  "answers": {
+    "200": [
+      {
+        "createdAt": 1792029519220,
+        "displayOrder": 1,
+        "folders": [
+          {
+            "addedAt": 1792029519225,
+            "fullPath": "/fiction",
+            "id": "2599fce3-0201-4289-8106-f2cfb98fb689",
+            "libraryId": "d9204ade-9fe6-4681-99d9-26075fdeb94a"
+          }
+        ],
+        "icon": "database",
+        "id": "d9204ade-9fe6-4681-99d9-26075fdeb94a",
+        "lastScan": 1792029519647,
+        "lastScanVersion": "2.37.1",
+        "lastUpdate": 1792029519647,
+        "mediaType": "book",
+        "name": "SDK Fiction",
+        "provider": "audible",
+        "settings": {
+          "audiobooksOnly": false,
+          "autoScanCronExpression": null,
+          "coverAspectRatio": 1,
+          "disableWatcher": false,
+          "epubsAllowScriptedContent": false,
+          "hideSingleBookSeries": false,
+          "markAsFinishedPercentComplete": null,
+          "markAsFinishedTimeRemaining": 10,
+          "metadataPrecedence": [
+            "folderStructure"
+          ],
+          "onlyShowLaterBooksInContinueSeries": false,
+          "skipMatchingMediaWithAsin": false,
+          "skipMatchingMediaWithIsbn": false
+        }
+      },
+      {
+        "settings": {
+          "podcastSearchRegion": "us"
+        }
+      },
+      {
+        "filterdata": {
+          "authorCount": 0,
+          "authors": [
+            {
+              "id": "3539e469-e573-4845-9783-7d55f1e5b269",
+              "name": "Tad Williams"
+            }
+          ],
+          "bookCount": 0,
+          "genres": [],
+          "languages": [],
+          "loadedAt": 1792029519263,
+          "narrators": [],
+          "numIssues": 0,
+          "podcastCount": 0,
+          "publishedDecades": [],
+          "publishers": [],
+          "series": [
+            {
+              "id": "21a8b758-65da-4d6d-8987-1f913eba0054",
+              "name": "SDK Series"
+            }
+          ],
+          "seriesCount": 0,
+          "tags": []
+        },
+        "issues": 0,
+        "library": {
+          "createdAt": 1792029519220,
+          "displayOrder": 1,
+          "folders": [
+            {
+              "addedAt": 1792029519225,
+              "fullPath": "/fiction",
+              "id": "2599fce3-0201-4289-8106-f2cfb98fb689",
+              "libraryId": "d9204ade-9fe6-4681-99d9-26075fdeb94a"
+            }
+          ],
+          "icon": "database",
+          "id": "d9204ade-9fe6-4681-99d9-26075fdeb94a",
+          "lastScan": 1792029519647,
+          "lastScanVersion": "2.37.1",
+          "lastUpdate": 1792029531502,
+          "mediaType": "book",
+          "name": "SDK Fiction",
+          "provider": "audible",
+          "settings": {
+            "audiobooksOnly": false,
+            "autoScanCronExpression": null,
+            "coverAspectRatio": 1,
+            "disableWatcher": false,
+            "epubsAllowScriptedContent": false,
+            "hideSingleBookSeries": false,
+            "markAsFinishedPercentComplete": null,
+            "markAsFinishedTimeRemaining": 10,
+            "metadataPrecedence": [
+              "folderStructure"
+            ],
+            "onlyShowLaterBooksInContinueSeries": false,
+            "skipMatchingMediaWithAsin": false,
+            "skipMatchingMediaWithIsbn": false
+          }
+        },
+        "numUserPlaylists": 5
+      },
+      {
+        "library": {
+          "lastScan": null,
+          "lastScanVersion": null
+        }
+      },
+      {
+        "library": {
+          "settings": {
+            "podcastSearchRegion": "us"
+          }
+        }
+      }
+    ]
+  }
+}

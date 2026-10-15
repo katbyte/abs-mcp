@@ -336,7 +336,7 @@ func TestJourneyListsDeletedAndReadBack(t *testing.T) {
 
 		const queue = "Zzyzx Kept Queue"
 		made := acctest.Str(keeper.call(t, "playlist_create", map[string]any{"library": "Fiction", "name": queue, "entries": []any{map[string]any{"item": "Foundation"}, map[string]any{"item": "Second Foundation"}}})["id"])
-		own, err := abs.New(os.Getenv("ABS_SERVER"), keeper.Token)
+		own, err := abs.New(os.Getenv("ABS_SERVER"), keeper.Token, recorder.Option())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -435,7 +435,7 @@ func TestJourneyAListenersOwnListeningReadBack(t *testing.T) {
 	}
 
 	listener := newUser(t, "zzyzx-own-listening", abs.UserCreate{})
-	client, err := abs.New(os.Getenv("ABS_SERVER"), listener.Token)
+	client, err := abs.New(os.Getenv("ABS_SERVER"), listener.Token, recorder.Option())
 	if err != nil {
 		t.Fatal(err)
 	}

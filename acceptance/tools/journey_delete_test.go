@@ -87,7 +87,7 @@ func TestJourneyADeletedBookLeavesNothingBehind(t *testing.T) {
 
 	// someone else listens to it
 	listener := newUser(t, "zzyzx-gone-listener", abs.UserCreate{})
-	lc, err := abs.New(os.Getenv("ABS_SERVER"), listener.Token)
+	lc, err := abs.New(os.Getenv("ABS_SERVER"), listener.Token, recorder.Option())
 	if err != nil {
 		t.Fatal(err)
 	}

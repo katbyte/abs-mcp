@@ -1,0 +1,44 @@
+{
+  "operation": "LibraryStats",
+  "method": "GET",
+  "path": "/api/libraries/{id}/stats",
+  "answers": {
+    "200": [
+      {
+        "authorsWithCount": [
+          {
+            "count": 3,
+            "id": "b5f29003-4517-4452-b9c6-5684666f6952",
+            "name": "Isaac Asimov"
+          }
+        ],
+        "genresWithCount": [
+          {
+            "count": 5,
+            "genre": "Science Fiction & Fantasy"
+          }
+        ],
+        "largestItems": [
+          {
+            "id": "b34f34e3-d453-4057-9026-3d896b95772b",
+            "size": 5160,
+            "title": "Foundation"
+          }
+        ],
+        "longestItems": [
+          {
+            "duration": 1,
+            "id": "f9aea369-7047-4d60-895e-b5031b70458c",
+            "title": "Second Foundation"
+          }
+        ],
+        "numAudioTracks": 7,
+        "totalAuthors": 3,
+        "totalDuration": 7,
+        "totalGenres": 4,
+        "totalItems": 7,
+        "totalSize": 31606
+      }
+    ]
+  }
+}

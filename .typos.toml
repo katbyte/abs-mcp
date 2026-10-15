@@ -17,6 +17,7 @@ extend-exclude = [
   "**/go.mod", # commit hashes in pinned versions
   "**/go.sum",
   "**/testdata/", # recorded server answers and podcast feeds, other people's words
+  "api-defs/*/answers/", # answers saved from a real server, which carry podcast feeds' own words
 ]
 
 [default]
@@ -33,6 +34,8 @@ extend-ignore-re = [
 ]
 
 [default.extend-words]
+# Audiobookshelf's own field names
+pash = "pash" # the stored password hash
 # audio container and box names
 caf = "caf"
 trak = "trak"

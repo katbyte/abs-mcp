@@ -1,0 +1,31 @@
+{
+  "operation": "EmailUpdateEReaderDevices",
+  "method": "POST",
+  "path": "/api/emails/ereader-devices",
+  "sent": [
+    {
+      "ereaderDevices": [
+        {
+          "availabilityOption": "adminOrUp",
+          "email": "sdk@example.invalid",
+          "name": "SDK Reader",
+          "users": null
+        }
+      ]
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "ereaderDevices": [
+          {
+            "availabilityOption": "adminOrUp",
+            "email": "sdk@example.invalid",
+            "name": "SDK Reader",
+            "users": null
+          }
+        ]
+      }
+    ]
+  }
+}

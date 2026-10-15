@@ -1,0 +1,157 @@
+{
+  "operation": "UserGetListeningStats",
+  "method": "GET",
+  "path": "/api/users/{id}/listening-stats",
+  "answers": {
+    "200": [
+      {
+        "dayOfWeek": {},
+        "days": {},
+        "items": {},
+        "recentSessions": [],
+        "today": 0,
+        "totalTime": 0
+      },
+      {
+        "dayOfWeek": {
+          "Thursday": 0.8
+        },
+        "days": {
+          "2026-10-15": 0.8
+        },
+        "items": {
+          "b02cc1c1-debf-4a26-8bf3-309cc936fb79": {
+            "id": "b02cc1c1-debf-4a26-8bf3-309cc936fb79",
+            "mediaMetadata": {
+              "abridged": false,
+              "asin": null,
+              "authors": [
+                {
+                  "id": "36224802-6e1f-4c12-9688-12ce7fa1b008",
+                  "name": "Zzyzx Gone Author"
+                }
+              ],
+              "description": null,
+              "explicit": false,
+              "genres": [],
+              "isbn": null,
+              "language": null,
+              "narrators": [
+                "Zzyzx Gone Reader"
+              ],
+              "publishedDate": null,
+              "publishedYear": null,
+              "publisher": null,
+              "series": [
+                {
+                  "id": "d20b3aa0-5fe4-484b-ad1f-0906f08e1cf1",
+                  "name": "Zzyzx Gone Saga",
+                  "sequence": "1"
+                }
+              ],
+              "subtitle": null,
+              "title": "Zzyzx Gone One"
+            },
+            "timeListening": 0.8
+          }
+        },
+        "recentSessions": [
+          {
+            "bookId": "877530d7-4bd6-46cd-b05f-f26cdd03aa65",
+            "chapters": [],
+            "coverPath": null,
+            "currentTime": 0.4,
+            "date": "2026-10-15",
+            "dayOfWeek": "Thursday",
+            "deviceInfo": {
+              "clientName": "Unknown",
+              "clientVersion": "2.37.1",
+              "deviceId": "739032c9-d326-48d9-b6cd-5da446b8a69d",
+              "deviceName": "",
+              "id": "739032c9-d326-48d9-b6cd-5da446b8a69d",
+              "ipAddress": "::ffff:172.17.0.1",
+              "manufacturer": "",
+              "model": "",
+              "sdkVersion": "",
+              "userId": "9ac18392-15cb-486f-85c9-8bfac0f046bf"
+            },
+            "displayAuthor": "Zzyzx Gone Author",
+            "displayTitle": "Zzyzx Gone One",
+            "duration": 1,
+            "episodeId": null,
+            "id": "3d846084-7215-411e-a5f0-8c85e198c0b5",
+            "libraryId": "6a526c72-6c0c-4aa8-b70e-c9e2267933da",
+            "libraryItemId": "b02cc1c1-debf-4a26-8bf3-309cc936fb79",
+            "mediaMetadata": {
+              "abridged": false,
+              "asin": null,
+              "authors": [
+                {
+                  "id": "36224802-6e1f-4c12-9688-12ce7fa1b008",
+                  "name": "Zzyzx Gone Author"
+                }
+              ],
+              "description": null,
+              "explicit": false,
+              "genres": [],
+              "isbn": null,
+              "language": null,
+              "narrators": [
+                "Zzyzx Gone Reader"
+              ],
+              "publishedDate": null,
+              "publishedYear": null,
+              "publisher": null,
+              "series": [
+                {
+                  "id": "d20b3aa0-5fe4-484b-ad1f-0906f08e1cf1",
+                  "name": "Zzyzx Gone Saga",
+                  "sequence": "1"
+                }
+              ],
+              "subtitle": null,
+              "title": "Zzyzx Gone One"
+            },
+            "mediaPlayer": "zzyzx-player",
+            "mediaType": "book",
+            "playMethod": 0,
+            "serverVersion": "2.37.1",
+            "startTime": 0,
+            "startedAt": 1792029581447,
+            "timeListening": 0.8,
+            "updatedAt": 1792029581469,
+            "userId": "9ac18392-15cb-486f-85c9-8bfac0f046bf"
+          }
+        ],
+        "today": 0.8,
+        "totalTime": 0.8
+      },
+      {
+        "items": {
+          "a2143a8f-5922-45e0-bc55-79102a9d1fdd": {
+            "mediaMetadata": {
+              "genres": [
+                "Science Fiction"
+              ],
+              "language": "English",
+              "publishedYear": "2001",
+              "publisher": "DAW"
+            }
+          }
+        },
+        "recentSessions": [
+          {
+            "mediaMetadata": {
+              "genres": [
+                "Science Fiction"
+              ],
+              "language": "English",
+              "publishedYear": "2001",
+              "publisher": "DAW"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

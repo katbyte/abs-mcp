@@ -97,12 +97,17 @@ func TestSpec(t *testing.T) {
 		t.Errorf("search total: %+v, want a whole number", total)
 	}
 
+	// a body used as a list is one, and what a list has of its own is not a field of it
+	if order := doc.Paths["/api/libraries/order"]["post"].RequestBody.Content["application/json"].Schema; order.Type != "array" || order.Items == nil {
+		t.Errorf("order body: %+v, want a list", order)
+	}
+
 	download := doc.Paths["/api/items/{id}/download"]["get"]
 	if download.Responses["200"].Content["application/octet-stream"].Schema == nil {
 		t.Errorf("download: %+v, want a file", download.Responses)
 	}
 
-	for _, line := range []string{"Audiobookshelf 9.9.9: 11 routes, 12 operations", "answer a file", "/api/items/{id}/play/{episodeId}", "wrote " + filepath.Join(out, "audiobookshelf-openapi-9.9.9.json")} {
+	for _, line := range []string{"Audiobookshelf 9.9.9: 13 routes, 14 operations", "answer a file", "/api/items/{id}/play/{episodeId}", "wrote " + filepath.Join(out, "audiobookshelf-openapi-9.9.9.json")} {
 		if !strings.Contains(report.String(), line) {
 			t.Errorf("report has no %q:\n%s", line, report.String())
 		}
@@ -204,6 +209,44 @@ func TestSpecFillsFromClient(t *testing.T) {
 	}
 
 	for _, line := range []string{"filled from " + client + "   ", "; 1 it types otherwise are left as the source has them; 1 of its requests match no operation", "differs: GET /status answer.isInit: the source says boolean, the client integer", "no operation for GET /api/nothing (Nothing)"} {
+		if !strings.Contains(report.String(), line) {
+			t.Errorf("report has no %q:\n%s", line, report.String())
+		}
+	}
+}
+
+func TestSpecFillsFromAnswers(t *testing.T) {
+	t.Parallel()
+
+	src, out, saved := writeFakeSource(t), t.TempDir(), t.TempDir()
+	search := `{"operation": "LibrarySearch", "method": "GET", "path": "/api/libraries/{id}/search", "answers": {"200": [{"results": [{"id": "a", "n": 1}], "total": 2.5, "page": 0, "limit": 10}]}}`
+	if err := os.WriteFile(filepath.Join(saved, "LibrarySearch.json"), []byte(search), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var report bytes.Buffer
+	if err := spec([]string{"-v", "-client", "", "-answers", saved, src}, out, &report); err != nil {
+		t.Fatal(err)
+	}
+
+	b, err := fs.ReadFile(os.DirFS(out), "audiobookshelf-openapi-9.9.9.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc document
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+
+	answer := doc.Paths["/api/libraries/{id}/search"]["get"].Responses["200"].Content["application/json"].Schema
+	if results := answer.Properties["results"]; results.Type != "array" || results.Items.Properties["id"].Type != "string" || results.Items.Properties["n"].Type != "number" {
+		t.Errorf("results, which the source cannot type: %+v, want a list typed from the answer", results)
+	}
+	if total := answer.Properties["total"]; total.Type != "number" {
+		t.Errorf("total, a count that came back with a fraction: %+v, want a number", total)
+	}
+
+	for _, line := range []string{"answers from " + saved + "   1 files: filled ", "corrected: GET /api/libraries/{id}/search answer.total: the server sent a fraction"} {
 		if !strings.Contains(report.String(), line) {
 			t.Errorf("report has no %q:\n%s", line, report.String())
 		}

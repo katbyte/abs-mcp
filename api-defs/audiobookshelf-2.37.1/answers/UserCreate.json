@@ -1,0 +1,93 @@
+{
+  "operation": "UserCreate",
+  "method": "POST",
+  "path": "/api/users",
+  "sent": [
+    {
+      "password": "REDACTED",
+      "permissions": {
+        "download": true,
+        "update": true
+      },
+      "type": "user",
+      "username": "sdk-user"
+    },
+    {
+      "isActive": true,
+      "permissions": {
+        "accessAllLibraries": true,
+        "accessAllTags": true,
+        "accessExplicitContent": false
+      }
+    },
+    {
+      "itemTagsSelected": [
+        "cyberpunk"
+      ]
+    },
+    {
+      "librariesAccessible": [
+        "bc5ad08d-b2fe-402d-af4f-04846bf11cad"
+      ]
+    },
+    {
+      "permissions": {
+        "delete": false,
+        "upload": false
+      }
+    },
+    {
+      "permissions": {
+        "selectedTagsNotAccessible": false
+      }
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "user": {
+          "bookmarks": [],
+          "createdAt": 1792029518614,
+          "email": null,
+          "hasOpenIDLink": false,
+          "id": "b906f0b2-d98c-46db-8dbc-05201f9e11c3",
+          "isActive": false,
+          "isLocked": false,
+          "itemTagsSelected": [],
+          "lastSeen": null,
+          "librariesAccessible": [],
+          "mediaProgress": [],
+          "permissions": {
+            "accessAllLibraries": true,
+            "accessAllTags": true,
+            "accessExplicitContent": false,
+            "createEreader": false,
+            "delete": false,
+            "download": true,
+            "selectedTagsNotAccessible": false,
+            "update": true,
+            "upload": false
+          },
+          "seriesHideFromContinueListening": [],
+          "token": "REDACTED",
+          "type": "user",
+          "username": "sdk-user"
+        }
+      },
+      {
+        "user": {
+          "itemTagsSelected": [
+            "cyberpunk"
+          ]
+        }
+      },
+      {
+        "user": {
+          "librariesAccessible": [
+            "bc5ad08d-b2fe-402d-af4f-04846bf11cad"
+          ]
+        }
+      }
+    ]
+  }
+}

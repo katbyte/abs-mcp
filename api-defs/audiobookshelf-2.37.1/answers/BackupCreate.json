@@ -1,0 +1,25 @@
+{
+  "operation": "BackupCreate",
+  "method": "POST",
+  "path": "/api/backups",
+  "answers": {
+    "200": [
+      {
+        "backups": [
+          {
+            "backupDirPath": "/metadata/backups",
+            "createdAt": 1792029518651,
+            "datePretty": "Thu, Oct 15 2026 01:58",
+            "fileSize": 10391,
+            "filename": "2026-10-15T0158.audiobookshelf",
+            "fullPath": "/metadata/backups/2026-10-15T0158.audiobookshelf",
+            "id": "2026-10-15T0158",
+            "key": "sqlite",
+            "path": "backups/2026-10-15T0158.audiobookshelf",
+            "serverVersion": "2.37.1"
+          }
+        ]
+      }
+    ]
+  }
+}

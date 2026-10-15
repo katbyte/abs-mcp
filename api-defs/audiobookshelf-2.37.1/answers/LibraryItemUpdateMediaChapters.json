@@ -1,0 +1,29 @@
+{
+  "operation": "LibraryItemUpdateMediaChapters",
+  "method": "POST",
+  "path": "/api/items/{id}/chapters",
+  "sent": [
+    {
+      "chapters": [
+        {
+          "end": 0.5,
+          "id": 0,
+          "start": 0,
+          "title": "One"
+        },
+        {
+          "end": 1,
+          "start": 0.5
+        }
+      ]
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "success": true,
+        "updated": true
+      }
+    ]
+  }
+}

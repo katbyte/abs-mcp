@@ -1,0 +1,16 @@
+{
+  "operation": "SessionGetAllWithUserData",
+  "method": "GET",
+  "path": "/api/sessions",
+  "answers": {
+    "200": [
+      {
+        "itemsPerPage": 10,
+        "numPages": 0,
+        "page": 0,
+        "sessions": [],
+        "total": 0
+      }
+    ]
+  }
+}

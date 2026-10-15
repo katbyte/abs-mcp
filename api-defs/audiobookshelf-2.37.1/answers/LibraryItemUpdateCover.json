@@ -1,0 +1,18 @@
+{
+  "operation": "LibraryItemUpdateCover",
+  "method": "PATCH",
+  "path": "/api/items/{id}/cover",
+  "sent": [
+    {
+      "cover": "/fiction/Isaac Asimov/Second Foundation/cover.jpg"
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "cover": "/fiction/Isaac Asimov/Second Foundation/cover.jpg",
+        "success": true
+      }
+    ]
+  }
+}

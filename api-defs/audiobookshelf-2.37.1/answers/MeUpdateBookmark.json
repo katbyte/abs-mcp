@@ -1,0 +1,21 @@
+{
+  "operation": "MeUpdateBookmark",
+  "method": "PATCH",
+  "path": "/api/me/item/{id}/bookmark",
+  "sent": [
+    {
+      "time": 0.4,
+      "title": "second"
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "createdAt": 1792029533845,
+        "libraryItemId": "f9aea369-7047-4d60-895e-b5031b70458c",
+        "time": 0.4,
+        "title": "second"
+      }
+    ]
+  }
+}

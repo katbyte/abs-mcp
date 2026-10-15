@@ -1,0 +1,14 @@
+{
+  "operation": "SearchFindCovers",
+  "method": "GET",
+  "path": "/api/search/covers",
+  "answers": {
+    "200": [
+      {
+        "results": [
+          "https://m.media-amazon.com/images/I/91lB9bNl2IL.jpg"
+        ]
+      }
+    ]
+  }
+}

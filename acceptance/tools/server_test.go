@@ -176,7 +176,7 @@ func TestServerInfoNonAdmin(t *testing.T) {
 		t.Skip(suite.NotReady)
 	}
 
-	admin, err := abs.New(os.Getenv("ABS_SERVER"), os.Getenv("ABS_TOKEN"))
+	admin, err := abs.New(os.Getenv("ABS_SERVER"), os.Getenv("ABS_TOKEN"), recorder.Option())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestServerInfoNonAdmin(t *testing.T) {
 	}
 
 	// a second server, wired to their key rather than root's
-	plain, err := abs.New(os.Getenv("ABS_SERVER"), key.Key)
+	plain, err := abs.New(os.Getenv("ABS_SERVER"), key.Key, recorder.Option())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +301,7 @@ func TestServerSessionsWithAPlaybackSession(t *testing.T) {
 		t.Skip(suite.NotReady)
 	}
 
-	client, err := abs.New(os.Getenv("ABS_SERVER"), os.Getenv("ABS_TOKEN"))
+	client, err := abs.New(os.Getenv("ABS_SERVER"), os.Getenv("ABS_TOKEN"), recorder.Option())
 	if err != nil {
 		t.Fatal(err)
 	}

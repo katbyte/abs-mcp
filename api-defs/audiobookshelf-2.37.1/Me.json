@@ -7,6 +7,16 @@
       "OperationId": "MeBatchUpdateMediaProgress",
       "Method": "PATCH",
       "Path": "/api/me/progress/batch/update",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "List",
+          "NestedItem": {
+            "Type": "Reference",
+            "ReferenceName": "MeBatchUpdateMediaProgressRequest"
+          }
+        }
+      },
       "Response": {
         "ContentType": "text/plain",
         "Type": {
@@ -762,6 +772,99 @@
     }
   ],
   "Models": [
+    {
+      "Name": "MeBatchUpdateMediaProgressRequest",
+      "Fields": [
+        {
+          "Name": "CurrentTime",
+          "JsonName": "currentTime",
+          "Type": {
+            "Type": "Double"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Duration",
+          "JsonName": "duration",
+          "Type": {
+            "Type": "Double"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "EbookLocation",
+          "JsonName": "ebookLocation",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "EbookProgress",
+          "JsonName": "ebookProgress",
+          "Type": {
+            "Type": "Double"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "EpisodeId",
+          "JsonName": "episodeId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "EpisodeID"
+          }
+        },
+        {
+          "Name": "FinishedAt",
+          "JsonName": "finishedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "HideFromContinueListening",
+          "JsonName": "hideFromContinueListening",
+          "Type": {
+            "Type": "Boolean"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "IsFinished",
+          "JsonName": "isFinished",
+          "Type": {
+            "Type": "Boolean"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "LastUpdate",
+          "JsonName": "lastUpdate",
+          "Type": {
+            "Type": "UnixMillis"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "LibraryItemId",
+          "JsonName": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        },
+        {
+          "Name": "Progress",
+          "JsonName": "progress",
+          "Type": {
+            "Type": "Double"
+          },
+          "Nullable": true
+        }
+      ]
+    },
     {
       "Name": "MeCreateBookmarkAnswer",
       "Fields": [
@@ -1712,10 +1815,8 @@
           "Name": "DayOfWeek",
           "JsonName": "dayOfWeek",
           "Type": {
-            "Type": "Dictionary",
-            "NestedItem": {
-              "Type": "Any"
-            }
+            "Type": "Reference",
+            "ReferenceName": "MeGetListeningStatsAnswerDayOfWeek"
           }
         },
         {
@@ -1759,6 +1860,18 @@
         {
           "Name": "TotalTime",
           "JsonName": "totalTime",
+          "Type": {
+            "Type": "Double"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MeGetListeningStatsAnswerDayOfWeek",
+      "Fields": [
+        {
+          "Name": "Thursday",
+          "JsonName": "Thursday",
           "Type": {
             "Type": "Double"
           }
@@ -1979,7 +2092,8 @@
           "Name": "LibraryItemId",
           "JsonName": "libraryItemId",
           "Type": {
-            "Type": "Any"
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
           },
           "Nullable": true
         },
@@ -2208,7 +2322,7 @@
           "Type": {
             "Type": "List",
             "NestedItem": {
-              "Type": "Any"
+              "Type": "String"
             }
           }
         },
@@ -2321,21 +2435,21 @@
           "Name": "FinishedAt",
           "JsonName": "finishedAt",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           }
         },
         {
           "Name": "Id",
           "JsonName": "id",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           }
         },
         {
           "Name": "Title",
           "JsonName": "title",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           }
         }
       ]
@@ -2577,7 +2691,8 @@
             "NestedItem": {
               "Type": "String"
             }
-          }
+          },
+          "Nullable": true
         }
       ]
     },

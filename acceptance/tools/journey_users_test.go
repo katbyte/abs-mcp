@@ -30,7 +30,7 @@ func TestJourneyPlaybackReachesEveryListeningTool(t *testing.T) {
 	requireProviders(t)
 
 	listener := newUser(t, "zzyzx-listener", abs.UserCreate{})
-	client, err := abs.New(os.Getenv("ABS_SERVER"), listener.Token)
+	client, err := abs.New(os.Getenv("ABS_SERVER"), listener.Token, recorder.Option())
 	if err != nil {
 		t.Fatal(err)
 	}

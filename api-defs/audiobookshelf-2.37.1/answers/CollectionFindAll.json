@@ -1,0 +1,312 @@
+{
+  "operation": "CollectionFindAll",
+  "method": "GET",
+  "path": "/api/collections",
+  "answers": {
+    "200": [
+      {
+        "collections": [
+          {
+            "books": [
+              {
+                "addedAt": 1792029549388,
+                "birthtimeMs": 1792029541666,
+                "ctimeMs": 1792029543824,
+                "folderId": "9a021275-58d1-47ef-95ab-3cad5d38c84e",
+                "id": "115849cb-2c14-4efb-9b8c-7634d86e7fc2",
+                "ino": "1463495",
+                "isFile": false,
+                "isInvalid": false,
+                "isMissing": false,
+                "lastScan": 1792029549387,
+                "libraryFiles": [
+                  {
+                    "addedAt": 1792029548781,
+                    "fileType": "audio",
+                    "ino": "1463504",
+                    "isSupplementary": null,
+                    "metadata": {
+                      "birthtimeMs": 1792029541727,
+                      "ctimeMs": 1792029543824,
+                      "ext": ".mp3",
+                      "filename": "01.mp3",
+                      "mtimeMs": 1792029541734,
+                      "path": "/fiction/Isaac Asimov/Foundation/01.mp3",
+                      "relPath": "01.mp3",
+                      "size": 4386
+                    },
+                    "updatedAt": 1792029548781
+                  },
+                  {
+                    "isSupplementary": false
+                  }
+                ],
+                "libraryId": "bc5ad08d-b2fe-402d-af4f-04846bf11cad",
+                "media": {
+                  "audioFiles": [
+                    {
+                      "addedAt": 1792029549379,
+                      "bitRate": 32000,
+                      "channelLayout": "mono",
+                      "channels": 1,
+                      "chapters": [],
+                      "codec": "mp3",
+                      "discNumFromFilename": null,
+                      "discNumFromMeta": null,
+                      "duration": 1,
+                      "embeddedCoverArt": null,
+                      "error": null,
+                      "exclude": false,
+                      "format": "MP2/3 (MPEG audio layer 2/3)",
+                      "index": 1,
+                      "ino": "1463504",
+                      "language": null,
+                      "manuallyVerified": false,
+                      "metaTags": {
+                        "tagEncoder": "Lavf63.1.102"
+                      },
+                      "metadata": {
+                        "birthtimeMs": 1792029541727,
+                        "ctimeMs": 1792029543824,
+                        "ext": ".mp3",
+                        "filename": "01.mp3",
+                        "mtimeMs": 1792029541734,
+                        "path": "/fiction/Isaac Asimov/Foundation/01.mp3",
+                        "relPath": "01.mp3",
+                        "size": 4386
+                      },
+                      "mimeType": "audio/mpeg",
+                      "timeBase": "1/14112000",
+                      "trackNumFromFilename": 1,
+                      "trackNumFromMeta": null,
+                      "updatedAt": 1792029549379
+                    }
+                  ],
+                  "chapters": [],
+                  "coverPath": null,
+                  "duration": 1,
+                  "ebookFile": {
+                    "addedAt": 1792029548781,
+                    "ebookFormat": "epub",
+                    "fileType": "ebook",
+                    "ino": "1463505",
+                    "isSupplementary": null,
+                    "metadata": {
+                      "birthtimeMs": 1792029542263,
+                      "ctimeMs": 1792029543824,
+                      "ext": ".epub",
+                      "filename": "Foundation.epub",
+                      "mtimeMs": 1792029542263,
+                      "path": "/fiction/Isaac Asimov/Foundation/Foundation.epub",
+                      "relPath": "Foundation.epub",
+                      "size": 774
+                    },
+                    "updatedAt": 1792029548781
+                  },
+                  "ebookFormat": "epub",
+                  "id": "d8dbb6ab-de0e-4cfb-8bc8-901da5124288",
+                  "libraryItemId": "115849cb-2c14-4efb-9b8c-7634d86e7fc2",
+                  "metadata": {
+                    "abridged": false,
+                    "asin": null,
+                    "authorName": "Isaac Asimov",
+                    "authorNameLF": "Asimov, Isaac",
+                    "authors": [
+                      {
+                        "id": "d663841d-4fae-48f2-9538-46cf545129b7",
+                        "name": "Isaac Asimov"
+                      }
+                    ],
+                    "description": null,
+                    "descriptionPlain": null,
+                    "explicit": false,
+                    "genres": [
+                      "Science Fiction"
+                    ],
+                    "isbn": null,
+                    "language": "English",
+                    "narratorName": "Scott Brick",
+                    "narrators": [
+                      "Scott Brick"
+                    ],
+                    "publishedDate": null,
+                    "publishedYear": "1951",
+                    "publisher": "Bantam",
+                    "series": [
+                      {
+                        "id": "fc878528-d25b-40b8-b0e1-66e437df7dc1",
+                        "name": "Foundation",
+                        "sequence": "1"
+                      }
+                    ],
+                    "seriesName": "Foundation #1",
+                    "subtitle": null,
+                    "title": "Foundation",
+                    "titleIgnorePrefix": "Foundation"
+                  },
+                  "numAudioFiles": 1,
+                  "numChapters": 0,
+                  "numTracks": 1,
+                  "size": 5160,
+                  "tags": [
+                    "sf"
+                  ],
+                  "tracks": [
+                    {
+                      "addedAt": 1792029549379,
+                      "bitRate": 32000,
+                      "channelLayout": "mono",
+                      "channels": 1,
+                      "chapters": [],
+                      "codec": "mp3",
+                      "contentUrl": "/api/items/115849cb-2c14-4efb-9b8c-7634d86e7fc2/file/1463504",
+                      "discNumFromFilename": null,
+                      "discNumFromMeta": null,
+                      "duration": 1,
+                      "embeddedCoverArt": null,
+                      "error": null,
+                      "exclude": false,
+                      "format": "MP2/3 (MPEG audio layer 2/3)",
+                      "index": 1,
+                      "ino": "1463504",
+                      "language": null,
+                      "manuallyVerified": false,
+                      "metaTags": {
+                        "tagEncoder": "Lavf63.1.102"
+                      },
+                      "metadata": {
+                        "birthtimeMs": 1792029541727,
+                        "ctimeMs": 1792029543824,
+                        "ext": ".mp3",
+                        "filename": "01.mp3",
+                        "mtimeMs": 1792029541734,
+                        "path": "/fiction/Isaac Asimov/Foundation/01.mp3",
+                        "relPath": "01.mp3",
+                        "size": 4386
+                      },
+                      "mimeType": "audio/mpeg",
+                      "startOffset": 0,
+                      "timeBase": "1/14112000",
+                      "title": "01.mp3",
+                      "trackNumFromFilename": 1,
+                      "trackNumFromMeta": null,
+                      "updatedAt": 1792029549379
+                    }
+                  ]
+                },
+                "mediaType": "book",
+                "mtimeMs": 1792029542270,
+                "numFiles": 2,
+                "oldLibraryItemId": null,
+                "path": "/fiction/Isaac Asimov/Foundation",
+                "relPath": "Isaac Asimov/Foundation",
+                "scanVersion": "2.37.1",
+                "size": 5160,
+                "updatedAt": 1792029556495
+              },
+              {
+                "media": {
+                  "ebookFile": null
+                }
+              }
+            ],
+            "createdAt": 1792029556665,
+            "description": "made by the acceptance suite",
+            "id": "b3209a7c-4fc2-4e95-8dc1-edfbe48a2709",
+            "lastUpdate": 1792029556665,
+            "libraryId": "bc5ad08d-b2fe-402d-af4f-04846bf11cad",
+            "name": "Integration Collection"
+          }
+        ]
+      },
+      {
+        "collections": [
+          {
+            "description": null
+          }
+        ]
+      },
+      {
+        "collections": [
+          {
+            "books": [
+              {
+                "media": {
+                  "metadata": {
+                    "language": null,
+                    "publishedYear": null,
+                    "publisher": null
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "collections": [
+          {
+            "books": [
+              {
+                "media": {
+                  "metadata": {
+                    "description": "A novel, on this shelf so the audits have something to sweep. This description is here so audit_missing has nothing to say about it: it is long enough to pass as one.",
+                    "descriptionPlain": "A novel, on this shelf so the audits have something to sweep. This description is here so audit_missing has nothing to say about it: it is long enough to pass as one."
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "collections": [
+          {
+            "books": [
+              {
+                "media": {
+                  "chapters": [
+                    {
+                      "end": 20,
+                      "id": 0,
+                      "start": 0,
+                      "title": "Zzyzx Setting Out"
+                    }
+                  ],
+                  "coverPath": "/metadata/items/f688bd4b-ffd9-464c-a0e0-7abe36f6e3aa/cover.jpg",
+                  "metadata": {
+                    "asin": "B0ZZYZX001"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "collections": [
+          {
+            "books": [
+              {
+                "media": {
+                  "audioFiles": [
+                    {
+                      "language": "und",
+                      "trackNumFromFilename": null
+                    }
+                  ],
+                  "tracks": [
+                    {
+                      "language": "und",
+                      "trackNumFromFilename": null
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

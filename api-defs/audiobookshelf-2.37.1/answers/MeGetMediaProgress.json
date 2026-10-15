@@ -1,0 +1,27 @@
+{
+  "operation": "MeGetMediaProgress",
+  "method": "GET",
+  "path": "/api/me/progress/{id}/{episodeId}",
+  "answers": {
+    "200": [
+      {
+        "currentTime": 0.5159185,
+        "duration": 1.031837,
+        "ebookLocation": null,
+        "ebookProgress": 0,
+        "episodeId": "7b6f8191-b177-4386-82ca-a63ea1f9cf12",
+        "finishedAt": null,
+        "hideFromContinueListening": false,
+        "id": "e8603685-976c-421d-a1e4-5b1a386dc5f2",
+        "isFinished": false,
+        "lastUpdate": 1792029673508,
+        "libraryItemId": "3a4f1599-ee23-4d1f-99ef-0947da649804",
+        "mediaItemId": "7b6f8191-b177-4386-82ca-a63ea1f9cf12",
+        "mediaItemType": "podcastEpisode",
+        "progress": 0.5,
+        "startedAt": 1792029673508,
+        "userId": "1cb68be5-3438-472e-a6b5-c77ea363964e"
+      }
+    ]
+  }
+}

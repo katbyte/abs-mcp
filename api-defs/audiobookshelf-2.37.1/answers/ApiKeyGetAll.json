@@ -1,0 +1,36 @@
+{
+  "operation": "ApiKeyGetAll",
+  "method": "GET",
+  "path": "/api/api-keys",
+  "answers": {
+    "200": [
+      {
+        "apiKeys": [
+          {
+            "createdAt": "2026-10-15T01:58:36.986Z",
+            "createdByUser": {
+              "id": "e2682b5d-a1fb-4847-b7e2-39b7c7564f87",
+              "type": "root",
+              "username": "root"
+            },
+            "createdByUserId": "e2682b5d-a1fb-4847-b7e2-39b7c7564f87",
+            "description": null,
+            "expiresAt": null,
+            "id": "dae1ce87-e25e-42cd-afb8-4fc0743e208c",
+            "isActive": true,
+            "lastUsedAt": null,
+            "name": "abs-mcp-integration",
+            "permissions": null,
+            "updatedAt": "2026-10-15T01:58:36.986Z",
+            "user": {
+              "id": "e2682b5d-a1fb-4847-b7e2-39b7c7564f87",
+              "type": "root",
+              "username": "root"
+            },
+            "userId": "e2682b5d-a1fb-4847-b7e2-39b7c7564f87"
+          }
+        ]
+      }
+    ]
+  }
+}

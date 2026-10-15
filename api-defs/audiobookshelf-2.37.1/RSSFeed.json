@@ -209,14 +209,14 @@
           "Name": "ServerAddress",
           "JsonName": "serverAddress",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           }
         },
         {
           "Name": "Slug",
           "JsonName": "slug",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           }
         }
       ]

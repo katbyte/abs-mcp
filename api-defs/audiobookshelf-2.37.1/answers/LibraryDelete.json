@@ -1,0 +1,49 @@
+{
+  "operation": "LibraryDelete",
+  "method": "DELETE",
+  "path": "/api/libraries/{id}",
+  "answers": {
+    "200": [
+      {
+        "createdAt": 1792029564301,
+        "displayOrder": 5,
+        "folders": [
+          {
+            "addedAt": 1792029564307,
+            "fullPath": "/scratch/zzyzx-abridged",
+            "id": "1f78d254-fa18-4ce7-855e-e167e2ff585a",
+            "libraryId": "c1c52fa8-b3e1-415d-9170-5111f5e21967"
+          }
+        ],
+        "icon": "database",
+        "id": "c1c52fa8-b3e1-415d-9170-5111f5e21967",
+        "lastScan": 1792029564891,
+        "lastScanVersion": "2.37.1",
+        "lastUpdate": 1792029564891,
+        "mediaType": "book",
+        "name": "Zzyzx Abridged Shelf",
+        "provider": "google",
+        "settings": {
+          "audiobooksOnly": false,
+          "autoScanCronExpression": null,
+          "coverAspectRatio": 1,
+          "disableWatcher": false,
+          "epubsAllowScriptedContent": false,
+          "hideSingleBookSeries": false,
+          "markAsFinishedPercentComplete": null,
+          "markAsFinishedTimeRemaining": 10,
+          "metadataPrecedence": [
+            "folderStructure"
+          ],
+          "onlyShowLaterBooksInContinueSeries": false,
+          "skipMatchingMediaWithAsin": false,
+          "skipMatchingMediaWithIsbn": false
+        }
+      },
+      {
+        "lastScan": null,
+        "lastScanVersion": null
+      }
+    ]
+  }
+}

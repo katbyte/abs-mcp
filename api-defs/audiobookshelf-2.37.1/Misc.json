@@ -231,6 +231,13 @@
       "OperationId": "MiscUpdateAuthSettings",
       "Method": "PATCH",
       "Path": "/api/auth-settings",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MiscUpdateAuthSettingsRequest"
+        }
+      },
       "Response": {
         "ContentType": "application/json",
         "Type": {
@@ -247,6 +254,13 @@
       "OperationId": "MiscUpdateServerSettings",
       "Method": "PATCH",
       "Path": "/api/settings",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "MiscUpdateServerSettingsRequest"
+        }
+      },
       "Response": {
         "ContentType": "application/json",
         "Type": {
@@ -334,7 +348,7 @@
           "Name": "Source",
           "JsonName": "Source",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           }
         },
         {
@@ -407,7 +421,8 @@
             "NestedItem": {
               "Type": "String"
             }
-          }
+          },
+          "Nullable": true
         }
       ]
     },
@@ -634,7 +649,51 @@
           "Name": "CurrentDailyLogs",
           "JsonName": "currentDailyLogs",
           "Type": {
-            "Type": "Any"
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "MiscGetLoggerDataAnswerCurrentDailyLogs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetLoggerDataAnswerCurrentDailyLogs",
+      "Fields": [
+        {
+          "Name": "Level",
+          "JsonName": "level",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "LevelName",
+          "JsonName": "levelName",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Message",
+          "JsonName": "message",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Source",
+          "JsonName": "source",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Timestamp",
+          "JsonName": "timestamp",
+          "Type": {
+            "Type": "String"
           }
         }
       ]
@@ -706,10 +765,8 @@
           "Name": "Data",
           "JsonName": "data",
           "Type": {
-            "Type": "Dictionary",
-            "NestedItem": {
-              "Type": "Any"
-            }
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksData"
           }
         },
         {
@@ -717,21 +774,59 @@
           "JsonName": "description",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "DescriptionKey",
+          "JsonName": "descriptionKey",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "DescriptionSubs",
+          "JsonName": "descriptionSubs",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          },
+          "Nullable": true
         },
         {
           "Name": "Error",
           "JsonName": "error",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "ErrorKey",
+          "JsonName": "errorKey",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "ErrorSubs",
+          "JsonName": "errorSubs",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
         },
         {
           "Name": "FinishedAt",
           "JsonName": "finishedAt",
           "Type": {
             "Type": "UnixMillis"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Id",
@@ -773,6 +868,1802 @@
           "JsonName": "title",
           "Type": {
             "Type": "String"
+          }
+        },
+        {
+          "Name": "TitleKey",
+          "JsonName": "titleKey",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TitleSubs",
+          "JsonName": "titleSubs",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          },
+          "Nullable": true
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksData",
+      "Fields": [
+        {
+          "Name": "AudioFiles",
+          "JsonName": "audioFiles",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "MiscGetTasksAnswerTasksDataAudioFiles"
+            }
+          }
+        },
+        {
+          "Name": "Chapters",
+          "JsonName": "chapters",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "MiscGetTasksAnswerTasksDataChapters"
+            }
+          }
+        },
+        {
+          "Name": "CoverPath",
+          "JsonName": "coverPath",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Duration",
+          "JsonName": "duration",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "EncodeOptions",
+          "JsonName": "encodeOptions",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataEncodeOptions"
+          }
+        },
+        {
+          "Name": "FfmetadataObject",
+          "JsonName": "ffmetadataObject",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataFfmetadataObject"
+          }
+        },
+        {
+          "Name": "FfmetadataPath",
+          "JsonName": "ffmetadataPath",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Ffmpeg",
+          "JsonName": "ffmpeg",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataFfmpeg"
+          }
+        },
+        {
+          "Name": "Inos",
+          "JsonName": "inos",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "ItemCachePath",
+          "JsonName": "itemCachePath",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "LibraryId",
+          "JsonName": "libraryId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryID"
+          }
+        },
+        {
+          "Name": "LibraryItemDir",
+          "JsonName": "libraryItemDir",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "LibraryItemId",
+          "JsonName": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        },
+        {
+          "Name": "LibraryMediaType",
+          "JsonName": "libraryMediaType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "LibraryName",
+          "JsonName": "libraryName",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "MetadataObject",
+          "JsonName": "metadataObject",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataMetadataObject"
+          }
+        },
+        {
+          "Name": "MimeType",
+          "JsonName": "mimeType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Options",
+          "JsonName": "options",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataOptions"
+          }
+        },
+        {
+          "Name": "OriginalTrackPaths",
+          "JsonName": "originalTrackPaths",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "TargetFilename",
+          "JsonName": "targetFilename",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TargetFilepath",
+          "JsonName": "targetFilepath",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TempFilepath",
+          "JsonName": "tempFilepath",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "UserId",
+          "JsonName": "userId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataAudioFiles",
+      "Fields": [
+        {
+          "Name": "CachePath",
+          "JsonName": "cachePath",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Duration",
+          "JsonName": "duration",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Filename",
+          "JsonName": "filename",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Index",
+          "JsonName": "index",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Ino",
+          "JsonName": "ino",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Path",
+          "JsonName": "path",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataChapters",
+      "Fields": [
+        {
+          "Name": "End",
+          "JsonName": "end",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Start",
+          "JsonName": "start",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataEncodeOptions",
+      "Fields": [
+        {
+          "Name": "Bitrate",
+          "JsonName": "bitrate",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Channels",
+          "JsonName": "channels",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmetadataObject",
+      "Fields": [
+        {
+          "Name": "TRACKTOTAL",
+          "JsonName": "TRACKTOTAL",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Album",
+          "JsonName": "album",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "AlbumArtist",
+          "JsonName": "album_artist",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Artist",
+          "JsonName": "artist",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmpeg",
+      "Fields": [
+        {
+          "Name": "FfmpegProc",
+          "JsonName": "ffmpegProc",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProc"
+          }
+        },
+        {
+          "Name": "Logger",
+          "JsonName": "logger",
+          "Type": {
+            "Type": "Dictionary",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "Options",
+          "JsonName": "options",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataFfmpegOptions"
+          }
+        },
+        {
+          "Name": "CurrentInput",
+          "JsonName": "_currentInput",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataFfmpegCurrentInput"
+          }
+        },
+        {
+          "Name": "CurrentOutput",
+          "JsonName": "_currentOutput",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataFfmpegCurrentOutput"
+          }
+        },
+        {
+          "Name": "Events",
+          "JsonName": "_events",
+          "Type": {
+            "Type": "Dictionary",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "EventsCount",
+          "JsonName": "_eventsCount",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Inputs",
+          "JsonName": "_inputs",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "MiscGetTasksAnswerTasksDataFfmpegInputs"
+            }
+          }
+        },
+        {
+          "Name": "Outputs",
+          "JsonName": "_outputs",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "MiscGetTasksAnswerTasksDataFfmpegOutputs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmpegCurrentInput",
+      "Fields": [
+        {
+          "Name": "IsFile",
+          "JsonName": "isFile",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "IsStream",
+          "JsonName": "isStream",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Source",
+          "JsonName": "source",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmpegCurrentOutput",
+      "Fields": [
+        {
+          "Name": "Flags",
+          "JsonName": "flags",
+          "Type": {
+            "Type": "Dictionary",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "IsFile",
+          "JsonName": "isFile",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Pipeopts",
+          "JsonName": "pipeopts",
+          "Type": {
+            "Type": "Dictionary",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "Target",
+          "JsonName": "target",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProc",
+      "Fields": [
+        {
+          "Name": "Connected",
+          "JsonName": "connected",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "ExitCode",
+          "JsonName": "exitCode",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Killed",
+          "JsonName": "killed",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Pid",
+          "JsonName": "pid",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "SignalCode",
+          "JsonName": "signalCode",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Spawnargs",
+          "JsonName": "spawnargs",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "Spawnfile",
+          "JsonName": "spawnfile",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Stderr",
+          "JsonName": "stderr",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStderr"
+          }
+        },
+        {
+          "Name": "Stdin",
+          "JsonName": "stdin",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStdin"
+          }
+        },
+        {
+          "Name": "Stdio",
+          "JsonName": "stdio",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStdio"
+            }
+          }
+        },
+        {
+          "Name": "Stdout",
+          "JsonName": "stdout",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStdout"
+          }
+        },
+        {
+          "Name": "ClosesGot",
+          "JsonName": "_closesGot",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "ClosesNeeded",
+          "JsonName": "_closesNeeded",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Events",
+          "JsonName": "_events",
+          "Type": {
+            "Type": "Dictionary",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "EventsCount",
+          "JsonName": "_eventsCount",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Handle",
+          "JsonName": "_handle",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcHandle"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcHandle",
+      "Fields": [
+        {
+          "Name": "Pid",
+          "JsonName": "pid",
+          "Type": {
+            "Type": "Double"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStderr",
+      "Fields": [
+        {
+          "Name": "AllowHalfOpen",
+          "JsonName": "allowHalfOpen",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Connecting",
+          "JsonName": "connecting",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Server",
+          "JsonName": "server",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "CloseAfterHandlingError",
+          "JsonName": "_closeAfterHandlingError",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Events",
+          "JsonName": "_events",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStderrEvents"
+          }
+        },
+        {
+          "Name": "EventsCount",
+          "JsonName": "_eventsCount",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "HadError",
+          "JsonName": "_hadError",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Host",
+          "JsonName": "_host",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Parent",
+          "JsonName": "_parent",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "PendingData",
+          "JsonName": "_pendingData",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "PendingEncoding",
+          "JsonName": "_pendingEncoding",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ReadableState",
+          "JsonName": "_readableState",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStderrReadableState"
+          }
+        },
+        {
+          "Name": "UnderscoreServer",
+          "JsonName": "_server",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Sockname",
+          "JsonName": "_sockname",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "WritableState",
+          "JsonName": "_writableState",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStderrWritableState"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStderrEvents",
+      "Fields": [
+        {
+          "Name": "Close",
+          "JsonName": "close",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStderrReadableState",
+      "Fields": [
+        {
+          "Name": "AwaitDrainWriters",
+          "JsonName": "awaitDrainWriters",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Buffer",
+          "JsonName": "buffer",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "BufferIndex",
+          "JsonName": "bufferIndex",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "HighWaterMark",
+          "JsonName": "highWaterMark",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Length",
+          "JsonName": "length",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Pipes",
+          "JsonName": "pipes",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStderrWritableState",
+      "Fields": [
+        {
+          "Name": "BufferedIndex",
+          "JsonName": "bufferedIndex",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Corked",
+          "JsonName": "corked",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "HighWaterMark",
+          "JsonName": "highWaterMark",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Length",
+          "JsonName": "length",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Pendingcb",
+          "JsonName": "pendingcb",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Writelen",
+          "JsonName": "writelen",
+          "Type": {
+            "Type": "Double"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStdin",
+      "Fields": [
+        {
+          "Name": "AllowHalfOpen",
+          "JsonName": "allowHalfOpen",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Connecting",
+          "JsonName": "connecting",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Server",
+          "JsonName": "server",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "CloseAfterHandlingError",
+          "JsonName": "_closeAfterHandlingError",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Events",
+          "JsonName": "_events",
+          "Type": {
+            "Type": "Dictionary",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "EventsCount",
+          "JsonName": "_eventsCount",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "HadError",
+          "JsonName": "_hadError",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Host",
+          "JsonName": "_host",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Parent",
+          "JsonName": "_parent",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "PendingData",
+          "JsonName": "_pendingData",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "PendingEncoding",
+          "JsonName": "_pendingEncoding",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ReadableState",
+          "JsonName": "_readableState",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStdinReadableState"
+          }
+        },
+        {
+          "Name": "UnderscoreServer",
+          "JsonName": "_server",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Sockname",
+          "JsonName": "_sockname",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "WritableState",
+          "JsonName": "_writableState",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStdinWritableState"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStdinReadableState",
+      "Fields": [
+        {
+          "Name": "AwaitDrainWriters",
+          "JsonName": "awaitDrainWriters",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Buffer",
+          "JsonName": "buffer",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "BufferIndex",
+          "JsonName": "bufferIndex",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "HighWaterMark",
+          "JsonName": "highWaterMark",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Length",
+          "JsonName": "length",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Pipes",
+          "JsonName": "pipes",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "Readable",
+          "JsonName": "readable",
+          "Type": {
+            "Type": "Boolean"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStdinWritableState",
+      "Fields": [
+        {
+          "Name": "BufferedIndex",
+          "JsonName": "bufferedIndex",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Corked",
+          "JsonName": "corked",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "HighWaterMark",
+          "JsonName": "highWaterMark",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Length",
+          "JsonName": "length",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Pendingcb",
+          "JsonName": "pendingcb",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Writelen",
+          "JsonName": "writelen",
+          "Type": {
+            "Type": "Double"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStdio",
+      "Fields": [
+        {
+          "Name": "AllowHalfOpen",
+          "JsonName": "allowHalfOpen",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Connecting",
+          "JsonName": "connecting",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Server",
+          "JsonName": "server",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "CloseAfterHandlingError",
+          "JsonName": "_closeAfterHandlingError",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Events",
+          "JsonName": "_events",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStdioEvents"
+          }
+        },
+        {
+          "Name": "EventsCount",
+          "JsonName": "_eventsCount",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "HadError",
+          "JsonName": "_hadError",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Host",
+          "JsonName": "_host",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Parent",
+          "JsonName": "_parent",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "PendingData",
+          "JsonName": "_pendingData",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "PendingEncoding",
+          "JsonName": "_pendingEncoding",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ReadableState",
+          "JsonName": "_readableState",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStdioReadableState"
+          }
+        },
+        {
+          "Name": "UnderscoreServer",
+          "JsonName": "_server",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Sockname",
+          "JsonName": "_sockname",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "WritableState",
+          "JsonName": "_writableState",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStdioWritableState"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStdioEvents",
+      "Fields": [
+        {
+          "Name": "Close",
+          "JsonName": "close",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStdioReadableState",
+      "Fields": [
+        {
+          "Name": "AwaitDrainWriters",
+          "JsonName": "awaitDrainWriters",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Buffer",
+          "JsonName": "buffer",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "BufferIndex",
+          "JsonName": "bufferIndex",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "HighWaterMark",
+          "JsonName": "highWaterMark",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Length",
+          "JsonName": "length",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Pipes",
+          "JsonName": "pipes",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "Readable",
+          "JsonName": "readable",
+          "Type": {
+            "Type": "Boolean"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStdioWritableState",
+      "Fields": [
+        {
+          "Name": "BufferedIndex",
+          "JsonName": "bufferedIndex",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Corked",
+          "JsonName": "corked",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "HighWaterMark",
+          "JsonName": "highWaterMark",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Length",
+          "JsonName": "length",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Pendingcb",
+          "JsonName": "pendingcb",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Writelen",
+          "JsonName": "writelen",
+          "Type": {
+            "Type": "Double"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStdout",
+      "Fields": [
+        {
+          "Name": "AllowHalfOpen",
+          "JsonName": "allowHalfOpen",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Connecting",
+          "JsonName": "connecting",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Server",
+          "JsonName": "server",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "CloseAfterHandlingError",
+          "JsonName": "_closeAfterHandlingError",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Events",
+          "JsonName": "_events",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStdoutEvents"
+          }
+        },
+        {
+          "Name": "EventsCount",
+          "JsonName": "_eventsCount",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "HadError",
+          "JsonName": "_hadError",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Host",
+          "JsonName": "_host",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Parent",
+          "JsonName": "_parent",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "PendingData",
+          "JsonName": "_pendingData",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "PendingEncoding",
+          "JsonName": "_pendingEncoding",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ReadableState",
+          "JsonName": "_readableState",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStdoutReadableState"
+          }
+        },
+        {
+          "Name": "UnderscoreServer",
+          "JsonName": "_server",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Sockname",
+          "JsonName": "_sockname",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "WritableState",
+          "JsonName": "_writableState",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStdoutWritableState"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStdoutEvents",
+      "Fields": [
+        {
+          "Name": "Close",
+          "JsonName": "close",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStdoutReadableState",
+      "Fields": [
+        {
+          "Name": "AwaitDrainWriters",
+          "JsonName": "awaitDrainWriters",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Buffer",
+          "JsonName": "buffer",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "BufferIndex",
+          "JsonName": "bufferIndex",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "HighWaterMark",
+          "JsonName": "highWaterMark",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Length",
+          "JsonName": "length",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Pipes",
+          "JsonName": "pipes",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmpegFfmpegProcStdoutWritableState",
+      "Fields": [
+        {
+          "Name": "BufferedIndex",
+          "JsonName": "bufferedIndex",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Corked",
+          "JsonName": "corked",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "HighWaterMark",
+          "JsonName": "highWaterMark",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Length",
+          "JsonName": "length",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Pendingcb",
+          "JsonName": "pendingcb",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Writelen",
+          "JsonName": "writelen",
+          "Type": {
+            "Type": "Double"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmpegInputs",
+      "Fields": [
+        {
+          "Name": "IsFile",
+          "JsonName": "isFile",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "IsStream",
+          "JsonName": "isStream",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Source",
+          "JsonName": "source",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmpegOptions",
+      "Fields": [
+        {
+          "Name": "Niceness",
+          "JsonName": "niceness",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Presets",
+          "JsonName": "presets",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "StdoutLines",
+          "JsonName": "stdoutLines",
+          "Type": {
+            "Type": "Double"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataFfmpegOutputs",
+      "Fields": [
+        {
+          "Name": "Flags",
+          "JsonName": "flags",
+          "Type": {
+            "Type": "Dictionary",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "IsFile",
+          "JsonName": "isFile",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Pipeopts",
+          "JsonName": "pipeopts",
+          "Type": {
+            "Type": "Dictionary",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "Target",
+          "JsonName": "target",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataMetadataObject",
+      "Fields": [
+        {
+          "Name": "TIT3",
+          "JsonName": "TIT3",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TRACKTOTAL",
+          "JsonName": "TRACKTOTAL",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Album",
+          "JsonName": "album",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "AlbumArtist",
+          "JsonName": "album_artist",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Artist",
+          "JsonName": "artist",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Comment",
+          "JsonName": "comment",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Composer",
+          "JsonName": "composer",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Copyright",
+          "JsonName": "copyright",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Date",
+          "JsonName": "date",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Description",
+          "JsonName": "description",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Genre",
+          "JsonName": "genre",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Grouping",
+          "JsonName": "grouping",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Publisher",
+          "JsonName": "publisher",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscGetTasksAnswerTasksDataOptions",
+      "Fields": [
+        {
+          "Name": "BackupFiles",
+          "JsonName": "backupFiles",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "ForceEmbedChapters",
+          "JsonName": "forceEmbedChapters",
+          "Type": {
+            "Type": "Boolean"
           }
         }
       ]
@@ -914,6 +2805,21 @@
       ]
     },
     {
+      "Name": "MiscUpdateAuthSettingsRequest",
+      "Fields": [
+        {
+          "Name": "AuthActiveAuthMethods",
+          "JsonName": "authActiveAuthMethods",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        }
+      ]
+    },
+    {
       "Name": "MiscUpdateServerSettingsAnswer",
       "Fields": [
         {
@@ -922,6 +2828,25 @@
           "Type": {
             "Type": "Reference",
             "ReferenceName": "ServerSettings"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MiscUpdateServerSettingsRequest",
+      "Fields": [
+        {
+          "Name": "AllowIframe",
+          "JsonName": "allowIframe",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "ScannerFindCovers",
+          "JsonName": "scannerFindCovers",
+          "Type": {
+            "Type": "Boolean"
           }
         }
       ]
@@ -1182,7 +3107,7 @@
           "Name": "BackupPath",
           "JsonName": "backupPath",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           }
         },
         {
@@ -1397,7 +3322,7 @@
           "Name": "Version",
           "JsonName": "version",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           },
           "Nullable": true
         }

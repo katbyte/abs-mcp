@@ -26,6 +26,7 @@ type byhand struct {
 	unmatched  []string                 // requests whose route no operation has
 	conflicts  []string                 // values the client types other than the scan, where and how
 	filled     int                      // values the client typed that the scan did not
+	settled    int                      // numbers the server only sent whole, which the client reads as whole numbers
 	filledOps  map[string]bool          // operations a value was typed in
 	visitedRef map[string]bool
 }
@@ -585,7 +586,7 @@ func (b *byhand) merge(to, from *schema, components map[string]*schema, where st
 		for _, n := range slices.Sorted(maps.Keys(to.Properties)) {
 			b.merge(to.Properties[n], from.Properties[n], components, where+"."+n)
 		}
-		if to.AdditionalProperties {
+		if to.AdditionalProperties || to.sampled {
 			for _, n := range slices.Sorted(maps.Keys(from.Properties)) {
 				if _, ok := to.Properties[n]; !ok {
 					to.Properties[n] = clone(from.Properties[n])
@@ -596,6 +597,11 @@ func (b *byhand) merge(to, from *schema, components map[string]*schema, where st
 
 	case to.Type == "array" && from.Type == "array":
 		b.merge(to.Items, from.Items, components, where+"[]")
+
+	// a number the server only ever sent whole, which the client reads as a whole number
+	case to.whole && to.Type == "number" && from.Type == "integer":
+		to.Type, to.whole = "integer", false
+		b.settled++
 
 	case to.Type != from.Type && (to.Type != "number" || from.Type != "integer"):
 		b.conflicts = append(b.conflicts, fmt.Sprintf("%s: the source says %s, the client %s", where, to.Type, from.Type))
@@ -639,7 +645,7 @@ func fingerprint(s *schema) string {
 
 // write reports what the client filled, and with -v the requests it makes that no operation of the document has.
 func (b *byhand) write(w io.Writer, dir string, verbose bool) {
-	_, _ = fmt.Fprintf(w, "  filled from %s   %d values in %d operations; %d it types otherwise are left as the source has them; %d of its requests match no operation\n", dir, b.filled, len(b.filledOps), len(b.conflicts), len(b.unmatched))
+	_, _ = fmt.Fprintf(w, "  filled from %s   %d values in %d operations, and %d numbers the server only sent whole it reads as whole; %d it types otherwise are left as the source has them; %d of its requests match no operation\n", dir, b.filled, len(b.filledOps), b.settled, len(b.conflicts), len(b.unmatched))
 
 	if verbose {
 		for _, c := range b.conflicts {

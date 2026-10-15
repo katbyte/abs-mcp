@@ -1,0 +1,13 @@
+{
+  "operation": "UserGetOnlineUsers",
+  "method": "GET",
+  "path": "/api/users/online",
+  "answers": {
+    "200": [
+      {
+        "openSessions": [],
+        "usersOnline": []
+      }
+    ]
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "operation": "LibraryFindAll",
+  "method": "GET",
+  "path": "/api/libraries",
+  "answers": {
+    "200": [
+      {
+        "libraries": []
+      },
+      {
+        "libraries": [
+          {
+            "createdAt": 1792029519220,
+            "displayOrder": 1,
+            "folders": [
+              {
+                "addedAt": 1792029519225,
+                "fullPath": "/fiction",
+                "id": "2599fce3-0201-4289-8106-f2cfb98fb689",
+                "libraryId": "d9204ade-9fe6-4681-99d9-26075fdeb94a"
+              }
+            ],
+            "icon": "database",
+            "id": "d9204ade-9fe6-4681-99d9-26075fdeb94a",
+            "lastScan": 1792029519647,
+            "lastScanVersion": "2.37.1",
+            "lastUpdate": 1792029531502,
+            "mediaType": "book",
+            "name": "SDK Fiction",
+            "provider": "audible",
+            "settings": {
+              "audiobooksOnly": false,
+              "autoScanCronExpression": null,
+              "coverAspectRatio": 1,
+              "disableWatcher": false,
+              "epubsAllowScriptedContent": false,
+              "hideSingleBookSeries": false,
+              "markAsFinishedPercentComplete": null,
+              "markAsFinishedTimeRemaining": 10,
+              "metadataPrecedence": [
+                "folderStructure"
+              ],
+              "onlyShowLaterBooksInContinueSeries": false,
+              "skipMatchingMediaWithAsin": false,
+              "skipMatchingMediaWithIsbn": false
+            }
+          },
+          {
+            "lastScan": null,
+            "lastScanVersion": null
+          }
+        ]
+      },
+      {
+        "libraries": [
+          {
+            "settings": {
+              "podcastSearchRegion": "us"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

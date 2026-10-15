@@ -198,6 +198,14 @@
           }
         },
         {
+          "Name": "User",
+          "JsonName": "user",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "ApiKeyCreateAnswerApiKeyUser"
+          }
+        },
+        {
           "Name": "UserId",
           "JsonName": "userId",
           "Type": {
@@ -209,13 +217,39 @@
       ]
     },
     {
+      "Name": "ApiKeyCreateAnswerApiKeyUser",
+      "Fields": [
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Type",
+          "JsonName": "type",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Username",
+          "JsonName": "username",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
       "Name": "ApiKeyCreateRequest",
       "Fields": [
         {
           "Name": "ExpiresIn",
           "JsonName": "expiresIn",
           "Type": {
-            "Type": "Any"
+            "Type": "Double"
           }
         },
         {
@@ -329,7 +363,8 @@
           "JsonName": "permissions",
           "Type": {
             "Type": "Any"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "UpdatedAt",
@@ -369,7 +404,7 @@
           "Name": "IsActive",
           "JsonName": "isActive",
           "Type": {
-            "Type": "Any"
+            "Type": "Boolean"
           }
         },
         {

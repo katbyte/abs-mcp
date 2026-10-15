@@ -1,0 +1,266 @@
+{
+  "operation": "PlaylistFindOne",
+  "method": "GET",
+  "path": "/api/playlists/{id}",
+  "answers": {
+    "200": [
+      {
+        "createdAt": 1792029522231,
+        "description": null,
+        "id": "caf1fa76-7189-448e-9585-6acb98de93ca",
+        "items": [
+          {
+            "libraryItem": {
+              "addedAt": 1792029519518,
+              "birthtimeMs": 1792029512417,
+              "ctimeMs": 1792029514481,
+              "folderId": "2599fce3-0201-4289-8106-f2cfb98fb689",
+              "id": "f9aea369-7047-4d60-895e-b5031b70458c",
+              "ino": "1462919",
+              "isFile": false,
+              "isInvalid": false,
+              "isMissing": false,
+              "lastScan": 1792029519517,
+              "libraryFiles": [
+                {
+                  "addedAt": 1792029519276,
+                  "fileType": "audio",
+                  "ino": "1462927",
+                  "isSupplementary": null,
+                  "metadata": {
+                    "birthtimeMs": 1792029512449,
+                    "ctimeMs": 1792029514481,
+                    "ext": ".mp3",
+                    "filename": "01.mp3",
+                    "mtimeMs": 1792029512452,
+                    "path": "/fiction/Isaac Asimov/Second Foundation/01.mp3",
+                    "relPath": "01.mp3",
+                    "size": 4386
+                  },
+                  "updatedAt": 1792029519276
+                }
+              ],
+              "libraryId": "d9204ade-9fe6-4681-99d9-26075fdeb94a",
+              "media": {
+                "audioFiles": [
+                  {
+                    "addedAt": 1792029519517,
+                    "bitRate": 32000,
+                    "channelLayout": "mono",
+                    "channels": 1,
+                    "chapters": [],
+                    "codec": "mp3",
+                    "discNumFromFilename": null,
+                    "discNumFromMeta": null,
+                    "duration": 1,
+                    "embeddedCoverArt": null,
+                    "error": null,
+                    "exclude": false,
+                    "format": "MP2/3 (MPEG audio layer 2/3)",
+                    "index": 1,
+                    "ino": "1462927",
+                    "language": null,
+                    "manuallyVerified": false,
+                    "metaTags": {
+                      "tagEncoder": "Lavf63.1.102"
+                    },
+                    "metadata": {
+                      "birthtimeMs": 1792029512449,
+                      "ctimeMs": 1792029514481,
+                      "ext": ".mp3",
+                      "filename": "01.mp3",
+                      "mtimeMs": 1792029512452,
+                      "path": "/fiction/Isaac Asimov/Second Foundation/01.mp3",
+                      "relPath": "01.mp3",
+                      "size": 4386
+                    },
+                    "mimeType": "audio/mpeg",
+                    "timeBase": "1/14112000",
+                    "trackNumFromFilename": 1,
+                    "trackNumFromMeta": null,
+                    "updatedAt": 1792029519517
+                  }
+                ],
+                "chapters": [],
+                "coverPath": null,
+                "duration": 1,
+                "ebookFile": null,
+                "id": "fbadb453-d559-4670-925c-a6b8134e827d",
+                "libraryItemId": "f9aea369-7047-4d60-895e-b5031b70458c",
+                "metadata": {
+                  "abridged": false,
+                  "asin": null,
+                  "authorName": "Isaac Asimov",
+                  "authorNameLF": "Asimov, Isaac",
+                  "authors": [
+                    {
+                      "id": "b5f29003-4517-4452-b9c6-5684666f6952",
+                      "name": "Isaac Asimov"
+                    }
+                  ],
+                  "description": null,
+                  "descriptionPlain": null,
+                  "explicit": false,
+                  "genres": [],
+                  "isbn": null,
+                  "language": null,
+                  "narratorName": "SDK Narrator",
+                  "narrators": [
+                    "SDK Narrator"
+                  ],
+                  "publishedDate": null,
+                  "publishedYear": null,
+                  "publisher": null,
+                  "series": [
+                    {
+                      "id": "21a8b758-65da-4d6d-8987-1f913eba0054",
+                      "name": "SDK Series",
+                      "sequence": "1"
+                    }
+                  ],
+                  "seriesName": "SDK Series #1",
+                  "subtitle": null,
+                  "title": "Second Foundation",
+                  "titleIgnorePrefix": "Second Foundation"
+                },
+                "numAudioFiles": 1,
+                "numChapters": 0,
+                "numTracks": 1,
+                "size": 4386,
+                "tags": [],
+                "tracks": [
+                  {
+                    "addedAt": 1792029519517,
+                    "bitRate": 32000,
+                    "channelLayout": "mono",
+                    "channels": 1,
+                    "chapters": [],
+                    "codec": "mp3",
+                    "contentUrl": "/api/items/f9aea369-7047-4d60-895e-b5031b70458c/file/1462927",
+                    "discNumFromFilename": null,
+                    "discNumFromMeta": null,
+                    "duration": 1,
+                    "embeddedCoverArt": null,
+                    "error": null,
+                    "exclude": false,
+                    "format": "MP2/3 (MPEG audio layer 2/3)",
+                    "index": 1,
+                    "ino": "1462927",
+                    "language": null,
+                    "manuallyVerified": false,
+                    "metaTags": {
+                      "tagEncoder": "Lavf63.1.102"
+                    },
+                    "metadata": {
+                      "birthtimeMs": 1792029512449,
+                      "ctimeMs": 1792029514481,
+                      "ext": ".mp3",
+                      "filename": "01.mp3",
+                      "mtimeMs": 1792029512452,
+                      "path": "/fiction/Isaac Asimov/Second Foundation/01.mp3",
+                      "relPath": "01.mp3",
+                      "size": 4386
+                    },
+                    "mimeType": "audio/mpeg",
+                    "startOffset": 0,
+                    "timeBase": "1/14112000",
+                    "title": "01.mp3",
+                    "trackNumFromFilename": 1,
+                    "trackNumFromMeta": null,
+                    "updatedAt": 1792029519517
+                  }
+                ]
+              },
+              "mediaType": "book",
+              "mtimeMs": 1792029512449,
+              "numFiles": 1,
+              "oldLibraryItemId": null,
+              "path": "/fiction/Isaac Asimov/Second Foundation",
+              "relPath": "Isaac Asimov/Second Foundation",
+              "scanVersion": "2.37.1",
+              "size": 4386,
+              "updatedAt": 1792029521499
+            },
+            "libraryItemId": "f9aea369-7047-4d60-895e-b5031b70458c"
+          }
+        ],
+        "lastUpdate": 1792029522231,
+        "libraryId": "d9204ade-9fe6-4681-99d9-26075fdeb94a",
+        "name": "SDK Methods",
+        "userId": "e2682b5d-a1fb-4847-b7e2-39b7c7564f87"
+      },
+      {
+        "items": [
+          {
+            "libraryItem": {
+              "libraryFiles": [
+                {
+                  "isSupplementary": false
+                }
+              ],
+              "media": {
+                "ebookFile": {
+                  "addedAt": 1792029519276,
+                  "ebookFormat": "epub",
+                  "fileType": "ebook",
+                  "ino": "1462925",
+                  "isSupplementary": null,
+                  "metadata": {
+                    "birthtimeMs": 1792029512859,
+                    "ctimeMs": 1792029514481,
+                    "ext": ".epub",
+                    "filename": "Foundation.epub",
+                    "mtimeMs": 1792029512859,
+                    "path": "/fiction/Isaac Asimov/Foundation/Foundation.epub",
+                    "relPath": "Foundation.epub",
+                    "size": 774
+                  },
+                  "updatedAt": 1792029519276
+                },
+                "ebookFormat": "epub",
+                "tags": [
+                  "sdk"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "libraryItem": {
+              "media": {
+                "metadata": {
+                  "genres": [
+                    "Science Fiction"
+                  ],
+                  "language": "English",
+                  "publishedYear": "1996",
+                  "publisher": "DAW"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "libraryItem": {
+              "media": {
+                "metadata": {
+                  "description": "A novel, on this shelf so the audits have something to sweep. This description is here so audit_missing has nothing to say about it: it is long enough to pass as one.",
+                  "descriptionPlain": "A novel, on this shelf so the audits have something to sweep. This description is here so audit_missing has nothing to say about it: it is long enough to pass as one."
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "description": "made by the acceptance suite"
+      }
+    ]
+  }
+}

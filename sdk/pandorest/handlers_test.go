@@ -86,6 +86,24 @@ func TestAnalyze(t *testing.T) {
 		}
 	})
 
+	t.Run("a body read through a name it is given, and looped over", func(t *testing.T) {
+		t.Parallel()
+
+		r := routes["post /api/libraries/:id/notes"]
+		if !slices.Equal(r.req.body, []string{"text"}) || !r.req.bodyWhole {
+			t.Errorf("body: %q, whole %v, want text read through payload, and every field read by the loop", r.req.body, r.req.bodyWhole)
+		}
+	})
+
+	t.Run("a body used as a list", func(t *testing.T) {
+		t.Parallel()
+
+		r := routes["post /api/libraries/order"]
+		if len(r.req.body) != 0 || !r.req.bodyList {
+			t.Errorf("body: %q, list %v, want a list and no fields called length or forEach", r.req.body, r.req.bodyList)
+		}
+	})
+
 	t.Run("an answer written by a manager the server made", func(t *testing.T) {
 		t.Parallel()
 

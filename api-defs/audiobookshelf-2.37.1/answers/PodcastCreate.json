@@ -1,0 +1,139 @@
+{
+  "operation": "PodcastCreate",
+  "method": "POST",
+  "path": "/api/podcasts",
+  "sent": [
+    {
+      "folderId": "96dca3e9-a716-4ca1-ba16-a53cb6871811",
+      "libraryId": "5745c0fc-0e6c-4f44-9ae3-20a8d4e8bb2d",
+      "media": {
+        "autoDownloadEpisodes": false,
+        "metadata": {
+          "author": "WTYP is Justin Roczniak, November Kelly, Liam McAnderson, and friends.",
+          "feedUrl": "https://feed.podbean.com/wtyppod/feed.xml",
+          "title": "SDK Feed Podcast"
+        }
+      },
+      "path": "/podcasts/SDK Feed Podcast"
+    },
+    {
+      "media": {
+        "metadata": {
+          "description": "A feed the acceptance suite serves.",
+          "explicit": false,
+          "genres": [],
+          "imageUrl": "",
+          "itunesPageUrl": "",
+          "language": "en",
+          "releaseDate": "",
+          "type": ""
+        }
+      }
+    },
+    {
+      "media": {
+        "metadata": {
+          "genres": [
+            "Technology"
+          ]
+        }
+      }
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "addedAt": 1792029534643,
+        "birthtimeMs": 1792029534543,
+        "ctimeMs": 1792029534543,
+        "folderId": "96dca3e9-a716-4ca1-ba16-a53cb6871811",
+        "id": "46a82f1b-f453-44a3-8194-8c6c8e7ad49d",
+        "ino": "1463298",
+        "isFile": false,
+        "isInvalid": false,
+        "isMissing": false,
+        "libraryFiles": [],
+        "libraryId": "5745c0fc-0e6c-4f44-9ae3-20a8d4e8bb2d",
+        "media": {
+          "autoDownloadEpisodes": false,
+          "autoDownloadSchedule": "0 * * * *",
+          "coverPath": null,
+          "episodes": [],
+          "id": "55f24e6c-44c8-4a14-a505-d5930a7ff563",
+          "lastEpisodeCheck": 1792029534639,
+          "libraryItemId": "46a82f1b-f453-44a3-8194-8c6c8e7ad49d",
+          "maxEpisodesToKeep": 0,
+          "maxNewEpisodesToDownload": 3,
+          "metadata": {
+            "author": "WTYP is Justin Roczniak, November Kelly, Liam McAnderson, and friends.",
+            "description": null,
+            "explicit": false,
+            "feedUrl": "https://feed.podbean.com/wtyppod/feed.xml",
+            "genres": [],
+            "imageUrl": null,
+            "itunesArtistId": null,
+            "itunesId": null,
+            "itunesPageUrl": null,
+            "language": null,
+            "releaseDate": null,
+            "title": "SDK Feed Podcast",
+            "titleIgnorePrefix": "SDK Feed Podcast",
+            "type": null
+          },
+          "numEpisodes": 0,
+          "size": 0,
+          "tags": []
+        },
+        "mediaType": "podcast",
+        "mtimeMs": 1792029534543,
+        "numFiles": 0,
+        "oldLibraryItemId": null,
+        "path": "/podcasts/SDK Feed Podcast",
+        "relPath": "SDK Feed Podcast",
+        "size": 0,
+        "updatedAt": 1792029534643
+      },
+      {
+        "media": {
+          "metadata": {
+            "description": "A feed the acceptance suite serves.",
+            "imageUrl": "",
+            "itunesPageUrl": "",
+            "language": "en",
+            "releaseDate": "",
+            "type": ""
+          }
+        }
+      },
+      {
+        "libraryFiles": [
+          {
+            "addedAt": 1792029707698,
+            "fileType": "unknown",
+            "ino": "1466263",
+            "isSupplementary": null,
+            "metadata": {
+              "birthtimeMs": 1792029707653,
+              "ctimeMs": 1792029707653,
+              "ext": "jpg",
+              "filename": "cover.jpg",
+              "mtimeMs": 1792029707653,
+              "path": "/podcasts/Provider Test Podcast/cover.jpg",
+              "relPath": "cover.jpg",
+              "size": 219
+            },
+            "updatedAt": 1792029707698
+          }
+        ],
+        "media": {
+          "coverPath": "/podcasts/Provider Test Podcast/cover.jpg",
+          "metadata": {
+            "genres": [
+              "Technology"
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

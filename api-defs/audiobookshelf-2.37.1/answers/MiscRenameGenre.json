@@ -1,0 +1,19 @@
+{
+  "operation": "MiscRenameGenre",
+  "method": "POST",
+  "path": "/api/genres/rename",
+  "sent": [
+    {
+      "genre": "SDK Genre",
+      "newGenre": "SDK Genre Renamed"
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "genreMerged": false,
+        "numItemsUpdated": 2
+      }
+    ]
+  }
+}

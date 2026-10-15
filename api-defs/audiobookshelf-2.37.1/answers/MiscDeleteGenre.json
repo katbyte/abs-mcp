@@ -1,0 +1,12 @@
+{
+  "operation": "MiscDeleteGenre",
+  "method": "DELETE",
+  "path": "/api/genres/{genre}",
+  "answers": {
+    "200": [
+      {
+        "numItemsUpdated": 1
+      }
+    ]
+  }
+}

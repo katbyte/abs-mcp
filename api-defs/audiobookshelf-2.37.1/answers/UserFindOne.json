@@ -1,0 +1,97 @@
+{
+  "operation": "UserFindOne",
+  "method": "GET",
+  "path": "/api/users/{id}",
+  "answers": {
+    "200": [
+      {
+        "bookmarks": [
+          {
+            "createdAt": 1792029533845,
+            "libraryItemId": "f9aea369-7047-4d60-895e-b5031b70458c",
+            "time": 0.4,
+            "title": "second"
+          }
+        ],
+        "createdAt": 1792029516882,
+        "email": null,
+        "hasOpenIDLink": false,
+        "id": "e2682b5d-a1fb-4847-b7e2-39b7c7564f87",
+        "isActive": true,
+        "isLocked": false,
+        "itemTagsSelected": [],
+        "lastSeen": null,
+        "librariesAccessible": [],
+        "mediaProgress": [
+          {
+            "coverPath": "/metadata/items/336944bb-dcc6-4d14-bebe-2b9163a064e5/cover.jpg",
+            "currentTime": 0,
+            "displayTitle": "Foundation and Empire",
+            "duration": 0,
+            "ebookLocation": null,
+            "ebookProgress": 0,
+            "episodeId": null,
+            "finishedAt": 1792029533904,
+            "hideFromContinueListening": false,
+            "id": "8320bf60-7e79-44cf-b3ea-35af0a182106",
+            "isFinished": true,
+            "lastUpdate": 1792029533904,
+            "libraryItemId": "336944bb-dcc6-4d14-bebe-2b9163a064e5",
+            "mediaItemId": "e9159259-c340-4392-9c11-4158e2c15d5c",
+            "mediaItemType": "book",
+            "mediaUpdatedAt": "2026-10-15T01:58:54.303Z",
+            "progress": 1,
+            "startedAt": 1792029533904,
+            "userId": "e2682b5d-a1fb-4847-b7e2-39b7c7564f87"
+          },
+          {
+            "currentTime": 0.5
+          }
+        ],
+        "permissions": {
+          "accessAllLibraries": true,
+          "accessAllTags": true,
+          "accessExplicitContent": true,
+          "createEreader": true,
+          "delete": true,
+          "download": true,
+          "selectedTagsNotAccessible": false,
+          "update": true,
+          "upload": true
+        },
+        "seriesHideFromContinueListening": [],
+        "token": "REDACTED",
+        "type": "root",
+        "username": "root"
+      },
+      {
+        "itemTagsSelected": [
+          "cyberpunk"
+        ]
+      },
+      {
+        "mediaProgress": [
+          {
+            "coverPath": null,
+            "progress": 0.3
+          }
+        ]
+      },
+      {
+        "mediaProgress": [
+          {
+            "finishedAt": null
+          }
+        ]
+      },
+      {
+        "librariesAccessible": [
+          "bc5ad08d-b2fe-402d-af4f-04846bf11cad"
+        ]
+      },
+      {
+        "email": "newcomer@zzyzx.test"
+      }
+    ]
+  }
+}

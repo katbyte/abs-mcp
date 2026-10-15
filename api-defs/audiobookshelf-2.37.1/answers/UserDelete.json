@@ -1,0 +1,12 @@
+{
+  "operation": "UserDelete",
+  "method": "DELETE",
+  "path": "/api/users/{id}",
+  "answers": {
+    "200": [
+      {
+        "success": true
+      }
+    ]
+  }
+}

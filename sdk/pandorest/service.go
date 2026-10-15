@@ -60,18 +60,13 @@ var absIDs = []config.ID{
 	{Name: "ProviderID", Of: []string{"CustomMetadataProviderRecord"}},
 }
 
-// untypedByScan are the places an id is read or written that the scan of the source could not type: body fields, a playback session the code
-// fills in after making it, a device copied field by field, a progress kept as JSON, and the books a database query joins to a series.
-// pandorest types no id that has no type, so each is left out of its kind until it has one.
+// untypedByScan are the places an id is read or written that neither the source nor the answers the live suites saved can type, as the suites
+// never do what fills them: move a key to another user, collapse series, play a podcast episode, or sync a session played offline. pandorest
+// types no id that has no type, so each is left out of its kind until it has one.
 var untypedByScan = []string{
 	"ApiKeyUpdateRequest .userId",
-	"DeviceInfo .userId",
 	"LibraryItemMinifiedCollapsedSeries .libraryItemIds",
-	"MeGetMediaProgressAnswer .libraryItemId",
 	"PlaybackSessionForClient .episodeId",
-	"PlaybackSessionForClient .libraryId",
-	"PlaybackSessionForClient .libraryItemId",
-	"PlaybackSessionForClient .userId",
 	"SessionSyncLocalRequest .episodeId",
 	"SessionSyncLocalRequest .libraryId",
 	"SessionSyncLocalRequest .libraryItemId",

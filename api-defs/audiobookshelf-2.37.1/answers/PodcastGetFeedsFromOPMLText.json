@@ -1,0 +1,22 @@
+{
+  "operation": "PodcastGetFeedsFromOPMLText",
+  "method": "POST",
+  "path": "/api/podcasts/opml/parse",
+  "sent": [
+    {
+      "opmlText": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<opml version=\"1.0\">\n    <head>\n        <title>Audiobookshelf Podcast Subscriptions</title>\n    </head>\n    <body>\n        <outline type=\"rss\" text=\"SDK Feed Podcast\" title=\"SDK Feed Podcast\" xmlUrl=\"https://feed.podbean.com/wtyppod/feed.xml\"/>\n    </body>\n</opml>"
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "feeds": [
+          {
+            "feedUrl": "https://feed.podbean.com/wtyppod/feed.xml",
+            "title": "SDK Feed Podcast"
+          }
+        ]
+      }
+    ]
+  }
+}

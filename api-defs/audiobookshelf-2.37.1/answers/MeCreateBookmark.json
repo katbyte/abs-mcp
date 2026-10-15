@@ -1,0 +1,21 @@
+{
+  "operation": "MeCreateBookmark",
+  "method": "POST",
+  "path": "/api/me/item/{id}/bookmark",
+  "sent": [
+    {
+      "time": 0.25,
+      "title": "SDK bookmark"
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "createdAt": 1792029533792,
+        "libraryItemId": "f9aea369-7047-4d60-895e-b5031b70458c",
+        "time": 0.25,
+        "title": "SDK bookmark"
+      }
+    ]
+  }
+}

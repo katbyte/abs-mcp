@@ -1,0 +1,48 @@
+{
+  "operation": "NotificationCreateNotification",
+  "method": "POST",
+  "path": "/api/notifications",
+  "sent": [
+    {
+      "bodyTemplate": "SDK",
+      "enabled": false,
+      "eventName": "onTest",
+      "titleTemplate": "SDK",
+      "type": "apprise",
+      "urls": [
+        "json://localhost/sdk"
+      ]
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "appriseApiUrl": null,
+        "appriseType": "api",
+        "id": "notification-settings",
+        "maxFailedAttempts": 5,
+        "maxNotificationQueue": 20,
+        "notificationDelay": 1000,
+        "notifications": [
+          {
+            "bodyTemplate": "SDK",
+            "createdAt": 1792029535880,
+            "enabled": false,
+            "eventName": "onTest",
+            "id": "73e34577-6905-4cca-a67a-92714029887c",
+            "lastAttemptFailed": false,
+            "lastFiredAt": null,
+            "libraryId": null,
+            "numConsecutiveFailedAttempts": 0,
+            "numTimesFired": 0,
+            "titleTemplate": "SDK",
+            "type": "apprise",
+            "urls": [
+              "json://localhost/sdk"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

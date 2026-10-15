@@ -1,0 +1,58 @@
+{
+  "operation": "LibraryGetEpisodeDownloadQueue",
+  "method": "GET",
+  "path": "/api/libraries/{id}/episode-downloads",
+  "answers": {
+    "200": [
+      {
+        "queue": []
+      },
+      {
+        "currentDownload": {
+          "appendRandomId": false,
+          "createdAt": 1792029679656,
+          "episode": "",
+          "episodeDisplayTitle": "Zzyzx Fresh Two",
+          "episodeType": "",
+          "failed": false,
+          "finishedAt": null,
+          "guid": "zzyzx-fresh-2",
+          "id": "1bb6f2a3-dc8f-4a51-8029-2cec57262d18",
+          "isFinished": false,
+          "libraryId": "b4518ee0-0472-4e79-a728-7ee7b958a879",
+          "libraryItemId": "f713a880-5fee-40b0-9181-6ca7c7393bcb",
+          "podcastExplicit": false,
+          "podcastTitle": "Zzyzx Fresh Show",
+          "publishedAt": 1791943279000,
+          "season": "",
+          "startedAt": null,
+          "url": "http://zzyzx-fresh.test/audio/zzyzx-fresh-2.mp3"
+        }
+      },
+      {
+        "queue": [
+          {
+            "appendRandomId": false,
+            "createdAt": 1792029679673,
+            "episode": "",
+            "episodeDisplayTitle": "Zzyzx Fresh One",
+            "episodeType": "",
+            "failed": false,
+            "finishedAt": null,
+            "guid": "zzyzx-fresh-1",
+            "id": "5ffcf6f7-39aa-4ba3-b4c0-82283a240c62",
+            "isFinished": false,
+            "libraryId": "b4518ee0-0472-4e79-a728-7ee7b958a879",
+            "libraryItemId": "f713a880-5fee-40b0-9181-6ca7c7393bcb",
+            "podcastExplicit": false,
+            "podcastTitle": "Zzyzx Fresh Show",
+            "publishedAt": 1791856879000,
+            "season": "",
+            "startedAt": null,
+            "url": "http://zzyzx-fresh.test/audio/zzyzx-fresh-1.mp3"
+          }
+        ]
+      }
+    ]
+  }
+}

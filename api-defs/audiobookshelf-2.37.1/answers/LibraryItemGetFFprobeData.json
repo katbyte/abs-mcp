@@ -1,0 +1,122 @@
+{
+  "operation": "LibraryItemGetFFprobeData",
+  "method": "GET",
+  "path": "/api/items/{id}/ffprobe/{fileid}",
+  "answers": {
+    "200": [
+      {
+        "chapters": [
+          {
+            "end": 500,
+            "end_time": "0.500000",
+            "id": 0,
+            "start": 0,
+            "start_time": "0.000000",
+            "tags": {
+              "title": "One"
+            },
+            "time_base": "1/1000"
+          }
+        ],
+        "format": {
+          "bit_rate": "73496",
+          "duration": "1.000000",
+          "filename": "/fiction/Isaac Asimov/Second Foundation/01.mp3",
+          "format_long_name": "MP2/3 (MPEG audio layer 2/3)",
+          "format_name": "mp3",
+          "nb_programs": 0,
+          "nb_stream_groups": 0,
+          "nb_streams": 2,
+          "probe_score": 51,
+          "size": "9187",
+          "start_time": "0.025056",
+          "tags": {
+            "TIT3": "Ciclo de la Fundación 5 [Foundation Cycle, Book 5]",
+            "TRACKTOTAL": "1",
+            "album": "Second Foundation: Ciclo de la Fundación 5 [Foundation Cycle, Book 5]",
+            "album_artist": "Isaac Asimov",
+            "artist": "Isaac Asimov",
+            "comment": "<p><b><i>Segunda Fundación</i></b><b> es el quinto volumen del «Ciclo de la Fundación», pero también es el cierre de la original «Trilogía de la Fundación» o «Ciclo de Trántor», que puede leerse independientemente y que fue galardonada con el Premio Hugo a la mejor serie de ciencia ficción de todos los tiempos.</b></p> <p>La Fundación yace en ruinas, arrasada por la inteligencia mutante del Mulo. Sin embargo, se rumorea que Hari Seldon, el científico que lo inició todo, ha establecido una Segunda Fundación al otro lado de la galaxia, cuya ubicación exacta es un secreto guardado desde hace tiempo. Obligada a revelar su existencia, la Segunda Fundación deberá enfrentarse a la voluntad destructora del Mulo, con el añadido de que los supervivientes de la Primera Fundación también quieren acabar con ella…</p> <p>«Un talento de proporciones cósmicas».<br /> <i>Chicago Tribune</i></p> <p><b>Please note: This audiobook is in Spanish.</b></p>",
+            "composer": "SDK Doomed Narrator",
+            "copyright": "Penguin Random House Audio",
+            "date": "1999",
+            "description": "<p><b><i>Segunda Fundación</i></b><b> es el quinto volumen del «Ciclo de la Fundación», pero también es el cierre de la original «Trilogía de la Fundación» o «Ciclo de Trántor», que puede leerse independientemente y que fue galardonada con el Premio Hugo a la mejor serie de ciencia ficción de todos los tiempos.</b></p> <p>La Fundación yace en ruinas, arrasada por la inteligencia mutante del Mulo. Sin embargo, se rumorea que Hari Seldon, el científico que lo inició todo, ha establecido una Segunda Fundación al otro lado de la galaxia, cuya ubicación exacta es un secreto guardado desde hace tiempo. Obligada a revelar su existencia, la Segunda Fundación deberá enfrentarse a la voluntad destructora del Mulo, con el añadido de que los supervivientes de la Primera Fundación también quieren acabar con ella…</p> <p>«Un talento de proporciones cósmicas».<br /> <i>Chicago Tribune</i></p> <p><b>Please note: This audiobook is in Spanish.</b></p>",
+            "encoder": "Lavf62.12.102",
+            "genre": "Science Fiction & Fantasy",
+            "grouping": "SDK Series #1",
+            "publisher": "Penguin Random House Audio",
+            "title": "Second Foundation",
+            "track": "1"
+          }
+        },
+        "programs": [],
+        "streams": [
+          {
+            "avg_frame_rate": "0/0",
+            "bit_rate": "32000",
+            "bits_per_sample": 0,
+            "channel_layout": "mono",
+            "channels": 1,
+            "codec_long_name": "MP3 (MPEG audio layer 3)",
+            "codec_name": "mp3",
+            "codec_tag": "0x0000",
+            "codec_tag_string": "[0][0][0][0]",
+            "codec_type": "audio",
+            "disposition": {
+              "attached_pic": 0,
+              "captions": 0,
+              "clean_effects": 0,
+              "comment": 0,
+              "default": 0,
+              "dependent": 0,
+              "descriptions": 0,
+              "dub": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "karaoke": 0,
+              "lyrics": 0,
+              "metadata": 0,
+              "multilayer": 0,
+              "non_diegetic": 0,
+              "original": 0,
+              "still_image": 0,
+              "timed_thumbnails": 0,
+              "visual_impaired": 0
+            },
+            "duration": "1.000000",
+            "duration_ts": 14112000,
+            "index": 0,
+            "initial_padding": 0,
+            "mime_codec_string": "mp4a.40.34",
+            "r_frame_rate": "0/0",
+            "sample_fmt": "fltp",
+            "sample_rate": "44100",
+            "start_pts": 353600,
+            "start_time": "0.025057",
+            "time_base": "1/14112000"
+          },
+          {
+            "bits_per_raw_sample": "8",
+            "chroma_location": "center",
+            "coded_height": 2,
+            "coded_width": 2,
+            "color_range": "pc",
+            "color_space": "bt470bg",
+            "display_aspect_ratio": "1:1",
+            "has_b_frames": 0,
+            "height": 2,
+            "level": -99,
+            "pix_fmt": "yuvj420p",
+            "profile": "Baseline",
+            "sample_aspect_ratio": "1:1",
+            "tags": {
+              "comment": "Other",
+              "title": "Cover"
+            },
+            "width": 2
+          }
+        ]
+      }
+    ]
+  }
+}

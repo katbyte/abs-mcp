@@ -58,6 +58,16 @@
       "OperationId": "SearchFindCovers",
       "Method": "GET",
       "Path": "/api/search/covers",
+      "Options": [
+        {
+          "Name": "podcast",
+          "Field": "Podcast",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
       "Response": {
         "ContentType": "application/json",
         "Type": {
@@ -183,6 +193,14 @@
           "JsonName": "description",
           "Type": {
             "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "DescriptionPlain",
+          "JsonName": "descriptionPlain",
+          "Type": {
+            "Type": "String"
           }
         },
         {
@@ -193,6 +211,13 @@
           }
         },
         {
+          "Name": "Explicit",
+          "JsonName": "explicit",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
           "Name": "Genres",
           "JsonName": "genres",
           "Type": {
@@ -200,7 +225,8 @@
             "NestedItem": {
               "Type": "String"
             }
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Id",
@@ -224,6 +250,13 @@
           }
         },
         {
+          "Name": "MatchConfidence",
+          "JsonName": "matchConfidence",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
           "Name": "Narrator",
           "JsonName": "narrator",
           "Type": {
@@ -234,8 +267,9 @@
           "Name": "PublishedYear",
           "JsonName": "publishedYear",
           "Type": {
-            "Type": "Any"
-          }
+            "Type": "String"
+          },
+          "Nullable": true
         },
         {
           "Name": "Publisher",
@@ -248,15 +282,17 @@
           "Name": "Rating",
           "JsonName": "rating",
           "Type": {
-            "Type": "Any"
-          }
+            "Type": "String"
+          },
+          "Nullable": true
         },
         {
           "Name": "Region",
           "JsonName": "region",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Series",
@@ -267,14 +303,16 @@
               "Type": "Reference",
               "ReferenceName": "SearchFindBooksAnswerSeries"
             }
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Subtitle",
           "JsonName": "subtitle",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Tags",
@@ -284,7 +322,8 @@
             "NestedItem": {
               "Type": "String"
             }
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Title",
@@ -325,6 +364,38 @@
       "Name": "SearchFindChaptersAnswer",
       "Fields": [
         {
+          "Name": "Asin",
+          "JsonName": "asin",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "BrandIntroDurationMs",
+          "JsonName": "brandIntroDurationMs",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "BrandOutroDurationMs",
+          "JsonName": "brandOutroDurationMs",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Chapters",
+          "JsonName": "chapters",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "SearchFindChaptersAnswerChapters"
+            }
+          }
+        },
+        {
           "Name": "Error",
           "JsonName": "error",
           "Type": {
@@ -332,8 +403,69 @@
           }
         },
         {
+          "Name": "IsAccurate",
+          "JsonName": "isAccurate",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Region",
+          "JsonName": "region",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "RuntimeLengthMs",
+          "JsonName": "runtimeLengthMs",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "RuntimeLengthSec",
+          "JsonName": "runtimeLengthSec",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
           "Name": "StringKey",
           "JsonName": "stringKey",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "SearchFindChaptersAnswerChapters",
+      "Fields": [
+        {
+          "Name": "LengthMs",
+          "JsonName": "lengthMs",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "StartOffsetMs",
+          "JsonName": "startOffsetMs",
+          "Type": {
+            "Type": "Integer"
+          }
+        },
+        {
+          "Name": "StartOffsetSec",
+          "JsonName": "startOffsetSec",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
           "Type": {
             "Type": "String"
           }
@@ -371,7 +503,8 @@
           "JsonName": "artistId",
           "Type": {
             "Type": "Any"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "ArtistName",
@@ -429,7 +562,7 @@
           "Name": "Id",
           "JsonName": "id",
           "Type": {
-            "Type": "Any"
+            "Type": "Double"
           }
         },
         {

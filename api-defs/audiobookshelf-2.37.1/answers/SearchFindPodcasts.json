@@ -1,0 +1,28 @@
+{
+  "operation": "SearchFindPodcasts",
+  "method": "GET",
+  "path": "/api/search/podcast",
+  "answers": {
+    "200": [
+      [
+        {
+          "artistId": null,
+          "artistName": "WTYP is Justin Roczniak, November Kelly, Liam McAnderson, and friends.",
+          "cover": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts125/v4/21/da/66/21da66c0-ff2d-981c-862c-8d8138903ec5/mza_1840288066774406949.jpg/600x600bb.jpg",
+          "description": "",
+          "descriptionPlain": "",
+          "explicit": true,
+          "feedUrl": "https://feed.podbean.com/wtyppod/feed.xml",
+          "genres": [
+            "Technology"
+          ],
+          "id": 1487829595,
+          "pageUrl": "https://podcasts.apple.com/us/podcast/well-there-s-your-problem/id1487829595?uo=4",
+          "releaseDate": "2026-08-27T14:22:00Z",
+          "title": "Well There‘s Your Problem",
+          "trackCount": 263
+        }
+      ]
+    ]
+  }
+}

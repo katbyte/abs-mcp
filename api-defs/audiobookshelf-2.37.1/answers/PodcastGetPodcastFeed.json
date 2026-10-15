@@ -1,0 +1,71 @@
+{
+  "operation": "PodcastGetPodcastFeed",
+  "method": "POST",
+  "path": "/api/podcasts/feed",
+  "sent": [
+    {
+      "rssFeed": "https://feed.podbean.com/wtyppod/feed.xml"
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "podcast": {
+          "episodes": [
+            {
+              "author": "WTYP is Justin Roczniak, November Kelly, Liam McAnderson, and friends.",
+              "chapters": [],
+              "chaptersType": null,
+              "chaptersUrl": null,
+              "description": "<p>folks they're calling it our most fed episode yet<br />\nfull episode on our patreon: https://www.patreon.com/wtyppod/posts/weather-balloons-167837307</p>",
+              "descriptionPlain": "folks they're calling it our most fed episode yet\nfull episode on our patreon: https://www.patreon.com/wtyppod/posts/weather-balloons-167837307",
+              "duration": "817",
+              "durationSeconds": 817,
+              "enclosure": {
+                "length": "19634462",
+                "type": "audio/mpeg",
+                "url": "https://mcdn.podbean.com/mf/web/w9ebcd6tnc5qf972/Area_51_Preview_Audioboua2.mp3"
+              },
+              "episode": "265",
+              "episodeType": "full",
+              "explicit": "true",
+              "guid": "wtyppod.podbean.com/63492328-81ee-3dcc-be63-6829946f20d4",
+              "pubDate": "Thu, 27 Aug 2026 11:22:22 -0300",
+              "publishedAt": 1787840542000,
+              "season": "",
+              "subtitle": "",
+              "title": "BONUS Episode 57 PREVIEW: Area 51 and its Weather Balloons"
+            }
+          ],
+          "metadata": {
+            "author": "WTYP is Justin Roczniak, November Kelly, Liam McAnderson, and friends.",
+            "categories": [
+              "Technology"
+            ],
+            "description": "This is a podcast about engineering disasters and systemic failures, from a leftist perspective, with jokes",
+            "descriptionPlain": "This is a podcast about engineering disasters and systemic failures, from a leftist perspective, with jokes",
+            "explicit": "true",
+            "feedUrl": "https://feed.podbean.com/wtyppod/feed.xml",
+            "image": "https://pbcdn1.podbean.com/imglogo/image-logo/6563527/danger-not-only-will-this-kill-you-it-will-hurt-19375548_pod.jpg",
+            "language": "en",
+            "link": "https://wtyppod.podbean.com",
+            "pubDate": "Thu, 27 Aug 2026 11:22:22 -0300",
+            "title": "Well There‘s Your Problem",
+            "type": "episodic"
+          }
+        }
+      },
+      {
+        "podcast": {
+          "metadata": {
+            "explicit": null,
+            "image": null,
+            "link": null,
+            "pubDate": null,
+            "type": null
+          }
+        }
+      }
+    ]
+  }
+}

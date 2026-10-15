@@ -1,0 +1,26 @@
+{
+  "operation": "SeriesUpdate",
+  "method": "PATCH",
+  "path": "/api/series/{id}",
+  "sent": [
+    {
+      "description": "A series, per the SDK suite."
+    },
+    {
+      "name": "Zzyzx Otherland"
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "addedAt": 1792029521361,
+        "description": "A series, per the SDK suite.",
+        "id": "21a8b758-65da-4d6d-8987-1f913eba0054",
+        "libraryId": "d9204ade-9fe6-4681-99d9-26075fdeb94a",
+        "name": "SDK Series",
+        "nameIgnorePrefix": "SDK Series",
+        "updatedAt": 1792029521902
+      }
+    ]
+  }
+}

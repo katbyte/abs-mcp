@@ -1,0 +1,505 @@
+{
+  "operation": "PlaylistFindAllForUser",
+  "method": "GET",
+  "path": "/api/playlists",
+  "answers": {
+    "200": [
+      {
+        "playlists": []
+      },
+      {
+        "playlists": [
+          {
+            "createdAt": 1792029569318,
+            "description": null,
+            "id": "c543ee43-7a27-4229-af49-47e679e48abf",
+            "items": [
+              {
+                "libraryItem": {
+                  "addedAt": 1792029548949,
+                  "birthtimeMs": 1792029541818,
+                  "ctimeMs": 1792029543825,
+                  "folderId": "9a021275-58d1-47ef-95ab-3cad5d38c84e",
+                  "id": "9947ed05-4bb0-4dba-b8b5-889a9cb4815d",
+                  "ino": "1463500",
+                  "isFile": false,
+                  "isInvalid": false,
+                  "isMissing": false,
+                  "lastScan": 1792029548949,
+                  "libraryFiles": [
+                    {
+                      "addedAt": 1792029548775,
+                      "fileType": "audio",
+                      "ino": "1463507",
+                      "isSupplementary": null,
+                      "metadata": {
+                        "birthtimeMs": 1792029541849,
+                        "ctimeMs": 1792029543825,
+                        "ext": ".mp3",
+                        "filename": "01.mp3",
+                        "mtimeMs": 1792029541854,
+                        "path": "/fiction/Tad Williams/City of Golden Shadow/01.mp3",
+                        "relPath": "01.mp3",
+                        "size": 4386
+                      },
+                      "updatedAt": 1792029548775
+                    }
+                  ],
+                  "libraryId": "bc5ad08d-b2fe-402d-af4f-04846bf11cad",
+                  "media": {
+                    "audioFiles": [
+                      {
+                        "addedAt": 1792029548948,
+                        "bitRate": 32000,
+                        "channelLayout": "mono",
+                        "channels": 1,
+                        "chapters": [],
+                        "codec": "mp3",
+                        "discNumFromFilename": null,
+                        "discNumFromMeta": null,
+                        "duration": 1,
+                        "embeddedCoverArt": null,
+                        "error": null,
+                        "exclude": false,
+                        "format": "MP2/3 (MPEG audio layer 2/3)",
+                        "index": 1,
+                        "ino": "1463507",
+                        "language": null,
+                        "manuallyVerified": false,
+                        "metaTags": {
+                          "tagEncoder": "Lavf63.1.102"
+                        },
+                        "metadata": {
+                          "birthtimeMs": 1792029541849,
+                          "ctimeMs": 1792029543825,
+                          "ext": ".mp3",
+                          "filename": "01.mp3",
+                          "mtimeMs": 1792029541854,
+                          "path": "/fiction/Tad Williams/City of Golden Shadow/01.mp3",
+                          "relPath": "01.mp3",
+                          "size": 4386
+                        },
+                        "mimeType": "audio/mpeg",
+                        "timeBase": "1/14112000",
+                        "trackNumFromFilename": 1,
+                        "trackNumFromMeta": null,
+                        "updatedAt": 1792029548948
+                      }
+                    ],
+                    "chapters": [],
+                    "coverPath": null,
+                    "duration": 1,
+                    "ebookFile": null,
+                    "id": "0f771fd0-ae19-4ce7-a093-7e628f10a1d3",
+                    "libraryItemId": "9947ed05-4bb0-4dba-b8b5-889a9cb4815d",
+                    "metadata": {
+                      "abridged": false,
+                      "asin": null,
+                      "authorName": "Tad Williams",
+                      "authorNameLF": "Williams, Tad",
+                      "authors": [
+                        {
+                          "id": "4ea8538c-b74d-4945-af03-3d2dc36ad328",
+                          "name": "Tad Williams"
+                        }
+                      ],
+                      "description": null,
+                      "descriptionPlain": null,
+                      "explicit": false,
+                      "genres": [
+                        "Science Fiction"
+                      ],
+                      "isbn": null,
+                      "language": "English",
+                      "narratorName": "George Newbern",
+                      "narrators": [
+                        "George Newbern"
+                      ],
+                      "publishedDate": null,
+                      "publishedYear": "1996",
+                      "publisher": "DAW",
+                      "series": [
+                        {
+                          "id": "7ea83159-fd9a-4ca1-8015-fb151af1f2fd",
+                          "name": "Otherland",
+                          "sequence": "1"
+                        }
+                      ],
+                      "seriesName": "Otherland #1",
+                      "subtitle": null,
+                      "title": "City of Golden Shadow",
+                      "titleIgnorePrefix": "City of Golden Shadow"
+                    },
+                    "numAudioFiles": 1,
+                    "numChapters": 0,
+                    "numTracks": 1,
+                    "size": 4386,
+                    "tags": [
+                      "sf"
+                    ],
+                    "tracks": [
+                      {
+                        "addedAt": 1792029548948,
+                        "bitRate": 32000,
+                        "channelLayout": "mono",
+                        "channels": 1,
+                        "chapters": [],
+                        "codec": "mp3",
+                        "contentUrl": "/api/items/9947ed05-4bb0-4dba-b8b5-889a9cb4815d/file/1463507",
+                        "discNumFromFilename": null,
+                        "discNumFromMeta": null,
+                        "duration": 1,
+                        "embeddedCoverArt": null,
+                        "error": null,
+                        "exclude": false,
+                        "format": "MP2/3 (MPEG audio layer 2/3)",
+                        "index": 1,
+                        "ino": "1463507",
+                        "language": null,
+                        "manuallyVerified": false,
+                        "metaTags": {
+                          "tagEncoder": "Lavf63.1.102"
+                        },
+                        "metadata": {
+                          "birthtimeMs": 1792029541849,
+                          "ctimeMs": 1792029543825,
+                          "ext": ".mp3",
+                          "filename": "01.mp3",
+                          "mtimeMs": 1792029541854,
+                          "path": "/fiction/Tad Williams/City of Golden Shadow/01.mp3",
+                          "relPath": "01.mp3",
+                          "size": 4386
+                        },
+                        "mimeType": "audio/mpeg",
+                        "startOffset": 0,
+                        "timeBase": "1/14112000",
+                        "title": "01.mp3",
+                        "trackNumFromFilename": 1,
+                        "trackNumFromMeta": null,
+                        "updatedAt": 1792029548948
+                      }
+                    ]
+                  },
+                  "mediaType": "book",
+                  "mtimeMs": 1792029541849,
+                  "numFiles": 1,
+                  "oldLibraryItemId": null,
+                  "path": "/fiction/Tad Williams/City of Golden Shadow",
+                  "relPath": "Tad Williams/City of Golden Shadow",
+                  "scanVersion": "2.37.1",
+                  "size": 4386,
+                  "updatedAt": 1792029551022
+                },
+                "libraryItemId": "9947ed05-4bb0-4dba-b8b5-889a9cb4815d"
+              }
+            ],
+            "lastUpdate": 1792029569318,
+            "libraryId": "bc5ad08d-b2fe-402d-af4f-04846bf11cad",
+            "name": "Zzyzx Tag Queue",
+            "userId": "e500ec99-d805-44a6-9e0c-f049fe698c97"
+          }
+        ]
+      },
+      {
+        "playlists": [
+          {
+            "items": [
+              {
+                "libraryItem": {
+                  "libraryFiles": [
+                    {
+                      "isSupplementary": false
+                    }
+                  ],
+                  "media": {
+                    "ebookFile": {
+                      "addedAt": 1792029548781,
+                      "ebookFormat": "epub",
+                      "fileType": "ebook",
+                      "ino": "1463505",
+                      "isSupplementary": null,
+                      "metadata": {
+                        "birthtimeMs": 1792029542263,
+                        "ctimeMs": 1792029543824,
+                        "ext": ".epub",
+                        "filename": "Foundation.epub",
+                        "mtimeMs": 1792029542263,
+                        "path": "/fiction/Isaac Asimov/Foundation/Foundation.epub",
+                        "relPath": "Foundation.epub",
+                        "size": 774
+                      },
+                      "updatedAt": 1792029548781
+                    },
+                    "ebookFormat": "epub"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "playlists": [
+          {
+            "items": [
+              {
+                "libraryItem": {
+                  "media": {
+                    "metadata": {
+                      "language": null,
+                      "publishedYear": null,
+                      "publisher": null
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "playlists": [
+          {
+            "items": [
+              {
+                "libraryItem": {
+                  "media": {
+                    "metadata": {
+                      "description": "A novel, on this shelf so the audits have something to sweep. This description is here so audit_missing has nothing to say about it: it is long enough to pass as one.",
+                      "descriptionPlain": "A novel, on this shelf so the audits have something to sweep. This description is here so audit_missing has nothing to say about it: it is long enough to pass as one."
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "playlists": [
+          {
+            "items": [
+              {
+                "libraryItem": {
+                  "media": {
+                    "chapters": [
+                      {
+                        "end": 20,
+                        "id": 0,
+                        "start": 0,
+                        "title": "Zzyzx Setting Out"
+                      }
+                    ],
+                    "coverPath": "/metadata/items/f688bd4b-ffd9-464c-a0e0-7abe36f6e3aa/cover.jpg",
+                    "metadata": {
+                      "asin": "B0ZZYZX001"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "playlists": [
+          {
+            "items": [
+              {
+                "episode": {
+                  "addedAt": 1792029672169,
+                  "audioFile": {
+                    "addedAt": 1792029672165,
+                    "bitRate": 32000,
+                    "channelLayout": "mono",
+                    "channels": 1,
+                    "chapters": [],
+                    "codec": "mp3",
+                    "discNumFromFilename": null,
+                    "discNumFromMeta": null,
+                    "duration": 1.031837,
+                    "embeddedCoverArt": null,
+                    "error": null,
+                    "exclude": false,
+                    "format": "MP2/3 (MPEG audio layer 2/3)",
+                    "index": 1,
+                    "ino": "1465762",
+                    "language": null,
+                    "manuallyVerified": false,
+                    "metaTags": {
+                      "tagAlbum": "Zzyzx Feed Show",
+                      "tagAlbumSort": "Zzyzx Feed Show",
+                      "tagArtist": "Zzyzx Host",
+                      "tagArtistSort": "Zzyzx Host",
+                      "tagDate": "Tue, 13 Oct 2026 01:01:10 +0000",
+                      "tagEncoder": "Lavf62.12.102",
+                      "tagLanguage": "en",
+                      "tagSeries": "Zzyzx Feed Show",
+                      "tagTitle": "Zzyzx Episode Two",
+                      "tagTitleSort": "Zzyzx Episode Two"
+                    },
+                    "metadata": {
+                      "birthtimeMs": 1792029672059,
+                      "ctimeMs": 1792029672060,
+                      "ext": ".mp3",
+                      "filename": "Zzyzx Episode Two.mp3",
+                      "mtimeMs": 1792029672060,
+                      "path": "/podcasts/Zzyzx Feed Show/Zzyzx Episode Two.mp3",
+                      "relPath": "Zzyzx Episode Two.mp3",
+                      "size": 4729
+                    },
+                    "mimeType": "audio/mpeg",
+                    "timeBase": "1/14112000",
+                    "trackNumFromFilename": null,
+                    "trackNumFromMeta": null,
+                    "updatedAt": 1792029672165
+                  },
+                  "audioTrack": {
+                    "addedAt": 1792029672165,
+                    "bitRate": 32000,
+                    "channelLayout": "mono",
+                    "channels": 1,
+                    "chapters": [],
+                    "codec": "mp3",
+                    "contentUrl": "/api/items/3a4f1599-ee23-4d1f-99ef-0947da649804/file/1465762",
+                    "discNumFromFilename": null,
+                    "discNumFromMeta": null,
+                    "duration": 1.031837,
+                    "embeddedCoverArt": null,
+                    "error": null,
+                    "exclude": false,
+                    "format": "MP2/3 (MPEG audio layer 2/3)",
+                    "index": 1,
+                    "ino": "1465762",
+                    "language": null,
+                    "manuallyVerified": false,
+                    "metaTags": {
+                      "tagAlbum": "Zzyzx Feed Show",
+                      "tagAlbumSort": "Zzyzx Feed Show",
+                      "tagArtist": "Zzyzx Host",
+                      "tagArtistSort": "Zzyzx Host",
+                      "tagDate": "Tue, 13 Oct 2026 01:01:10 +0000",
+                      "tagEncoder": "Lavf62.12.102",
+                      "tagLanguage": "en",
+                      "tagSeries": "Zzyzx Feed Show",
+                      "tagTitle": "Zzyzx Episode Two",
+                      "tagTitleSort": "Zzyzx Episode Two"
+                    },
+                    "metadata": {
+                      "birthtimeMs": 1792029672059,
+                      "ctimeMs": 1792029672060,
+                      "ext": ".mp3",
+                      "filename": "Zzyzx Episode Two.mp3",
+                      "mtimeMs": 1792029672060,
+                      "path": "/podcasts/Zzyzx Feed Show/Zzyzx Episode Two.mp3",
+                      "relPath": "Zzyzx Episode Two.mp3",
+                      "size": 4729
+                    },
+                    "mimeType": "audio/mpeg",
+                    "startOffset": 0,
+                    "timeBase": "1/14112000",
+                    "title": "Zzyzx Episode Two.mp3",
+                    "trackNumFromFilename": null,
+                    "trackNumFromMeta": null,
+                    "updatedAt": 1792029672165
+                  },
+                  "chapters": [],
+                  "description": "",
+                  "duration": 1.031837,
+                  "enclosure": {
+                    "length": "4386",
+                    "type": "audio/mpeg",
+                    "url": "http://zzyzx-feed.test/audio/zzyzx-ep-2.mp3"
+                  },
+                  "episode": "2",
+                  "episodeType": "bonus",
+                  "guid": "zzyzx-ep-2",
+                  "id": "cbfab832-3d68-46c2-add9-4731eeb10295",
+                  "index": null,
+                  "libraryItemId": "3a4f1599-ee23-4d1f-99ef-0947da649804",
+                  "oldEpisodeId": null,
+                  "podcastId": "9790e89b-26a5-4279-89b7-c0cdb1213ba2",
+                  "pubDate": "Tue, 13 Oct 2026 01:01:10 +0000",
+                  "publishedAt": 1791853270000,
+                  "season": "1",
+                  "size": 4729,
+                  "subtitle": "",
+                  "title": "Zzyzx Episode Two, Retitled",
+                  "updatedAt": 1792029672698
+                },
+                "episodeId": "cbfab832-3d68-46c2-add9-4731eeb10295",
+                "libraryItem": {
+                  "media": {
+                    "autoDownloadEpisodes": false,
+                    "autoDownloadSchedule": "0 3 * * *",
+                    "lastEpisodeCheck": 1792029673358,
+                    "maxEpisodesToKeep": 10,
+                    "maxNewEpisodesToDownload": 2,
+                    "metadata": {
+                      "author": "Zzyzx Host",
+                      "feedUrl": "http://zzyzx-feed.test/show.xml",
+                      "imageUrl": "",
+                      "itunesArtistId": null,
+                      "itunesId": null,
+                      "itunesPageUrl": "",
+                      "releaseDate": "",
+                      "type": ""
+                    },
+                    "numEpisodes": 0
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "playlists": [
+          {
+            "description": "Zzyzx: the account's own"
+          }
+        ]
+      },
+      {
+        "playlists": [
+          {
+            "items": [
+              {
+                "episode": {
+                  "audioFile": {
+                    "duration": 1
+                  },
+                  "audioTrack": {
+                    "duration": 1
+                  },
+                  "description": null,
+                  "duration": 1,
+                  "enclosure": null,
+                  "episode": null,
+                  "episodeType": null,
+                  "guid": null,
+                  "pubDate": null,
+                  "publishedAt": null,
+                  "season": null,
+                  "subtitle": null
+                },
+                "libraryItem": {
+                  "media": {
+                    "lastEpisodeCheck": null,
+                    "metadata": {
+                      "author": null,
+                      "feedUrl": null,
+                      "imageUrl": null,
+                      "itunesPageUrl": null,
+                      "releaseDate": null
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

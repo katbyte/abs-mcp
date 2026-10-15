@@ -1,0 +1,48 @@
+{
+  "operation": "StatsGetAdminStatsForYear",
+  "method": "GET",
+  "path": "/api/stats/year/{year}",
+  "answers": {
+    "200": [
+      {
+        "booksAddedWithCovers": [],
+        "numAuthorsAdded": 3,
+        "numBooks": 7,
+        "numBooksAdded": 7,
+        "numListeningSessions": 0,
+        "topAuthors": [],
+        "topGenres": [],
+        "topNarrators": [],
+        "totalBooksAddedDuration": 7,
+        "totalBooksAddedSize": 31476,
+        "totalBooksDuration": 7,
+        "totalBooksSize": 31476,
+        "totalListeningTime": 0
+      },
+      {
+        "booksAddedWithCovers": [
+          "b5420e90-bb58-4337-8ec8-88058576a249"
+        ],
+        "topAuthors": [
+          {
+            "name": "James S. A. Corey",
+            "time": 1
+          }
+        ],
+        "topGenres": [
+          {
+            "genre": "Science Fiction",
+            "time": 2
+          }
+        ],
+        "topNarrators": [
+          {
+            "name": "Jefferson Mays",
+            "time": 1
+          }
+        ],
+        "totalListeningTime": 2.4000000000000004
+      }
+    ]
+  }
+}

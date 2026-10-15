@@ -297,17 +297,48 @@
       "Name": "NotificationCreateNotificationRequest",
       "Fields": [
         {
+          "Name": "BodyTemplate",
+          "JsonName": "bodyTemplate",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Enabled",
+          "JsonName": "enabled",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
           "Name": "EventName",
           "JsonName": "eventName",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TitleTemplate",
+          "JsonName": "titleTemplate",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Type",
+          "JsonName": "type",
+          "Type": {
+            "Type": "String"
           }
         },
         {
           "Name": "Urls",
           "JsonName": "urls",
           "Type": {
-            "Type": "Any"
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
           }
         }
       ]
@@ -926,14 +957,21 @@
           "Name": "Enabled",
           "JsonName": "enabled",
           "Type": {
-            "Type": "Any"
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "EventName",
+          "JsonName": "eventName",
+          "Type": {
+            "Type": "String"
           }
         },
         {
           "Name": "Id",
           "JsonName": "id",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           }
         }
       ]

@@ -1,0 +1,66 @@
+{
+  "operation": "PodcastGetEpisode",
+  "method": "GET",
+  "path": "/api/podcasts/{id}/episode/{episodeId}",
+  "answers": {
+    "200": [
+      {
+        "addedAt": 1792029531700,
+        "audioFile": {
+          "addedAt": 1792029531693,
+          "bitRate": 32000,
+          "channelLayout": "mono",
+          "channels": 1,
+          "chapters": [],
+          "codec": "mp3",
+          "discNumFromFilename": null,
+          "discNumFromMeta": null,
+          "duration": 1,
+          "embeddedCoverArt": null,
+          "error": null,
+          "exclude": false,
+          "format": "MP2/3 (MPEG audio layer 2/3)",
+          "index": 1,
+          "ino": "1463226",
+          "language": null,
+          "manuallyVerified": false,
+          "metaTags": {
+            "tagEncoder": "Lavf63.1.102"
+          },
+          "metadata": {
+            "birthtimeMs": 1792029514290,
+            "ctimeMs": 1792029514480,
+            "ext": ".mp3",
+            "filename": "Episode 1.mp3",
+            "mtimeMs": 1792029514292,
+            "path": "/podcasts/Well There's Your Problem/Episode 1.mp3",
+            "relPath": "Episode 1.mp3",
+            "size": 4386
+          },
+          "mimeType": "audio/mpeg",
+          "timeBase": "1/14112000",
+          "trackNumFromFilename": null,
+          "trackNumFromMeta": null,
+          "updatedAt": 1792029531693
+        },
+        "chapters": [],
+        "description": null,
+        "enclosure": null,
+        "episode": null,
+        "episodeType": null,
+        "guid": null,
+        "id": "519c3cad-934e-4042-abe1-d02d42dc7e46",
+        "index": null,
+        "libraryItemId": "6858ff53-055b-496a-b054-ed4eb0de924c",
+        "oldEpisodeId": null,
+        "podcastId": "e867888f-01fa-453c-9e65-3dbb5ce238f2",
+        "pubDate": null,
+        "publishedAt": null,
+        "season": null,
+        "subtitle": null,
+        "title": "Episode 1",
+        "updatedAt": 1792029531700
+      }
+    ]
+  }
+}

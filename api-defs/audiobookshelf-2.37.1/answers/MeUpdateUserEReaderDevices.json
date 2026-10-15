@@ -1,0 +1,38 @@
+{
+  "operation": "MeUpdateUserEReaderDevices",
+  "method": "POST",
+  "path": "/api/me/ereader-devices",
+  "sent": [
+    {
+      "ereaderDevices": [
+        {
+          "availabilityOption": "specificUsers",
+          "email": "me@example.invalid",
+          "name": "SDK Me Reader",
+          "users": [
+            "e2682b5d-a1fb-4847-b7e2-39b7c7564f87"
+          ]
+        }
+      ]
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "ereaderDevices": [
+          {
+            "availabilityOption": "adminOrUp",
+            "email": "sdk@example.invalid",
+            "name": "SDK Reader",
+            "users": null
+          },
+          {
+            "users": [
+              "e2682b5d-a1fb-4847-b7e2-39b7c7564f87"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

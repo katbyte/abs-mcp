@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	"github.com/katbyte/abs-mcp/sdk/pandorest/answers"
 	"github.com/katbyte/abs-mcp/tools"
 	"github.com/katbyte/go-kt/mcp/acctest"
 	"github.com/katbyte/go-kt/test/env"
@@ -227,6 +228,13 @@ func runSuite(m *testing.M) {
 		}
 	}
 
+	if err := recorder.Report(os.Stderr); err != nil {
+		fmt.Fprintln(os.Stderr, "\nanswers:", err)
+		if code == 0 {
+			code = 1
+		}
+	}
+
 	os.Exit(code)
 }
 
@@ -276,8 +284,19 @@ func stopProxy() {
 	proxy = nil
 }
 
+// recorder saves what the server answers when ABS_TEST_ANSWERS is set, for the API document; nil otherwise. Every client a test makes takes its
+// Option, so what it is answered as another account is saved too.
+var recorder *answers.Recorder
+
 func start() error {
-	client, err := abs.New(os.Getenv("ABS_SERVER"), os.Getenv("ABS_TOKEN"))
+	var err error
+	if os.Getenv(answers.Env) != "" {
+		if recorder, err = answers.Open(context.Background(), os.Getenv("ABS_SERVER"), "../.."); err != nil {
+			return fmt.Errorf("answers: %w", err)
+		}
+	}
+
+	client, err := abs.New(os.Getenv("ABS_SERVER"), os.Getenv("ABS_TOKEN"), recorder.Option())
 	if err != nil {
 		return err
 	}

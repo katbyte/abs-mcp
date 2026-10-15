@@ -310,7 +310,7 @@ func TestUserCreateAndEdit(t *testing.T) {
 // of another account's: previewed, removed, and gone from user_history.
 func TestUserHistoryRemove(t *testing.T) {
 	listener := newUser(t, "zzyzx-forgetful", abs.UserCreate{})
-	lc, err := abs.New(os.Getenv("ABS_SERVER"), listener.Token)
+	lc, err := abs.New(os.Getenv("ABS_SERVER"), listener.Token, recorder.Option())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -449,7 +449,7 @@ func TestUserCreateTagsAndType(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = admin.DeleteAPIKey(context.WithoutCancel(ctx), key.ID) })
-	own, err := abs.New(os.Getenv("ABS_SERVER"), key.Key)
+	own, err := abs.New(os.Getenv("ABS_SERVER"), key.Key, recorder.Option())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,0 +1,101 @@
+{
+  "operation": "UserUpdate",
+  "method": "PATCH",
+  "path": "/api/users/{id}",
+  "sent": [
+    {
+      "email": "sdk@example.invalid"
+    },
+    {
+      "permissions": {
+        "delete": true
+      }
+    },
+    {
+      "permissions": {
+        "accessAllLibraries": true,
+        "upload": true
+      }
+    },
+    {
+      "isActive": false
+    },
+    {
+      "password": "REDACTED"
+    },
+    {
+      "itemTagsSelected": [
+        "classic"
+      ],
+      "permissions": {
+        "accessAllTags": false,
+        "selectedTagsNotAccessible": true
+      }
+    },
+    {
+      "type": "admin"
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "success": true,
+        "user": {
+          "bookmarks": [],
+          "createdAt": 1792029518614,
+          "email": "sdk@example.invalid",
+          "hasOpenIDLink": false,
+          "id": "b906f0b2-d98c-46db-8dbc-05201f9e11c3",
+          "isActive": false,
+          "isLocked": false,
+          "itemTagsSelected": [],
+          "lastSeen": null,
+          "librariesAccessible": [],
+          "mediaProgress": [],
+          "permissions": {
+            "accessAllLibraries": true,
+            "accessAllTags": true,
+            "accessExplicitContent": false,
+            "createEreader": false,
+            "delete": false,
+            "download": true,
+            "selectedTagsNotAccessible": false,
+            "update": true,
+            "upload": false
+          },
+          "seriesHideFromContinueListening": [],
+          "token": "REDACTED",
+          "type": "user",
+          "username": "sdk-user"
+        }
+      },
+      {
+        "user": {
+          "bookmarks": [
+            {
+              "createdAt": 1792029699221,
+              "libraryItemId": "bd4206bc-5c02-49a5-8dc5-ba4462de8836",
+              "time": 0.5,
+              "title": "Zzyzx Kept Mark"
+            }
+          ],
+          "email": null
+        }
+      },
+      {
+        "user": {
+          "librariesAccessible": [
+            "bc5ad08d-b2fe-402d-af4f-04846bf11cad"
+          ]
+        }
+      },
+      {
+        "user": {
+          "itemTagsSelected": [
+            "classic"
+          ]
+        }
+      }
+    ]
+  }
+}

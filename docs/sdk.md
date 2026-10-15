@@ -40,6 +40,6 @@ Audiobookshelf's own OpenAPI file covers under a quarter of its routes and stopp
 make spec SOURCE=../audiobookshelf   # a checkout of the release to read
 ```
 
-It covers every route. Where an answer comes from a stored JSON column or an object the code fills in later, the source does not say its shape. The hand-written client's types fill those in, and `make spec` lists every place the two disagree. What neither says is left untyped. The command reports how many answers it typed in full.
+It covers every route. Where an answer comes from a stored JSON column or an object the code fills in later, the source does not say its shape. Answers saved from a real server fill those in, and correct the source where the server sent a fraction, a null or a field it does not mention (see [saving what Audiobookshelf answers](testing.md#saving-what-audiobookshelf-answers)). The hand-written client's types then settle what is left, and `make spec` lists every place they disagree. What none of them says is left untyped. The command reports how many answers it typed in full.
 
 It is the first step towards generating this client with [pandorest](https://github.com/katbyte/pandorest), as the other katbyte clients are. `make pandorest-import` reads it into pandorest's definitions under `api-defs/audiobookshelf-<version>/`, with each kind of id a type of its own, the times read as the dates they are, and the lists that page marked, so a generated client can read every page. No client is generated from them yet.

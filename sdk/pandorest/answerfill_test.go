@@ -1,0 +1,208 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/katbyte/abs-mcp/sdk/pandorest/answers"
+)
+
+// decoded is JSON as the answers package reads it, numbers kept as written.
+func decoded(t *testing.T, js string) any {
+	t.Helper()
+
+	d := json.NewDecoder(strings.NewReader(js))
+	d.UseNumber()
+
+	var v any
+	if err := d.Decode(&v); err != nil {
+		t.Fatal(err)
+	}
+
+	return v
+}
+
+func TestInferAll(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]string{
+		`[1, 2]`:                     "integer",
+		`[1, 2.5]`:                   "number",
+		`["a", null]`:                "string?",
+		`["a", 1]`:                   "",
+		`[{"a": 1}, {"b": "x"}]`:     "object{a:integer,b:string}",
+		`[[1], []]`:                  "array[integer]",
+		`[[]]`:                       "array[]",
+		`[{"2026-10-14": 1}]`:        "object*",
+		`[{"a": null}, {"a": true}]`: "object{a:boolean?}",
+	}
+	for in, want := range cases {
+		samples, ok := decoded(t, in).([]any)
+		if !ok {
+			t.Fatalf("%s is not a list of samples", in)
+		}
+		if got := describe(inferAll(samples)); got != want {
+			t.Errorf("inferAll(%s) = %s, want %s", in, got, want)
+		}
+	}
+}
+
+// describe writes a schema short, for comparing in a test.
+func describe(s *schema) string {
+	if s == nil {
+		return "nil"
+	}
+
+	out := s.Type
+	switch {
+	case s.Type == "object" && s.AdditionalProperties && len(s.Properties) == 0:
+		out += "*"
+	case s.Type == "object":
+		var fields []string
+		for _, n := range sortedKeys(s.Properties) {
+			fields = append(fields, n+":"+describe(s.Properties[n]))
+		}
+		out += "{" + strings.Join(fields, ",") + "}"
+	case s.Type == "array":
+		out += "[" + describe(s.Items) + "]"
+	}
+	if s.Nullable {
+		out += "?"
+	}
+
+	return out
+}
+
+func TestAnswerFillMerge(t *testing.T) {
+	t.Parallel()
+
+	components := map[string]*schema{"Book": {Type: "object", Properties: map[string]*schema{"title": {Type: "string"}}}}
+	to := &schema{Type: "object", Properties: map[string]*schema{
+		"untyped":  {},
+		"count":    {Type: "integer"},
+		"name":     {Type: "string"},
+		"duration": {Type: "number"},
+		"settings": {Type: "object", AdditionalProperties: true},
+		"book":     {Ref: "#/components/schemas/Book"},
+		"label":    {Type: "string"},
+	}}
+	a := newAnswerFill()
+	a.merge(to, inferAll([]any{decoded(t, `{"untyped": {"n": 1}, "count": 2.5, "name": null, "duration": 3, "settings": {"theme": "dark"}, "book": {"title": "T", "isbn": "1"}, "label": 7, "added": true}`)}), components, "answer", place{})
+
+	if got := describe(to.Properties["untyped"]); got != "object{n:number}" || !to.Properties["untyped"].Properties["n"].whole {
+		t.Errorf("an untyped value: %s, want filled, its whole number a number seen whole", got)
+	}
+	if to.Properties["count"].Type != "number" {
+		t.Errorf("a whole number sent with a fraction: %s, want a number", to.Properties["count"].Type)
+	}
+	if !to.Properties["name"].Nullable {
+		t.Error("a value sent null: want it nullable")
+	}
+	if to.Properties["duration"].Type != "number" || to.Properties["duration"].whole {
+		t.Errorf("a number sent whole: %+v, want it left a number", to.Properties["duration"])
+	}
+	if components["Book"].Properties["isbn"] != nil {
+		t.Error("a field a shared record lacks, which may be another kind of record's: want it listed, not added")
+	}
+	if to.Properties["label"].Type != "string" {
+		t.Errorf("a disagreement: %s, want it left as the source says", to.Properties["label"].Type)
+	}
+	if to.Properties["added"] == nil {
+		t.Error("a field the record lacked: want it added")
+	}
+
+	if a.filled != 2 {
+		t.Errorf("filled %d, want the untyped value and the open record's field", a.filled)
+	}
+	wantCorrected := []string{"answer.added: the server sends it, and the document did not have it", "answer.count: the server sent a fraction", "answer.name: the server sent null"}
+	if got := slices.Sorted(slices.Values(a.corrected)); !slices.Equal(got, slices.Sorted(slices.Values(wantCorrected))) {
+		t.Errorf("corrected:\n%q\nwant\n%q", got, wantCorrected)
+	}
+	wantConflicts := []string{"Book.isbn: the server sent it where the document has this record, which lacks it: another kind of record, or a field the record is missing", "answer.label: the source says string, the server sent integer"}
+	if got := slices.Sorted(slices.Values(a.conflicts)); !slices.Equal(got, wantConflicts) {
+		t.Errorf("conflicts:\n%q\nwant\n%q", got, wantConflicts)
+	}
+
+	var report bytes.Buffer
+	a.write(&report, "answers", true)
+	for _, line := range []string{"filled 2 values", "corrected 3", "2 differ", "corrected: answer.count: the server sent a fraction", "differs: answer.label"} {
+		if !strings.Contains(report.String(), line) {
+			t.Errorf("report has no %q:\n%s", line, report.String())
+		}
+	}
+}
+
+// What a client sent only fills what the document leaves untyped: it shows what one client chose to send, not what the server reads.
+func TestAnswerFillMergeSent(t *testing.T) {
+	t.Parallel()
+
+	to := &schema{Type: "object", Properties: map[string]*schema{"userId": {}, "isActive": {Type: "boolean"}, "count": {Type: "integer"}}}
+
+	a := newAnswerFill()
+	a.merge(to, inferAll([]any{decoded(t, `{"userId": "u1", "isActive": null, "count": 1.5, "name": "x"}`)}), nil, "body", place{sent: true})
+
+	if to.Properties["userId"].Type != "string" || a.filled != 1 {
+		t.Errorf("an untyped field: %+v, filled %d, want it typed", to.Properties["userId"], a.filled)
+	}
+	if to.Properties["isActive"].Nullable || to.Properties["count"].Type != "integer" || to.Properties["name"] != nil {
+		t.Errorf("body: %s, want nothing but the untyped field changed", describe(to))
+	}
+	if len(a.corrected) != 0 {
+		t.Errorf("corrected: %q, want none from what a client sent", a.corrected)
+	}
+	wantConflicts := []string{"body.count: the source says integer, the client sends number", "body.name: the client sends it, and the source does not show the server reading it"}
+	if got := slices.Sorted(slices.Values(a.conflicts)); !slices.Equal(got, wantConflicts) {
+		t.Errorf("conflicts:\n%q\nwant\n%q", got, wantConflicts)
+	}
+
+	// a body the source hands on whole may hold any field, so what a working client sends fills it in
+	open := &schema{Type: "object", AdditionalProperties: true, Properties: map[string]*schema{}}
+	a.merge(open, inferAll([]any{decoded(t, `{"email": "e"}`)}), nil, "open", place{sent: true})
+	if open.Properties["email"] == nil || a.filled != 2 {
+		t.Errorf("an open body: %s, filled %d, want the field sent", describe(open), a.filled)
+	}
+}
+
+func TestAnswerFillMatchesOperations(t *testing.T) {
+	t.Parallel()
+
+	items := &schema{}
+	files := []*answers.File{
+		{Operation: "ItemList", Method: "GET", Path: "/api/items", Answers: map[string][]any{"200": {decoded(t, `[{"id": "a"}]`)}, "201": {decoded(t, `{}`)}}},
+		{Operation: "Gone", Method: "GET", Path: "/api/gone"},
+	}
+
+	a := newAnswerFill()
+	a.fill(&document{Paths: map[string]map[string]*operation{"/api/items": {"get": {Responses: map[string]response{"200": {Content: map[string]media{"application/json": {Schema: items}}}}}}}}, files)
+
+	if describe(items) != "array[object{id:string}]" || !a.ops["GET /api/items"] {
+		t.Errorf("answer: %s, operations %v", describe(items), a.ops)
+	}
+	if !slices.Equal(a.unmatched, []string{"GET /api/gone (Gone)"}) {
+		t.Errorf("unmatched: %q", a.unmatched)
+	}
+	if !slices.Equal(a.conflicts, []string{"GET /api/items: the server answered 201 with JSON, which the document does not say"}) {
+		t.Errorf("conflicts: %q", a.conflicts)
+	}
+}
+
+// The hand-written client settles a number the server only ever sent whole.
+func TestByhandSettlesAWholeNumber(t *testing.T) {
+	t.Parallel()
+
+	to := &schema{Type: "number", whole: true}
+	b := &byhand{visitedRef: map[string]bool{}}
+	b.merge(to, &schema{Type: "integer"}, nil, "count")
+	if to.Type != "integer" || to.whole || b.settled != 1 || b.filled != 0 {
+		t.Errorf("settled: %+v, settled %d, filled %d", to, b.settled, b.filled)
+	}
+
+	plain := &schema{Type: "number"}
+	b.merge(plain, &schema{Type: "integer"}, nil, "duration")
+	if plain.Type != "number" {
+		t.Errorf("a number the source says: %s, want it left a number", plain.Type)
+	}
+}

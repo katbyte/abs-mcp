@@ -1,0 +1,17 @@
+{
+  "operation": "MiscGetAllGenres",
+  "method": "GET",
+  "path": "/api/genres",
+  "answers": {
+    "200": [
+      {
+        "genres": []
+      },
+      {
+        "genres": [
+          "SDK Genre"
+        ]
+      }
+    ]
+  }
+}

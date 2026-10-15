@@ -1,0 +1,21 @@
+{
+  "operation": "FileSystemCheckPathExists",
+  "method": "POST",
+  "path": "/api/filesystem/pathexists",
+  "sent": [
+    {
+      "directory": "SDK Author/SDK Trimmable/01.mp3",
+      "folderPath": "/scratch/sdk-file-delete"
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "exists": true
+      },
+      {
+        "libraryItemTitle": "SDK Trimmable"
+      }
+    ]
+  }
+}

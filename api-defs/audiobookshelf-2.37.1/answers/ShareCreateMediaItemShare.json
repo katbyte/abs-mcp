@@ -1,0 +1,31 @@
+{
+  "operation": "ShareCreateMediaItemShare",
+  "method": "POST",
+  "path": "/api/share/mediaitem",
+  "sent": [
+    {
+      "expiresAt": 1792033136008,
+      "isDownloadable": false,
+      "mediaItemId": "fbadb453-d559-4670-925c-a6b8134e827d",
+      "mediaItemType": "book",
+      "slug": "sdk-share"
+    }
+  ],
+  "answers": {
+    "201": [
+      {
+        "createdAt": "2026-10-15T01:58:56.116Z",
+        "expiresAt": "2026-10-15T02:58:56.008Z",
+        "id": "0e9644c4-856c-47ef-993d-6c4e91adbf85",
+        "isDownloadable": false,
+        "mediaItemId": "fbadb453-d559-4670-925c-a6b8134e827d",
+        "mediaItemType": "book",
+        "slug": "sdk-share",
+        "updatedAt": "2026-10-15T01:58:56.116Z"
+      },
+      {
+        "expiresAt": null
+      }
+    ]
+  }
+}

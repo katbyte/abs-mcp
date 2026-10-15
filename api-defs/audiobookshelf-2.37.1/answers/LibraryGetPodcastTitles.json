@@ -1,0 +1,19 @@
+{
+  "operation": "LibraryGetPodcastTitles",
+  "method": "GET",
+  "path": "/api/libraries/{id}/podcast-titles",
+  "answers": {
+    "200": [
+      {
+        "podcasts": [
+          {
+            "itunesId": null,
+            "libraryId": "5745c0fc-0e6c-4f44-9ae3-20a8d4e8bb2d",
+            "libraryItemId": "6858ff53-055b-496a-b054-ed4eb0de924c",
+            "title": "Well There's Your Problem"
+          }
+        ]
+      }
+    ]
+  }
+}

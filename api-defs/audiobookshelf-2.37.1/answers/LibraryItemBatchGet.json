@@ -1,0 +1,655 @@
+{
+  "operation": "LibraryItemBatchGet",
+  "method": "POST",
+  "path": "/api/items/batch/get",
+  "sent": [
+    {
+      "libraryItemIds": [
+        "f9aea369-7047-4d60-895e-b5031b70458c"
+      ]
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "libraryItems": [
+          {
+            "addedAt": 1792029519518,
+            "birthtimeMs": 1792029512417,
+            "ctimeMs": 1792029526816,
+            "folderId": "2599fce3-0201-4289-8106-f2cfb98fb689",
+            "id": "f9aea369-7047-4d60-895e-b5031b70458c",
+            "ino": "1462919",
+            "isFile": false,
+            "isInvalid": false,
+            "isMissing": false,
+            "lastScan": 1792029526831,
+            "libraryFiles": [
+              {
+                "addedAt": 1792029519276,
+                "fileType": "audio",
+                "ino": "1462927",
+                "isSupplementary": null,
+                "metadata": {
+                  "birthtimeMs": 1792029512449,
+                  "ctimeMs": 1792029514481,
+                  "ext": ".mp3",
+                  "filename": "01.mp3",
+                  "mtimeMs": 1792029512452,
+                  "path": "/fiction/Isaac Asimov/Second Foundation/01.mp3",
+                  "relPath": "01.mp3",
+                  "size": 4386
+                },
+                "updatedAt": 1792029519276
+              }
+            ],
+            "libraryId": "d9204ade-9fe6-4681-99d9-26075fdeb94a",
+            "media": {
+              "audioFiles": [
+                {
+                  "addedAt": 1792029519517,
+                  "bitRate": 32000,
+                  "channelLayout": "mono",
+                  "channels": 1,
+                  "chapters": [],
+                  "codec": "mp3",
+                  "discNumFromFilename": null,
+                  "discNumFromMeta": null,
+                  "duration": 1,
+                  "embeddedCoverArt": null,
+                  "error": null,
+                  "exclude": false,
+                  "format": "MP2/3 (MPEG audio layer 2/3)",
+                  "index": 1,
+                  "ino": "1462927",
+                  "language": null,
+                  "manuallyVerified": false,
+                  "metaTags": {
+                    "tagEncoder": "Lavf63.1.102"
+                  },
+                  "metadata": {
+                    "birthtimeMs": 1792029512449,
+                    "ctimeMs": 1792029514481,
+                    "ext": ".mp3",
+                    "filename": "01.mp3",
+                    "mtimeMs": 1792029512452,
+                    "path": "/fiction/Isaac Asimov/Second Foundation/01.mp3",
+                    "relPath": "01.mp3",
+                    "size": 4386
+                  },
+                  "mimeType": "audio/mpeg",
+                  "timeBase": "1/14112000",
+                  "trackNumFromFilename": 1,
+                  "trackNumFromMeta": null,
+                  "updatedAt": 1792029519517
+                }
+              ],
+              "chapters": [],
+              "coverPath": null,
+              "duration": 1,
+              "ebookFile": null,
+              "id": "fbadb453-d559-4670-925c-a6b8134e827d",
+              "libraryItemId": "f9aea369-7047-4d60-895e-b5031b70458c",
+              "metadata": {
+                "abridged": false,
+                "asin": null,
+                "authorName": "Isaac Asimov",
+                "authorNameLF": "Asimov, Isaac",
+                "authors": [
+                  {
+                    "id": "b5f29003-4517-4452-b9c6-5684666f6952",
+                    "name": "Isaac Asimov"
+                  }
+                ],
+                "description": null,
+                "descriptionPlain": null,
+                "explicit": false,
+                "genres": [],
+                "isbn": null,
+                "language": null,
+                "narratorName": "SDK Doomed Narrator",
+                "narrators": [
+                  "SDK Doomed Narrator"
+                ],
+                "publishedDate": null,
+                "publishedYear": null,
+                "publisher": null,
+                "series": [
+                  {
+                    "id": "21a8b758-65da-4d6d-8987-1f913eba0054",
+                    "name": "SDK Series",
+                    "sequence": "1"
+                  }
+                ],
+                "seriesName": "SDK Series #1",
+                "subtitle": null,
+                "title": "Second Foundation",
+                "titleIgnorePrefix": "Second Foundation"
+              },
+              "numAudioFiles": 1,
+              "numChapters": 0,
+              "numTracks": 1,
+              "size": 4386,
+              "tags": [],
+              "tracks": [
+                {
+                  "addedAt": 1792029519517,
+                  "bitRate": 32000,
+                  "channelLayout": "mono",
+                  "channels": 1,
+                  "chapters": [],
+                  "codec": "mp3",
+                  "contentUrl": "/api/items/f9aea369-7047-4d60-895e-b5031b70458c/file/1462927",
+                  "discNumFromFilename": null,
+                  "discNumFromMeta": null,
+                  "duration": 1,
+                  "embeddedCoverArt": null,
+                  "error": null,
+                  "exclude": false,
+                  "format": "MP2/3 (MPEG audio layer 2/3)",
+                  "index": 1,
+                  "ino": "1462927",
+                  "language": null,
+                  "manuallyVerified": false,
+                  "metaTags": {
+                    "tagEncoder": "Lavf63.1.102"
+                  },
+                  "metadata": {
+                    "birthtimeMs": 1792029512449,
+                    "ctimeMs": 1792029514481,
+                    "ext": ".mp3",
+                    "filename": "01.mp3",
+                    "mtimeMs": 1792029512452,
+                    "path": "/fiction/Isaac Asimov/Second Foundation/01.mp3",
+                    "relPath": "01.mp3",
+                    "size": 4386
+                  },
+                  "mimeType": "audio/mpeg",
+                  "startOffset": 0,
+                  "timeBase": "1/14112000",
+                  "title": "01.mp3",
+                  "trackNumFromFilename": 1,
+                  "trackNumFromMeta": null,
+                  "updatedAt": 1792029519517
+                }
+              ]
+            },
+            "mediaType": "book",
+            "mtimeMs": 1792029526816,
+            "numFiles": 2,
+            "oldLibraryItemId": null,
+            "path": "/fiction/Isaac Asimov/Second Foundation",
+            "relPath": "Isaac Asimov/Second Foundation",
+            "scanVersion": "2.37.1",
+            "size": 4567,
+            "updatedAt": 1792029526920
+          }
+        ]
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "metadata": {
+                "genres": [
+                  "Science Fiction"
+                ],
+                "language": "English",
+                "publishedYear": "2001",
+                "publisher": "DAW"
+              },
+              "tags": [
+                "sf"
+              ]
+            }
+          },
+          {
+            "libraryFiles": [
+              {
+                "isSupplementary": false
+              }
+            ],
+            "media": {
+              "ebookFile": {
+                "addedAt": 1792029548781,
+                "ebookFormat": "epub",
+                "fileType": "ebook",
+                "ino": "1463505",
+                "isSupplementary": null,
+                "metadata": {
+                  "birthtimeMs": 1792029542263,
+                  "ctimeMs": 1792029543824,
+                  "ext": ".epub",
+                  "filename": "Foundation.epub",
+                  "mtimeMs": 1792029542263,
+                  "path": "/fiction/Isaac Asimov/Foundation/Foundation.epub",
+                  "relPath": "Foundation.epub",
+                  "size": 774
+                },
+                "updatedAt": 1792029548781
+              },
+              "ebookFormat": "epub"
+            }
+          }
+        ]
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "coverPath": "/nonfiction/William Manchester/The Arms of Krupp/cover.jpg"
+            }
+          }
+        ]
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "audioFiles": [
+                {
+                  "embeddedCoverArt": "mjpeg",
+                  "metaTags": {
+                    "tagAlbum": "The Arms of Krupp",
+                    "tagAlbumArtist": "William Manchester",
+                    "tagArtist": "William Manchester",
+                    "tagComposer": "Grover Gardner",
+                    "tagDate": "1968",
+                    "tagGenre": "History",
+                    "tagPublisher": "Little, Brown",
+                    "tagTitle": "The Arms of Krupp",
+                    "tagTrack": "1"
+                  },
+                  "trackNumFromMeta": 1
+                }
+              ],
+              "tracks": [
+                {
+                  "embeddedCoverArt": "mjpeg",
+                  "metaTags": {
+                    "tagAlbum": "The Arms of Krupp",
+                    "tagAlbumArtist": "William Manchester",
+                    "tagArtist": "William Manchester",
+                    "tagComposer": "Grover Gardner",
+                    "tagDate": "1968",
+                    "tagGenre": "History",
+                    "tagPublisher": "Little, Brown",
+                    "tagTitle": "The Arms of Krupp",
+                    "tagTrack": "1"
+                  },
+                  "trackNumFromMeta": 1
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "autoDownloadEpisodes": false,
+              "autoDownloadSchedule": "0 * * * *",
+              "episodes": [
+                {
+                  "addedAt": 1792029548795,
+                  "audioFile": {
+                    "addedAt": 1792029548773,
+                    "bitRate": 32000,
+                    "channelLayout": "mono",
+                    "channels": 1,
+                    "chapters": [],
+                    "codec": "mp3",
+                    "discNumFromFilename": null,
+                    "discNumFromMeta": null,
+                    "duration": 1,
+                    "embeddedCoverArt": null,
+                    "error": null,
+                    "exclude": false,
+                    "format": "MP2/3 (MPEG audio layer 2/3)",
+                    "index": 1,
+                    "ino": "1463531",
+                    "language": null,
+                    "manuallyVerified": false,
+                    "metaTags": {
+                      "tagEncoder": "Lavf63.1.102"
+                    },
+                    "metadata": {
+                      "birthtimeMs": 1792029543689,
+                      "ctimeMs": 1792029543823,
+                      "ext": ".mp3",
+                      "filename": "Episode 1.mp3",
+                      "mtimeMs": 1792029543692,
+                      "path": "/podcasts/Well There's Your Problem/Episode 1.mp3",
+                      "relPath": "Episode 1.mp3",
+                      "size": 4386
+                    },
+                    "mimeType": "audio/mpeg",
+                    "timeBase": "1/14112000",
+                    "trackNumFromFilename": null,
+                    "trackNumFromMeta": null,
+                    "updatedAt": 1792029548773
+                  },
+                  "audioTrack": {
+                    "addedAt": 1792029548773,
+                    "bitRate": 32000,
+                    "channelLayout": "mono",
+                    "channels": 1,
+                    "chapters": [],
+                    "codec": "mp3",
+                    "contentUrl": "/api/items/1994343f-85fc-4f84-aacc-12f09e0996a7/file/1463531",
+                    "discNumFromFilename": null,
+                    "discNumFromMeta": null,
+                    "duration": 1,
+                    "embeddedCoverArt": null,
+                    "error": null,
+                    "exclude": false,
+                    "format": "MP2/3 (MPEG audio layer 2/3)",
+                    "index": 1,
+                    "ino": "1463531",
+                    "language": null,
+                    "manuallyVerified": false,
+                    "metaTags": {
+                      "tagEncoder": "Lavf63.1.102"
+                    },
+                    "metadata": {
+                      "birthtimeMs": 1792029543689,
+                      "ctimeMs": 1792029543823,
+                      "ext": ".mp3",
+                      "filename": "Episode 1.mp3",
+                      "mtimeMs": 1792029543692,
+                      "path": "/podcasts/Well There's Your Problem/Episode 1.mp3",
+                      "relPath": "Episode 1.mp3",
+                      "size": 4386
+                    },
+                    "mimeType": "audio/mpeg",
+                    "startOffset": 0,
+                    "timeBase": "1/14112000",
+                    "title": "Episode 1.mp3",
+                    "trackNumFromFilename": null,
+                    "trackNumFromMeta": null,
+                    "updatedAt": 1792029548773
+                  },
+                  "chapters": [],
+                  "description": null,
+                  "duration": 1,
+                  "enclosure": null,
+                  "episode": null,
+                  "episodeType": null,
+                  "guid": null,
+                  "id": "685e92ae-ab85-4444-b7db-31866f9b11b3",
+                  "index": null,
+                  "libraryItemId": "1994343f-85fc-4f84-aacc-12f09e0996a7",
+                  "oldEpisodeId": null,
+                  "podcastId": "69a27da3-a2b2-4852-9c57-56600f6e4910",
+                  "pubDate": null,
+                  "publishedAt": null,
+                  "season": null,
+                  "size": 4386,
+                  "subtitle": null,
+                  "title": "Episode 1",
+                  "updatedAt": 1792029548795
+                }
+              ],
+              "lastEpisodeCheck": null,
+              "maxEpisodesToKeep": 0,
+              "maxNewEpisodesToDownload": 3,
+              "metadata": {
+                "author": null,
+                "feedUrl": null,
+                "imageUrl": null,
+                "itunesArtistId": null,
+                "itunesId": null,
+                "itunesPageUrl": null,
+                "releaseDate": null,
+                "type": "episodic"
+              },
+              "numEpisodes": 2
+            }
+          },
+          {
+            "media": {
+              "chapters": [
+                {
+                  "end": 1,
+                  "id": 0,
+                  "start": 0,
+                  "title": "Chapter One"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "audioFiles": [
+                {
+                  "language": "und",
+                  "trackNumFromFilename": null
+                }
+              ],
+              "tracks": [
+                {
+                  "language": "und",
+                  "trackNumFromFilename": null
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "metadata": {
+                "asin": "B0ZZYZX001"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "audioFiles": [
+                {
+                  "chapters": [
+                    {
+                      "end": 60,
+                      "id": 0,
+                      "start": 0,
+                      "title": "Zzyzx Opening Credits"
+                    }
+                  ]
+                }
+              ],
+              "tracks": [
+                {
+                  "chapters": [
+                    {
+                      "end": 60,
+                      "id": 0,
+                      "start": 0,
+                      "title": "Zzyzx Opening Credits"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "chapters": [
+                {
+                  "end": 0.5
+                },
+                {
+                  "start": 0.5
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "audioFiles": [
+                {
+                  "chapters": [
+                    {
+                      "end": 0.5
+                    },
+                    {
+                      "start": 0.5
+                    }
+                  ],
+                  "metaTags": {
+                    "tagGrouping": "Zzyzx Embedded Saga #2"
+                  }
+                }
+              ],
+              "tracks": [
+                {
+                  "chapters": [
+                    {
+                      "end": 0.5
+                    },
+                    {
+                      "start": 0.5
+                    }
+                  ],
+                  "metaTags": {
+                    "tagGrouping": "Zzyzx Embedded Saga #2"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "metadata": {
+                "description": "A novel, on this shelf so the audits have something to sweep. This description is here so audit_missing has nothing to say about it: it is long enough to pass as one.",
+                "descriptionPlain": "A novel, on this shelf so the audits have something to sweep. This description is here so audit_missing has nothing to say about it: it is long enough to pass as one."
+              }
+            }
+          }
+        ]
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "metadata": {
+                "isbn": "9780306406157"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "metadata": {
+                "series": [
+                  {
+                    "sequence": null
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "episodes": [
+                {
+                  "audioFile": {
+                    "duration": 1.031837,
+                    "metaTags": {
+                      "tagAlbum": "Zzyzx Feed Show",
+                      "tagAlbumSort": "Zzyzx Feed Show",
+                      "tagArtist": "Zzyzx Host",
+                      "tagArtistSort": "Zzyzx Host",
+                      "tagDate": "Mon, 12 Oct 2026 01:01:10 +0000",
+                      "tagLanguage": "en",
+                      "tagSeries": "Zzyzx Feed Show",
+                      "tagTitle": "Zzyzx Episode One",
+                      "tagTitleSort": "Zzyzx Episode One"
+                    }
+                  },
+                  "audioTrack": {
+                    "duration": 1.031837,
+                    "metaTags": {
+                      "tagAlbum": "Zzyzx Feed Show",
+                      "tagAlbumSort": "Zzyzx Feed Show",
+                      "tagArtist": "Zzyzx Host",
+                      "tagArtistSort": "Zzyzx Host",
+                      "tagDate": "Mon, 12 Oct 2026 01:01:10 +0000",
+                      "tagLanguage": "en",
+                      "tagSeries": "Zzyzx Feed Show",
+                      "tagTitle": "Zzyzx Episode One",
+                      "tagTitleSort": "Zzyzx Episode One"
+                    }
+                  },
+                  "description": "",
+                  "duration": 1.031837,
+                  "enclosure": {
+                    "length": "4386",
+                    "type": "audio/mpeg",
+                    "url": "http://zzyzx-feed.test/audio/zzyzx-ep-1.mp3"
+                  },
+                  "episode": "",
+                  "episodeType": "",
+                  "guid": "zzyzx-ep-1",
+                  "pubDate": "Mon, 12 Oct 2026 01:01:10 +0000",
+                  "publishedAt": 1791766870000,
+                  "season": "",
+                  "subtitle": ""
+                }
+              ],
+              "lastEpisodeCheck": 1792029673358,
+              "metadata": {
+                "author": "Zzyzx Host",
+                "feedUrl": "http://zzyzx-feed.test/show.xml",
+                "imageUrl": "",
+                "itunesPageUrl": "",
+                "releaseDate": ""
+              }
+            },
+            "scanVersion": null
+          }
+        ]
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "metadata": {
+                "subtitle": "A  Short Story"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

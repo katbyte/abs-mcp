@@ -305,7 +305,8 @@
             "NestedItem": {
               "Type": "String"
             }
-          }
+          },
+          "Nullable": true
         }
       ]
     },
@@ -357,7 +358,8 @@
             "NestedItem": {
               "Type": "String"
             }
-          }
+          },
+          "Nullable": true
         }
       ]
     },
@@ -382,6 +384,13 @@
           "JsonName": "ereaderDevices",
           "Type": {
             "Type": "Any"
+          }
+        },
+        {
+          "Name": "FromAddress",
+          "JsonName": "fromAddress",
+          "Type": {
+            "Type": "String"
           }
         },
         {

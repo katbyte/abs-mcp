@@ -1,0 +1,138 @@
+{
+  "operation": "AuthorFindOne",
+  "method": "GET",
+  "path": "/api/authors/{id}",
+  "answers": {
+    "200": [
+      {
+        "addedAt": 1792029519328,
+        "asin": null,
+        "description": null,
+        "id": "3539e469-e573-4845-9783-7d55f1e5b269",
+        "imagePath": null,
+        "libraryId": "d9204ade-9fe6-4681-99d9-26075fdeb94a",
+        "libraryItems": [
+          {
+            "addedAt": 1792029519373,
+            "birthtimeMs": 1792029512458,
+            "ctimeMs": 1792029514481,
+            "folderId": "2599fce3-0201-4289-8106-f2cfb98fb689",
+            "id": "20893fab-8537-4f63-b182-53dbe182c58b",
+            "ino": "1462922",
+            "isFile": false,
+            "isInvalid": false,
+            "isMissing": false,
+            "libraryId": "d9204ade-9fe6-4681-99d9-26075fdeb94a",
+            "media": {
+              "coverPath": null,
+              "duration": 1,
+              "id": "2bd146d2-959a-45c7-bffe-f10a21a8ba2b",
+              "metadata": {
+                "abridged": false,
+                "asin": null,
+                "authorName": "Tad Williams",
+                "authorNameLF": "Williams, Tad",
+                "description": null,
+                "explicit": false,
+                "genres": [],
+                "isbn": null,
+                "language": null,
+                "narratorName": "SDK Reader",
+                "publishedDate": null,
+                "publishedYear": null,
+                "publisher": null,
+                "seriesName": "",
+                "subtitle": null,
+                "title": "City of Golden Shadow",
+                "titleIgnorePrefix": "City of Golden Shadow"
+              },
+              "numAudioFiles": 1,
+              "numChapters": 0,
+              "numTracks": 1,
+              "size": 4386,
+              "tags": [
+                "sdk"
+              ]
+            },
+            "mediaType": "book",
+            "mtimeMs": 1792029512488,
+            "numFiles": 1,
+            "oldLibraryItemId": null,
+            "path": "/fiction/Tad Williams/City of Golden Shadow",
+            "relPath": "Tad Williams/City of Golden Shadow",
+            "size": 4386,
+            "updatedAt": 1792029521463
+          }
+        ],
+        "name": "Tad Williams",
+        "updatedAt": 1792029519328
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "ebookFormat": "epub",
+              "metadata": {
+                "genres": [
+                  "Science Fiction"
+                ],
+                "language": "English",
+                "publishedYear": "1951",
+                "publisher": "Bantam"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "description": "Author of Otherland."
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "metadata": {
+                "description": "A novel, on this shelf so the audits have something to sweep. This description is here so audit_missing has nothing to say about it: it is long enough to pass as one."
+              }
+            }
+          }
+        ]
+      },
+      {
+        "asin": "B003RY2ISS",
+        "imagePath": "/metadata/authors/d663841d-4fae-48f2-9538-46cf545129b7.jpg"
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "metadata": {
+                "subtitle": "A  Short Story"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "metadata": {
+                "asin": "B003D8W5VS"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "coverPath": "/metadata/items/7859bffd-1f27-41e9-9b80-7a4cb7447818/cover.jpg"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

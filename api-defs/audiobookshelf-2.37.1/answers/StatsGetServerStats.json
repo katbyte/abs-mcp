@@ -1,0 +1,26 @@
+{
+  "operation": "StatsGetServerStats",
+  "method": "GET",
+  "path": "/api/stats/server",
+  "answers": {
+    "200": [
+      {
+        "books": {
+          "numAudioFiles": 15,
+          "numItems": 15,
+          "totalSize": 171588
+        },
+        "podcasts": {
+          "numAudioFiles": 3,
+          "numItems": 3,
+          "totalSize": 17544
+        },
+        "total": {
+          "numAudioFiles": 18,
+          "numItems": 18,
+          "totalSize": 189132
+        }
+      }
+    ]
+  }
+}

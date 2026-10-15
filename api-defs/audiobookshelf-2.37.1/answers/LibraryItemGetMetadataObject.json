@@ -1,0 +1,18 @@
+{
+  "operation": "LibraryItemGetMetadataObject",
+  "method": "GET",
+  "path": "/api/items/{id}/metadata-object",
+  "answers": {
+    "200": [
+      {
+        "TRACKTOTAL": "1",
+        "album": "Second Foundation",
+        "album_artist": "Isaac Asimov",
+        "artist": "Isaac Asimov",
+        "composer": "SDK Doomed Narrator",
+        "grouping": "SDK Series #1",
+        "title": "Second Foundation"
+      }
+    ]
+  }
+}

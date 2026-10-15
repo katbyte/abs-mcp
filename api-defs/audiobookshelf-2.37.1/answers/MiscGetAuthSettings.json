@@ -1,0 +1,34 @@
+{
+  "operation": "MiscGetAuthSettings",
+  "method": "GET",
+  "path": "/api/auth-settings",
+  "answers": {
+    "200": [
+      {
+        "authActiveAuthMethods": [
+          "local"
+        ],
+        "authLoginCustomMessage": null,
+        "authOpenIDAdvancedPermsClaim": "",
+        "authOpenIDAuthorizationURL": null,
+        "authOpenIDAutoLaunch": false,
+        "authOpenIDAutoRegister": false,
+        "authOpenIDButtonText": "Login with OpenId",
+        "authOpenIDClientID": null,
+        "authOpenIDClientSecret": null,
+        "authOpenIDGroupClaim": "",
+        "authOpenIDIssuerURL": null,
+        "authOpenIDJwksURL": null,
+        "authOpenIDLogoutURL": null,
+        "authOpenIDMatchExistingBy": null,
+        "authOpenIDMobileRedirectURIs": [
+          "audiobookshelf://oauth"
+        ],
+        "authOpenIDSamplePermissions": "{\n  \"canDownload\": false,\n  \"canUpload\": false,\n  \"canDelete\": false,\n  \"canUpdate\": false,\n  \"canAccessExplicitContent\": false,\n  \"canAccessAllLibraries\": false,\n  \"canAccessAllTags\": false,\n  \"canCreateEReader\": false,\n  \"tagsAreDenylist\": false,\n  \"allowedLibraries\": [\n    \"5406ba8a-16e1-451d-96d7-4931b0a0d966\",\n    \"918fd848-7c1d-4a02-818a-847435a879ca\"\n  ],\n  \"allowedTags\": [\n    \"ExampleTag\",\n    \"AnotherTag\",\n    \"ThirdTag\"\n  ]\n}",
+        "authOpenIDTokenSigningAlgorithm": "RS256",
+        "authOpenIDTokenURL": null,
+        "authOpenIDUserInfoURL": null
+      }
+    ]
+  }
+}

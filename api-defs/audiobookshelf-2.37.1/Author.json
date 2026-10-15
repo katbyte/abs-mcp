@@ -281,21 +281,21 @@
           "Name": "Asin",
           "JsonName": "asin",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           }
         },
         {
           "Name": "Q",
           "JsonName": "q",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           }
         },
         {
           "Name": "Region",
           "JsonName": "region",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           }
         }
       ]
@@ -335,24 +335,21 @@
           "JsonName": "asin",
           "Type": {
             "Type": "String"
-          },
-          "Nullable": true
+          }
         },
         {
           "Name": "Description",
           "JsonName": "description",
           "Type": {
             "Type": "String"
-          },
-          "Nullable": true
+          }
         },
         {
           "Name": "Name",
           "JsonName": "name",
           "Type": {
             "Type": "String"
-          },
-          "Nullable": true
+          }
         }
       ]
     },

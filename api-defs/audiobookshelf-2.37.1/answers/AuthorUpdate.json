@@ -1,0 +1,46 @@
+{
+  "operation": "AuthorUpdate",
+  "method": "PATCH",
+  "path": "/api/authors/{id}",
+  "sent": [
+    {
+      "description": "Written by the SDK suite."
+    },
+    {
+      "name": "T. Williams"
+    },
+    {
+      "asin": ""
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "author": {
+          "addedAt": 1792029519328,
+          "asin": null,
+          "description": "Written by the SDK suite.",
+          "id": "3539e469-e573-4845-9783-7d55f1e5b269",
+          "imagePath": null,
+          "libraryId": "d9204ade-9fe6-4681-99d9-26075fdeb94a",
+          "name": "Tad Williams",
+          "updatedAt": 1792029521866
+        },
+        "updated": true
+      },
+      {
+        "author": {
+          "description": null
+        }
+      },
+      {
+        "merged": true
+      },
+      {
+        "author": {
+          "asin": ""
+        }
+      }
+    ]
+  }
+}

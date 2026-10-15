@@ -1,0 +1,19 @@
+{
+  "operation": "MiscRenameTag",
+  "method": "POST",
+  "path": "/api/tags/rename",
+  "sent": [
+    {
+      "newTag": "sdk-renamed",
+      "tag": "sdk"
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "numItemsUpdated": 6,
+        "tagMerged": false
+      }
+    ]
+  }
+}

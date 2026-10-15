@@ -289,8 +289,7 @@
           "JsonName": "isActive",
           "Type": {
             "Type": "Boolean"
-          },
-          "Nullable": true
+          }
         },
         {
           "Name": "ItemTagsSelected",
@@ -323,10 +322,8 @@
           "Name": "Permissions",
           "JsonName": "permissions",
           "Type": {
-            "Type": "Dictionary",
-            "NestedItem": {
-              "Type": "Any"
-            }
+            "Type": "Reference",
+            "ReferenceName": "UserCreateRequestPermissions"
           }
         },
         {
@@ -341,6 +338,67 @@
           "JsonName": "username",
           "Type": {
             "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserCreateRequestPermissions",
+      "Fields": [
+        {
+          "Name": "AccessAllLibraries",
+          "JsonName": "accessAllLibraries",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "AccessAllTags",
+          "JsonName": "accessAllTags",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "AccessExplicitContent",
+          "JsonName": "accessExplicitContent",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Delete",
+          "JsonName": "delete",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Download",
+          "JsonName": "download",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "SelectedTagsNotAccessible",
+          "JsonName": "selectedTagsNotAccessible",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Update",
+          "JsonName": "update",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Upload",
+          "JsonName": "upload",
+          "Type": {
+            "Type": "Boolean"
           }
         }
       ]
@@ -421,6 +479,16 @@
       "Name": "UserGetListeningSessionsAnswerSessions",
       "Fields": [
         {
+          "Name": "AudioTracks",
+          "JsonName": "audioTracks",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
           "Name": "BookId",
           "JsonName": "bookId",
           "Type": {
@@ -428,11 +496,30 @@
           }
         },
         {
+          "Name": "Chapters",
+          "JsonName": "chapters",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "CoverAspectRatio",
+          "JsonName": "coverAspectRatio",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
           "Name": "CoverPath",
           "JsonName": "coverPath",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "CurrentTime",
@@ -461,8 +548,7 @@
           "Type": {
             "Type": "Reference",
             "ReferenceName": "UserGetListeningSessionsAnswerSessionsDeviceInfo"
-          },
-          "Nullable": true
+          }
         },
         {
           "Name": "DisplayAuthor",
@@ -491,13 +577,21 @@
           "Type": {
             "Type": "ID",
             "ReferenceName": "EpisodeID"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Id",
           "JsonName": "id",
           "Type": {
             "Type": "String"
+          }
+        },
+        {
+          "Name": "LastSave",
+          "JsonName": "lastSave",
+          "Type": {
+            "Type": "Double"
           }
         },
         {
@@ -517,10 +611,19 @@
           }
         },
         {
+          "Name": "MediaItemShareId",
+          "JsonName": "mediaItemShareId",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
           "Name": "MediaMetadata",
           "JsonName": "mediaMetadata",
           "Type": {
-            "Type": "Any"
+            "Type": "Reference",
+            "ReferenceName": "UserGetListeningSessionsAnswerSessionsMediaMetadata"
           }
         },
         {
@@ -552,6 +655,14 @@
           }
         },
         {
+          "Name": "ShareSessionId",
+          "JsonName": "shareSessionId",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
           "Name": "StartTime",
           "JsonName": "startTime",
           "Type": {
@@ -564,6 +675,14 @@
           "Type": {
             "Type": "UnixMillis"
           }
+        },
+        {
+          "Name": "Stream",
+          "JsonName": "stream",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
         },
         {
           "Name": "TimeListening",
@@ -697,6 +816,191 @@
           "Type": {
             "Type": "String"
           }
+        },
+        {
+          "Name": "UserId",
+          "JsonName": "userId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserGetListeningSessionsAnswerSessionsMediaMetadata",
+      "Fields": [
+        {
+          "Name": "Abridged",
+          "JsonName": "abridged",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Asin",
+          "JsonName": "asin",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Authors",
+          "JsonName": "authors",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "UserGetListeningSessionsAnswerSessionsMediaMetadataAuthors"
+            }
+          }
+        },
+        {
+          "Name": "Description",
+          "JsonName": "description",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Explicit",
+          "JsonName": "explicit",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Genres",
+          "JsonName": "genres",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "Isbn",
+          "JsonName": "isbn",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Language",
+          "JsonName": "language",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Narrators",
+          "JsonName": "narrators",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "PublishedDate",
+          "JsonName": "publishedDate",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "PublishedYear",
+          "JsonName": "publishedYear",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Publisher",
+          "JsonName": "publisher",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Series",
+          "JsonName": "series",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "UserGetListeningSessionsAnswerSessionsMediaMetadataSeries"
+            }
+          }
+        },
+        {
+          "Name": "Subtitle",
+          "JsonName": "subtitle",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserGetListeningSessionsAnswerSessionsMediaMetadataAuthors",
+      "Fields": [
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserGetListeningSessionsAnswerSessionsMediaMetadataSeries",
+      "Fields": [
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Sequence",
+          "JsonName": "sequence",
+          "Type": {
+            "Type": "String"
+          }
         }
       ]
     },
@@ -727,10 +1031,8 @@
           "Name": "DayOfWeek",
           "JsonName": "dayOfWeek",
           "Type": {
-            "Type": "Dictionary",
-            "NestedItem": {
-              "Type": "Any"
-            }
+            "Type": "Reference",
+            "ReferenceName": "UserGetListeningStatsAnswerDayOfWeek"
           }
         },
         {
@@ -774,6 +1076,18 @@
         {
           "Name": "TotalTime",
           "JsonName": "totalTime",
+          "Type": {
+            "Type": "Double"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserGetListeningStatsAnswerDayOfWeek",
+      "Fields": [
+        {
+          "Name": "Thursday",
+          "JsonName": "Thursday",
           "Type": {
             "Type": "Double"
           }
@@ -1796,12 +2110,115 @@
       "Name": "UserUpdateRequest",
       "Fields": [
         {
+          "Name": "Email",
+          "JsonName": "email",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "IsActive",
+          "JsonName": "isActive",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "ItemTagsSelected",
+          "JsonName": "itemTagsSelected",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "LastSeen",
+          "JsonName": "lastSeen",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "LibrariesAccessible",
+          "JsonName": "librariesAccessible",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "Password",
+          "JsonName": "password",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Permissions",
+          "JsonName": "permissions",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "UserUpdateRequestPermissions"
+          }
+        },
+        {
           "Name": "Type",
           "JsonName": "type",
           "Type": {
             "Type": "String"
+          }
+        },
+        {
+          "Name": "Username",
+          "JsonName": "username",
+          "Type": {
+            "Type": "String"
           },
           "Nullable": true
+        }
+      ]
+    },
+    {
+      "Name": "UserUpdateRequestPermissions",
+      "Fields": [
+        {
+          "Name": "AccessAllLibraries",
+          "JsonName": "accessAllLibraries",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "AccessAllTags",
+          "JsonName": "accessAllTags",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Delete",
+          "JsonName": "delete",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "SelectedTagsNotAccessible",
+          "JsonName": "selectedTagsNotAccessible",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Upload",
+          "JsonName": "upload",
+          "Type": {
+            "Type": "Boolean"
+          }
         }
       ]
     }

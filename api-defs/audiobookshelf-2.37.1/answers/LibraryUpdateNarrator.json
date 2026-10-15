@@ -1,0 +1,17 @@
+{
+  "operation": "LibraryUpdateNarrator",
+  "method": "PATCH",
+  "path": "/api/libraries/{id}/narrators/{narratorId}",
+  "sent": [
+    {
+      "name": "SDK Narrator"
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "updated": 7
+      }
+    ]
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "operation": "LibraryItemBatchUpdate",
+  "method": "POST",
+  "path": "/api/items/batch/update",
+  "sent": [
+    [
+      {
+        "id": "336944bb-dcc6-4d14-bebe-2b9163a064e5",
+        "mediaPayload": {
+          "metadata": {
+            "genres": [
+              "SDK Genre"
+            ]
+          }
+        }
+      }
+    ],
+    [
+      {
+        "mediaPayload": {
+          "metadata": {
+            "series": [
+              {
+                "id": "fc878528-d25b-40b8-b0e1-66e437df7dc1",
+                "name": "Foundation",
+                "sequence": "1"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    [
+      {
+        "mediaPayload": {
+          "tags": [
+            "war"
+          ]
+        }
+      }
+    ],
+    [
+      {
+        "mediaPayload": {
+          "metadata": {
+            "authors": [
+              {
+                "id": "",
+                "name": "Zzyzx Gone Author"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    [
+      {
+        "mediaPayload": {
+          "metadata": {
+            "language": "English",
+            "publishedYear": "1999",
+            "publisher": "Zzyzx Press"
+          }
+        }
+      }
+    ]
+  ],
+  "answers": {
+    "200": [
+      {
+        "success": true,
+        "updates": 2
+      }
+    ]
+  }
+}

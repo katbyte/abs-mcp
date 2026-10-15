@@ -86,7 +86,7 @@ func adminClient(t *testing.T) *abs.Client {
 	if !suite.Ready {
 		t.Skip(suite.NotReady)
 	}
-	c, err := abs.New(os.Getenv("ABS_SERVER"), os.Getenv("ABS_TOKEN"))
+	c, err := abs.New(os.Getenv("ABS_SERVER"), os.Getenv("ABS_TOKEN"), recorder.Option())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func newUserWith(t *testing.T, username string, create abs.UserCreate, opts tool
 	}
 	t.Cleanup(func() { _ = admin.DeleteAPIKey(context.WithoutCancel(ctx), key.ID) })
 
-	client, err := abs.New(os.Getenv("ABS_SERVER"), key.Key)
+	client, err := abs.New(os.Getenv("ABS_SERVER"), key.Key, recorder.Option())
 	if err != nil {
 		t.Fatal(err)
 	}

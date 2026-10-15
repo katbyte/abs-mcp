@@ -48,6 +48,7 @@ type reqInfo struct {
 	body      []string
 	files     []string
 	bodyWhole bool
+	bodyList  bool // the body is used as a list, req.body.map(...) or for (const x of req.body)
 	attached  map[string]*jsType
 	reached   []reqUse
 }
@@ -106,7 +107,13 @@ func (e *evaluator) analyze(r *route) (*answer, *reqInfo) {
 // readRequest finds every query parameter, body field and upload a function reads from the request, by reading its code rather than
 // running it, so a name read only on a path the run did not follow is still found.
 func readRequest(use reqUse, req *reqInfo) {
+	// names given the request's query or body whole, const payload = req.body, whose fields are the request's
+	aliases := map[string]string{}
+
 	from := func(x js.IExpr, part string) bool {
+		if v, ok := x.(*js.Var); ok && aliases[string(v.Name())] == part {
+			return true
+		}
 		if use.part != "" {
 			return use.part == part && identName(x) == use.name
 		}
@@ -130,21 +137,50 @@ func readRequest(use reqUse, req *reqInfo) {
 		switch n := n.(type) {
 		case *js.DotExpr:
 			for _, part := range []string{"query", "body", "files"} {
-				if from(n.X, part) {
-					add(part, identName(n.Y))
+				if !from(n.X, part) {
+					continue
 				}
+				if part == "body" && slices.Contains(listMembers, identName(n.Y)) {
+					req.bodyList = true
+					continue
+				}
+				add(part, identName(n.Y))
+			}
+
+		case *js.ForOfStmt:
+			if from(n.Value, "body") {
+				req.bodyList = true
 			}
 
 		case *js.IndexExpr:
 			for _, part := range []string{"query", "body", "files"} {
-				if from(n.X, part) {
-					if k, ok := stringValue(n.Y); ok {
-						add(part, k)
-					}
+				if !from(n.X, part) {
+					continue
+				}
+				// req.body[key]: a field the code works out, so any may be read
+				if k, ok := stringValue(n.Y); ok {
+					add(part, k)
+				} else if part == "body" {
+					req.bodyWhole = true
 				}
 			}
 
+		case *js.ForInStmt:
+			// for (const key in req.body): every field is read
+			if from(n.Value, "body") {
+				req.bodyWhole = true
+			}
+
 		case *js.BindingElement:
+			if v, ok := n.Binding.(*js.Var); ok {
+				for _, part := range []string{"query", "body"} {
+					if from(n.Default, part) {
+						aliases[string(v.Name())] = part
+					}
+				}
+				return
+			}
+
 			obj, ok := n.Binding.(*js.BindingObject)
 			if !ok {
 				return
@@ -196,6 +232,9 @@ func readRequest(use reqUse, req *reqInfo) {
 		js.Walk(v, st)
 	}
 }
+
+// listMembers are what a list has of its own, which a body used as a list is read by and which are not fields of it.
+var listMembers = []string{"length", "map", "flatMap", "forEach", "filter", "find", "findIndex", "some", "every", "includes", "indexOf", "reduce", "slice", "join", "at"}
 
 // queryName is the query parameter x reads, req.query.page or req.query['page'], or "" when it reads none.
 func queryName(x js.IExpr, from func(js.IExpr, string) bool) string {

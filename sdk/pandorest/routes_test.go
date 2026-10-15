@@ -23,6 +23,8 @@ func TestReadRoutes(t *testing.T) {
 		"get /api/libraries/:id/raw LibraryController.raw",
 		"get /api/libraries/:id/label LibraryController.label",
 		"get /api/libraries/:id/search LibraryController.search",
+		"post /api/libraries/:id/notes LibraryController.notes",
+		"post /api/libraries/order LibraryController.order",
 		"get /api/items/:id/play/:episodeId? ItemController.play",
 		"get /api/items/:id/download ItemController.download",
 		"get /status inline",

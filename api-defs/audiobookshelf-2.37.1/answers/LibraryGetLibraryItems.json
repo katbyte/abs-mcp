@@ -1,0 +1,220 @@
+{
+  "operation": "LibraryGetLibraryItems",
+  "method": "GET",
+  "path": "/api/libraries/{id}/items",
+  "answers": {
+    "200": [
+      {
+        "collapseseries": false,
+        "include": "",
+        "limit": 100,
+        "mediaType": "book",
+        "minified": true,
+        "offset": 0,
+        "page": 0,
+        "results": [],
+        "sortDesc": false,
+        "total": 0
+      },
+      {
+        "results": [
+          {
+            "addedAt": 1792029519518,
+            "birthtimeMs": 1792029512417,
+            "ctimeMs": 1792029514481,
+            "folderId": "2599fce3-0201-4289-8106-f2cfb98fb689",
+            "id": "f9aea369-7047-4d60-895e-b5031b70458c",
+            "ino": "1462919",
+            "isFile": false,
+            "isInvalid": false,
+            "isMissing": false,
+            "libraryId": "d9204ade-9fe6-4681-99d9-26075fdeb94a",
+            "media": {
+              "coverPath": null,
+              "duration": 1,
+              "id": "fbadb453-d559-4670-925c-a6b8134e827d",
+              "metadata": {
+                "abridged": false,
+                "asin": null,
+                "authorName": "Isaac Asimov",
+                "authorNameLF": "Asimov, Isaac",
+                "description": null,
+                "explicit": false,
+                "genres": [],
+                "isbn": null,
+                "language": null,
+                "narratorName": "",
+                "publishedDate": null,
+                "publishedYear": null,
+                "publisher": null,
+                "seriesName": "",
+                "subtitle": null,
+                "title": "Second Foundation",
+                "titleIgnorePrefix": "Second Foundation"
+              },
+              "numAudioFiles": 1,
+              "numChapters": 0,
+              "numTracks": 1,
+              "size": 4386,
+              "tags": []
+            },
+            "mediaType": "book",
+            "mtimeMs": 1792029512449,
+            "numFiles": 1,
+            "oldLibraryItemId": null,
+            "path": "/fiction/Isaac Asimov/Second Foundation",
+            "relPath": "Isaac Asimov/Second Foundation",
+            "size": 4386,
+            "updatedAt": 1792029519518
+          },
+          {
+            "media": {
+              "ebookFormat": "epub"
+            }
+          }
+        ]
+      },
+      {
+        "results": [
+          {
+            "media": {
+              "tags": [
+                "sdk"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "filterBy": "series.MjFhOGI3NTgtNjVkYS00ZDZkLTg5ODctMWY5MTNlYmEwMDU0",
+        "results": [
+          {
+            "media": {
+              "metadata": {
+                "series": {
+                  "id": "21a8b758-65da-4d6d-8987-1f913eba0054",
+                  "name": "SDK Series",
+                  "sequence": "1"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "results": [
+          {
+            "media": {
+              "coverPath": "/nonfiction/Smedley D. Butler/War Is a Racket/cover.jpg"
+            }
+          }
+        ]
+      },
+      {
+        "results": [
+          {
+            "media": {
+              "autoDownloadEpisodes": false,
+              "autoDownloadSchedule": "0 * * * *",
+              "lastEpisodeCheck": null,
+              "maxEpisodesToKeep": 0,
+              "maxNewEpisodesToDownload": 3,
+              "metadata": {
+                "author": null,
+                "feedUrl": null,
+                "imageUrl": null,
+                "itunesArtistId": null,
+                "itunesId": null,
+                "itunesPageUrl": null,
+                "releaseDate": null,
+                "type": "episodic"
+              },
+              "numEpisodes": 2
+            }
+          }
+        ]
+      },
+      {
+        "results": [
+          {
+            "media": {
+              "metadata": {
+                "publishedYear": "1999"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "results": [
+          {
+            "media": {
+              "metadata": {
+                "genres": [
+                  "SDK Genre"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "results": [
+          {
+            "media": {
+              "metadata": {
+                "asin": "B0BV7MGYFH",
+                "description": "<p><b><i>Segunda Fundación</i></b><b> es el quinto volumen del «Ciclo de la Fundación», pero también es el cierre de la original «Trilogía de la Fundación» o «Ciclo de Trántor», que puede leerse independientemente y que fue galardonada con el Premio Hugo a la mejor serie de ciencia ficción de todos los tiempos.</b></p> <p>La Fundación yace en ruinas, arrasada por la inteligencia mutante del Mulo. Sin embargo, se rumorea que Hari Seldon, el científico que lo inició todo, ha establecido una Segunda Fundación al otro lado de la galaxia, cuya ubicación exacta es un secreto guardado desde hace tiempo. Obligada a revelar su existencia, la Segunda Fundación deberá enfrentarse a la voluntad destructora del Mulo, con el añadido de que los supervivientes de la Primera Fundación también quieren acabar con ella…</p> <p>«Un talento de proporciones cósmicas».<br /> <i>Chicago Tribune</i></p> <p><b>Please note: This audiobook is in Spanish.</b></p>",
+                "isbn": "9788466371452",
+                "language": "Spanish",
+                "publisher": "Penguin Random House Audio",
+                "subtitle": "Ciclo de la Fundación 5 [Foundation Cycle, Book 5]"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "results": [
+          {
+            "media": {
+              "lastEpisodeCheck": 1792029534858,
+              "metadata": {
+                "author": "WTYP is Justin Roczniak, November Kelly, Liam McAnderson, and friends.",
+                "feedUrl": "https://feed.podbean.com/wtyppod/feed.xml",
+                "type": null
+              }
+            }
+          }
+        ]
+      },
+      {
+        "results": [
+          {
+            "media": {
+              "metadata": {
+                "imageUrl": "https://pbcdn1.podbean.com/imglogo/image-logo/6563527/danger-not-only-will-this-kill-you-it-will-hurt-19375548_pod.jpg",
+                "itunesArtistId": "",
+                "itunesId": "",
+                "itunesPageUrl": "",
+                "releaseDate": ""
+              }
+            }
+          }
+        ]
+      },
+      {
+        "sortBy": "media.metadata.title"
+      },
+      {
+        "results": [
+          {
+            "media": {
+              "duration": 235.301625
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

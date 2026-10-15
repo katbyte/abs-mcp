@@ -1,0 +1,20 @@
+{
+  "operation": "MiscGetLoggerData",
+  "method": "GET",
+  "path": "/api/logger-data",
+  "answers": {
+    "200": [
+      {
+        "currentDailyLogs": [
+          {
+            "level": 2,
+            "levelName": "INFO",
+            "message": "=== Starting Server ===",
+            "source": "Server.js:208",
+            "timestamp": "2026-10-15 01:58:35.507"
+          }
+        ]
+      }
+    ]
+  }
+}

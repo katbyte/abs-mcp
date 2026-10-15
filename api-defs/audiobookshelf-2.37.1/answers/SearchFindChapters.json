@@ -1,0 +1,26 @@
+{
+  "operation": "SearchFindChapters",
+  "method": "GET",
+  "path": "/api/search/chapters",
+  "answers": {
+    "200": [
+      {
+        "asin": "B003D8W5VS",
+        "brandIntroDurationMs": 3970,
+        "brandOutroDurationMs": 4945,
+        "chapters": [
+          {
+            "lengthMs": 19109,
+            "startOffsetMs": 0,
+            "startOffsetSec": 0,
+            "title": "Foundation: (Apple Series Tie-In Edition): Intro"
+          }
+        ],
+        "isAccurate": true,
+        "region": "us",
+        "runtimeLengthMs": 31139210,
+        "runtimeLengthSec": 31139
+      }
+    ]
+  }
+}

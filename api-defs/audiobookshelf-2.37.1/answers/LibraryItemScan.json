@@ -1,0 +1,12 @@
+{
+  "operation": "LibraryItemScan",
+  "method": "POST",
+  "path": "/api/items/{id}/scan",
+  "answers": {
+    "200": [
+      {
+        "result": "UPDATED"
+      }
+    ]
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "operation": "RSSFeedOpenRSSFeedForSeries",
+  "method": "POST",
+  "path": "/api/feeds/series/{seriesId}/open",
+  "sent": [
+    {
+      "serverAddress": "http://localhost:13379",
+      "slug": "sdk-series-feed"
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "feed": {
+          "entityId": "21a8b758-65da-4d6d-8987-1f913eba0054",
+          "entityType": "series",
+          "feedUrl": "/feed/sdk-series-feed",
+          "id": "72d60e12-8ee6-414e-a5f9-409c7924f249",
+          "meta": {
+            "description": "",
+            "ownerEmail": null,
+            "ownerName": null,
+            "preventIndexing": true,
+            "title": "SDK Series"
+          }
+        }
+      }
+    ]
+  }
+}

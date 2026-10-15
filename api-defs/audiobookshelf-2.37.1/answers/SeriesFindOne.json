@@ -1,0 +1,35 @@
+{
+  "operation": "SeriesFindOne",
+  "method": "GET",
+  "path": "/api/series/{id}",
+  "answers": {
+    "200": [
+      {
+        "addedAt": 1792029521361,
+        "description": null,
+        "id": "21a8b758-65da-4d6d-8987-1f913eba0054",
+        "libraryId": "d9204ade-9fe6-4681-99d9-26075fdeb94a",
+        "name": "SDK Series",
+        "nameIgnorePrefix": "SDK Series",
+        "progress": {
+          "isFinished": false,
+          "libraryItemIds": [
+            "f9aea369-7047-4d60-895e-b5031b70458c"
+          ],
+          "libraryItemIdsFinished": []
+        },
+        "updatedAt": 1792029521361
+      },
+      {
+        "description": "Four volumes, two of them here."
+      },
+      {
+        "progress": {
+          "libraryItemIdsFinished": [
+            "f688bd4b-ffd9-464c-a0e0-7abe36f6e3aa"
+          ]
+        }
+      }
+    ]
+  }
+}

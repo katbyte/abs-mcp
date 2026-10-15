@@ -1,0 +1,18 @@
+{
+  "operation": "NotificationDeleteNotification",
+  "method": "DELETE",
+  "path": "/api/notifications/{id}",
+  "answers": {
+    "200": [
+      {
+        "appriseApiUrl": null,
+        "appriseType": "api",
+        "id": "notification-settings",
+        "maxFailedAttempts": 5,
+        "maxNotificationQueue": 20,
+        "notificationDelay": 1000,
+        "notifications": []
+      }
+    ]
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "operation": "NotificationGet",
+  "method": "GET",
+  "path": "/api/notifications",
+  "answers": {
+    "200": [
+      {
+        "data": {
+          "events": [
+            {
+              "defaults": {
+                "body": "{{episodeTitle}} has been added to {{libraryName}} library.",
+                "title": "New {{podcastTitle}} Episode!"
+              },
+              "description": "Triggered when a podcast episode is auto-downloaded",
+              "descriptionKey": "NotificationOnEpisodeDownloadedDescription",
+              "libraryMediaType": "podcast",
+              "name": "onPodcastEpisodeDownloaded",
+              "requiresLibrary": true,
+              "testData": {
+                "episodeDescription": "Some description of the podcast episode.",
+                "episodeId": "ep_notification_test",
+                "episodeSubtitle": "Episode Subtitle",
+                "episodeTitle": "Successful Test Episode",
+                "libraryId": "lib_test",
+                "libraryItemId": "li_notification_test",
+                "libraryName": "Podcasts",
+                "mediaTags": "TestTag1, TestTag2",
+                "podcastAuthor": "Audiobookshelf",
+                "podcastDescription": "Description of the Abs Test Podcast belongs here.",
+                "podcastGenres": "TestGenre1, TestGenre2",
+                "podcastTitle": "Abs Test Podcast"
+              },
+              "variables": [
+                "libraryItemId"
+              ]
+            },
+            {
+              "testData": {
+                "backupCount": "1",
+                "backupPath": "path/to/backup",
+                "backupSize": "1.23 MB",
+                "completionTime": "12:00 AM",
+                "removedOldest": "false"
+              }
+            },
+            {
+              "testData": {
+                "errorMsg": "Example error message"
+              }
+            },
+            {
+              "testData": {
+                "feedUrl": "https://example.com/rss",
+                "numFailed": 3,
+                "title": "Test RSS Feed"
+              }
+            },
+            {
+              "testData": {
+                "version": "v2.37.1"
+              }
+            }
+          ]
+        },
+        "settings": {
+          "appriseApiUrl": null,
+          "appriseType": "api",
+          "id": "notification-settings",
+          "maxFailedAttempts": 5,
+          "maxNotificationQueue": 20,
+          "notificationDelay": 1000,
+          "notifications": []
+        }
+      }
+    ]
+  }
+}

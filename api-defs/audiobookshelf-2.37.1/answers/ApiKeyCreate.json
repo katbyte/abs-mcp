@@ -1,0 +1,42 @@
+{
+  "operation": "ApiKeyCreate",
+  "method": "POST",
+  "path": "/api/api-keys",
+  "sent": [
+    {
+      "isActive": true,
+      "name": "sdk-key",
+      "userId": "e2682b5d-a1fb-4847-b7e2-39b7c7564f87"
+    },
+    {
+      "expiresIn": 900
+    }
+  ],
+  "answers": {
+    "200": [
+      {
+        "apiKey": {
+          "apiKey": "REDACTED",
+          "createdAt": "2026-10-15T01:58:55.922Z",
+          "createdByUserId": "e2682b5d-a1fb-4847-b7e2-39b7c7564f87",
+          "expiresAt": null,
+          "id": "dec4544d-66ed-433b-8a20-e233d9dbca88",
+          "isActive": true,
+          "name": "sdk-key",
+          "updatedAt": "2026-10-15T01:58:55.922Z",
+          "user": {
+            "id": "e2682b5d-a1fb-4847-b7e2-39b7c7564f87",
+            "type": "root",
+            "username": "root"
+          },
+          "userId": "e2682b5d-a1fb-4847-b7e2-39b7c7564f87"
+        }
+      },
+      {
+        "apiKey": {
+          "expiresAt": "2026-10-15T02:15:08.085Z"
+        }
+      }
+    ]
+  }
+}

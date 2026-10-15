@@ -1,0 +1,324 @@
+{
+  "operation": "SessionGetOpenSession",
+  "method": "GET",
+  "path": "/api/session/{id}",
+  "answers": {
+    "200": [
+      {
+        "audioTracks": [
+          {
+            "addedAt": 1792029519517,
+            "bitRate": 32000,
+            "channelLayout": "mono",
+            "channels": 1,
+            "chapters": [],
+            "codec": "mp3",
+            "contentUrl": "/api/items/f9aea369-7047-4d60-895e-b5031b70458c/file/1462927",
+            "discNumFromFilename": null,
+            "discNumFromMeta": null,
+            "duration": 1,
+            "embeddedCoverArt": null,
+            "error": null,
+            "exclude": false,
+            "format": "MP2/3 (MPEG audio layer 2/3)",
+            "index": 1,
+            "ino": "1462927",
+            "language": null,
+            "manuallyVerified": true,
+            "metaTags": {
+              "tagAlbum": "Second Foundation",
+              "tagEncoder": "Lavf62.12.102",
+              "tagGrouping": "SDK Series #1",
+              "tagTitle": "Second Foundation",
+              "tagTrack": "1"
+            },
+            "metadata": {
+              "birthtimeMs": 1792029512449,
+              "ctimeMs": 1792029526882,
+              "ext": ".mp3",
+              "filename": "01.mp3",
+              "mtimeMs": 1792029526882,
+              "path": "/fiction/Isaac Asimov/Second Foundation/01.mp3",
+              "relPath": "01.mp3",
+              "size": 4516
+            },
+            "mimeType": "audio/mpeg",
+            "startOffset": 0,
+            "timeBase": "1/14112000",
+            "title": "01.mp3",
+            "trackNumFromFilename": 1,
+            "trackNumFromMeta": 1,
+            "updatedAt": 1792029519517
+          }
+        ],
+        "bookId": "fbadb453-d559-4670-925c-a6b8134e827d",
+        "chapters": [
+          {
+            "end": 0.5,
+            "id": 0,
+            "start": 0,
+            "title": "One"
+          },
+          {
+            "end": 1,
+            "start": 0.5
+          }
+        ],
+        "coverPath": "/metadata/items/f9aea369-7047-4d60-895e-b5031b70458c/cover.jpg",
+        "currentTime": 0,
+        "date": "2026-10-15",
+        "dayOfWeek": "Thursday",
+        "deviceInfo": {
+          "clientName": "abs-mcp-sdk-test",
+          "clientVersion": "2.37.1",
+          "deviceId": "02e43d89-8e4a-4fda-9b90-e919a40836c7",
+          "id": "02e43d89-8e4a-4fda-9b90-e919a40836c7",
+          "ipAddress": "::ffff:172.17.0.1",
+          "userId": "e2682b5d-a1fb-4847-b7e2-39b7c7564f87"
+        },
+        "displayAuthor": "Isaac Asimov",
+        "displayTitle": "Second Foundation",
+        "duration": 1,
+        "episodeId": null,
+        "id": "59982c90-6dd4-4138-971c-a411dc2defd3",
+        "libraryId": "d9204ade-9fe6-4681-99d9-26075fdeb94a",
+        "libraryItem": {
+          "addedAt": 1792029519518,
+          "birthtimeMs": 1792029512417,
+          "ctimeMs": 1792029531321,
+          "folderId": "2599fce3-0201-4289-8106-f2cfb98fb689",
+          "id": "f9aea369-7047-4d60-895e-b5031b70458c",
+          "ino": "1462919",
+          "isFile": false,
+          "isInvalid": false,
+          "isMissing": false,
+          "lastScan": 1792029531389,
+          "libraryFiles": [
+            {
+              "addedAt": 1792029519276,
+              "fileType": "audio",
+              "ino": "1462927",
+              "isSupplementary": null,
+              "metadata": {
+                "birthtimeMs": 1792029512449,
+                "ctimeMs": 1792029526882,
+                "ext": ".mp3",
+                "filename": "01.mp3",
+                "mtimeMs": 1792029526882,
+                "path": "/fiction/Isaac Asimov/Second Foundation/01.mp3",
+                "relPath": "01.mp3",
+                "size": 4516
+              },
+              "updatedAt": 1792029531309
+            }
+          ],
+          "libraryId": "d9204ade-9fe6-4681-99d9-26075fdeb94a",
+          "media": {
+            "audioFiles": [
+              {
+                "addedAt": 1792029519517,
+                "bitRate": 32000,
+                "channelLayout": "mono",
+                "channels": 1,
+                "chapters": [],
+                "codec": "mp3",
+                "discNumFromFilename": null,
+                "discNumFromMeta": null,
+                "duration": 1,
+                "embeddedCoverArt": null,
+                "error": null,
+                "exclude": false,
+                "format": "MP2/3 (MPEG audio layer 2/3)",
+                "index": 1,
+                "ino": "1462927",
+                "language": null,
+                "manuallyVerified": true,
+                "metaTags": {
+                  "tagAlbum": "Second Foundation",
+                  "tagEncoder": "Lavf62.12.102",
+                  "tagGrouping": "SDK Series #1",
+                  "tagTitle": "Second Foundation",
+                  "tagTrack": "1"
+                },
+                "metadata": {
+                  "birthtimeMs": 1792029512449,
+                  "ctimeMs": 1792029526882,
+                  "ext": ".mp3",
+                  "filename": "01.mp3",
+                  "mtimeMs": 1792029526882,
+                  "path": "/fiction/Isaac Asimov/Second Foundation/01.mp3",
+                  "relPath": "01.mp3",
+                  "size": 4516
+                },
+                "mimeType": "audio/mpeg",
+                "timeBase": "1/14112000",
+                "trackNumFromFilename": 1,
+                "trackNumFromMeta": 1,
+                "updatedAt": 1792029519517
+              }
+            ],
+            "chapters": [
+              {
+                "end": 0.5,
+                "id": 0,
+                "start": 0,
+                "title": "One"
+              },
+              {
+                "end": 1,
+                "start": 0.5
+              }
+            ],
+            "coverPath": "/metadata/items/f9aea369-7047-4d60-895e-b5031b70458c/cover.jpg",
+            "duration": 1,
+            "ebookFile": null,
+            "id": "fbadb453-d559-4670-925c-a6b8134e827d",
+            "libraryItemId": "f9aea369-7047-4d60-895e-b5031b70458c",
+            "metadata": {
+              "abridged": false,
+              "asin": "B0BV7MGYFH",
+              "authorName": "Isaac Asimov",
+              "authorNameLF": "Asimov, Isaac",
+              "authors": [
+                {
+                  "id": "b5f29003-4517-4452-b9c6-5684666f6952",
+                  "name": "Isaac Asimov"
+                }
+              ],
+              "description": "<p><b><i>Segunda Fundación</i></b><b> es el quinto volumen del «Ciclo de la Fundación», pero también es el cierre de la original «Trilogía de la Fundación» o «Ciclo de Trántor», que puede leerse independientemente y que fue galardonada con el Premio Hugo a la mejor serie de ciencia ficción de todos los tiempos.</b></p> <p>La Fundación yace en ruinas, arrasada por la inteligencia mutante del Mulo. Sin embargo, se rumorea que Hari Seldon, el científico que lo inició todo, ha establecido una Segunda Fundación al otro lado de la galaxia, cuya ubicación exacta es un secreto guardado desde hace tiempo. Obligada a revelar su existencia, la Segunda Fundación deberá enfrentarse a la voluntad destructora del Mulo, con el añadido de que los supervivientes de la Primera Fundación también quieren acabar con ella…</p> <p>«Un talento de proporciones cósmicas».<br /> <i>Chicago Tribune</i></p> <p><b>Please note: This audiobook is in Spanish.</b></p>",
+              "descriptionPlain": "Segunda Fundación es el quinto volumen del «Ciclo de la Fundación», pero también es el cierre de la original «Trilogía de la Fundación» o «Ciclo de Trántor», que puede leerse independientemente y que fue galardonada con el Premio Hugo a la mejor serie de ciencia ficción de todos los tiempos. La Fundación yace en ruinas, arrasada por la inteligencia mutante del Mulo. Sin embargo, se rumorea que Hari Seldon, el científico que lo inició todo, ha establecido una Segunda Fundación al otro lado de la galaxia, cuya ubicación exacta es un secreto guardado desde hace tiempo. Obligada a revelar su existencia, la Segunda Fundación deberá enfrentarse a la voluntad destructora del Mulo, con el añadido de que los supervivientes de la Primera Fundación también quieren acabar con ella… «Un talento de proporciones cósmicas». Chicago Tribune Please note: This audiobook is in Spanish.",
+              "explicit": false,
+              "genres": [
+                "Science Fiction & Fantasy"
+              ],
+              "isbn": "9788466371452",
+              "language": "Spanish",
+              "narratorName": "SDK Doomed Narrator",
+              "narrators": [
+                "SDK Doomed Narrator"
+              ],
+              "publishedDate": null,
+              "publishedYear": "1999",
+              "publisher": "Penguin Random House Audio",
+              "series": [
+                {
+                  "id": "21a8b758-65da-4d6d-8987-1f913eba0054",
+                  "name": "SDK Series",
+                  "sequence": "1"
+                }
+              ],
+              "seriesName": "SDK Series #1",
+              "subtitle": "Ciclo de la Fundación 5 [Foundation Cycle, Book 5]",
+              "title": "Second Foundation",
+              "titleIgnorePrefix": "Second Foundation"
+            },
+            "numAudioFiles": 1,
+            "numChapters": 2,
+            "numTracks": 1,
+            "size": 4516,
+            "tags": [
+              "sdk-test"
+            ],
+            "tracks": [
+              {
+                "addedAt": 1792029519517,
+                "bitRate": 32000,
+                "channelLayout": "mono",
+                "channels": 1,
+                "chapters": [],
+                "codec": "mp3",
+                "contentUrl": "/api/items/f9aea369-7047-4d60-895e-b5031b70458c/file/1462927",
+                "discNumFromFilename": null,
+                "discNumFromMeta": null,
+                "duration": 1,
+                "embeddedCoverArt": null,
+                "error": null,
+                "exclude": false,
+                "format": "MP2/3 (MPEG audio layer 2/3)",
+                "index": 1,
+                "ino": "1462927",
+                "language": null,
+                "manuallyVerified": true,
+                "metaTags": {
+                  "tagAlbum": "Second Foundation",
+                  "tagEncoder": "Lavf62.12.102",
+                  "tagGrouping": "SDK Series #1",
+                  "tagTitle": "Second Foundation",
+                  "tagTrack": "1"
+                },
+                "metadata": {
+                  "birthtimeMs": 1792029512449,
+                  "ctimeMs": 1792029526882,
+                  "ext": ".mp3",
+                  "filename": "01.mp3",
+                  "mtimeMs": 1792029526882,
+                  "path": "/fiction/Isaac Asimov/Second Foundation/01.mp3",
+                  "relPath": "01.mp3",
+                  "size": 4516
+                },
+                "mimeType": "audio/mpeg",
+                "startOffset": 0,
+                "timeBase": "1/14112000",
+                "title": "01.mp3",
+                "trackNumFromFilename": 1,
+                "trackNumFromMeta": 1,
+                "updatedAt": 1792029519517
+              }
+            ]
+          },
+          "mediaType": "book",
+          "mtimeMs": 1792029531321,
+          "numFiles": 1,
+          "oldLibraryItemId": null,
+          "path": "/fiction/Isaac Asimov/Second Foundation",
+          "relPath": "Isaac Asimov/Second Foundation",
+          "scanVersion": "2.37.1",
+          "size": 4516,
+          "updatedAt": 1792029534464
+        },
+        "libraryItemId": "f9aea369-7047-4d60-895e-b5031b70458c",
+        "mediaMetadata": {
+          "abridged": false,
+          "asin": "B0BV7MGYFH",
+          "authors": [
+            {
+              "id": "b5f29003-4517-4452-b9c6-5684666f6952",
+              "name": "Isaac Asimov"
+            }
+          ],
+          "description": "<p><b><i>Segunda Fundación</i></b><b> es el quinto volumen del «Ciclo de la Fundación», pero también es el cierre de la original «Trilogía de la Fundación» o «Ciclo de Trántor», que puede leerse independientemente y que fue galardonada con el Premio Hugo a la mejor serie de ciencia ficción de todos los tiempos.</b></p> <p>La Fundación yace en ruinas, arrasada por la inteligencia mutante del Mulo. Sin embargo, se rumorea que Hari Seldon, el científico que lo inició todo, ha establecido una Segunda Fundación al otro lado de la galaxia, cuya ubicación exacta es un secreto guardado desde hace tiempo. Obligada a revelar su existencia, la Segunda Fundación deberá enfrentarse a la voluntad destructora del Mulo, con el añadido de que los supervivientes de la Primera Fundación también quieren acabar con ella…</p> <p>«Un talento de proporciones cósmicas».<br /> <i>Chicago Tribune</i></p> <p><b>Please note: This audiobook is in Spanish.</b></p>",
+          "explicit": false,
+          "genres": [
+            "Science Fiction & Fantasy"
+          ],
+          "isbn": "9788466371452",
+          "language": "Spanish",
+          "narrators": [
+            "SDK Doomed Narrator"
+          ],
+          "publishedDate": null,
+          "publishedYear": "1999",
+          "publisher": "Penguin Random House Audio",
+          "series": [
+            {
+              "id": "21a8b758-65da-4d6d-8987-1f913eba0054",
+              "name": "SDK Series",
+              "sequence": "1"
+            }
+          ],
+          "subtitle": "Ciclo de la Fundación 5 [Foundation Cycle, Book 5]",
+          "title": "Second Foundation"
+        },
+        "mediaPlayer": "unknown",
+        "mediaType": "book",
+        "playMethod": 0,
+        "serverVersion": "2.37.1",
+        "startTime": 0,
+        "startedAt": 1792029536050,
+        "timeListening": 0,
+        "updatedAt": 1792029536050,
+        "userId": "e2682b5d-a1fb-4847-b7e2-39b7c7564f87"
+      }
+    ]
+  }
+}

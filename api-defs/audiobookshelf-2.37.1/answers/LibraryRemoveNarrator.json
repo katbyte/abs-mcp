@@ -1,0 +1,12 @@
+{
+  "operation": "LibraryRemoveNarrator",
+  "method": "DELETE",
+  "path": "/api/libraries/{id}/narrators/{narratorId}",
+  "answers": {
+    "200": [
+      {
+        "updated": 1
+      }
+    ]
+  }
+}
