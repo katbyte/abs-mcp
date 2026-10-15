@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/katbyte/go-kt/chttp"
+	"github.com/katbyte/go-kt/httpc"
 )
 
 // fakeServer is a canned Audiobookshelf that records the requests made to it.
@@ -138,5 +138,5 @@ func newClient(t *testing.T, s *fakeServer, opts ...Option) *Client {
 // tries: what a test is about is whether a request is sent again, not how
 // long after.
 func atOnce() Option {
-	return WithRetry(chttp.Retry{Wait: func(int) time.Duration { return 0 }})
+	return WithRetry(httpc.Retry{Wait: func(int) time.Duration { return 0 }})
 }

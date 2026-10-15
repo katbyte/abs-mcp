@@ -34,7 +34,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/katbyte/go-kt/chttp"
+	"github.com/katbyte/go-kt/httpc"
 
 	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
 )
@@ -502,7 +502,7 @@ func (s *Sampler) serve(w http.ResponseWriter, r *http.Request) {
 	resp, err := s.client.ItemFileRange(r.Context(), item, file, r.Header.Get("Range"))
 	if err != nil {
 		status := http.StatusBadGateway
-		if code := chttp.StatusCode(err); code != 0 {
+		if code := httpc.StatusCode(err); code != 0 {
 			status = code
 		}
 		// a range past the end is ffmpeg probing, not the server refusing;

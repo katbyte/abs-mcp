@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/katbyte/go-kt/lock"
+	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 
 	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -302,7 +303,7 @@ func registerMatchBatchTools(r *registry) {
 			return nil, batchOut{}, err
 		}
 		providers := prov.providersFor(in.Providers, lib)
-		limit, offset := min(limitOr(in.Limit, 20), 50), max(in.Offset, 0)
+		limit, offset := min(mcpregistry.LimitOr(in.Limit, 20), 50), max(in.Offset, 0)
 		items, total, err := window(offset, limit, func(page int) ([]abs.Item, int, error) {
 			res, ierr := client.Items(ctx, lib.ID, abs.ItemsOptions{Limit: limit, Page: page, Sort: "media.metadata.title", Filter: encoded, Minified: true})
 			if ierr != nil {
@@ -331,7 +332,7 @@ func registerMatchBatchTools(r *registry) {
 			out.Counts.add(row.Confidence)
 			out.Rows = append(out.Rows, row)
 		}
-		if out.NextOffset = nextOffset(offset, len(items), total); out.NextOffset > 0 {
+		if out.NextOffset = mcpregistry.NextOffset(offset, len(items), total); out.NextOffset > 0 {
 			// a matched book leaves a missing: filter, and the listing closes
 			// up behind it: next_offset after applying would start as many
 			// books past the ones not yet seen as were applied

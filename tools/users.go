@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -240,7 +241,7 @@ func registerUserTools(r *registry) {
 		if err != nil {
 			return nil, inProgressOut{}, err
 		}
-		limit := limitOr(in.Limit, defaultLimit)
+		limit := mcpregistry.LimitOr(in.Limit, defaultLimit)
 
 		var items []abs.Item
 		var progressFor map[string]*abs.MediaProgress
@@ -810,7 +811,7 @@ func registerUserTools(r *registry) {
 		if err != nil {
 			return nil, historyOut{}, err
 		}
-		limit := limitOr(in.Limit, defaultLimit)
+		limit := mcpregistry.LimitOr(in.Limit, defaultLimit)
 
 		onlyItem := ""
 		if in.Item != "" {
@@ -821,7 +822,7 @@ func registerUserTools(r *registry) {
 			onlyItem = it.ID
 		}
 
-		cutoff := time.Now().AddDate(0, 0, -limitOr(in.Days, 60))
+		cutoff := time.Now().AddDate(0, 0, -mcpregistry.LimitOr(in.Days, 60))
 		var sessions []abs.Session
 		var total int
 		searched := true

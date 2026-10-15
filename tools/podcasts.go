@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -162,7 +163,7 @@ func registerPodcastTools(r *registry) {
 					continue
 				}
 				podcastLibs++
-				eps, err := client.RecentEpisodes(ctx, libs[i].ID, limitOr(in.Limit, defaultLimit), 0)
+				eps, err := client.RecentEpisodes(ctx, libs[i].ID, mcpregistry.LimitOr(in.Limit, defaultLimit), 0)
 				if err != nil {
 					return nil, episodesOut{}, err
 				}
@@ -195,7 +196,7 @@ func registerPodcastTools(r *registry) {
 		}
 
 		eps := newestEpisodes(it.Media.Episodes)
-		limit := limitOr(in.Limit, 50)
+		limit := mcpregistry.LimitOr(in.Limit, 50)
 		// a negative offset would index past the end of the list; treat it as
 		// the start, like an offset past the end yields nothing
 		offset := max(in.Offset, 0)
@@ -474,7 +475,7 @@ func registerPodcastTools(r *registry) {
 		if err != nil {
 			return nil, feedSearchOut{}, err
 		}
-		limit := limitOr(in.Limit, defaultLimit)
+		limit := mcpregistry.LimitOr(in.Limit, defaultLimit)
 		rows := feedEpisodeRows(eps, true)
 		if len(rows) > limit {
 			rows = rows[:limit]
@@ -626,7 +627,7 @@ func registerPodcastTools(r *registry) {
 		}
 		out := searchOut{Results: []podcastHit{}}
 		for i, p := range results {
-			if i >= limitOr(in.Limit, 10) {
+			if i >= mcpregistry.LimitOr(in.Limit, 10) {
 				break
 			}
 			out.Results = append(out.Results, podcastHit{

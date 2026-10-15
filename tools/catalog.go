@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -356,7 +357,7 @@ func registerAuthorTools(r *registry) {
 			return nil, listOut{}, err
 		}
 
-		out := listOut{Total: total, Offset: offset, NextOffset: nextOffset(offset, len(authors), total), Authors: []authorRow{}}
+		out := listOut{Total: total, Offset: offset, NextOffset: mcpregistry.NextOffset(offset, len(authors), total), Authors: []authorRow{}}
 		for i := range authors {
 			out.Authors = append(out.Authors, authorRowOf(&authors[i], false))
 		}
@@ -795,7 +796,7 @@ func registerSeriesTools(r *registry) {
 				return nil, listOut{}, err
 			}
 			out.Total += total
-			if nextOffset(offset, len(series), total) > 0 {
+			if mcpregistry.NextOffset(offset, len(series), total) > 0 {
 				out.NextOffset = offset + limit
 			}
 			for j := range series {

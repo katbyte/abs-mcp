@@ -8,40 +8,11 @@ import (
 	"strings"
 
 	"github.com/katbyte/abs-mcp/tools"
+	"github.com/katbyte/go-kt/text"
 	"github.com/katbyte/go-kt/version"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
-
-// firstSentence trims a tool description to its opening sentence, so the list
-// stays one line per tool. A full stop inside an abbreviation is not the end
-// of one: "from a url (e.g. from item_cover_search)" was cut at "(e.g.".
-func firstSentence(s string) string {
-	for from := 0; ; {
-		i := strings.Index(s[from:], ". ")
-		if i < 0 {
-			return s
-		}
-		end := from + i
-		if !endsInAbbreviation(s[:end+1]) {
-			return s[:end+1]
-		}
-		from = end + 2
-	}
-}
-
-// endsInAbbreviation reports whether a stretch of text ends in a
-// dotted abbreviation rather than a sentence.
-func endsInAbbreviation(s string) bool {
-	lower := strings.ToLower(s)
-	for _, abbr := range []string{"e.g.", "i.e.", "etc.", "vs.", "ph.d."} {
-		if strings.HasSuffix(lower, abbr) {
-			return true
-		}
-	}
-
-	return false
-}
 
 func ValidateParams(params []string) func(cmd *cobra.Command, args []string) error {
 	return func(_ *cobra.Command, _ []string) error {
@@ -134,7 +105,7 @@ Needs no server: it reports what would be registered, not what a server accepts.
 				}
 				_, _ = fmt.Fprintf(out, "\n%s (%d)\n", set, len(in))
 				for _, t := range in {
-					_, _ = fmt.Fprintf(out, "  %-26s %-6s %s\n", t.Name, t.Kind, firstSentence(t.Description))
+					_, _ = fmt.Fprintf(out, "  %-26s %-6s %s\n", t.Name, t.Kind, text.FirstSentence(t.Description))
 				}
 			}
 			_, _ = fmt.Fprintf(out, "\n%d tools: %d read, %d write, %d delete\n",

@@ -21,7 +21,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/katbyte/go-kt/chttp"
+	"github.com/katbyte/go-kt/httpc"
 )
 
 func TestNewRejectsBadURLs(t *testing.T) {
@@ -89,7 +89,7 @@ func TestARefusedDialNamesLocalNetworkPrivacy(t *testing.T) {
 	t.Parallel()
 
 	refused := &net.OpError{Op: "dial", Net: "tcp", Err: &os.SyscallError{Syscall: "connect", Err: syscall.EHOSTUNREACH}}
-	c, err := New("http://nas.invalid:13378", "k", func(o *chttp.Options) { o.Base = failing{refused} })
+	c, err := New("http://nas.invalid:13378", "k", func(o *httpc.Options) { o.Base = failing{refused} })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestARefusedDialNamesLocalNetworkPrivacy(t *testing.T) {
 	}
 
 	timedOut := &net.OpError{Op: "dial", Net: "tcp", Err: context.DeadlineExceeded}
-	c, err = New("http://nas.invalid:13378", "k", func(o *chttp.Options) { o.Base = failing{timedOut} })
+	c, err = New("http://nas.invalid:13378", "k", func(o *httpc.Options) { o.Base = failing{timedOut} })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -379,13 +379,13 @@ func TestAReadIsTriedAgainAndAWriteIsNot(t *testing.T) {
 
 	s = newJSONServer(t, always(http.StatusInternalServerError, "boom"))
 	_, err = newClient(t, s).Me(t.Context())
-	if got := s.requests(); len(got) != 1 || chttp.StatusCode(err) != http.StatusInternalServerError {
+	if got := s.requests(); len(got) != 1 || httpc.StatusCode(err) != http.StatusInternalServerError {
 		t.Errorf("a read answered 500 = %v after %v, want the server's answer after one request", err, got)
 	}
 
 	// and a caller that wants none of it says so
 	s = newJSONServer(t, always(http.StatusBadGateway, "bad gateway"))
-	_, err = newClient(t, s, WithRetry(chttp.Retry{Tries: 1})).Me(t.Context())
+	_, err = newClient(t, s, WithRetry(httpc.Retry{Tries: 1})).Me(t.Context())
 	if got := s.requests(); len(got) != 1 || err == nil {
 		t.Errorf("with one try a read answered 502 = %v after %v, want it sent once", err, got)
 	}

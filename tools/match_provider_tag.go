@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/katbyte/go-kt/lock"
+	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 
 	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -298,7 +299,7 @@ func registerMatchTagTool(r *registry) {
 			return nil, tagOut{}, err
 		}
 		providers := prov.providersFor(in.Providers, lib)
-		limit, offset := min(limitOr(in.Limit, 50), 100), max(in.Offset, 0)
+		limit, offset := min(mcpregistry.LimitOr(in.Limit, 50), 100), max(in.Offset, 0)
 		var filter string
 		if f := strings.TrimSpace(in.Filter); f != "" {
 			if filter, err = buildFilter(ctx, client, lib, f); err != nil {

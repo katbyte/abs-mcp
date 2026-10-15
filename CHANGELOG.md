@@ -3,6 +3,7 @@
 ### Breaking
 
 - the hand-written Go client moves from `sdk/abs` to `sdk/abs-byhand`, still package `abs`: change the import path. `sdk/abs` is to be the client generated from the API document
+- the Go client's errors and options come from go-kt's `httpc`, which go-kt 0.8.0 renamed from `chttp`: a refused call is a `*httpc.StatusError`, and an option takes `*httpc.Options`
 
 ### Changed
 

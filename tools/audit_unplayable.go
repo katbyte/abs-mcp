@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/katbyte/go-kt/chttp"
+	"github.com/katbyte/go-kt/httpc"
 
 	"github.com/katbyte/go-kt/parallel"
 
@@ -322,7 +322,7 @@ func serverFailure(ctx context.Context, title string, err error) error {
 	if err == nil || errors.Is(err, audioprobe.ErrMalformed) {
 		return nil
 	}
-	if code := chttp.StatusCode(err); code == http.StatusNotFound || code == http.StatusInternalServerError {
+	if code := httpc.StatusCode(err); code == http.StatusNotFound || code == http.StatusInternalServerError {
 		return nil
 	}
 	return fmt.Errorf("reading the files of %q: %w", title, err)

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/katbyte/go-kt/lock"
+	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 
 	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -594,7 +595,7 @@ func registerItemTools(r *registry) {
 
 		out := matchOut{Item: it.Title(), ItemDuration: wholeSec(it.Media.Duration), Provider: provider, Candidates: []candidate{}}
 		for i, res := range results {
-			if i >= limitOr(in.Limit, 8) {
+			if i >= mcpregistry.LimitOr(in.Limit, 8) {
 				break
 			}
 			c := candidate{

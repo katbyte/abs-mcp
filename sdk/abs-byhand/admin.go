@@ -10,7 +10,7 @@ import (
 	"net/url"
 	"slices"
 
-	"github.com/katbyte/go-kt/chttp"
+	"github.com/katbyte/go-kt/httpc"
 )
 
 // Server administration: notifications, email, API keys, custom providers,
@@ -439,7 +439,7 @@ func (c *Client) ServerPathExists(ctx context.Context, path string) (bool, error
 	q.Set("path", path)
 	q.Set("level", "0")
 	err := c.get(ctx, "/api/filesystem", q, nil)
-	if chttp.StatusCode(err) == http.StatusBadRequest {
+	if httpc.StatusCode(err) == http.StatusBadRequest {
 		return false, nil
 	}
 	return err == nil, err

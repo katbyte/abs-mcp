@@ -83,13 +83,6 @@ func plain(s string) string {
 	return strings.TrimSpace(htmlTagRe.ReplaceAllString(s, ""))
 }
 
-func limitOr(limit, def int) int {
-	if limit <= 0 {
-		return def
-	}
-	return limit
-}
-
 var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // looksLikeID reports whether s is an Audiobookshelf uuid (or a legacy

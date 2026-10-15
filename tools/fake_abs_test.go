@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/katbyte/go-kt/chttp"
+	"github.com/katbyte/go-kt/httpc"
 
 	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 
@@ -110,7 +110,7 @@ func (f *fakeABS) client(t *testing.T) *abs.Client {
 	t.Helper()
 
 	// tries again as a real client does, without the waits between tries
-	c, err := abs.New(f.srv.URL, "test", abs.WithRetry(chttp.Retry{Wait: func(int) time.Duration { return 0 }}))
+	c, err := abs.New(f.srv.URL, "test", abs.WithRetry(httpc.Retry{Wait: func(int) time.Duration { return 0 }}))
 	if err != nil {
 		t.Fatal(err)
 	}

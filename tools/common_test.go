@@ -212,15 +212,3 @@ func TestFormatting(t *testing.T) {
 		t.Error("looksLikeID")
 	}
 }
-
-func TestLimitOr(t *testing.T) {
-	t.Parallel()
-
-	for _, tc := range []struct{ limit, def, want int }{
-		{0, 50, 50}, {-1, 50, 50}, {10, 50, 10}, {1, 50, 1},
-	} {
-		if got := limitOr(tc.limit, tc.def); got != tc.want {
-			t.Errorf("limitOr(%d, %d) = %d, want %d", tc.limit, tc.def, got, tc.want)
-		}
-	}
-}

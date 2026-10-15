@@ -15,6 +15,7 @@ import (
 	"unicode"
 
 	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -29,9 +30,9 @@ type auditIn struct {
 // gets a thousand, and total_findings still says how many there are.
 const auditLimitMax = 1000
 
-// auditLimit is limitOr capped at auditLimitMax.
+// auditLimit is mcpregistry.LimitOr capped at auditLimitMax.
 func auditLimit(limit, def int) int {
-	return min(limitOr(limit, def), auditLimitMax)
+	return min(mcpregistry.LimitOr(limit, def), auditLimitMax)
 }
 
 type auditFinding struct {

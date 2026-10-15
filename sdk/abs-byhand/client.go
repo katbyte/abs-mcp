@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/katbyte/go-kt/chttp"
+	"github.com/katbyte/go-kt/httpc"
 )
 
 const (
@@ -40,31 +40,31 @@ type Client struct {
 	// a read is sent again when a gateway could not reach the server or a
 	// connection dropped, a write is sent once, and every exchange is
 	// traced for the logger the client was made with, if any.
-	http *chttp.Client
+	http *httpc.Client
 	// files carries downloads and uploads, which run as long as the file
 	// takes: a limit on the whole request covers reading the body too, and
 	// would cut an audiobook off part way. Only the wait for the server to
 	// start answering is bounded; the caller's context bounds the rest.
-	files *chttp.Client
+	files *httpc.Client
 }
 
 // Option changes how a client is made: it is handed the options of the HTTP
-// client underneath (go-kt's chttp), before either is built.
-type Option func(*chttp.Options)
+// client underneath (go-kt's httpc), before either is built.
+type Option func(*httpc.Options)
 
 // WithLog has the client say what it is doing to a logger: each request and
 // answer at trace, with the API key and anything else secret blanked, and a
 // retry at debug. With none, which is the default, it logs nothing. clog.Log
 // is one, and so is any logrus logger.
-func WithLog(log chttp.Logger) Option {
-	return func(o *chttp.Options) { o.Log = log }
+func WithLog(log httpc.Logger) Option {
+	return func(o *httpc.Options) { o.Log = log }
 }
 
 // WithRetry sets when a request is sent again, in place of the default: a
 // read three times in all, a second and then two apart, for a 502, 503 or
 // 504 and for a dropped connection.
-func WithRetry(retry chttp.Retry) Option {
-	return func(o *chttp.Options) { o.Retry = retry }
+func WithRetry(retry httpc.Retry) Option {
+	return func(o *httpc.Options) { o.Retry = retry }
 }
 
 // New returns a client for the Audiobookshelf server at baseURL that
@@ -86,7 +86,7 @@ func New(baseURL, token string, opts ...Option) (*Client, error) {
 		return nil, errors.New("server URL must not contain credentials; pass the API key via --token / ABS_TOKEN")
 	}
 
-	o := chttp.Options{Name: "Audiobookshelf", HeaderWait: requestWait}
+	o := httpc.Options{Name: "Audiobookshelf", HeaderWait: requestWait}
 	for _, opt := range opts {
 		opt(&o)
 	}
@@ -97,9 +97,9 @@ func New(baseURL, token string, opts ...Option) (*Client, error) {
 	// failing: Go turns a DELETE, PATCH or POST into a GET on a 301, 302 or
 	// 303, the GET answers 200, and the write reports success having done
 	// nothing
-	calls, files := chttp.New(o), chttp.New(o)
+	calls, files := httpc.New(o), httpc.New(o)
 	calls.Timeout = requestWait
-	calls.CheckRedirect, files.CheckRedirect = chttp.RefuseRedirects(redirectAdvice), chttp.RefuseRedirects(redirectAdvice)
+	calls.CheckRedirect, files.CheckRedirect = httpc.RefuseRedirects(redirectAdvice), httpc.RefuseRedirects(redirectAdvice)
 
 	return &Client{baseURL: strings.TrimRight(baseURL, "/"), token: token, http: calls, files: files}, nil
 }
@@ -135,10 +135,10 @@ func (c *Client) BaseURL() string { return c.baseURL }
 
 // statusError is the server answering a call with a status that is not
 // success: go-kt's StatusError, with what is known of that status on this
-// API. Callers read the status with chttp.StatusCode, or IsNotFound and
+// API. Callers read the status with httpc.StatusCode, or IsNotFound and
 // IsForbidden here.
-func statusError(method, path string, resp *http.Response, body string) *chttp.StatusError {
-	e := &chttp.StatusError{Method: method, Path: path, StatusCode: resp.StatusCode, Body: body, Tries: chttp.Tries(resp)}
+func statusError(method, path string, resp *http.Response, body string) *httpc.StatusError {
+	e := &httpc.StatusError{Method: method, Path: path, StatusCode: resp.StatusCode, Body: body, Tries: httpc.Tries(resp)}
 	switch resp.StatusCode {
 	case http.StatusUnauthorized:
 		e.Note = "API key rejected; check ABS_TOKEN"
@@ -151,13 +151,13 @@ func statusError(method, path string, resp *http.Response, body string) *chttp.S
 
 // IsNotFound reports whether err is an HTTP 404 from the server.
 func IsNotFound(err error) bool {
-	return chttp.IsNotFound(err)
+	return httpc.IsNotFound(err)
 }
 
 // IsForbidden reports whether err is the server refusing the key: a 401 or a
 // 403, as an admin-only route answers any other key.
 func IsForbidden(err error) bool {
-	code := chttp.StatusCode(err)
+	code := httpc.StatusCode(err)
 
 	return code == http.StatusForbidden || code == http.StatusUnauthorized
 }
@@ -167,7 +167,7 @@ func IsForbidden(err error) bool {
 func errorBody(r io.Reader) string {
 	body, err := io.ReadAll(io.LimitReader(r, errBodyPreview+1))
 
-	return unread(chttp.Preview(body), err)
+	return unread(httpc.Preview(body), err)
 }
 
 // unread adds, to what was read of a failed request's body, why the rest
@@ -244,7 +244,7 @@ func (c *Client) doRaw(ctx context.Context, method, path string, query url.Value
 	if resp == nil {
 		return nil, err
 	}
-	tooLarge := errors.Is(err, chttp.ErrTooLarge)
+	tooLarge := errors.Is(err, httpc.ErrTooLarge)
 
 	// a refusal keeps its status whether or not its body can be read: a 404
 	// read as a network error would not be "none"
@@ -253,7 +253,7 @@ func (c *Client) doRaw(ctx context.Context, method, path string, query url.Value
 			err = nil
 		}
 
-		return nil, statusError(method, path, resp, unread(chttp.Preview(raw), err))
+		return nil, statusError(method, path, resp, unread(httpc.Preview(raw), err))
 	}
 	if tooLarge {
 		return nil, fmt.Errorf("%s %s: the reply is over %d MiB, more than abs-mcp reads: ask for less at a time", method, path, maxResponseBytes>>20)
@@ -265,7 +265,7 @@ func (c *Client) doRaw(ctx context.Context, method, path string, query url.Value
 	// front of it (a login wall, a proxy's own page) answering 200 for a
 	// request that never arrived. The server's own text replies are labelled
 	// text/html too (Express's default for a string), so the body decides
-	if chttp.IsWebPage(resp.Header.Get("Content-Type"), raw) {
+	if httpc.IsWebPage(resp.Header.Get("Content-Type"), raw) {
 		return nil, fmt.Errorf("%s %s: answered with a web page, not the Audiobookshelf API: check the server url (--server / ABS_SERVER)", method, path)
 	}
 

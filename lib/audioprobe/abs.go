@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/katbyte/go-kt/chttp"
+	"github.com/katbyte/go-kt/httpc"
 
 	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
 )
@@ -21,7 +21,7 @@ func ItemFile(client *abs.Client, itemID, fileID string) Fetch {
 		resp, err := client.ItemFileRange(ctx, itemID, fileID, fmt.Sprintf("bytes=%d-%d", off, off+n-1))
 		if err != nil {
 			// a range past the end of an empty file: nothing to read
-			if chttp.StatusCode(err) == http.StatusRequestedRangeNotSatisfiable && off == 0 {
+			if httpc.StatusCode(err) == http.StatusRequestedRangeNotSatisfiable && off == 0 {
 				return nil, 0, nil
 			}
 			return nil, 0, err

@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/katbyte/go-kt/chttp"
+	"github.com/katbyte/go-kt/httpc"
 
 	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
 )
@@ -52,7 +52,7 @@ func TestNotifications(t *testing.T) {
 	}
 	// firing one notification, as opposed to all of them
 	if err := client.TestOneNotification(ctx, id); err != nil {
-		if reached := chttp.StatusCode(err) != 0; !reached {
+		if reached := httpc.StatusCode(err) != 0; !reached {
 			t.Errorf("TestOneNotification did not reach the server: %v", err)
 		}
 	}
@@ -199,7 +199,7 @@ func TestSettingsAndMaintenance(t *testing.T) {
 	// the watcher payload is inferred rather than read out of the server
 	// source, so this asserts it reaches the server, not that it applied
 	if err := client.UpdateWatcher(ctx, library(t), true); err != nil {
-		if reached := chttp.StatusCode(err) != 0; !reached {
+		if reached := httpc.StatusCode(err) != 0; !reached {
 			t.Errorf("UpdateWatcher did not reach the server: %v", err)
 		}
 	}
@@ -270,7 +270,7 @@ func TestSessionsAndAuth(t *testing.T) {
 		t.Errorf("SyncSession: %v", err)
 	}
 	if err := client.CloseSession(ctx, session.ID, nil); err != nil {
-		if reached := chttp.StatusCode(err) != 0; !reached {
+		if reached := httpc.StatusCode(err) != 0; !reached {
 			t.Errorf("CloseSession did not reach the server: %v", err)
 		}
 	}
@@ -431,7 +431,7 @@ func TestRemainingAdminSurface(t *testing.T) {
 		if err == nil {
 			return
 		}
-		if reached := chttp.StatusCode(err) != 0; !reached {
+		if reached := httpc.StatusCode(err) != 0; !reached {
 			t.Errorf("%s did not reach the server: %v", name, err)
 		}
 	}
@@ -540,12 +540,12 @@ func TestBackupFiles(t *testing.T) {
 		t.Errorf("DownloadBackup streamed %d bytes: %v", n, err)
 	}
 
-	if err := client.UploadBackup(ctx, "sdk.audiobookshelf", strings.NewReader("not a backup")); err != nil && chttp.StatusCode(err) == 0 {
+	if err := client.UploadBackup(ctx, "sdk.audiobookshelf", strings.NewReader("not a backup")); err != nil && httpc.StatusCode(err) == 0 {
 		t.Errorf("UploadBackup did not reach the server: %v", err)
 	}
 	if err := client.ApplyBackup(ctx, "00000000-0000-0000-0000-000000000000"); err == nil {
 		t.Error("ApplyBackup accepted a nonexistent id")
-	} else if chttp.StatusCode(err) == 0 {
+	} else if httpc.StatusCode(err) == 0 {
 		t.Errorf("ApplyBackup did not reach the server: %v", err)
 	}
 }

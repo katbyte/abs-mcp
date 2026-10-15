@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -71,7 +72,7 @@ const previewCap = 50
 // the default when no limit is given, never more than maxLimit, never before
 // the start.
 func pageArgs(asked, from, def int) (limit, offset int) {
-	return min(limitOr(asked, def), maxLimit), max(from, 0)
+	return min(mcpregistry.LimitOr(asked, def), maxLimit), max(from, 0)
 }
 
 // window reads limit rows from offset out of a listing the server pages by
@@ -114,16 +115,7 @@ type pageIn struct {
 func pageOf[T any](all []T, limit, offset int) (page []T, next int) {
 	offset = min(offset, len(all))
 	page = all[offset:min(offset+limit, len(all))]
-	return page, nextOffset(offset, len(page), len(all))
-}
-
-// nextOffset is where the page after one of n rows from offset starts, or 0
-// when that was the last.
-func nextOffset(offset, n, total int) int {
-	if n == 0 || offset+n >= total {
-		return 0
-	}
-	return offset + n
+	return page, mcpregistry.NextOffset(offset, len(page), len(all))
 }
 
 func registerLibraryTools(r *registry) {
@@ -325,7 +317,7 @@ func registerLibraryTools(r *registry) {
 
 		out := searchOut{Items: []itemSummary{}}
 		for i := range libs {
-			res, err := client.Search(ctx, libs[i].ID, in.Query, min(limitOr(in.Limit, 10), maxLimit))
+			res, err := client.Search(ctx, libs[i].ID, in.Query, min(mcpregistry.LimitOr(in.Limit, 10), maxLimit))
 			if err != nil {
 				return nil, searchOut{}, err
 			}
@@ -444,7 +436,7 @@ func registerLibraryTools(r *registry) {
 			}
 		}
 
-		return nil, itemsOut{Total: total, Offset: offset, NextOffset: nextOffset(offset, len(items), total), Items: summarizeAll(items)}, nil
+		return nil, itemsOut{Total: total, Offset: offset, NextOffset: mcpregistry.NextOffset(offset, len(items), total), Items: summarizeAll(items)}, nil
 	})
 
 	type recentIn struct {
@@ -462,7 +454,7 @@ func registerLibraryTools(r *registry) {
 		if err != nil {
 			return nil, recentOut{}, err
 		}
-		limit := min(limitOr(in.Limit, defaultLimit), maxLimit)
+		limit := min(mcpregistry.LimitOr(in.Limit, defaultLimit), maxLimit)
 
 		var all []abs.Item
 		for i := range libs {

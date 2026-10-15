@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/katbyte/go-kt/chttp"
+	"github.com/katbyte/go-kt/httpc"
 )
 
 // A download runs as long as the file takes: the two-minute limit on an API
@@ -166,7 +166,7 @@ func TestStreamErrorsCarryTheStatus(t *testing.T) {
 	c := newClient(t, s)
 
 	_, err := c.DownloadItem(t.Context(), "i1")
-	he, ok := errors.AsType[*chttp.StatusError](err)
+	he, ok := errors.AsType[*httpc.StatusError](err)
 	if !ok || he.StatusCode != http.StatusForbidden {
 		t.Fatalf("DownloadItem error = %v, want HTTP 403", err)
 	}

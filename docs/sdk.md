@@ -13,13 +13,13 @@ items, err := client.Items(ctx, libraryID, abs.ItemsOptions{Limit: 50})
 
 ## What it depends on
 
-The standard library, and [go-kt's HTTP package](https://github.com/katbyte/go-kt/tree/main/chttp), which itself uses only the standard library. Nothing else is built into a program that imports it.
+The standard library, and [go-kt's HTTP package](https://github.com/katbyte/go-kt/tree/main/httpc), which itself uses only the standard library. Nothing else is built into a program that imports it.
 
 ## How it behaves
 
 - **Retries.** A read is asked for again when a gateway could not reach the server (502, 503, 504) or the connection dropped, three times in all. A write is sent once.
 - **Logging.** It logs nothing unless handed a logger with `abs.WithLog`. Then it traces every request and answer, with the API key blanked. abs-mcp hands it its own, so `ABS_LOG=trace` shows the traffic.
-- **Errors.** A status that is not success is a `*chttp.StatusError`. `abs.IsNotFound` and `abs.IsForbidden` read the common ones.
+- **Errors.** A status that is not success is a `*httpc.StatusError`. `abs.IsNotFound` and `abs.IsForbidden` read the common ones.
 - **Downloads.** File downloads stream and are not held in memory, so a multi-gigabyte audiobook does not have to fit.
 
 ## What it covers

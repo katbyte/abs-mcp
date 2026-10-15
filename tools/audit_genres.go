@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -298,6 +299,6 @@ func registerGenresAudit(r *registry) {
 				return nil, genresOut{}, err
 			}
 		}
-		return nil, c.findings(limitOr(in.MinItems, 5), auditLimit(in.Limit, 50)), nil
+		return nil, c.findings(mcpregistry.LimitOr(in.MinItems, 5), auditLimit(in.Limit, 50)), nil
 	})
 }

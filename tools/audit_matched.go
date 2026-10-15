@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -246,7 +247,7 @@ func registerMatchedAudit(r *registry) {
 			}
 		}
 		out := matchedOut{Findings: []matchedFinding{}}
-		limit, offset := min(limitOr(in.Limit, 50), 100), max(in.Offset, 0)
+		limit, offset := min(mcpregistry.LimitOr(in.Limit, 50), 100), max(in.Offset, 0)
 		// with no library the matched books of every book library are one
 		// run, in library order, and a window is limit books of that run: the
 		// count of books walked carries on from one library to the next

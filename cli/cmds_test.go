@@ -120,21 +120,3 @@ func TestToolsCommandRejectsAnUnknownToolset(t *testing.T) {
 		t.Errorf("the error should name the valid sets: %v", err)
 	}
 }
-
-func TestFirstSentence(t *testing.T) {
-	t.Parallel()
-
-	for _, c := range []struct{ in, want string }{
-		{"One thing. And then another.", "One thing."},
-		{"No full stop at all", "No full stop at all"},
-		{"Trailing full stop.", "Trailing full stop."},
-		{"", ""},
-		// an abbreviation's full stop is not the end of the sentence
-		{"Set an item's cover from a url (e.g. from item_cover_search) or a file. Changes server state.", "Set an item's cover from a url (e.g. from item_cover_search) or a file."},
-		{"Names like Jane Doe, Ph.D. are one name. More.", "Names like Jane Doe, Ph.D. are one name."},
-	} {
-		if got := firstSentence(c.in); got != c.want {
-			t.Errorf("firstSentence(%q) = %q, want %q", c.in, got, c.want)
-		}
-	}
-}
