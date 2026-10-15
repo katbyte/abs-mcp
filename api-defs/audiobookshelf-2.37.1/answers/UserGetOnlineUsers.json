@@ -7,6 +7,101 @@
       {
         "openSessions": [],
         "usersOnline": []
+      },
+      {
+        "openSessions": [
+          {
+            "bookId": "8fce5464-b10b-4a1f-bfa9-22647b9abb99",
+            "chapters": [],
+            "coverPath": "/metadata/items/4082b652-27e7-4238-a4cb-9949a40d71b5/cover.jpg",
+            "currentTime": 40,
+            "date": "2026-10-15",
+            "dayOfWeek": "Thursday",
+            "deviceInfo": {
+              "clientName": "Unknown",
+              "clientVersion": "2.37.1",
+              "deviceId": "55e95058-ab21-4546-9ba6-0ac463d725ea",
+              "id": "55e95058-ab21-4546-9ba6-0ac463d725ea",
+              "ipAddress": "::ffff:172.17.0.1",
+              "userId": "087291d3-518f-4c18-b2b1-b0ea8cd0613d"
+            },
+            "displayAuthor": "Isaac Asimov",
+            "displayTitle": "Second Foundation",
+            "duration": 1,
+            "episodeId": null,
+            "id": "87d4260a-f0da-42a7-abf6-0535e74c16c7",
+            "libraryId": "381af3e9-3949-4552-b0af-71b7ec68db10",
+            "libraryItemId": "4082b652-27e7-4238-a4cb-9949a40d71b5",
+            "mediaMetadata": {
+              "abridged": false,
+              "asin": null,
+              "authors": [
+                {
+                  "id": "be103c75-de78-4c3e-9cb2-1d9404feeef0",
+                  "name": "Isaac Asimov"
+                }
+              ],
+              "description": null,
+              "explicit": false,
+              "genres": [
+                "Sweep"
+              ],
+              "isbn": null,
+              "language": null,
+              "narrators": [
+                "SDK Reader"
+              ],
+              "publishedDate": null,
+              "publishedYear": null,
+              "publisher": null,
+              "series": [
+                {
+                  "id": "861aa6e5-7f42-4046-a5e3-d214057c80c9",
+                  "name": "SDK Series",
+                  "sequence": "1"
+                }
+              ],
+              "subtitle": null,
+              "title": "Second Foundation"
+            },
+            "mediaPlayer": "sweep",
+            "mediaType": "book",
+            "playMethod": 0,
+            "serverVersion": "2.37.1",
+            "startTime": 0,
+            "startedAt": 1792082083181,
+            "timeListening": 10,
+            "updatedAt": 1792082083187,
+            "userId": "087291d3-518f-4c18-b2b1-b0ea8cd0613d"
+          }
+        ]
+      },
+      {
+        "openSessions": [
+          {
+            "chapters": [
+              {
+                "end": 0.5,
+                "id": 0,
+                "start": 0,
+                "title": "One"
+              },
+              {
+                "end": 1,
+                "start": 0.5
+              }
+            ],
+            "mediaMetadata": {
+              "asin": "B0BV7MGYFH",
+              "description": "<p><b><i>Segunda Fundación</i></b><b> es el quinto volumen del «Ciclo de la Fundación», pero también es el cierre de la original «Trilogía de la Fundación» o «Ciclo de Trántor», que puede leerse independientemente y que fue galardonada con el Premio Hugo a la mejor serie de ciencia ficción de todos los tiempos.</b></p> <p>La Fundación yace en ruinas, arrasada por la inteligencia mutante del Mulo. Sin embargo, se rumorea que Hari Seldon, el científico que lo inició todo, ha establecido una Segunda Fundación al otro lado de la galaxia, cuya ubicación exacta es un secreto guardado desde hace tiempo. Obligada a revelar su existencia, la Segunda Fundación deberá enfrentarse a la voluntad destructora del Mulo, con el añadido de que los supervivientes de la Primera Fundación también quieren acabar con ella…</p> <p>«Un talento de proporciones cósmicas».<br /> <i>Chicago Tribune</i></p> <p><b>Please note: This audiobook is in Spanish.</b></p>",
+              "isbn": "9788466371452",
+              "language": "Spanish",
+              "publishedYear": "1999",
+              "publisher": "Penguin Random House Audio",
+              "subtitle": "Ciclo de la Fundación 5 [Foundation Cycle, Book 5]"
+            }
+          }
+        ]
       }
     ]
   }

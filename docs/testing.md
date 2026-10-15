@@ -24,7 +24,7 @@ Everything else runs against a real Audiobookshelf in Docker, because a canned s
 
 | | Covers | Command |
 |---|---|---|
-| `acceptance/abs/` | the `sdk/abs-byhand` client: that every response decodes with its fields filled | `make testacc-sdk` |
+| `acceptance/abs/` | the `sdk/abs-byhand` client: that every response decodes with its fields filled; and the generated `sdk/abs`, by the read sweep | `make testacc-sdk` |
 | `acceptance/tools/` | the tools: name lookup, trimmed answers, audits, provider flows, journeys, and a test of the built binary | `make testacc-tools` |
 
 With `ABS_SERVER` and `ABS_TOKEN` unset the suites skip, so they never fail for want of Docker.
@@ -94,6 +94,12 @@ make record-check   # check the cassettes still match, without rewriting them
 
 `record-check` compares the shape of live responses against the recordings: renamed fields, vanished fields, changed types. It ignores values. So it goes red when a provider changes its contract, not when a chart position moves.
 
+## The read sweep
+
+`TestReadSweep` calls every read of the API document through the generated client, against the suite's server. It is [pandorest's sweep](https://github.com/katbyte/pandorest/tree/main/sweep): what is here is the fixtures it reads by id, made at the start and removed after, and a case for each read that cannot simply answer, saying why: a read that writes, such as restoring a backup, is skipped, and one the fixtures hold nothing for, such as an ebook, is expected to be refused. A read added to the document is swept on the next run with nothing to write, and a case whose read starts answering fails, so a stale one is noticed.
+
+It is strict: an answer carrying a field the document does not declare fails it, as does a value outside a field's set of values. `TestShelf` does the same inside a library's shelves, which hold records of several kinds the sweep does not look into.
+
 ## Saving what Audiobookshelf answers
 
 The live suites can save every request they send Audiobookshelf and every answer it gives, for the [API document](sdk.md#an-api-document-read-from-the-source). `make spec` then types the document from what the server really sent, rather than only from what its source suggests.
@@ -102,7 +108,7 @@ The live suites can save every request they send Audiobookshelf and every answer
 ABS_TEST_ANSWERS=1 make testacc
 ```
 
-The answers go in `api-defs/audiobookshelf-<version>/answers/`, one file per operation of the document, and are committed. Tokens, keys and passwords are blanked first. A file keeps its first answer whole, and from each later one only what is new, so a second run against the same server changes nothing. A request that matches no operation of the document is listed at the end of the run, as a route the document lacks.
+The answers go in `api-defs/audiobookshelf-<version>/answers/`, one file per operation of the document, and are committed. Both clients' requests are saved, the generated one's from the read sweep. Tokens, keys and passwords are blanked first. A file keeps its first answer whole, and from each later one only what is new, with the field that says which kind of record it is, so a second run against the same server changes nothing. A request that matches no operation of the document is listed at the end of the run, as a route the document lacks.
 
 ## Audio comparison
 

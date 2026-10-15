@@ -90,8 +90,11 @@ func TestAnalyze(t *testing.T) {
 		t.Parallel()
 
 		r := routes["post /api/libraries/:id/notes"]
-		if !slices.Equal(r.req.body, []string{"text"}) || !r.req.bodyWhole {
-			t.Errorf("body: %q, whole %v, want text read through payload, and every field read by the loop", r.req.body, r.req.bodyWhole)
+		if !slices.Equal(r.req.body, []string{"mediaItemType", "text"}) || !r.req.bodyWhole {
+			t.Errorf("body: %q, whole %v, want text read through payload, mediaItemType taken out of it, and every field read by the loop", r.req.body, r.req.bodyWhole)
+		}
+		if want := []string{"book", "podcastEpisode"}; !slices.Equal(r.req.values["body mediaItemType"], want) {
+			t.Errorf("values: %q, want mediaItemType checked against %q", r.req.values, want)
 		}
 	})
 

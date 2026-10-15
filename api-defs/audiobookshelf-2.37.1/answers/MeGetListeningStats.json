@@ -129,6 +129,63 @@
         ],
         "today": 0.6,
         "totalTime": 0.6
+      },
+      {
+        "dayOfWeek": {
+          "Thursday": 30
+        },
+        "days": {
+          "2026-10-15": 30
+        },
+        "items": {
+          "4082b652-27e7-4238-a4cb-9949a40d71b5": {
+            "mediaMetadata": {
+              "language": null,
+              "publishedYear": null,
+              "publisher": null
+            },
+            "timeListening": 30
+          }
+        },
+        "recentSessions": [
+          {
+            "coverPath": "/metadata/items/4082b652-27e7-4238-a4cb-9949a40d71b5/cover.jpg",
+            "currentTime": 40,
+            "mediaMetadata": {
+              "language": null,
+              "publishedYear": null,
+              "publisher": null
+            },
+            "timeListening": 10
+          }
+        ]
+      },
+      {
+        "items": {
+          "45b0d740-8868-4e14-bebf-b67b00ed2be2": {
+            "mediaMetadata": {
+              "asin": "B0BV7MGYFH",
+              "description": "<p><b><i>Segunda Fundación</i></b><b> es el quinto volumen del «Ciclo de la Fundación», pero también es el cierre de la original «Trilogía de la Fundación» o «Ciclo de Trántor», que puede leerse independientemente y que fue galardonada con el Premio Hugo a la mejor serie de ciencia ficción de todos los tiempos.</b></p> <p>La Fundación yace en ruinas, arrasada por la inteligencia mutante del Mulo. Sin embargo, se rumorea que Hari Seldon, el científico que lo inició todo, ha establecido una Segunda Fundación al otro lado de la galaxia, cuya ubicación exacta es un secreto guardado desde hace tiempo. Obligada a revelar su existencia, la Segunda Fundación deberá enfrentarse a la voluntad destructora del Mulo, con el añadido de que los supervivientes de la Primera Fundación también quieren acabar con ella…</p> <p>«Un talento de proporciones cósmicas».<br /> <i>Chicago Tribune</i></p> <p><b>Please note: This audiobook is in Spanish.</b></p>",
+              "isbn": "9788466371452",
+              "subtitle": "Ciclo de la Fundación 5 [Foundation Cycle, Book 5]"
+            }
+          }
+        },
+        "recentSessions": [
+          {
+            "mediaMetadata": {
+              "asin": "B0BV7MGYFH",
+              "description": "<p><b><i>Segunda Fundación</i></b><b> es el quinto volumen del «Ciclo de la Fundación», pero también es el cierre de la original «Trilogía de la Fundación» o «Ciclo de Trántor», que puede leerse independientemente y que fue galardonada con el Premio Hugo a la mejor serie de ciencia ficción de todos los tiempos.</b></p> <p>La Fundación yace en ruinas, arrasada por la inteligencia mutante del Mulo. Sin embargo, se rumorea que Hari Seldon, el científico que lo inició todo, ha establecido una Segunda Fundación al otro lado de la galaxia, cuya ubicación exacta es un secreto guardado desde hace tiempo. Obligada a revelar su existencia, la Segunda Fundación deberá enfrentarse a la voluntad destructora del Mulo, con el añadido de que los supervivientes de la Primera Fundación también quieren acabar con ella…</p> <p>«Un talento de proporciones cósmicas».<br /> <i>Chicago Tribune</i></p> <p><b>Please note: This audiobook is in Spanish.</b></p>",
+              "isbn": "9788466371452",
+              "subtitle": "Ciclo de la Fundación 5 [Foundation Cycle, Book 5]"
+            }
+          },
+          {
+            "mediaPlayer": null,
+            "playMethod": null,
+            "timeListening": null
+          }
+        ]
       }
     ]
   }

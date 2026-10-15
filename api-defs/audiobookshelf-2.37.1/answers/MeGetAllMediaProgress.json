@@ -28,6 +28,20 @@
             "currentTime": 0
           }
         ]
+      },
+      {
+        "mediaProgress": [
+          {
+            "episodeId": "6b7b5d40-1a59-4f4c-baba-3688c7f6ada8"
+          }
+        ]
+      },
+      {
+        "mediaProgress": [
+          {
+            "finishedAt": null
+          }
+        ]
       }
     ]
   }

@@ -133,12 +133,16 @@ func (t *jsType) notNull() *jsType {
 }
 
 // widen is a value merged with one the scan could not tell: a whole number written out, as the 0 of x || 0, then says only that it is a
-// number, since what it stands in for may have a fraction.
+// number, since what it stands in for may have a fraction, and text written out, as the 'book' of x || 'book', may be any text.
 func widen(t *jsType) *jsType {
-	if t.kind != integerKind || !t.written {
+	switch {
+	case t.kind == stringKind && t.literals != nil:
+		out := *t
+		out.literals = nil
+		return &out
+	case t.kind != integerKind || !t.written:
 		return t
-	}
-	if t.nullable {
+	case t.nullable:
 		return num.orNull()
 	}
 
@@ -1365,6 +1369,12 @@ func typeKey(t *jsType) string {
 		return "[" + typeKey(t.elem) + "]"
 	case objectKind:
 		return "{" + t.name + "}"
+	case funcKind:
+		// a function handed in, as the loaders a timing helper is given, is told apart by its code, as what the call returns is what it does
+		if t.fn != nil && t.fn.builtin == nil {
+			return fmt.Sprintf("%d:%p", t.kind, t.fn.body)
+		}
+		return fmt.Sprint(t.kind)
 	default:
 		return fmt.Sprint(t.kind)
 	}

@@ -137,10 +137,12 @@ class LibraryController {
   notes(req, res) {
     const payload = req.body
     if (!payload.text) return res.sendStatus(400)
+    const { mediaItemType } = req.body
+    if (!['book', 'podcastEpisode'].includes(mediaItemType)) return res.sendStatus(400)
     for (const key in req.body) {
       if (key.startsWith('_')) return res.sendStatus(400)
     }
-    res.sendStatus(200)
+    res.sendStatus(204)
   }
 
   order(req, res) {
@@ -154,8 +156,13 @@ class LibraryController {
     const page = toNumber(req.query.page, 0)
     const limit = req.query.limit || 10
     const near = parseFloat(req.query.near)
-    const found = searchIndex(req.query.q, page, limit, near)
-    res.json({ results: found, total: found.length, page, limit })
+    const kind = getQueryParamAsString(req.query, 'kind', 'book')
+    const sorts = ['displayTitle', 'timeListening']
+    let sort = req.query.sort || 'displayTitle'
+    if (!sorts.includes(sort)) sort = 'displayTitle'
+    const found = searchIndex(req.query.q, page, limit, near, kind, sort)
+    const stringKey = found.length ? 'MessageInvalidAsin' : 'MessageChaptersNotFound'
+    res.json({ results: found, total: found.length, page, limit, stringKey, note: 'One note' })
   }
 }
 module.exports = new LibraryController()

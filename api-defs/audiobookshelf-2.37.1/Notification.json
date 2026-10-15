@@ -402,7 +402,8 @@
           "Name": "DescriptionKey",
           "JsonName": "descriptionKey",
           "Type": {
-            "Type": "String"
+            "Type": "Reference",
+            "ReferenceName": "NotificationEventDescriptionKey"
           }
         },
         {
@@ -416,7 +417,8 @@
           "Name": "Name",
           "JsonName": "name",
           "Type": {
-            "Type": "String"
+            "Type": "Reference",
+            "ReferenceName": "NotificationEvent"
           }
         },
         {
@@ -665,7 +667,8 @@
           "Name": "DescriptionKey",
           "JsonName": "descriptionKey",
           "Type": {
-            "Type": "String"
+            "Type": "Reference",
+            "ReferenceName": "NotificationEventDescriptionKey"
           }
         },
         {
@@ -679,7 +682,8 @@
           "Name": "Name",
           "JsonName": "name",
           "Type": {
-            "Type": "String"
+            "Type": "Reference",
+            "ReferenceName": "NotificationEvent"
           }
         },
         {
@@ -999,6 +1003,68 @@
           "Type": {
             "Type": "Any"
           }
+        }
+      ]
+    }
+  ],
+  "Constants": [
+    {
+      "Name": "NotificationEvent",
+      "SchemaName": "NotificationEvent",
+      "Values": [
+        {
+          "Name": "NotificationEventOnBackupCompleted",
+          "Value": "onBackupCompleted"
+        },
+        {
+          "Name": "NotificationEventOnBackupFailed",
+          "Value": "onBackupFailed"
+        },
+        {
+          "Name": "NotificationEventOnPodcastEpisodeDownloaded",
+          "Value": "onPodcastEpisodeDownloaded"
+        },
+        {
+          "Name": "NotificationEventOnRSSFeedDisabled",
+          "Value": "onRSSFeedDisabled"
+        },
+        {
+          "Name": "NotificationEventOnRSSFeedFailed",
+          "Value": "onRSSFeedFailed"
+        },
+        {
+          "Name": "NotificationEventOnTest",
+          "Value": "onTest"
+        }
+      ]
+    },
+    {
+      "Name": "NotificationEventDescriptionKey",
+      "SchemaName": "NotificationEventDescriptionKey",
+      "Values": [
+        {
+          "Name": "NotificationEventDescriptionKeyNotificationOnBackupCompletedDescription",
+          "Value": "NotificationOnBackupCompletedDescription"
+        },
+        {
+          "Name": "NotificationEventDescriptionKeyNotificationOnBackupFailedDescription",
+          "Value": "NotificationOnBackupFailedDescription"
+        },
+        {
+          "Name": "NotificationEventDescriptionKeyNotificationOnEpisodeDownloadedDescription",
+          "Value": "NotificationOnEpisodeDownloadedDescription"
+        },
+        {
+          "Name": "NotificationEventDescriptionKeyNotificationOnRSSFeedDisabledDescription",
+          "Value": "NotificationOnRSSFeedDisabledDescription"
+        },
+        {
+          "Name": "NotificationEventDescriptionKeyNotificationOnRSSFeedFailedDescription",
+          "Value": "NotificationOnRSSFeedFailedDescription"
+        },
+        {
+          "Name": "NotificationEventDescriptionKeyNotificationOnTestDescription",
+          "Value": "NotificationOnTestDescription"
         }
       ]
     }

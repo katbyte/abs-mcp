@@ -137,7 +137,8 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "String"
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
           }
         }
       ],
@@ -171,7 +172,8 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "String"
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
           }
         },
         {
@@ -202,7 +204,8 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "String"
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
           }
         }
       ],
@@ -226,7 +229,8 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "String"
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
           }
         },
         {
@@ -258,7 +262,8 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "String"
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
           }
         }
       ],
@@ -309,7 +314,8 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "String"
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
           }
         }
       ],
@@ -368,7 +374,8 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "String"
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
           }
         },
         {
@@ -400,7 +407,8 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "String"
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
           }
         }
       ],
@@ -425,7 +433,8 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "String"
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
           }
         },
         {
@@ -457,7 +466,8 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "String"
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
           }
         },
         {
@@ -489,7 +499,8 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "String"
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
           }
         }
       ],
@@ -514,7 +525,8 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "String"
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
           }
         }
       ],
@@ -539,7 +551,8 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "String"
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
           }
         }
       ],
@@ -563,7 +576,8 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "String"
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
           }
         }
       ],
@@ -588,7 +602,8 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "String"
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
           }
         },
         {
@@ -628,7 +643,8 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "String"
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
           }
         }
       ],
@@ -660,7 +676,8 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "String"
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
           }
         }
       ],
@@ -692,7 +709,8 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "String"
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
           }
         },
         {
@@ -723,7 +741,8 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "String"
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
           }
         }
       ],
@@ -755,7 +774,8 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "String"
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
           }
         }
       ],
@@ -820,7 +840,8 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "String"
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
           }
         }
       ],
@@ -3975,7 +3996,7 @@
           "Name": "Genre",
           "JsonName": "genre",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           }
         },
         {

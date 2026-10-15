@@ -1,0 +1,12 @@
+{
+  "operation": "ServerGetPing",
+  "method": "GET",
+  "path": "/ping",
+  "answers": {
+    "200": [
+      {
+        "success": true
+      }
+    ]
+  }
+}

@@ -234,6 +234,32 @@
       },
       {
         "warning": "No audible match found"
+      },
+      {
+        "libraryItem": {
+          "media": {
+            "audioFiles": [
+              {
+                "metaTags": {
+                  "tagAlbumArtist": "Isaac Asimov",
+                  "tagArtist": "Isaac Asimov",
+                  "tagComposer": "SDK Reader",
+                  "tagGenre": "Science Fiction"
+                }
+              }
+            ],
+            "tracks": [
+              {
+                "metaTags": {
+                  "tagAlbumArtist": "Isaac Asimov",
+                  "tagArtist": "Isaac Asimov",
+                  "tagComposer": "SDK Reader",
+                  "tagGenre": "Science Fiction"
+                }
+              }
+            ]
+          }
+        }
       }
     ]
   }

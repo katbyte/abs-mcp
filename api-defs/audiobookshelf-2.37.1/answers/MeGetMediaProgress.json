@@ -21,6 +21,12 @@
         "progress": 0.5,
         "startedAt": 1792029673508,
         "userId": "1cb68be5-3438-472e-a6b5-c77ea363964e"
+      },
+      {
+        "currentTime": 1,
+        "duration": 2,
+        "finishedAt": 1792081970463,
+        "progress": 1
       }
     ]
   }

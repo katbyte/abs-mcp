@@ -224,6 +224,21 @@
             }
           }
         ]
+      },
+      {
+        "items": [
+          {
+            "libraryItem": {
+              "media": {
+                "metadata": {
+                  "genres": [
+                    "Science Fiction"
+                  ]
+                }
+              }
+            }
+          }
+        ]
       }
     ]
   }

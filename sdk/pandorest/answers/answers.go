@@ -143,7 +143,8 @@ func places(v any, at string, out map[string]bool) {
 }
 
 // keepNew is v with only the parts that hold a place or kind of value seen does not, and whether there are any: all of v when seen is empty.
-func keepNew(v any, at string, seen map[string]bool) (any, bool) {
+// A record keeps the fields named in kinds with any part of it, as they say which of a union's records it is.
+func keepNew(v any, at string, seen map[string]bool, kinds []string) (any, bool) {
 	isNew := !seen[at+"="+Kind(v)]
 
 	switch v := v.(type) {
@@ -154,8 +155,15 @@ func keepNew(v any, at string, seen map[string]bool) (any, bool) {
 			if Keyed(v) {
 				sub = at + ".*"
 			}
-			if kept, ok := keepNew(x, sub, seen); ok {
+			if kept, ok := keepNew(x, sub, seen, kinds); ok {
 				out[k] = kept
+			}
+		}
+		if len(out) > 0 && !Keyed(v) {
+			for _, k := range kinds {
+				if x, ok := v[k]; ok {
+					out[k] = x
+				}
 			}
 		}
 		return out, isNew || len(out) > 0
@@ -163,7 +171,7 @@ func keepNew(v any, at string, seen map[string]bool) (any, bool) {
 	case []any:
 		out := []any{}
 		for _, x := range v {
-			if kept, ok := keepNew(x, at+"[]", seen); ok {
+			if kept, ok := keepNew(x, at+"[]", seen, kinds); ok {
 				out = append(out, kept)
 			}
 		}
@@ -174,14 +182,14 @@ func keepNew(v any, at string, seen map[string]bool) (any, bool) {
 }
 
 // trim keeps, of a list's items and a keyed map's entries, the first whole, and of each one after it the parts that hold a place or kind of value
-// the ones kept do not.
-func trim(v any) any {
+// the ones kept do not, with the fields named in kinds.
+func trim(v any, kinds []string) any {
 	switch v := v.(type) {
 	case []any:
 		out, seen := make([]any, 0, len(v)), map[string]bool{}
 		for _, x := range v {
-			x = trim(x)
-			if kept, ok := keepNew(x, "", seen); ok {
+			x = trim(x, kinds)
+			if kept, ok := keepNew(x, "", seen, kinds); ok {
 				out = append(out, kept)
 				places(x, "", seen)
 			}
@@ -191,15 +199,15 @@ func trim(v any) any {
 	case map[string]any:
 		if !Keyed(v) {
 			for k, x := range v {
-				v[k] = trim(x)
+				v[k] = trim(x, kinds)
 			}
 			return v
 		}
 
 		out, seen := map[string]any{}, map[string]bool{}
 		for _, k := range slices.Sorted(maps.Keys(v)) {
-			x := trim(v[k])
-			if kept, ok := keepNew(x, "", seen); ok {
+			x := trim(v[k], kinds)
+			if kept, ok := keepNew(x, "", seen, kinds); ok {
 				out[k] = kept
 				places(x, "", seen)
 			}
@@ -249,6 +257,7 @@ type Recorder struct {
 	dir    string
 	base   string // the server's own path, which every request path starts with
 	ops    []operation
+	kinds  []string // the fields that say which of a union's records a record is, kept with any part of one
 	mu     sync.Mutex
 	files  map[string]*File
 	seen   map[string]map[string]bool // by operation, every place and kind of value its samples hold, under "sent" or the status
@@ -270,12 +279,12 @@ func Open(ctx context.Context, address, root string) (*Recorder, error) {
 	}
 
 	defs := filepath.Join(root, "api-defs")
-	ops, err := readDocument(os.DirFS(defs), "audiobookshelf-openapi-"+version+".json")
+	ops, kinds, err := readDocument(os.DirFS(defs), "audiobookshelf-openapi-"+version+".json")
 	if err != nil {
 		return nil, fmt.Errorf("the API document for Audiobookshelf %s: %w", version, err)
 	}
 
-	r := &Recorder{dir: Dir(defs, version), base: strings.TrimRight(u.Path, "/"), ops: ops, files: map[string]*File{}, seen: map[string]map[string]bool{}}
+	r := &Recorder{dir: Dir(defs, version), base: strings.TrimRight(u.Path, "/"), ops: ops, kinds: kinds, files: map[string]*File{}, seen: map[string]map[string]bool{}}
 
 	files, err := Read(r.dir)
 	if err != nil {
@@ -324,30 +333,42 @@ func serverVersion(ctx context.Context, address string) (string, error) {
 	return status.ServerVersion, nil
 }
 
-// readDocument is every operation of the API document named in fsys.
-func readDocument(fsys fs.FS, name string) ([]operation, error) {
+// readDocument is every operation of the API document named in fsys, and the fields its unions tell their records apart by.
+func readDocument(fsys fs.FS, name string) (ops []operation, kinds []string, err error) {
 	b, err := fs.ReadFile(fsys, name)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var doc struct {
 		Paths map[string]map[string]struct {
 			OperationID string `json:"operationId"`
 		} `json:"paths"`
+		Components struct {
+			Schemas map[string]struct {
+				Discriminator *struct {
+					PropertyName string `json:"propertyName"`
+				} `json:"discriminator"`
+			} `json:"schemas"`
+		} `json:"components"`
 	}
 	if err := json.Unmarshal(b, &doc); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	var ops []operation
 	for _, p := range slices.Sorted(maps.Keys(doc.Paths)) {
 		for _, verb := range slices.Sorted(maps.Keys(doc.Paths[p])) {
 			ops = append(ops, operation{id: doc.Paths[p][verb].OperationID, method: strings.ToUpper(verb), path: p, parts: strings.Split(strings.Trim(p, "/"), "/")})
 		}
 	}
+	for _, s := range doc.Components.Schemas {
+		if s.Discriminator != nil && !slices.Contains(kinds, s.Discriminator.PropertyName) {
+			kinds = append(kinds, s.Discriminator.PropertyName)
+		}
+	}
+	slices.Sort(kinds)
 
-	return ops, nil
+	return ops, kinds, nil
 }
 
 // Option has a client's exchanges recorded, and does nothing when r is nil, so a suite hands it to every client whether it records or not.
@@ -363,6 +384,19 @@ func (r *Recorder) Option() func(*httpc.Options) {
 		}
 		o.Base = &transport{rec: r, next: next}
 	}
+}
+
+// Transport has the exchanges of a client that takes a transport rather than an option recorded, as the generated client does through
+// client.WithTransport, and is nil when r is nil.
+func (r *Recorder) Transport() http.RoundTripper {
+	if r == nil {
+		return nil
+	}
+
+	var o httpc.Options
+	r.Option()(&o)
+
+	return o.Base
 }
 
 // Missed is every request no operation of the document matched, which is a route the document lacks.
@@ -497,9 +531,9 @@ func (r *Recorder) sample(op *operation, under string, body []byte, seen map[str
 		return nil, false
 	}
 	blank(v)
-	v = trim(v)
+	v = trim(v, r.kinds)
 
-	kept, ok := keepNew(v, under, seen)
+	kept, ok := keepNew(v, under, seen, r.kinds)
 	if ok {
 		places(v, under, seen)
 	}

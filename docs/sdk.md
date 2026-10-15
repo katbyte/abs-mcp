@@ -2,7 +2,7 @@
 
 `sdk/abs-byhand` is a plain Go client for the Audiobookshelf API, written by hand. It knows nothing about MCP. If you only want to talk to Audiobookshelf from Go, take it and ignore the rest.
 
-`sdk/abs` is to be the client generated from the API document below, and will take its place.
+`sdk/abs` is the client generated from the API document below. The tools still use the hand-written one; they move to the generated one next, and the hand-written one then goes.
 
 ```go
 import "github.com/katbyte/abs-mcp/sdk/abs-byhand"
@@ -42,4 +42,32 @@ make spec SOURCE=../audiobookshelf   # a checkout of the release to read
 
 It covers every route. Where an answer comes from a stored JSON column or an object the code fills in later, the source does not say its shape. Answers saved from a real server fill those in, and correct the source where the server sent a fraction, a null or a field it does not mention (see [saving what Audiobookshelf answers](testing.md#saving-what-audiobookshelf-answers)). The hand-written client's types then settle what is left, and `make spec` lists every place they disagree. What none of them says is left untyped. The command reports how many answers it typed in full.
 
-It is the first step towards generating this client with [pandorest](https://github.com/katbyte/pandorest), as the other katbyte clients are. `make pandorest-import` reads it into pandorest's definitions under `api-defs/audiobookshelf-<version>/`, with each kind of id a type of its own, the times read as the dates they are, and the lists that page marked, so a generated client can read every page. No client is generated from them yet.
+A value that is one of several kinds of record, and the field that says which, cannot be seen in the source, so each is stated in `sdk/pandorest/unions.go`: today only a library's shelves, which hold books, series or authors by their `type`. A field that only ever takes a few fixed codes is a set of values, named in `sdk/pandorest/enums.go`; the scan stops at one with no name, so each is named on purpose.
+
+## The generated client
+
+`make generate` reads the document into [pandorest](https://github.com/katbyte/pandorest)'s definitions under `api-defs/audiobookshelf-<version>/` and writes `sdk/abs` from them, as the other katbyte clients are made. `make gencheck`, and a unit test, fail when either is stale.
+
+```go
+import "github.com/katbyte/abs-mcp/sdk/abs"
+
+c, err := abs.New("http://nas:13378", os.Getenv("ABS_TOKEN"))
+for item, err := range c.LibraryGetLibraryItemsEach(ctx, abs.LibraryID(libraryID)) {
+	// every item of the library, a page at a time
+}
+shelves, err := c.LibraryGetUserPersonalizedShelves(ctx, abs.LibraryID(libraryID))
+for _, shelf := range shelves.Answer {
+	if shelf.Kind() == string(abs.ShelfTypeSeries) {
+		series, err := shelf.AsSeriesShelf()
+	}
+}
+```
+
+- **Ids.** Each kind of id is a type of its own, so a library id cannot be passed where a book's belongs.
+- **Lists.** A list that pages has `Complete`, for every item at once, and `Each`, a page at a time as they are ranged over.
+- **Dates.** Times, which Audiobookshelf writes as milliseconds since 1970, are read as dates.
+- **Kinds of record.** A value of several kinds hands over the one asked for, checked against the field that names it.
+- **Sets of values.** A field of fixed codes is a type with each code a constant, and `Known` says whether a value is one the document lists.
+- **Errors.** A refusal carries Audiobookshelf's own words, read by `sdk/abs/service.go`, the one file there written by hand.
+
+A live sweep calls every read of the document through it against a real server; see [testing.md](testing.md#the-read-sweep).

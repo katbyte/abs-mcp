@@ -89,6 +89,13 @@
             }
           }
         ]
+      },
+      {
+        "feeds": [
+          {
+            "coverPath": "/metadata/items/4082b652-27e7-4238-a4cb-9949a40d71b5/cover.jpg"
+          }
+        ]
       }
     ]
   }

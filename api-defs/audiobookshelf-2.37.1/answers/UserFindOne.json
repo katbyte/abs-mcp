@@ -91,6 +91,19 @@
       },
       {
         "email": "newcomer@zzyzx.test"
+      },
+      {
+        "bookmarks": [
+          {
+            "time": 5
+          }
+        ],
+        "mediaProgress": [
+          {
+            "displaySubtitle": "Well There's Your Problem",
+            "episodeId": "6b7b5d40-1a59-4f4c-baba-3688c7f6ada8"
+          }
+        ]
       }
     ]
   }

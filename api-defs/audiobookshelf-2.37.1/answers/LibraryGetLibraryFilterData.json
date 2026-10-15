@@ -29,6 +29,17 @@
         ],
         "seriesCount": 0,
         "tags": []
+      },
+      {
+        "genres": [
+          "Sweep"
+        ],
+        "narrators": [
+          "SDK Reader"
+        ],
+        "tags": [
+          "sdk"
+        ]
       }
     ]
   }

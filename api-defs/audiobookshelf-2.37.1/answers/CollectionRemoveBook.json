@@ -184,6 +184,22 @@
         "lastUpdate": 1792029522426,
         "libraryId": "d9204ade-9fe6-4681-99d9-26075fdeb94a",
         "name": "SDK Single"
+      },
+      {
+        "books": [
+          {
+            "media": {
+              "metadata": {
+                "genres": [
+                  "Science Fiction"
+                ]
+              },
+              "tags": [
+                "sdk"
+              ]
+            }
+          }
+        ]
       }
     ]
   }

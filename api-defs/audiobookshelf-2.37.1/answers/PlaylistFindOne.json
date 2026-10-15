@@ -260,6 +260,74 @@
       },
       {
         "description": "made by the acceptance suite"
+      },
+      {
+        "items": [
+          {
+            "libraryItem": {
+              "media": {
+                "coverPath": "/metadata/items/4082b652-27e7-4238-a4cb-9949a40d71b5/cover.jpg"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "libraryItem": {
+              "media": {
+                "audioFiles": [
+                  {
+                    "metaTags": {
+                      "tagAlbum": "Second Foundation",
+                      "tagAlbumArtist": "Isaac Asimov",
+                      "tagArtist": "Isaac Asimov",
+                      "tagComposer": "SDK Reader",
+                      "tagGenre": "Science Fiction",
+                      "tagGrouping": "SDK Series #1",
+                      "tagTitle": "Second Foundation",
+                      "tagTrack": "1"
+                    },
+                    "trackNumFromMeta": 1
+                  }
+                ],
+                "chapters": [
+                  {
+                    "end": 0.5,
+                    "id": 0,
+                    "start": 0,
+                    "title": "One"
+                  },
+                  {
+                    "end": 1,
+                    "start": 0.5
+                  }
+                ],
+                "metadata": {
+                  "asin": "B0BV7MGYFH",
+                  "isbn": "9788466371452",
+                  "subtitle": "Ciclo de la Fundación 5 [Foundation Cycle, Book 5]"
+                },
+                "tracks": [
+                  {
+                    "metaTags": {
+                      "tagAlbum": "Second Foundation",
+                      "tagAlbumArtist": "Isaac Asimov",
+                      "tagArtist": "Isaac Asimov",
+                      "tagComposer": "SDK Reader",
+                      "tagGenre": "Science Fiction",
+                      "tagGrouping": "SDK Series #1",
+                      "tagTitle": "Second Foundation",
+                      "tagTrack": "1"
+                    },
+                    "trackNumFromMeta": 1
+                  }
+                ]
+              }
+            }
+          }
+        ]
       }
     ]
   }

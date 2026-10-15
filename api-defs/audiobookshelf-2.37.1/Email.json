@@ -253,7 +253,8 @@
             "NestedItem": {
               "Type": "String"
             }
-          }
+          },
+          "Nullable": true
         }
       ]
     },

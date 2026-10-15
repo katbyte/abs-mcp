@@ -88,9 +88,10 @@ func TestAnswerFillMerge(t *testing.T) {
 		"settings": {Type: "object", AdditionalProperties: true},
 		"book":     {Ref: "#/components/schemas/Book"},
 		"label":    {Type: "string"},
+		"shelf":    {OneOf: []*schema{{Ref: "#/components/schemas/Book"}}},
 	}}
 	a := newAnswerFill()
-	a.merge(to, inferAll([]any{decoded(t, `{"untyped": {"n": 1}, "count": 2.5, "name": null, "duration": 3, "settings": {"theme": "dark"}, "book": {"title": "T", "isbn": "1"}, "label": 7, "added": true}`)}), components, "answer", place{})
+	a.merge(to, inferAll([]any{decoded(t, `{"untyped": {"n": 1}, "count": 2.5, "name": null, "duration": 3, "settings": {"theme": "dark"}, "book": {"title": "T", "isbn": "1"}, "label": 7, "added": true, "shelf": {"title": "S", "entities": []}}`)}), components, "answer", place{})
 
 	if got := describe(to.Properties["untyped"]); got != "object{n:number}" || !to.Properties["untyped"].Properties["n"].whole {
 		t.Errorf("an untyped value: %s, want filled, its whole number a number seen whole", got)
@@ -104,8 +105,11 @@ func TestAnswerFillMerge(t *testing.T) {
 	if to.Properties["duration"].Type != "number" || to.Properties["duration"].whole {
 		t.Errorf("a number sent whole: %+v, want it left a number", to.Properties["duration"])
 	}
-	if components["Book"].Properties["isbn"] != nil {
-		t.Error("a field a shared record lacks, which may be another kind of record's: want it listed, not added")
+	if components["Book"].Properties["isbn"] == nil {
+		t.Error("a field a shared record lacks: want it added")
+	}
+	if shelf := to.Properties["shelf"]; len(shelf.OneOf) != 1 || shelf.Type != "" || components["Book"].Properties["entities"] != nil {
+		t.Errorf("a value of several kinds: %+v, want it left as stated, its kinds untouched", shelf)
 	}
 	if to.Properties["label"].Type != "string" {
 		t.Errorf("a disagreement: %s, want it left as the source says", to.Properties["label"].Type)
@@ -117,18 +121,18 @@ func TestAnswerFillMerge(t *testing.T) {
 	if a.filled != 2 {
 		t.Errorf("filled %d, want the untyped value and the open record's field", a.filled)
 	}
-	wantCorrected := []string{"answer.added: the server sends it, and the document did not have it", "answer.count: the server sent a fraction", "answer.name: the server sent null"}
+	wantCorrected := []string{"Book.isbn: the server sends it, and the document did not have it", "answer.added: the server sends it, and the document did not have it", "answer.count: the server sent a fraction", "answer.name: the server sent null"}
 	if got := slices.Sorted(slices.Values(a.corrected)); !slices.Equal(got, slices.Sorted(slices.Values(wantCorrected))) {
 		t.Errorf("corrected:\n%q\nwant\n%q", got, wantCorrected)
 	}
-	wantConflicts := []string{"Book.isbn: the server sent it where the document has this record, which lacks it: another kind of record, or a field the record is missing", "answer.label: the source says string, the server sent integer"}
+	wantConflicts := []string{"answer.label: the source says string, the server sent integer"}
 	if got := slices.Sorted(slices.Values(a.conflicts)); !slices.Equal(got, wantConflicts) {
 		t.Errorf("conflicts:\n%q\nwant\n%q", got, wantConflicts)
 	}
 
 	var report bytes.Buffer
 	a.write(&report, "answers", true)
-	for _, line := range []string{"filled 2 values", "corrected 3", "2 differ", "corrected: answer.count: the server sent a fraction", "differs: answer.label"} {
+	for _, line := range []string{"filled 2 values", "corrected 4", "1 differ", "corrected: answer.count: the server sent a fraction", "differs: answer.label"} {
 		if !strings.Contains(report.String(), line) {
 			t.Errorf("report has no %q:\n%s", line, report.String())
 		}
@@ -204,5 +208,49 @@ func TestByhandSettlesAWholeNumber(t *testing.T) {
 	b.merge(plain, &schema{Type: "integer"}, nil, "duration")
 	if plain.Type != "number" {
 		t.Errorf("a number the source says: %s, want it left a number", plain.Type)
+	}
+}
+
+// A value of several kinds is stated, so the hand-written client neither types it nor counts it as a disagreement.
+func TestByhandLeavesAUnion(t *testing.T) {
+	t.Parallel()
+
+	to := &schema{OneOf: []*schema{{Ref: "#/components/schemas/Book"}}}
+	b := &byhand{visitedRef: map[string]bool{}}
+	b.merge(to, &schema{Type: "object", Properties: map[string]*schema{"title": {Type: "string"}}}, nil, "shelf")
+	if to.Type != "" || len(to.OneOf) != 1 || b.filled != 0 || len(b.conflicts) != 0 {
+		t.Errorf("a union: %+v, filled %d, conflicts %q", to, b.filled, b.conflicts)
+	}
+}
+
+// Each record where the document has a union fills the member its field names, and a kind the union has no member for is listed.
+func TestAnswerFillThroughUnions(t *testing.T) {
+	t.Parallel()
+
+	components := map[string]*schema{
+		"Item":       {Type: "object", Properties: map[string]*schema{"id": {Type: "string"}}},
+		"ItemShelf":  {Type: "object", Properties: map[string]*schema{"type": {Type: "string"}, "entities": {Type: "array", Items: &schema{Ref: "#/components/schemas/Item"}}}},
+		"OtherShelf": {Type: "object", Properties: map[string]*schema{"type": {Type: "string"}, "total": {}}},
+		"Shelf": {
+			OneOf:         []*schema{{Ref: "#/components/schemas/ItemShelf"}, {Ref: "#/components/schemas/OtherShelf"}},
+			Discriminator: &discriminator{PropertyName: "type", Mapping: map[string]string{"book": "#/components/schemas/ItemShelf", "other": "#/components/schemas/OtherShelf"}},
+		},
+	}
+	answer := &schema{Type: "array", Items: &schema{Ref: "#/components/schemas/Shelf"}}
+
+	a := newAnswerFill()
+	a.throughUnions(answer, decoded(t, `[{"type": "book", "entities": [{"id": "a", "recentEpisode": {"title": "E"}}]}, {"type": "other", "total": 3}, {"type": "series"}]`), components, "answer")
+
+	if ep := components["Item"].Properties["recentEpisode"]; ep == nil || ep.Type != "object" {
+		t.Errorf("a field of a record a member holds: %+v, want it added", ep)
+	}
+	if total := components["OtherShelf"].Properties["total"]; total.Type != "number" || !total.whole {
+		t.Errorf("an untyped field of the other member: %+v, want it filled", total)
+	}
+	if components["ItemShelf"].Properties["total"] != nil {
+		t.Error("the other member's field went to the item shelf")
+	}
+	if want := []string{`Shelf: the server sent a type of "series", which the union has no record for`}; !slices.Equal(a.conflicts, want) {
+		t.Errorf("conflicts: %q, want %q", a.conflicts, want)
 	}
 }

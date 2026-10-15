@@ -55,6 +55,9 @@ func (a *answerFill) fill(doc *document, files []*answers.File) {
 				continue
 			}
 			a.merge(m.Schema, inferAll(f.Answers[code]), doc.Components.Schemas, key+" answer", place{})
+			for _, v := range f.Answers[code] {
+				a.throughUnions(m.Schema, v, doc.Components.Schemas, key+" answer")
+			}
 		}
 
 		if a.filled+len(a.corrected) > before {
@@ -167,10 +170,9 @@ func loosen(s *schema) *schema {
 }
 
 // place is where in the document a merge stands: in what a client sent, which only shows what one client chose to send, or in what the server
-// answered; and at the top of a shared record, where a field the record lacks may be another kind of record answered in its place.
+// answered. A record answered in place of another kind is no worry here: a value of several kinds is a stated union, which the merge leaves be.
 type place struct {
 	sent bool
-	top  bool
 }
 
 // merge types the untyped places of to from what was sent or answered, and, in an answer, corrects to where the server sent what it says cannot
@@ -191,7 +193,12 @@ func (a *answerFill) merge(to, from *schema, components map[string]*schema, wher
 			to.Nullable = true
 			a.corrected = append(a.corrected, where+": the server sent null")
 		}
-		a.merge(components[name], from, components, name, place{sent: at.sent, top: true})
+		a.merge(components[name], from, components, name, place{sent: at.sent})
+		return
+	}
+	// a value of several kinds is stated, and each kind's record is filled where it is used on its own: the answers here are of every kind at
+	// once
+	if len(to.OneOf) > 0 {
 		return
 	}
 
@@ -214,7 +221,7 @@ func (a *answerFill) merge(to, from *schema, components map[string]*schema, wher
 	switch {
 	case to.Type == "object" && from.Type == "object":
 		// a field of a record the source leaves open, or of a body it hands on whole, is filled in, and one the source's record lacks is a
-		// correction, except where it may be another record's or is only what a client chose to send
+		// correction, except where it is only what a client chose to send
 		open := to.AdditionalProperties || len(to.Properties) == 0
 		for _, n := range slices.Sorted(maps.Keys(from.Properties)) {
 			if p, ok := to.Properties[n]; ok {
@@ -222,12 +229,8 @@ func (a *answerFill) merge(to, from *schema, components map[string]*schema, wher
 				continue
 			}
 
-			switch {
-			case at.sent && !open:
+			if at.sent && !open {
 				a.conflicts = append(a.conflicts, where+"."+n+": the client sends it, and the source does not show the server reading it")
-				continue
-			case at.top && !open:
-				a.conflicts = append(a.conflicts, where+"."+n+": the server sent it where the document has this record, which lacks it: another kind of record, or a field the record is missing")
 				continue
 			}
 
@@ -258,6 +261,45 @@ func (a *answerFill) merge(to, from *schema, components map[string]*schema, wher
 			who = "the client sends"
 		}
 		a.conflicts = append(a.conflicts, fmt.Sprintf("%s: the source says %s, %s %s", where, to.Type, who, from.Type))
+	}
+}
+
+// throughUnions merges each record an answer holds where the document has a union into the member the record's field names, which the merge
+// of every answer at once cannot do, as it sees the kinds together. A kind the union has no member for is listed.
+func (a *answerFill) throughUnions(to *schema, v any, components map[string]*schema, where string) {
+	if to == nil || v == nil {
+		return
+	}
+	if to.Ref != "" {
+		where = strings.TrimPrefix(to.Ref, "#/components/schemas/")
+		to = components[where]
+		if to == nil {
+			return
+		}
+	}
+
+	switch v := v.(type) {
+	case map[string]any:
+		if len(to.OneOf) > 0 && to.Discriminator != nil {
+			kind, isText := v[to.Discriminator.PropertyName].(string)
+			ref, ok := to.Discriminator.Mapping[kind]
+			if !isText || !ok {
+				a.conflicts = append(a.conflicts, fmt.Sprintf("%s: the server sent a %s of %q, which the union has no record for", where, to.Discriminator.PropertyName, kind))
+				return
+			}
+			member := &schema{Ref: ref}
+			a.merge(member, infer(v), components, where, place{})
+			a.throughUnions(member, v, components, where)
+			return
+		}
+		for _, n := range slices.Sorted(maps.Keys(to.Properties)) {
+			a.throughUnions(to.Properties[n], v[n], components, where+"."+n)
+		}
+
+	case []any:
+		for _, item := range v {
+			a.throughUnions(to.Items, item, components, where+"[]")
+		}
 	}
 }
 

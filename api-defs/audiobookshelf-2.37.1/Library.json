@@ -796,7 +796,7 @@
           "Type": "List",
           "NestedItem": {
             "Type": "Reference",
-            "ReferenceName": "LibraryGetUserPersonalizedShelvesAnswer"
+            "ReferenceName": "Shelf"
           }
         }
       },
@@ -3889,58 +3889,6 @@
       ]
     },
     {
-      "Name": "LibraryGetUserPersonalizedShelvesAnswer",
-      "Fields": [
-        {
-          "Name": "Entities",
-          "JsonName": "entities",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "Reference",
-              "ReferenceName": "LibraryItemMinified"
-            }
-          }
-        },
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Label",
-          "JsonName": "label",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "LabelStringKey",
-          "JsonName": "labelStringKey",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Total",
-          "JsonName": "total",
-          "Type": {
-            "Type": "Integer"
-          }
-        },
-        {
-          "Name": "Type",
-          "JsonName": "type",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        }
-      ]
-    },
-    {
       "Name": "LibraryGetUserPlaylistsForLibraryAnswer",
       "Fields": [
         {
@@ -4644,7 +4592,7 @@
           "Name": "TrackNumFromMeta",
           "JsonName": "trackNumFromMeta",
           "Type": {
-            "Type": "Any"
+            "Type": "Double"
           },
           "Nullable": true
         },
@@ -4661,8 +4609,64 @@
       "Name": "LibraryGetUserPlaylistsForLibraryAnswerResultsItemsLibraryItemMediaAudioFilesMetaTags",
       "Fields": [
         {
+          "Name": "TagAlbum",
+          "JsonName": "tagAlbum",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagAlbumArtist",
+          "JsonName": "tagAlbumArtist",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagArtist",
+          "JsonName": "tagArtist",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagComposer",
+          "JsonName": "tagComposer",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
           "Name": "TagEncoder",
           "JsonName": "tagEncoder",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagGenre",
+          "JsonName": "tagGenre",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagGrouping",
+          "JsonName": "tagGrouping",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagTitle",
+          "JsonName": "tagTitle",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagTrack",
+          "JsonName": "tagTrack",
           "Type": {
             "Type": "String"
           }
@@ -4927,7 +4931,7 @@
           "Name": "Description",
           "JsonName": "description",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           },
           "Nullable": true
         },
@@ -4935,7 +4939,7 @@
           "Name": "DescriptionPlain",
           "JsonName": "descriptionPlain",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           },
           "Nullable": true
         },
@@ -4960,7 +4964,7 @@
           "Name": "Isbn",
           "JsonName": "isbn",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           },
           "Nullable": true
         },
@@ -5035,7 +5039,7 @@
           "Name": "Subtitle",
           "JsonName": "subtitle",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           },
           "Nullable": true
         },
@@ -5292,7 +5296,7 @@
           "Name": "TrackNumFromMeta",
           "JsonName": "trackNumFromMeta",
           "Type": {
-            "Type": "Any"
+            "Type": "Double"
           },
           "Nullable": true
         },
@@ -5309,8 +5313,64 @@
       "Name": "LibraryGetUserPlaylistsForLibraryAnswerResultsItemsLibraryItemMediaTracksMetaTags",
       "Fields": [
         {
+          "Name": "TagAlbum",
+          "JsonName": "tagAlbum",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagAlbumArtist",
+          "JsonName": "tagAlbumArtist",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagArtist",
+          "JsonName": "tagArtist",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagComposer",
+          "JsonName": "tagComposer",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
           "Name": "TagEncoder",
           "JsonName": "tagEncoder",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagGenre",
+          "JsonName": "tagGenre",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagGrouping",
+          "JsonName": "tagGrouping",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagTitle",
+          "JsonName": "tagTitle",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagTrack",
+          "JsonName": "tagTrack",
           "Type": {
             "Type": "String"
           }
@@ -8984,6 +9044,38 @@
               "Type": "Any"
             }
           }
+        }
+      ]
+    },
+    {
+      "Name": "Shelf",
+      "SchemaName": "Shelf",
+      "Union": [
+        "ItemShelf",
+        "SeriesShelf",
+        "AuthorShelf"
+      ],
+      "Discriminator": "type",
+      "Members": [
+        {
+          "Model": "ItemShelf",
+          "Kinds": [
+            "book",
+            "episode",
+            "podcast"
+          ]
+        },
+        {
+          "Model": "SeriesShelf",
+          "Kinds": [
+            "series"
+          ]
+        },
+        {
+          "Model": "AuthorShelf",
+          "Kinds": [
+            "authors"
+          ]
         }
       ]
     }

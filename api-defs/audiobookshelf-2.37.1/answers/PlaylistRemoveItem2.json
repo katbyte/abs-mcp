@@ -188,6 +188,24 @@
         "libraryId": "d9204ade-9fe6-4681-99d9-26075fdeb94a",
         "name": "SDK Single Playlist",
         "userId": "e2682b5d-a1fb-4847-b7e2-39b7c7564f87"
+      },
+      {
+        "items": [
+          {
+            "libraryItem": {
+              "media": {
+                "metadata": {
+                  "genres": [
+                    "Science Fiction"
+                  ]
+                },
+                "tags": [
+                  "sdk"
+                ]
+              }
+            }
+          }
+        ]
       }
     ]
   }

@@ -2,11 +2,13 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -82,19 +84,40 @@ func TestSpec(t *testing.T) {
 		}
 	}
 
-	// a query value the code makes a number is one, and the length of a list from a call the scan cannot follow is a count
+	// a query value the code makes a number is one, a helper handed the query and a name reads it, and the length of a list from a call the
+	// scan cannot follow is a count
 	search := doc.Paths["/api/libraries/{id}/search"]["get"]
 	query := map[string]string{}
 	for _, p := range search.Parameters {
 		if p.In == "query" {
-			query[p.Name] = p.Schema.Type
+			query[p.Name] = cmp.Or(p.Schema.Type, p.Schema.Ref)
 		}
 	}
-	if want := map[string]string{"page": "integer", "limit": "integer", "near": "number", "q": "string"}; !maps.Equal(query, want) {
+	if want := map[string]string{"page": "integer", "limit": "integer", "near": "number", "q": "string", "kind": "string", "sort": "#/components/schemas/SessionSort"}; !maps.Equal(query, want) {
 		t.Errorf("search query: %v, want %v", query, want)
 	}
-	if total := search.Responses["200"].Content["application/json"].Schema.Properties["total"]; total == nil || total.Type != "integer" {
+	searched := search.Responses["200"].Content["application/json"].Schema
+	if total := searched.Properties["total"]; total == nil || total.Type != "integer" {
 		t.Errorf("search total: %+v, want a whole number", total)
+	}
+
+	// a value of the request checked against text written out takes those values, and so does an answer field only ever given codes, each set a
+	// record of its own named by the table; one value written out, or words for a person, is no set
+	if kind := doc.Paths["/api/libraries/{id}/notes"]["post"].RequestBody.Content["application/json"].Schema.Properties["mediaItemType"]; kind == nil || kind.Ref != "#/components/schemas/MediaItemType" {
+		t.Errorf("notes mediaItemType: %+v, want a set of values", kind)
+	}
+	if key := searched.Properties["stringKey"]; key == nil || key.Ref != "#/components/schemas/ChapterSearchErrorKey" || searched.Properties["note"].Ref != "" || searched.Properties["note"].Enum != nil {
+		t.Errorf("search stringKey: %+v, note %+v; want the two codes a set, and no set for words", key, searched.Properties["note"])
+	}
+	for name, want := range map[string][]string{"SessionSort": {"displayTitle", "timeListening"}, "MediaItemType": {"book", "podcastEpisode"}, "ChapterSearchErrorKey": {"MessageChaptersNotFound", "MessageInvalidAsin"}} {
+		if set := doc.Components.Schemas[name]; set == nil || set.Type != "string" || !slices.Equal(set.Enum, want) {
+			t.Errorf("%s: %+v, want %q", name, set, want)
+		}
+	}
+
+	// a 204 has no body, though the code sends one with sendStatus
+	if notes := doc.Paths["/api/libraries/{id}/notes"]["post"].Responses["204"]; notes.Description != "no content" || notes.Content != nil {
+		t.Errorf("notes 204: %+v, want no content", notes)
 	}
 
 	// a body used as a list is one, and what a list has of its own is not a field of it
@@ -107,7 +130,7 @@ func TestSpec(t *testing.T) {
 		t.Errorf("download: %+v, want a file", download.Responses)
 	}
 
-	for _, line := range []string{"Audiobookshelf 9.9.9: 13 routes, 14 operations", "answer a file", "/api/items/{id}/play/{episodeId}", "wrote " + filepath.Join(out, "audiobookshelf-openapi-9.9.9.json")} {
+	for _, line := range []string{"Audiobookshelf 9.9.9: 13 routes, 14 operations", "answer a file", "unions stated", "no operation for the union stated for GET /api/libraries/{id}/personalized", "/api/items/{id}/play/{episodeId}", "wrote " + filepath.Join(out, "audiobookshelf-openapi-9.9.9.json")} {
 		if !strings.Contains(report.String(), line) {
 			t.Errorf("report has no %q:\n%s", line, report.String())
 		}
@@ -249,6 +272,28 @@ func TestSpecFillsFromAnswers(t *testing.T) {
 	for _, line := range []string{"answers from " + saved + "   1 files: filled ", "corrected: GET /api/libraries/{id}/search answer.total: the server sent a fraction"} {
 		if !strings.Contains(report.String(), line) {
 			t.Errorf("report has no %q:\n%s", line, report.String())
+		}
+	}
+}
+
+// A fixed set of values is two or more codes a program compares against; one value written out is a default, and words for a person are no set.
+func TestCodes(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name   string
+		values []string
+		want   []string
+	}{
+		{"codes, sorted", []string{"podcastEpisode", "book"}, []string{"book", "podcastEpisode"}},
+		{"codes with dashes", []string{"recent-series", "continue-listening"}, []string{"continue-listening", "recent-series"}},
+		{"one value", []string{"book"}, nil},
+		{"words for a person", []string{"Library not found", "Media item not found"}, nil},
+		{"a code beside words", []string{"book", "Not a book"}, nil},
+		{"none", nil, nil},
+	} {
+		if got := codes(tt.values); !slices.Equal(got, tt.want) {
+			t.Errorf("%s: %q, want %q", tt.name, got, tt.want)
 		}
 	}
 }

@@ -7,6 +7,16 @@
       "OperationId": "SearchFindAuthor",
       "Method": "GET",
       "Path": "/api/search/authors",
+      "Options": [
+        {
+          "Name": "q",
+          "Field": "Q",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
       "Response": {
         "ContentType": "application/json",
         "Type": {
@@ -23,6 +33,40 @@
       "OperationId": "SearchFindBooks",
       "Method": "GET",
       "Path": "/api/search/books",
+      "Options": [
+        {
+          "Name": "author",
+          "Field": "Author",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "id",
+          "Field": "Id",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "provider",
+          "Field": "Provider",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "title",
+          "Field": "Title",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
       "Response": {
         "ContentType": "application/json",
         "Type": {
@@ -42,6 +86,24 @@
       "OperationId": "SearchFindChapters",
       "Method": "GET",
       "Path": "/api/search/chapters",
+      "Options": [
+        {
+          "Name": "asin",
+          "Field": "Asin",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "region",
+          "Field": "Region",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
       "Response": {
         "ContentType": "application/json",
         "Type": {
@@ -60,8 +122,32 @@
       "Path": "/api/search/covers",
       "Options": [
         {
+          "Name": "author",
+          "Field": "Author",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
           "Name": "podcast",
           "Field": "Podcast",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "provider",
+          "Field": "Provider",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "title",
+          "Field": "Title",
           "In": "Query",
           "Type": {
             "Type": "String"
@@ -84,6 +170,24 @@
       "OperationId": "SearchFindPodcasts",
       "Method": "GET",
       "Path": "/api/search/podcast",
+      "Options": [
+        {
+          "Name": "country",
+          "Field": "Country",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "term",
+          "Field": "Term",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
       "Response": {
         "ContentType": "application/json",
         "Type": {
@@ -434,7 +538,8 @@
           "Name": "StringKey",
           "JsonName": "stringKey",
           "Type": {
-            "Type": "String"
+            "Type": "Reference",
+            "ReferenceName": "ChapterSearchErrorKey"
           }
         }
       ]
@@ -703,6 +808,26 @@
           "Type": {
             "Type": "String"
           }
+        }
+      ]
+    }
+  ],
+  "Constants": [
+    {
+      "Name": "ChapterSearchErrorKey",
+      "SchemaName": "ChapterSearchErrorKey",
+      "Values": [
+        {
+          "Name": "ChapterSearchErrorKeyMessageChaptersNotFound",
+          "Value": "MessageChaptersNotFound"
+        },
+        {
+          "Name": "ChapterSearchErrorKeyMessageInvalidAsin",
+          "Value": "MessageInvalidAsin"
+        },
+        {
+          "Name": "ChapterSearchErrorKeyMessageInvalidRegion",
+          "Value": "MessageInvalidRegion"
         }
       ]
     }

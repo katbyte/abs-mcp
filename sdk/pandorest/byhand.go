@@ -554,7 +554,7 @@ func successJSON(op *operation) *schema {
 
 // untyped is whether a schema says nothing of what it holds.
 func untyped(s *schema) bool {
-	return s.Type == "" && s.Ref == "" && len(s.Properties) == 0 && s.Items == nil
+	return s.Type == "" && s.Ref == "" && len(s.Properties) == 0 && s.Items == nil && len(s.OneOf) == 0
 }
 
 // merge types the untyped places of to from the same places in from, following references into the records they name, once each.
@@ -570,6 +570,10 @@ func (b *byhand) merge(to, from *schema, components map[string]*schema, where st
 		}
 		b.visitedRef[name+"\x00"+fingerprint(from)] = true
 		b.merge(components[name], from, components, name)
+		return
+	}
+	// a value of several kinds is stated, and each kind's record is filled where it is used on its own
+	if len(to.OneOf) > 0 {
 		return
 	}
 
@@ -615,6 +619,11 @@ func clone(s *schema) *schema {
 
 	out := *s
 	out.Items = clone(s.Items)
+	out.Enum = slices.Clone(s.Enum)
+	out.OneOf = nil
+	for _, o := range s.OneOf {
+		out.OneOf = append(out.OneOf, clone(o))
+	}
 	if s.Properties != nil {
 		out.Properties = make(map[string]*schema, len(s.Properties))
 		for n, p := range s.Properties {

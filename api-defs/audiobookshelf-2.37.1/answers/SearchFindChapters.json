@@ -20,6 +20,10 @@
         "region": "us",
         "runtimeLengthMs": 31139210,
         "runtimeLengthSec": 31139
+      },
+      {
+        "error": "Invalid ASIN",
+        "stringKey": "MessageInvalidAsin"
       }
     ]
   }

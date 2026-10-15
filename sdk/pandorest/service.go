@@ -21,6 +21,12 @@ var services = []config.Service{{
 	// the document is this repository's own, so each operationId is chosen: the handler that answers it, LibraryGetLibraryItems
 	Naming: config.OperationIDNaming,
 	Auth:   "Bearer",
+	// what is Audiobookshelf's own about being talked to is sdk/abs/service.go, written by hand beside the generated files
+	ClientService: "service",
+	// New is worded for Audiobookshelf: its credential is an API key, or a user's token, sent as a bearer token
+	Credential: "API key",
+	NewDoc:     "New returns a client for the Audiobookshelf server at baseURL (scheme and host) that authenticates with an API key, made under\nSettings → Users → API Keys, or a user's token. The options are the base client's: client.WithLog to trace what is sent,\nclient.WithTransport to send it through a transport of the caller's own.",
+	Notes:      "Audiobookshelf writes its times as milliseconds since 1970, read here as dates, and counts the pages of a list from 0. Its ids are\nuuids, except on a server upgraded from an old version, which may still hold ids of an older form.",
 	// the ids that travel between calls are told apart by the compiler
 	IDs:   absIDs,
 	Plain: absPlainIDs,
@@ -28,6 +34,8 @@ var services = []config.Service{{
 	// answer sessions
 	Paging:  &config.Paging{Start: "page", Limit: "limit", Items: "results", Total: "total", ByPage: true, FirstPage: new(0)},
 	Pagings: []config.Paging{{Start: "page", Limit: "itemsPerPage", Items: "sessions", Total: "total", ByPage: true, FirstPage: new(0)}},
+	// a value of several kinds, such as a library's shelves, is a type that hands over the kind asked for, checked against the field that names it
+	TypedUnions: true,
 }}
 
 // fixes say what the document spec writes cannot: the source holds the value as a number and the server means a date by it.
@@ -44,8 +52,9 @@ func generation() pandorest.Config {
 // absIDs are the kinds of id that get a type of their own, so one passed where another belongs does not compile. Every id is text.
 var absIDs = []config.ID{
 	{Name: "LibraryID", Of: []string{"Library"}, Names: []string{"libraryId", "userDefaultLibraryId"}, Except: untypedIDs("libraryId")},
-	// a collection takes its books, and a feed is opened on a book, by the book's library item id
-	{Name: "LibraryItemID", Of: []string{"LibraryItem", "LibraryItemExpanded", "LibraryItemMinified"}, Names: []string{"libraryItemId", "libraryItemIds"}, In: []string{"DELETE /api/collections/{id}/book/{bookId} bookId", "POST /api/feeds/item/{itemId}/open itemId"}, Except: untypedIDs("libraryItemId", "libraryItemIds")},
+	// a collection takes its books, and a feed is opened on a book, by the book's library item id; a book or a show is read and changed by it
+	// under /api/items and /api/tools/item, whose answers are built route by route and name no record to find it by
+	{Name: "LibraryItemID", Of: []string{"LibraryItem", "LibraryItemExpanded", "LibraryItemMinified"}, Names: []string{"libraryItemId", "libraryItemIds"}, In: append([]string{"DELETE /api/collections/{id}/book/{bookId} bookId", "POST /api/feeds/item/{itemId}/open itemId"}, pathIDs("id", itemRoutes...)...), Except: untypedIDs("libraryItemId", "libraryItemIds")},
 	{Name: "AuthorID", Of: []string{"Author"}, Names: []string{"authorId"}},
 	// a library's series are under the library's own id
 	{Name: "SeriesID", Of: []string{"Series"}, Names: []string{"seriesId"}, Except: []string{"GET /api/libraries/{id}/series/{seriesId} id"}},
@@ -60,13 +69,54 @@ var absIDs = []config.ID{
 	{Name: "ProviderID", Of: []string{"CustomMetadataProviderRecord"}},
 }
 
+// itemRoutes are the routes that take a book or a show by its library item id as {id}, other than the one whose answer names the item.
+var itemRoutes = []string{
+	"DELETE /api/items/{id}",
+	"GET /api/items/{id}",
+	"POST /api/items/{id}/chapters",
+	"DELETE /api/items/{id}/cover",
+	"GET /api/items/{id}/cover",
+	"PATCH /api/items/{id}/cover",
+	"POST /api/items/{id}/cover",
+	"GET /api/items/{id}/download",
+	"GET /api/items/{id}/ebook",
+	"GET /api/items/{id}/ebook/{fileid}",
+	"PATCH /api/items/{id}/ebook/{fileid}/status",
+	"GET /api/items/{id}/ffprobe/{fileid}",
+	"DELETE /api/items/{id}/file/{fileid}",
+	"GET /api/items/{id}/file/{fileid}",
+	"GET /api/items/{id}/file/{fileid}/download",
+	"POST /api/items/{id}/match",
+	"PATCH /api/items/{id}/media",
+	"GET /api/items/{id}/metadata-object",
+	"POST /api/items/{id}/play",
+	"POST /api/items/{id}/play/{episodeId}",
+	"POST /api/items/{id}/scan",
+	"POST /api/tools/item/{id}/embed-metadata",
+	"DELETE /api/tools/item/{id}/encode-m4b",
+	"POST /api/tools/item/{id}/encode-m4b",
+}
+
+// pathIDs are the places of one path parameter in each of the routes, in the form an id kind's In takes.
+func pathIDs(param string, routes ...string) []string {
+	out := make([]string, 0, len(routes))
+	for _, r := range routes {
+		out = append(out, r+" "+param)
+	}
+
+	return out
+}
+
 // untypedByScan are the places an id is read or written that neither the source nor the answers the live suites saved can type, as the suites
 // never do what fills them: move a key to another user, collapse series, play a podcast episode, or sync a session played offline. pandorest
-// types no id that has no type, so each is left out of its kind until it has one.
+// types no id that has no type, so each is left out of its kind until it has one. A share's session is never given a user or an episode, so its
+// two are always empty.
 var untypedByScan = []string{
 	"ApiKeyUpdateRequest .userId",
 	"LibraryItemMinifiedCollapsedSeries .libraryItemIds",
 	"PlaybackSessionForClient .episodeId",
+	"SessionGetOpenSessionsAnswerShareSessions .episodeId",
+	"SessionGetOpenSessionsAnswerShareSessions .userId",
 	"SessionSyncLocalRequest .episodeId",
 	"SessionSyncLocalRequest .libraryId",
 	"SessionSyncLocalRequest .libraryItemId",

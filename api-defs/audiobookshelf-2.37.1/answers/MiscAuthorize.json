@@ -139,6 +139,17 @@
             "bc5ad08d-b2fe-402d-af4f-04846bf11cad"
           ]
         }
+      },
+      {
+        "user": {
+          "mediaProgress": [
+            {
+              "finishedAt": null,
+              "progress": 0.5
+            }
+          ],
+          "type": "root"
+        }
       }
     ]
   }

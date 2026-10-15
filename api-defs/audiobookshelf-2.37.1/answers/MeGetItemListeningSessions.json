@@ -1,0 +1,16 @@
+{
+  "operation": "MeGetItemListeningSessions",
+  "method": "GET",
+  "path": "/api/me/item/listening-sessions/{libraryItemId}/{episodeId}",
+  "answers": {
+    "200": [
+      {
+        "itemsPerPage": 10,
+        "numPages": 0,
+        "page": 0,
+        "sessions": [],
+        "total": 0
+      }
+    ]
+  }
+}

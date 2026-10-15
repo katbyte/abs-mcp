@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -70,6 +71,9 @@ type schema struct {
 	Items                *schema            `json:"items,omitempty"`
 	Properties           map[string]*schema `json:"properties,omitempty"`
 	AdditionalProperties bool               `json:"additionalProperties,omitempty"`
+	Enum                 []string           `json:"enum,omitempty"`
+	OneOf                []*schema          `json:"oneOf,omitempty"`
+	Discriminator        *discriminator     `json:"discriminator,omitempty"`
 
 	// whole is set on a number typed from answers that were all whole, which the hand-written client may settle as a whole number
 	whole bool
@@ -117,6 +121,10 @@ func spec(args []string, dir string, w io.Writer) error {
 	}
 
 	doc, b, routes := build(prog, version, *trace, w)
+	unplaced, err := applyUnions(doc, unions)
+	if err != nil {
+		return err
+	}
 
 	// what a real server answered fills what the source leaves untyped and corrects what it gets wrong, before anything else has a say
 	answerDir := cmp.Or(*answerFlag, answers.Dir(dir, version))
@@ -139,6 +147,11 @@ func spec(args []string, dir string, w io.Writer) error {
 		hand.fill(doc)
 	}
 
+	// once the answers and the client have had their say, each fixed set of values becomes a record of its own, for a type of constants
+	if err := nameEnums(doc, enumNames); err != nil {
+		return err
+	}
+
 	rep := measure(doc, b, routes)
 
 	js, err := json.MarshalIndent(doc, "", "  ")
@@ -156,6 +169,10 @@ func spec(args []string, dir string, w io.Writer) error {
 	}
 
 	rep.write(w, version, *verbose)
+	_, _ = fmt.Fprintf(w, "  unions stated        %4d   %d written\n", len(unions), len(unions)-len(unplaced))
+	for _, u := range unplaced {
+		_, _ = fmt.Fprintln(w, "  no operation for the union stated for", u)
+	}
 	if heard != nil {
 		heard.write(w, answerDir, *verbose)
 	}
@@ -254,14 +271,20 @@ func (b *builder) operation(r *route, params []string, ans *answer, req *reqInfo
 		op.Parameters = append(op.Parameters, parameter{Name: n, In: "path", Required: true, Schema: &schema{Type: "string"}})
 	}
 	for _, n := range req.query {
-		t := cmp.Or(req.numbers[n], "string")
-		op.Parameters = append(op.Parameters, parameter{Name: n, In: "query", Schema: &schema{Type: t}})
+		s := &schema{Type: cmp.Or(req.numbers[n], "string")}
+		if s.Type == "string" {
+			s.Enum = codes(req.values["query "+n])
+		}
+		op.Parameters = append(op.Parameters, parameter{Name: n, In: "query", Schema: s})
 	}
 
 	if r.verb != "get" && (len(req.body) > 0 || req.bodyWhole || req.bodyList || len(req.files) > 0) {
 		props := map[string]*schema{}
 		for _, n := range req.body {
 			props[n] = &schema{}
+			if values := codes(req.values["body "+n]); values != nil {
+				props[n] = &schema{Type: "string", Enum: values}
+			}
 		}
 		switch {
 		case len(req.files) > 0:
@@ -282,6 +305,9 @@ func (b *builder) operation(r *route, params []string, ans *answer, req *reqInfo
 		switch t := ans.json[n]; {
 		case t != nil:
 			op.Responses[code] = response{Description: "JSON", Content: map[string]media{"application/json": {Schema: b.schemaOf(t)}}}
+		// a 204 carries no body, whatever the code that sends it writes
+		case n == http.StatusNoContent:
+			op.Responses[code] = response{Description: "no content"}
 		case n < 300 && (ans.text[n] || ans.status[n]):
 			op.Responses[code] = response{Description: "text", Content: map[string]media{"text/plain": {Schema: &schema{Type: "string"}}}}
 		default:
@@ -305,6 +331,19 @@ func (b *builder) operation(r *route, params []string, ans *answer, req *reqInfo
 	return op
 }
 
+// code is a value a program compares against, such as 'podcastEpisode' or 'continue-listening', rather than words for a person to read.
+var code = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]*$`)
+
+// codes are the values a text is seen to take, when they are a fixed set a program tells apart: two or more, every one a code. One value
+// written out is a default or an example rather than a set, and words for a person to read are no set at all; nil for either.
+func codes(values []string) []string {
+	if len(values) < 2 || slices.ContainsFunc(values, func(v string) bool { return !code.MatchString(v) }) {
+		return nil
+	}
+
+	return slices.Sorted(slices.Values(values))
+}
+
 // schemaOf is a type as OpenAPI writes it. A record with a name is written once under components and referred to.
 func (b *builder) schemaOf(t *jsType) *schema {
 	if t == nil {
@@ -314,7 +353,7 @@ func (b *builder) schemaOf(t *jsType) *schema {
 	var s *schema
 	switch t.kind {
 	case stringKind:
-		s = &schema{Type: "string"}
+		s = &schema{Type: "string", Enum: codes(t.literals)}
 	case dateKind:
 		s = &schema{Type: "string", Format: "date-time"}
 	case integerKind:
@@ -325,6 +364,8 @@ func (b *builder) schemaOf(t *jsType) *schema {
 		s = &schema{Type: "boolean"}
 	case arrayKind:
 		s = &schema{Type: "array", Items: b.schemaOf(t.elem)}
+		// a list written out, as the 'the' and 'a' of the sorting prefixes, is data rather than the values one text may take
+		s.Items.Enum = nil
 	case objectKind:
 		s = b.objectSchema(t)
 	case instanceKind:
@@ -552,6 +593,14 @@ func (b *builder) count(s *schema, seen map[string]bool) (all, gaps int) {
 			return b.count(t, seen)
 		}
 		return 1, 1
+	}
+	for _, o := range s.OneOf {
+		a, g := b.count(o, seen)
+		all += a
+		gaps += g
+	}
+	if len(s.OneOf) > 0 {
+		return all, gaps
 	}
 
 	switch s.Type {

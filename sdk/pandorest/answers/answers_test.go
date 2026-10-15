@@ -22,8 +22,9 @@ const fakeDocument = `{"paths": {
   "/api/libraries/{id}/items": {"get": {"operationId": "LibraryGetLibraryItems"}},
   "/api/libraries/{id}/{part}": {"get": {"operationId": "LibraryGetPart"}},
   "/api/me": {"get": {"operationId": "MeGetMe"}},
-  "/api/me/stats": {"get": {"operationId": "MeGetStats"}}
-}}`
+  "/api/me/stats": {"get": {"operationId": "MeGetStats"}},
+  "/api/shelves": {"get": {"operationId": "LibraryGetShelves"}}
+}, "components": {"schemas": {"Shelf": {"oneOf": [], "discriminator": {"propertyName": "type"}}}}}`
 
 // fakeServer answers as Audiobookshelf would, with what each test asks of it in answers, by path.
 func fakeServer(t *testing.T, answers map[string]string) *httptest.Server {
@@ -64,10 +65,7 @@ func fakeRoot(t *testing.T) string {
 
 // recording is a client whose exchanges r records.
 func recording(r *Recorder) *http.Client {
-	var o httpc.Options
-	r.Option()(&o)
-
-	return &http.Client{Transport: o.Base}
+	return &http.Client{Transport: r.Transport()}
 }
 
 func call(t *testing.T, c *http.Client, method, url, body string) string {
@@ -293,7 +291,7 @@ func TestOpenRefusesAVersionWithNoDocument(t *testing.T) {
 	}
 }
 
-func TestOptionOfNoRecorderChangesNothing(t *testing.T) {
+func TestNoRecorderChangesNoClient(t *testing.T) {
 	t.Parallel()
 
 	var r *Recorder
@@ -301,6 +299,9 @@ func TestOptionOfNoRecorderChangesNothing(t *testing.T) {
 	r.Option()(&o)
 	if o.Base != nil {
 		t.Errorf("Base = %v, want it left as it was", o.Base)
+	}
+	if rt := r.Transport(); rt != nil {
+		t.Errorf("Transport = %v, want none", rt)
 	}
 }
 
@@ -347,5 +348,39 @@ func TestReadOfNoFolderIsNone(t *testing.T) {
 	files, err := Read(filepath.Join(t.TempDir(), "not-there"))
 	if err != nil || files != nil {
 		t.Errorf("Read = %v, %v, want none and no error", files, err)
+	}
+}
+
+// A record keeps the field that says which of a union's records it is with any part of it kept, within one answer and across them, so the
+// part is put with its kind when the document is filled.
+func TestRecorderKeepsAKind(t *testing.T) {
+	t.Parallel()
+
+	answers := map[string]string{"/api/shelves": `[{"type": "book", "id": "a", "entities": [{"id": "1"}]}, {"type": "series", "id": "b", "entities": [{"id": "2", "books": []}]}]`}
+	srv := fakeServer(t, answers)
+	root := fakeRoot(t)
+
+	rec, err := Open(t.Context(), srv.URL, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	call(t, recording(rec), http.MethodGet, srv.URL+"/api/shelves", "")
+	answers["/api/shelves"] = `[{"type": "authors", "id": "c", "entities": [{"id": "3", "numBooks": 2}]}]`
+	call(t, recording(rec), http.MethodGet, srv.URL+"/api/shelves", "")
+	if err := rec.Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	kept := readFile(t, root, "LibraryGetShelves").Answers["200"]
+	if len(kept) != 2 {
+		t.Fatalf("answers kept: %v, want both", kept)
+	}
+	series := object(t, list(t, kept[0])[1])
+	if series["type"] != "series" || series["id"] != nil {
+		t.Errorf("the second shelf of an answer kept as %v, want its new part with its type, and not what the first showed", series)
+	}
+	authors := object(t, list(t, kept[1])[0])
+	if authors["type"] != "authors" || authors["id"] != nil {
+		t.Errorf("a shelf of a later answer kept as %v, want its new part with its type", authors)
 	}
 }

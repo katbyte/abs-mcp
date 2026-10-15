@@ -2284,8 +2284,64 @@
       "Name": "PlaylistItemsLibraryItemMediaAudioFilesMetaTags",
       "Fields": [
         {
+          "Name": "TagAlbum",
+          "JsonName": "tagAlbum",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagAlbumArtist",
+          "JsonName": "tagAlbumArtist",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagArtist",
+          "JsonName": "tagArtist",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagComposer",
+          "JsonName": "tagComposer",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
           "Name": "TagEncoder",
           "JsonName": "tagEncoder",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagGenre",
+          "JsonName": "tagGenre",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagGrouping",
+          "JsonName": "tagGrouping",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagTitle",
+          "JsonName": "tagTitle",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagTrack",
+          "JsonName": "tagTrack",
           "Type": {
             "Type": "String"
           }
@@ -3732,7 +3788,7 @@
           "Name": "TrackNumFromMeta",
           "JsonName": "trackNumFromMeta",
           "Type": {
-            "Type": "Any"
+            "Type": "Double"
           },
           "Nullable": true
         },
@@ -3749,8 +3805,64 @@
       "Name": "PlaylistItemsLibraryItemMediaTracksMetaTags",
       "Fields": [
         {
+          "Name": "TagAlbum",
+          "JsonName": "tagAlbum",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagAlbumArtist",
+          "JsonName": "tagAlbumArtist",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagArtist",
+          "JsonName": "tagArtist",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagComposer",
+          "JsonName": "tagComposer",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
           "Name": "TagEncoder",
           "JsonName": "tagEncoder",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagGenre",
+          "JsonName": "tagGenre",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagGrouping",
+          "JsonName": "tagGrouping",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagTitle",
+          "JsonName": "tagTitle",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagTrack",
+          "JsonName": "tagTrack",
           "Type": {
             "Type": "String"
           }

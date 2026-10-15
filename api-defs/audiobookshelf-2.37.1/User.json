@@ -631,7 +631,8 @@
           "JsonName": "mediaPlayer",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "MediaType",
@@ -645,7 +646,8 @@
           "JsonName": "playMethod",
           "Type": {
             "Type": "Integer"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "ServerVersion",
@@ -689,7 +691,8 @@
           "JsonName": "timeListening",
           "Type": {
             "Type": "Double"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "UpdatedAt",
@@ -841,7 +844,7 @@
           "Name": "Asin",
           "JsonName": "asin",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           },
           "Nullable": true
         },
@@ -860,7 +863,7 @@
           "Name": "Description",
           "JsonName": "description",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           },
           "Nullable": true
         },
@@ -885,7 +888,7 @@
           "Name": "Isbn",
           "JsonName": "isbn",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           },
           "Nullable": true
         },
@@ -946,7 +949,7 @@
           "Name": "Subtitle",
           "JsonName": "subtitle",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           },
           "Nullable": true
         },
@@ -1132,6 +1135,17 @@
           }
         },
         {
+          "Name": "Chapters",
+          "JsonName": "chapters",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "UserGetOnlineUsersAnswerOpenSessionsChapters"
+            }
+          }
+        },
+        {
           "Name": "CoverPath",
           "JsonName": "coverPath",
           "Type": {
@@ -1165,8 +1179,7 @@
           "Type": {
             "Type": "Reference",
             "ReferenceName": "UserGetOnlineUsersAnswerOpenSessionsDeviceInfo"
-          },
-          "Nullable": true
+          }
         },
         {
           "Name": "DisplayAuthor",
@@ -1195,7 +1208,8 @@
           "Type": {
             "Type": "ID",
             "ReferenceName": "EpisodeID"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Id",
@@ -1224,7 +1238,8 @@
           "Name": "MediaMetadata",
           "JsonName": "mediaMetadata",
           "Type": {
-            "Type": "Any"
+            "Type": "Reference",
+            "ReferenceName": "UserGetOnlineUsersAnswerOpenSessionsMediaMetadata"
           }
         },
         {
@@ -1298,6 +1313,39 @@
           "Type": {
             "Type": "ID",
             "ReferenceName": "UserID"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserGetOnlineUsersAnswerOpenSessionsChapters",
+      "Fields": [
+        {
+          "Name": "End",
+          "JsonName": "end",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Start",
+          "JsonName": "start",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
           }
         }
       ]
@@ -1399,6 +1447,191 @@
         {
           "Name": "SdkVersion",
           "JsonName": "sdkVersion",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "UserId",
+          "JsonName": "userId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "UserID"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserGetOnlineUsersAnswerOpenSessionsMediaMetadata",
+      "Fields": [
+        {
+          "Name": "Abridged",
+          "JsonName": "abridged",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Asin",
+          "JsonName": "asin",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Authors",
+          "JsonName": "authors",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "UserGetOnlineUsersAnswerOpenSessionsMediaMetadataAuthors"
+            }
+          }
+        },
+        {
+          "Name": "Description",
+          "JsonName": "description",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Explicit",
+          "JsonName": "explicit",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Genres",
+          "JsonName": "genres",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "Isbn",
+          "JsonName": "isbn",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Language",
+          "JsonName": "language",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Narrators",
+          "JsonName": "narrators",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "PublishedDate",
+          "JsonName": "publishedDate",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "PublishedYear",
+          "JsonName": "publishedYear",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Publisher",
+          "JsonName": "publisher",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Series",
+          "JsonName": "series",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "UserGetOnlineUsersAnswerOpenSessionsMediaMetadataSeries"
+            }
+          }
+        },
+        {
+          "Name": "Subtitle",
+          "JsonName": "subtitle",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserGetOnlineUsersAnswerOpenSessionsMediaMetadataAuthors",
+      "Fields": [
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "UserGetOnlineUsersAnswerOpenSessionsMediaMetadataSeries",
+      "Fields": [
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Sequence",
+          "JsonName": "sequence",
           "Type": {
             "Type": "String"
           }

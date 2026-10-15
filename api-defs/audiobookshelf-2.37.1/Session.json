@@ -113,7 +113,8 @@
           "Field": "Sort",
           "In": "Query",
           "Type": {
-            "Type": "String"
+            "Type": "Reference",
+            "ReferenceName": "SessionSort"
           }
         },
         {
@@ -372,6 +373,16 @@
       "Name": "SessionGetAllWithUserDataAnswerSessions",
       "Fields": [
         {
+          "Name": "AudioTracks",
+          "JsonName": "audioTracks",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
           "Name": "BookId",
           "JsonName": "bookId",
           "Type": {
@@ -391,6 +402,14 @@
               }
             }
           }
+        },
+        {
+          "Name": "CoverAspectRatio",
+          "JsonName": "coverAspectRatio",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
         },
         {
           "Name": "CoverPath",
@@ -474,6 +493,13 @@
           "Nullable": true
         },
         {
+          "Name": "LastSave",
+          "JsonName": "lastSave",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
           "Name": "LibraryId",
           "JsonName": "libraryId",
           "Type": {
@@ -492,10 +518,19 @@
           "Nullable": true
         },
         {
+          "Name": "MediaItemShareId",
+          "JsonName": "mediaItemShareId",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
           "Name": "MediaMetadata",
           "JsonName": "mediaMetadata",
           "Type": {
-            "Type": "Any"
+            "Type": "Reference",
+            "ReferenceName": "SessionGetAllWithUserDataAnswerSessionsMediaMetadata"
           },
           "Nullable": true
         },
@@ -532,6 +567,14 @@
           "Nullable": true
         },
         {
+          "Name": "ShareSessionId",
+          "JsonName": "shareSessionId",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
           "Name": "StartTime",
           "JsonName": "startTime",
           "Type": {
@@ -544,6 +587,14 @@
           "JsonName": "startedAt",
           "Type": {
             "Type": "UnixMillis"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Stream",
+          "JsonName": "stream",
+          "Type": {
+            "Type": "Any"
           },
           "Nullable": true
         },
@@ -579,6 +630,183 @@
             "ReferenceName": "UserID"
           },
           "Nullable": true
+        }
+      ]
+    },
+    {
+      "Name": "SessionGetAllWithUserDataAnswerSessionsMediaMetadata",
+      "Fields": [
+        {
+          "Name": "Abridged",
+          "JsonName": "abridged",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Asin",
+          "JsonName": "asin",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Authors",
+          "JsonName": "authors",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "SessionGetAllWithUserDataAnswerSessionsMediaMetadataAuthors"
+            }
+          }
+        },
+        {
+          "Name": "Description",
+          "JsonName": "description",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Explicit",
+          "JsonName": "explicit",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Genres",
+          "JsonName": "genres",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "Isbn",
+          "JsonName": "isbn",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Language",
+          "JsonName": "language",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Narrators",
+          "JsonName": "narrators",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "PublishedDate",
+          "JsonName": "publishedDate",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "PublishedYear",
+          "JsonName": "publishedYear",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Publisher",
+          "JsonName": "publisher",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Series",
+          "JsonName": "series",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "SessionGetAllWithUserDataAnswerSessionsMediaMetadataSeries"
+            }
+          }
+        },
+        {
+          "Name": "Subtitle",
+          "JsonName": "subtitle",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "SessionGetAllWithUserDataAnswerSessionsMediaMetadataAuthors",
+      "Fields": [
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "SessionGetAllWithUserDataAnswerSessionsMediaMetadataSeries",
+      "Fields": [
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Sequence",
+          "JsonName": "sequence",
+          "Type": {
+            "Type": "String"
+          }
         }
       ]
     },
@@ -639,7 +867,8 @@
           "JsonName": "coverPath",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "CurrentTime",
@@ -1007,7 +1236,8 @@
           "JsonName": "trackNumFromMeta",
           "Type": {
             "Type": "Double"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "UpdatedAt",
@@ -1029,8 +1259,36 @@
           }
         },
         {
+          "Name": "TagAlbumArtist",
+          "JsonName": "tagAlbumArtist",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagArtist",
+          "JsonName": "tagArtist",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagComposer",
+          "JsonName": "tagComposer",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
           "Name": "TagEncoder",
           "JsonName": "tagEncoder",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagGenre",
+          "JsonName": "tagGenre",
           "Type": {
             "Type": "String"
           }
@@ -1570,7 +1828,8 @@
           "JsonName": "coverPath",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Duration",
@@ -1833,7 +2092,8 @@
           "JsonName": "trackNumFromMeta",
           "Type": {
             "Type": "Double"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "UpdatedAt",
@@ -1855,8 +2115,36 @@
           }
         },
         {
+          "Name": "TagAlbumArtist",
+          "JsonName": "tagAlbumArtist",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagArtist",
+          "JsonName": "tagArtist",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagComposer",
+          "JsonName": "tagComposer",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
           "Name": "TagEncoder",
           "JsonName": "tagEncoder",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagGenre",
+          "JsonName": "tagGenre",
           "Type": {
             "Type": "String"
           }
@@ -1993,7 +2281,8 @@
           "JsonName": "asin",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "AuthorName",
@@ -2025,14 +2314,16 @@
           "JsonName": "description",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "DescriptionPlain",
           "JsonName": "descriptionPlain",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Explicit",
@@ -2056,14 +2347,16 @@
           "JsonName": "isbn",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Language",
           "JsonName": "language",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "NarratorName",
@@ -2095,14 +2388,16 @@
           "JsonName": "publishedYear",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Publisher",
           "JsonName": "publisher",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Series",
@@ -2127,7 +2422,8 @@
           "JsonName": "subtitle",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Title",
@@ -2383,7 +2679,8 @@
           "JsonName": "trackNumFromMeta",
           "Type": {
             "Type": "Double"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "UpdatedAt",
@@ -2405,8 +2702,36 @@
           }
         },
         {
+          "Name": "TagAlbumArtist",
+          "JsonName": "tagAlbumArtist",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagArtist",
+          "JsonName": "tagArtist",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagComposer",
+          "JsonName": "tagComposer",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
           "Name": "TagEncoder",
           "JsonName": "tagEncoder",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "TagGenre",
+          "JsonName": "tagGenre",
           "Type": {
             "Type": "String"
           }
@@ -2510,7 +2835,8 @@
           "JsonName": "asin",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Authors",
@@ -2528,7 +2854,8 @@
           "JsonName": "description",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Explicit",
@@ -2552,14 +2879,16 @@
           "JsonName": "isbn",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Language",
           "JsonName": "language",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Narrators",
@@ -2584,14 +2913,16 @@
           "JsonName": "publishedYear",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Publisher",
           "JsonName": "publisher",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Series",
@@ -2609,7 +2940,8 @@
           "JsonName": "subtitle",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Title",
@@ -2704,7 +3036,8 @@
           "Type": {
             "Type": "List",
             "NestedItem": {
-              "Type": "Any"
+              "Type": "Reference",
+              "ReferenceName": "SessionGetOpenSessionsAnswerShareSessions"
             }
           }
         }
@@ -2726,7 +3059,8 @@
           "Type": {
             "Type": "List",
             "NestedItem": {
-              "Type": "Any"
+              "Type": "Reference",
+              "ReferenceName": "SessionGetOpenSessionsAnswerSessionsChapters"
             }
           }
         },
@@ -2904,6 +3238,39 @@
       ]
     },
     {
+      "Name": "SessionGetOpenSessionsAnswerSessionsChapters",
+      "Fields": [
+        {
+          "Name": "End",
+          "JsonName": "end",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Start",
+          "JsonName": "start",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
       "Name": "SessionGetOpenSessionsAnswerSessionsDeviceInfo",
       "Fields": [
         {
@@ -3028,7 +3395,7 @@
           "Name": "Asin",
           "JsonName": "asin",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           },
           "Nullable": true
         },
@@ -3047,7 +3414,7 @@
           "Name": "Description",
           "JsonName": "description",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           },
           "Nullable": true
         },
@@ -3072,7 +3439,7 @@
           "Name": "Isbn",
           "JsonName": "isbn",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           },
           "Nullable": true
         },
@@ -3081,7 +3448,8 @@
           "JsonName": "language",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Narrators",
@@ -3106,14 +3474,16 @@
           "JsonName": "publishedYear",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Publisher",
           "JsonName": "publisher",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Nullable": true
         },
         {
           "Name": "Series",
@@ -3130,7 +3500,7 @@
           "Name": "Subtitle",
           "JsonName": "subtitle",
           "Type": {
-            "Type": "Any"
+            "Type": "String"
           },
           "Nullable": true
         },
@@ -3205,6 +3575,439 @@
             "Type": "String"
           },
           "Nullable": true
+        }
+      ]
+    },
+    {
+      "Name": "SessionGetOpenSessionsAnswerShareSessions",
+      "Fields": [
+        {
+          "Name": "BookId",
+          "JsonName": "bookId",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Chapters",
+          "JsonName": "chapters",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "SessionGetOpenSessionsAnswerShareSessionsChapters"
+            }
+          }
+        },
+        {
+          "Name": "CoverPath",
+          "JsonName": "coverPath",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "CurrentTime",
+          "JsonName": "currentTime",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Date",
+          "JsonName": "date",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DayOfWeek",
+          "JsonName": "dayOfWeek",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DeviceInfo",
+          "JsonName": "deviceInfo",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "SessionGetOpenSessionsAnswerShareSessionsDeviceInfo"
+          }
+        },
+        {
+          "Name": "DisplayAuthor",
+          "JsonName": "displayAuthor",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DisplayTitle",
+          "JsonName": "displayTitle",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Duration",
+          "JsonName": "duration",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "EpisodeId",
+          "JsonName": "episodeId",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "LibraryId",
+          "JsonName": "libraryId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryID"
+          }
+        },
+        {
+          "Name": "LibraryItemId",
+          "JsonName": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        },
+        {
+          "Name": "MediaMetadata",
+          "JsonName": "mediaMetadata",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "SessionGetOpenSessionsAnswerShareSessionsMediaMetadata"
+          }
+        },
+        {
+          "Name": "MediaPlayer",
+          "JsonName": "mediaPlayer",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "MediaType",
+          "JsonName": "mediaType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "PlayMethod",
+          "JsonName": "playMethod",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "ServerVersion",
+          "JsonName": "serverVersion",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "StartTime",
+          "JsonName": "startTime",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "StartedAt",
+          "JsonName": "startedAt",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "TimeListening",
+          "JsonName": "timeListening",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "UpdatedAt",
+          "JsonName": "updatedAt",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "UserId",
+          "JsonName": "userId",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        }
+      ]
+    },
+    {
+      "Name": "SessionGetOpenSessionsAnswerShareSessionsChapters",
+      "Fields": [
+        {
+          "Name": "End",
+          "JsonName": "end",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Start",
+          "JsonName": "start",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "SessionGetOpenSessionsAnswerShareSessionsDeviceInfo",
+      "Fields": [
+        {
+          "Name": "ClientName",
+          "JsonName": "clientName",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "ClientVersion",
+          "JsonName": "clientVersion",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DeviceId",
+          "JsonName": "deviceId",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "IpAddress",
+          "JsonName": "ipAddress",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "SessionGetOpenSessionsAnswerShareSessionsMediaMetadata",
+      "Fields": [
+        {
+          "Name": "Abridged",
+          "JsonName": "abridged",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Asin",
+          "JsonName": "asin",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Authors",
+          "JsonName": "authors",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "SessionGetOpenSessionsAnswerShareSessionsMediaMetadataAuthors"
+            }
+          }
+        },
+        {
+          "Name": "Description",
+          "JsonName": "description",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Explicit",
+          "JsonName": "explicit",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Genres",
+          "JsonName": "genres",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "Isbn",
+          "JsonName": "isbn",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Language",
+          "JsonName": "language",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Narrators",
+          "JsonName": "narrators",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "PublishedDate",
+          "JsonName": "publishedDate",
+          "Type": {
+            "Type": "Any"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "PublishedYear",
+          "JsonName": "publishedYear",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Publisher",
+          "JsonName": "publisher",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Series",
+          "JsonName": "series",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "SessionGetOpenSessionsAnswerShareSessionsMediaMetadataSeries"
+            }
+          }
+        },
+        {
+          "Name": "Subtitle",
+          "JsonName": "subtitle",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "SessionGetOpenSessionsAnswerShareSessionsMediaMetadataAuthors",
+      "Fields": [
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "SessionGetOpenSessionsAnswerShareSessionsMediaMetadataSeries",
+      "Fields": [
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Sequence",
+          "JsonName": "sequence",
+          "Type": {
+            "Type": "String"
+          }
         }
       ]
     },
@@ -3388,6 +4191,46 @@
           "Type": {
             "Type": "Double"
           }
+        }
+      ]
+    }
+  ],
+  "Constants": [
+    {
+      "Name": "SessionSort",
+      "SchemaName": "SessionSort",
+      "Values": [
+        {
+          "Name": "SessionSortCreatedAt",
+          "Value": "createdAt"
+        },
+        {
+          "Name": "SessionSortCurrentTime",
+          "Value": "currentTime"
+        },
+        {
+          "Name": "SessionSortDisplayTitle",
+          "Value": "displayTitle"
+        },
+        {
+          "Name": "SessionSortDuration",
+          "Value": "duration"
+        },
+        {
+          "Name": "SessionSortPlayMethod",
+          "Value": "playMethod"
+        },
+        {
+          "Name": "SessionSortStartTime",
+          "Value": "startTime"
+        },
+        {
+          "Name": "SessionSortTimeListening",
+          "Value": "timeListening"
+        },
+        {
+          "Name": "SessionSortUpdatedAt",
+          "Value": "updatedAt"
         }
       ]
     }

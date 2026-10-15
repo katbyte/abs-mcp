@@ -1,3 +1,7 @@
+## v0.11.0 (2026-10-14)
+
+- **The client is on go-kt v0.8.0, where chttp is now httpc.** Nothing about it changes, but a repository that takes go-kt v0.8.0 needs this release for the client to compile, so pandorest moves first and the generated packages follow.
+
 ## v0.10.0 (2026-10-14)
 
 - **A service whose pages count from 0 can say so.** `FirstPage: new(0)` beside `ByPage` in a paging shape starts the pager at page 0 and counts the pages loaded from there. Unset is 1, as before.

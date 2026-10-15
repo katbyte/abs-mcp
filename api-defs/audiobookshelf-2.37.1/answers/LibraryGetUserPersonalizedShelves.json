@@ -8,68 +8,62 @@
         {
           "entities": [
             {
-              "addedAt": 1792029519622,
-              "birthtimeMs": 1792029512301,
-              "ctimeMs": 1792029514481,
-              "folderId": "2599fce3-0201-4289-8106-f2cfb98fb689",
-              "id": "b34f34e3-d453-4057-9026-3d896b95772b",
-              "ino": "1462917",
+              "addedAt": 1792081951651,
+              "birthtimeMs": 1792081940881,
+              "ctimeMs": 1792081942857,
+              "folderId": "1c45f52e-1e8b-40cc-92ea-8a6dab57389c",
+              "id": "4082b652-27e7-4238-a4cb-9949a40d71b5",
+              "ino": "1504076",
               "isFile": false,
               "isInvalid": false,
               "isMissing": false,
-              "libraryId": "d9204ade-9fe6-4681-99d9-26075fdeb94a",
+              "libraryId": "381af3e9-3949-4552-b0af-71b7ec68db10",
               "media": {
-                "coverPath": "/metadata/items/b34f34e3-d453-4057-9026-3d896b95772b/cover.jpg",
+                "coverPath": "/metadata/items/4082b652-27e7-4238-a4cb-9949a40d71b5/cover.jpg",
                 "duration": 1,
-                "ebookFormat": "epub",
-                "id": "b6393647-abc1-4ae0-94b6-89a4dc4975e2",
+                "id": "8fce5464-b10b-4a1f-bfa9-22647b9abb99",
                 "metadata": {
                   "abridged": false,
-                  "asin": "B0BV7MGYFH",
+                  "asin": null,
                   "authorName": "Isaac Asimov",
                   "authorNameLF": "Asimov, Isaac",
-                  "description": "<p><b><i>Segunda Fundación</i></b><b> es el quinto volumen del «Ciclo de la Fundación», pero también es el cierre de la original «Trilogía de la Fundación» o «Ciclo de Trántor», que puede leerse independientemente y que fue galardonada con el Premio Hugo a la mejor serie de ciencia ficción de todos los tiempos.</b></p> <p>La Fundación yace en ruinas, arrasada por la inteligencia mutante del Mulo. Sin embargo, se rumorea que Hari Seldon, el científico que lo inició todo, ha establecido una Segunda Fundación al otro lado de la galaxia, cuya ubicación exacta es un secreto guardado desde hace tiempo. Obligada a revelar su existencia, la Segunda Fundación deberá enfrentarse a la voluntad destructora del Mulo, con el añadido de que los supervivientes de la Primera Fundación también quieren acabar con ella…</p> <p>«Un talento de proporciones cósmicas».<br /> <i>Chicago Tribune</i></p> <p><b>Please note: This audiobook is in Spanish.</b></p>",
+                  "description": null,
                   "explicit": false,
                   "genres": [
-                    "SDK Genre"
+                    "Sweep"
                   ],
-                  "isbn": "9788466371452",
-                  "language": "Spanish",
-                  "narratorName": "SDK Narrator",
+                  "isbn": null,
+                  "language": null,
+                  "narratorName": "SDK Reader",
                   "publishedDate": null,
-                  "publishedYear": "2023",
-                  "publisher": "Penguin Random House Audio",
-                  "series": {
-                    "id": "21a8b758-65da-4d6d-8987-1f913eba0054",
-                    "name": "SDK Series",
-                    "sequence": "5"
-                  },
-                  "seriesName": "",
-                  "subtitle": "Ciclo de la Fundación 5 [Foundation Cycle, Book 5]",
-                  "title": "Foundation",
-                  "titleIgnorePrefix": "Foundation"
+                  "publishedYear": null,
+                  "publisher": null,
+                  "seriesName": "SDK Series #1",
+                  "subtitle": null,
+                  "title": "Second Foundation",
+                  "titleIgnorePrefix": "Second Foundation"
                 },
                 "numAudioFiles": 1,
                 "numChapters": 0,
                 "numTracks": 1,
-                "size": 5160,
+                "size": 4386,
                 "tags": [
                   "sdk"
                 ]
               },
               "mediaType": "book",
-              "mtimeMs": 1792029512865,
-              "numFiles": 2,
+              "mtimeMs": 1792081940909,
+              "numFiles": 1,
               "oldLibraryItemId": null,
-              "path": "/fiction/Isaac Asimov/Foundation",
-              "relPath": "Isaac Asimov/Foundation",
-              "size": 5160,
-              "updatedAt": 1792029534329
+              "path": "/fiction/Isaac Asimov/Second Foundation",
+              "relPath": "Isaac Asimov/Second Foundation",
+              "size": 4386,
+              "updatedAt": 1792083759142
             }
           ],
-          "id": "continue-series",
-          "label": "Continue Series",
-          "labelStringKey": "LabelContinueSeries",
+          "id": "continue-listening",
+          "label": "Continue Listening",
+          "labelStringKey": "LabelContinueListening",
           "total": 1,
           "type": "book"
         },
@@ -77,52 +71,52 @@
           "entities": [
             {
               "media": {
-                "metadata": {
-                  "subtitle": null
-                }
+                "coverPath": null,
+                "ebookFormat": "epub"
               }
             }
-          ]
+          ],
+          "type": "book"
         },
         {
           "entities": [
             {
               "books": [
                 {
-                  "addedAt": 1792029519419,
-                  "birthtimeMs": 1792029512534,
-                  "ctimeMs": 1792029514481,
-                  "folderId": "2599fce3-0201-4289-8106-f2cfb98fb689",
-                  "id": "7c058a53-47a1-45e0-a97c-c4d2f2111abf",
-                  "ino": "1462920",
+                  "addedAt": 1792081951651,
+                  "birthtimeMs": 1792081940881,
+                  "ctimeMs": 1792081942857,
+                  "folderId": "1c45f52e-1e8b-40cc-92ea-8a6dab57389c",
+                  "id": "4082b652-27e7-4238-a4cb-9949a40d71b5",
+                  "ino": "1504076",
                   "isFile": false,
                   "isInvalid": false,
                   "isMissing": false,
-                  "libraryId": "d9204ade-9fe6-4681-99d9-26075fdeb94a",
+                  "libraryId": "381af3e9-3949-4552-b0af-71b7ec68db10",
                   "media": {
-                    "coverPath": "/metadata/items/7c058a53-47a1-45e0-a97c-c4d2f2111abf/cover.jpg",
+                    "coverPath": "/metadata/items/4082b652-27e7-4238-a4cb-9949a40d71b5/cover.jpg",
                     "duration": 1,
-                    "id": "be09676f-aca2-4ed3-b96e-bad5589fe90a",
+                    "id": "8fce5464-b10b-4a1f-bfa9-22647b9abb99",
                     "metadata": {
                       "abridged": false,
-                      "asin": "B073H9PF2D",
+                      "asin": null,
                       "authorName": "",
                       "authorNameLF": "",
-                      "description": "<p><b>From a <i>New York Times</i> bestselling and Hugo award-winning author comes a modern masterwork of science fiction, introducing a captain, his crew, and a detective as they unravel a horrifying solar system wide conspiracy that begins with a single missing girl. Now a Prime Original series. </b><br /><br /> Humanity has colonized the solar system—Mars, the Moon, the Asteroid Belt and beyond—but the stars are still out of our reach.<br /><br /> Jim Holden is XO of an ice miner making runs from the rings of Saturn to the mining stations of the Belt. When he and his crew stumble upon a derelict ship, the<i> Scopuli</i>, they find themselves in possession of a secret they never wanted. A secret that someone is willing to kill for—and kill on a scale unfathomable to Jim and his crew. War is brewing in the system unless he can find out who left the ship and why.<br /><br /> Detective Miller is looking for a girl. One girl in a system of billions, but her parents have money and money talks. When the trail leads him to the<i> Scopuli</i> and rebel sympathizer Holden, he realizes that this girl may be the key to everything.<br /><br /> Holden and Miller must thread the needle between the Earth government, the Outer Planet revolutionaries, and secretive corporations—and the odds are against them. But out in the Belt, the rules are different, and one small ship can change the fate of the universe.​<br /><br /><b>\"Interplanetary adventure the way it ought to be written.\" —George R. R. Martin<br /><br /> Hugo Award Winner for Best Series</b><br /><br /><b>The Expanse</b><br /><i>Leviathan Wakes <br /> Caliban's War <br /> Abaddon's Gate <br /> Cibola Burn <br /> Nemesis Games <br /> Babylon's Ashes <br /> Persepolis Rising <br /> Tiamat's Wrath ​<br /> Leviathan Falls <br /> Memory's Legion</i><br /><br /><b>The Expanse Short Fiction</b><br /><i>Drive <br /> The Butcher of Anderson Station<br /> Gods of Risk<br /> The Churn<br /> The Vital Abyss<br /> Strange Dogs<br /> Auberon <br /> The Sins of Our Fathers​</i></p>",
+                      "description": null,
                       "explicit": false,
                       "genres": [
-                        "Science Fiction & Fantasy"
+                        "Sweep"
                       ],
-                      "isbn": "9781478998938",
-                      "language": "English",
-                      "narratorName": "SDK Narrator",
+                      "isbn": null,
+                      "language": null,
+                      "narratorName": "SDK Reader",
                       "publishedDate": null,
-                      "publishedYear": "2017",
-                      "publisher": "Orbit",
+                      "publishedYear": null,
+                      "publisher": null,
                       "seriesName": "",
                       "subtitle": null,
-                      "title": "Leviathan Wakes",
-                      "titleIgnorePrefix": "Leviathan Wakes"
+                      "title": "Second Foundation",
+                      "titleIgnorePrefix": "Second Foundation"
                     },
                     "numAudioFiles": 1,
                     "numChapters": 0,
@@ -133,37 +127,31 @@
                     ]
                   },
                   "mediaType": "book",
-                  "mtimeMs": 1792029512562,
+                  "mtimeMs": 1792081940909,
                   "numFiles": 1,
                   "oldLibraryItemId": null,
-                  "path": "/fiction/James S. A. Corey/Leviathan Wakes",
-                  "relPath": "James S. A. Corey/Leviathan Wakes",
+                  "path": "/fiction/Isaac Asimov/Second Foundation",
+                  "relPath": "Isaac Asimov/Second Foundation",
                   "size": 4386,
-                  "updatedAt": 1792029534268
+                  "updatedAt": 1792083759142
                 },
                 {
                   "media": {
-                    "metadata": {
-                      "subtitle": "The Expanse 3"
-                    }
+                    "coverPath": null
                   }
-                }
-              ],
-              "description": null,
-              "name": "The Expanse",
-              "nameIgnorePrefix": "Expanse, The"
-            },
-            {
-              "books": [
+                },
                 {
                   "media": {
                     "ebookFormat": "epub"
                   }
                 }
               ],
-              "description": "A series, per the SDK suite."
+              "description": null,
+              "name": "SDK Series",
+              "nameIgnorePrefix": "SDK Series"
             }
-          ]
+          ],
+          "type": "series"
         },
         {
           "entities": [
@@ -173,10 +161,153 @@
               "numBooks": 3
             },
             {
-              "asin": "B003RY2ISS",
-              "imagePath": "/metadata/authors/3539e469-e573-4845-9783-7d55f1e5b269.jpg"
+              "imagePath": "/metadata/authors/d19914c2-c6e8-492f-9a5f-773fa12ed68a.jpg"
             }
-          ]
+          ],
+          "type": "authors"
+        }
+      ],
+      [
+        {
+          "entities": [
+            {
+              "media": {
+                "autoDownloadEpisodes": false,
+                "autoDownloadSchedule": "0 * * * *",
+                "lastEpisodeCheck": null,
+                "maxEpisodesToKeep": 0,
+                "maxNewEpisodesToDownload": 3,
+                "metadata": {
+                  "author": null,
+                  "feedUrl": null,
+                  "imageUrl": null,
+                  "itunesArtistId": null,
+                  "itunesId": null,
+                  "itunesPageUrl": null,
+                  "releaseDate": null,
+                  "type": "episodic"
+                },
+                "numEpisodes": 0
+              },
+              "recentEpisode": {
+                "addedAt": 1792081953651,
+                "audioFile": {
+                  "addedAt": 1792081953643,
+                  "bitRate": 32000,
+                  "channelLayout": "mono",
+                  "channels": 1,
+                  "chapters": [],
+                  "codec": "mp3",
+                  "discNumFromFilename": null,
+                  "discNumFromMeta": null,
+                  "duration": 1,
+                  "embeddedCoverArt": null,
+                  "error": null,
+                  "exclude": false,
+                  "format": "MP2/3 (MPEG audio layer 2/3)",
+                  "index": 1,
+                  "ino": "1504153",
+                  "language": null,
+                  "manuallyVerified": false,
+                  "metaTags": {
+                    "tagEncoder": "Lavf63.1.102"
+                  },
+                  "metadata": {
+                    "birthtimeMs": 1792081942721,
+                    "ctimeMs": 1792081942856,
+                    "ext": ".mp3",
+                    "filename": "Episode 1.mp3",
+                    "mtimeMs": 1792081942724,
+                    "path": "/podcasts/Well There's Your Problem/Episode 1.mp3",
+                    "relPath": "Episode 1.mp3",
+                    "size": 4386
+                  },
+                  "mimeType": "audio/mpeg",
+                  "timeBase": "1/14112000",
+                  "trackNumFromFilename": null,
+                  "trackNumFromMeta": null,
+                  "updatedAt": 1792081953643
+                },
+                "chapters": [],
+                "description": null,
+                "enclosure": null,
+                "episode": null,
+                "episodeType": null,
+                "guid": null,
+                "id": "6b7b5d40-1a59-4f4c-baba-3688c7f6ada8",
+                "index": null,
+                "libraryItemId": "11b6f155-3c4e-4293-8530-97d66cea4a2c",
+                "oldEpisodeId": null,
+                "podcastId": "f08061de-9331-4506-8d9f-896ff6cec021",
+                "pubDate": null,
+                "publishedAt": null,
+                "season": null,
+                "subtitle": null,
+                "title": "Episode 1",
+                "updatedAt": 1792081953651
+              }
+            }
+          ],
+          "type": "episode"
+        }
+      ],
+      [
+        {
+          "entities": [
+            {
+              "media": {
+                "metadata": {
+                  "asin": "B0BV7MGYFH",
+                  "description": "<p><b><i>Segunda Fundación</i></b><b> es el quinto volumen del «Ciclo de la Fundación», pero también es el cierre de la original «Trilogía de la Fundación» o «Ciclo de Trántor», que puede leerse independientemente y que fue galardonada con el Premio Hugo a la mejor serie de ciencia ficción de todos los tiempos.</b></p> <p>La Fundación yace en ruinas, arrasada por la inteligencia mutante del Mulo. Sin embargo, se rumorea que Hari Seldon, el científico que lo inició todo, ha establecido una Segunda Fundación al otro lado de la galaxia, cuya ubicación exacta es un secreto guardado desde hace tiempo. Obligada a revelar su existencia, la Segunda Fundación deberá enfrentarse a la voluntad destructora del Mulo, con el añadido de que los supervivientes de la Primera Fundación también quieren acabar con ella…</p> <p>«Un talento de proporciones cósmicas».<br /> <i>Chicago Tribune</i></p> <p><b>Please note: This audiobook is in Spanish.</b></p>",
+                  "isbn": "9788466371452",
+                  "language": "Spanish",
+                  "publishedYear": "2023",
+                  "publisher": "Penguin Random House Audio",
+                  "subtitle": "Ciclo de la Fundación 5 [Foundation Cycle, Book 5]"
+                }
+              }
+            }
+          ],
+          "type": "book"
+        },
+        {
+          "entities": [
+            {
+              "books": [
+                {
+                  "media": {
+                    "metadata": {
+                      "asin": "B073H9PF2D",
+                      "description": "<p><b>From a <i>New York Times</i> bestselling and Hugo award-winning author comes a modern masterwork of science fiction, introducing a captain, his crew, and a detective as they unravel a horrifying solar system wide conspiracy that begins with a single missing girl. Now a Prime Original series. </b><br /><br /> Humanity has colonized the solar system—Mars, the Moon, the Asteroid Belt and beyond—but the stars are still out of our reach.<br /><br /> Jim Holden is XO of an ice miner making runs from the rings of Saturn to the mining stations of the Belt. When he and his crew stumble upon a derelict ship, the<i> Scopuli</i>, they find themselves in possession of a secret they never wanted. A secret that someone is willing to kill for—and kill on a scale unfathomable to Jim and his crew. War is brewing in the system unless he can find out who left the ship and why.<br /><br /> Detective Miller is looking for a girl. One girl in a system of billions, but her parents have money and money talks. When the trail leads him to the<i> Scopuli</i> and rebel sympathizer Holden, he realizes that this girl may be the key to everything.<br /><br /> Holden and Miller must thread the needle between the Earth government, the Outer Planet revolutionaries, and secretive corporations—and the odds are against them. But out in the Belt, the rules are different, and one small ship can change the fate of the universe.​<br /><br /><b>\"Interplanetary adventure the way it ought to be written.\" —George R. R. Martin<br /><br /> Hugo Award Winner for Best Series</b><br /><br /><b>The Expanse</b><br /><i>Leviathan Wakes <br /> Caliban's War <br /> Abaddon's Gate <br /> Cibola Burn <br /> Nemesis Games <br /> Babylon's Ashes <br /> Persepolis Rising <br /> Tiamat's Wrath ​<br /> Leviathan Falls <br /> Memory's Legion</i><br /><br /><b>The Expanse Short Fiction</b><br /><i>Drive <br /> The Butcher of Anderson Station<br /> Gods of Risk<br /> The Churn<br /> The Vital Abyss<br /> Strange Dogs<br /> Auberon <br /> The Sins of Our Fathers​</i></p>",
+                      "isbn": "9781478998938",
+                      "language": "English",
+                      "publishedYear": "2017",
+                      "publisher": "Orbit"
+                    }
+                  }
+                },
+                {
+                  "media": {
+                    "metadata": {
+                      "subtitle": "The Expanse 3"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "description": "A series, per the SDK suite."
+            }
+          ],
+          "type": "series"
+        },
+        {
+          "entities": [
+            {
+              "asin": "B003RY2ISS"
+            }
+          ],
+          "type": "authors"
         }
       ]
     ]

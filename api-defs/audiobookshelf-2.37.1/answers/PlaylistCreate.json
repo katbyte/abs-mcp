@@ -493,6 +493,58 @@
             }
           }
         ]
+      },
+      {
+        "items": [
+          {
+            "libraryItem": {
+              "media": {
+                "audioFiles": [
+                  {
+                    "metaTags": {
+                      "tagAlbum": "Second Foundation",
+                      "tagAlbumArtist": "Isaac Asimov",
+                      "tagArtist": "Isaac Asimov",
+                      "tagComposer": "SDK Reader",
+                      "tagGenre": "Science Fiction",
+                      "tagGrouping": "SDK Series #1",
+                      "tagTitle": "Second Foundation",
+                      "tagTrack": "1"
+                    },
+                    "trackNumFromMeta": 1
+                  }
+                ],
+                "chapters": [
+                  {
+                    "end": 0.5
+                  },
+                  {
+                    "start": 0.5
+                  }
+                ],
+                "metadata": {
+                  "isbn": "9788466371452",
+                  "subtitle": "Ciclo de la Fundación 5 [Foundation Cycle, Book 5]"
+                },
+                "tracks": [
+                  {
+                    "metaTags": {
+                      "tagAlbum": "Second Foundation",
+                      "tagAlbumArtist": "Isaac Asimov",
+                      "tagArtist": "Isaac Asimov",
+                      "tagComposer": "SDK Reader",
+                      "tagGenre": "Science Fiction",
+                      "tagGrouping": "SDK Series #1",
+                      "tagTitle": "Second Foundation",
+                      "tagTrack": "1"
+                    },
+                    "trackNumFromMeta": 1
+                  }
+                ]
+              }
+            }
+          }
+        ]
       }
     ]
   }

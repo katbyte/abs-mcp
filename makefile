@@ -309,13 +309,24 @@ spec: ## Write api-defs/audiobookshelf-openapi-<version>.json from an Audiobooks
 	@test -n "$(SOURCE)" || (echo "SOURCE is the Audiobookshelf checkout to read: make spec SOURCE=../audiobookshelf" && exit 1)
 	@go run ./sdk/pandorest spec $(SOURCE)
 
+generate: pandorest-import pandorest-generate ## Import the API document into api-defs/audiobookshelf-<version>/, then generate sdk/abs
+
 pandorest-import: ## Import api-defs/audiobookshelf-openapi-<version>.json into api-defs/audiobookshelf-<version>/, applying the fixes
 	@echo "==> importing the API document into api-defs/audiobookshelf-<version>/..."
 	go run ./sdk/pandorest import
 
+pandorest-generate: ## Generate sdk/abs from api-defs/audiobookshelf-<version>/
+	@echo "==> generating sdk/abs from api-defs/audiobookshelf-<version>/..."
+	go run ./sdk/pandorest generate
+
+gencheck: generate ## Check that the definitions and sdk/abs match the API document (regenerate, then diff)
+	@test -z "$$(git status --porcelain -- api-defs sdk/abs)" || \
+		(git status --short -- api-defs sdk/abs; echo; \
+		echo "api-defs/ or sdk/abs is stale. Run 'make generate' and commit."; exit 1)
+
 pandorest-diff: ## Report what the API document changes against its checked-in definitions
 	@go run ./sdk/pandorest diff -quiet
 
-check-all: build test testacc lint actionlint yamllint shellcheck typos markdownlint depscheck apicheck ## Run build + tests (incl. the live suites) + all linters + depscheck
+check-all: build test testacc lint actionlint yamllint shellcheck typos markdownlint depscheck gencheck apicheck ## Run build + tests (incl. the live suites) + all linters + depscheck
 
-.PHONY: default all help fmt goimports build docker lint lint-fix actionlint yamllint shellcheck zizmor typos typos-fix markdownlint depscheck check-all install tools test test-sdk test-tools testacc testacc-sdk testacc-tools cover cover-html record record-sdk record-check testenv-up testenv-down apicheck spec pandorest-import pandorest-diff
+.PHONY: default all help fmt goimports build docker lint lint-fix actionlint yamllint shellcheck zizmor typos typos-fix markdownlint depscheck check-all install tools test test-sdk test-tools testacc testacc-sdk testacc-tools cover cover-html record record-sdk record-check testenv-up testenv-down apicheck spec generate pandorest-import pandorest-generate pandorest-diff gencheck

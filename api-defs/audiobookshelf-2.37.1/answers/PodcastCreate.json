@@ -133,6 +133,14 @@
             ]
           }
         }
+      },
+      {
+        "media": {
+          "metadata": {
+            "author": null,
+            "type": null
+          }
+        }
       }
     ]
   }

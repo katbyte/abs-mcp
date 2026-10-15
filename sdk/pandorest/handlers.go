@@ -44,7 +44,8 @@ func (a *answer) statuses() []int {
 // middleware attaches, such as req.libraryItem.
 type reqInfo struct {
 	query     []string
-	numbers   map[string]string // the query parameters the code turns into numbers, each "integer" or "number"
+	numbers   map[string]string   // the query parameters the code turns into numbers, each "integer" or "number"
+	values    map[string][]string // the values a query parameter or body field is checked against, by "query sort" or "body mediaItemType"
 	body      []string
 	files     []string
 	bodyWhole bool
@@ -62,7 +63,7 @@ type reqUse struct {
 }
 
 func newReqInfo() *reqInfo {
-	return &reqInfo{attached: map[string]*jsType{}, numbers: map[string]string{}}
+	return &reqInfo{attached: map[string]*jsType{}, numbers: map[string]string{}, values: map[string][]string{}}
 }
 
 func (r *reqInfo) addQuery(n string) { r.query = addName(r.query, n) }
@@ -133,6 +134,35 @@ func readRequest(use reqUse, req *reqInfo) {
 		}
 	}
 
+	// names given one value of the request, const { mediaItemType } = req.body or let orderKey = req.query.sort || 'updatedAt', by "query sort",
+	// and names given a list of text written out, for the values a check of the one against the other allows
+	reads := map[string]string{}
+	lists := map[string][]string{}
+
+	// readOf is the "part name" x reads, through a default given with || or ??, or "" for none
+	readOf := func(x js.IExpr) string {
+		if b, ok := x.(*js.BinaryExpr); ok && (b.Op == js.OrToken || b.Op == js.NullishToken) {
+			x = b.X
+		}
+		if v, ok := x.(*js.Var); ok {
+			return reads[string(v.Name())]
+		}
+		for _, part := range []string{"query", "body"} {
+			switch x := x.(type) {
+			case *js.DotExpr:
+				if from(x.X, part) {
+					return part + " " + identName(x.Y)
+				}
+			case *js.IndexExpr:
+				if k, ok := stringValue(x.Y); ok && from(x.X, part) {
+					return part + " " + k
+				}
+			}
+		}
+
+		return ""
+	}
+
 	v := visitor(func(n js.INode) {
 		switch n := n.(type) {
 		case *js.DotExpr:
@@ -173,10 +203,19 @@ func readRequest(use reqUse, req *reqInfo) {
 
 		case *js.BindingElement:
 			if v, ok := n.Binding.(*js.Var); ok {
+				if n.Default == nil {
+					return
+				}
 				for _, part := range []string{"query", "body"} {
 					if from(n.Default, part) {
 						aliases[string(v.Name())] = part
 					}
+				}
+				if r := readOf(n.Default); r != "" {
+					reads[string(v.Name())] = r
+				}
+				if list, ok := textList(n.Default); ok {
+					lists[string(v.Name())] = list
 				}
 				return
 			}
@@ -189,12 +228,14 @@ func readRequest(use reqUse, req *reqInfo) {
 				if from(n.Default, part) {
 					for _, item := range obj.List {
 						name := propertyName(item.Key)
-						if name == "" {
-							if v, ok := item.Value.Binding.(*js.Var); ok {
-								name = string(v.Name())
-							}
+						v, named := item.Value.Binding.(*js.Var)
+						if name == "" && named {
+							name = string(v.Name())
 						}
 						add(part, name)
+						if named && name != "" {
+							reads[string(v.Name())] = part + " " + name
+						}
 					}
 				}
 			}
@@ -203,6 +244,29 @@ func readRequest(use reqUse, req *reqInfo) {
 			for _, a := range n.Args.List {
 				if from(a.Value, "body") {
 					req.bodyWhole = true
+				}
+			}
+
+			// getQueryParamAsString(req.query, 'title', ''): a helper handed the query or the body and a name reads that name from it
+			for i, a := range n.Args.List[:max(len(n.Args.List)-1, 0)] {
+				for _, part := range []string{"query", "body"} {
+					if from(a.Value, part) {
+						if k, ok := stringValue(n.Args.List[i+1].Value); ok {
+							add(part, k)
+						}
+					}
+				}
+			}
+
+			// ['book', 'podcastEpisode'].includes(mediaItemType): a value of the request is checked against text written out, which are the values
+			// the server acts on
+			if dot, ok := n.X.(*js.DotExpr); ok && identName(dot.Y) == "includes" && len(n.Args.List) == 1 {
+				list, ok := textList(dot.X)
+				if v, named := dot.X.(*js.Var); named && !ok {
+					list, ok = lists[string(v.Name())]
+				}
+				if r := readOf(n.Args.List[0].Value); ok && r != "" {
+					req.values[r] = list
 				}
 			}
 
@@ -231,6 +295,25 @@ func readRequest(use reqUse, req *reqInfo) {
 	for _, st := range use.body {
 		js.Walk(v, st)
 	}
+}
+
+// textList is the values of a list of text written out, ['book', 'podcast'], and false for any other value.
+func textList(x js.IExpr) ([]string, bool) {
+	arr, ok := x.(*js.ArrayExpr)
+	if !ok || len(arr.List) == 0 {
+		return nil, false
+	}
+
+	out := make([]string, 0, len(arr.List))
+	for _, e := range arr.List {
+		s, ok := stringValue(e.Value)
+		if !ok || e.Spread {
+			return nil, false
+		}
+		out = append(out, s)
+	}
+
+	return out, true
 }
 
 // listMembers are what a list has of its own, which a body used as a list is read by and which are not fields of it.

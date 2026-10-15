@@ -216,6 +216,19 @@
             }
           }
         ]
+      },
+      {
+        "books": [
+          {
+            "media": {
+              "metadata": {
+                "genres": [
+                  "Science Fiction"
+                ]
+              }
+            }
+          }
+        ]
       }
     ]
   }

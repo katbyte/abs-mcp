@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -126,6 +127,9 @@ func TestEval(t *testing.T) {
 		`Promise.resolve(1).then((n) => 'x')`:                 "string",
 		`Promise.resolve(1).catch(() => null)`:                "integer",
 		`((f) => f.call(null, 2))((n) => n)`:                  "integer",
+		// one helper handed two functions returns what each does, as the shelves' timing helper does with each loader
+		`((run) => [run(() => 1), run(() => 'a')])((f) => ({ v: f() }))[1].v`:                                         "mixed",
+		`(() => { const run = (f) => ({ v: f() }); const a = run(() => 1); const b = run(() => 'a'); return b.v })()`: "string",
 
 		// names given values later in a function
 		`(() => { const a = []; a.push('x'); return a })()`:                         "list of string",
@@ -195,6 +199,18 @@ func TestMerge(t *testing.T) {
 	}
 	if l := merge(listOf(integer), listOf(num)); l.elem.kind != numberKind {
 		t.Errorf("list items: %d, want number", l.elem.kind)
+	}
+
+	book, podcast := &jsType{kind: stringKind, literals: []string{"book"}}, &jsType{kind: stringKind, literals: []string{"podcast"}}
+	if got := merge(book, podcast).literals; !slices.Equal(got, []string{"book", "podcast"}) {
+		t.Errorf("two texts written out: %q, want both", got)
+	}
+	// x || 'book' may be any text, whatever was written beside it
+	if got := merge(unknown, book); got.kind != stringKind || got.literals != nil {
+		t.Errorf("text written out beside a value the scan could not tell: %+v, want any text", got)
+	}
+	if got := merge(book, str).literals; got != nil {
+		t.Errorf("text written out beside any text: %q, want any text", got)
 	}
 }
 

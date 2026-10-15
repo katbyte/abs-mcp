@@ -304,6 +304,14 @@
           }
         },
         {
+          "Name": "CreatedByUser",
+          "JsonName": "createdByUser",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "ApiKeyRecordCreatedByUser"
+          }
+        },
+        {
           "Name": "CreatedByUserId",
           "JsonName": "createdByUserId",
           "Type": {
@@ -374,6 +382,14 @@
           }
         },
         {
+          "Name": "User",
+          "JsonName": "user",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "ApiKeyRecordUser"
+          }
+        },
+        {
           "Name": "UserId",
           "JsonName": "userId",
           "Type": {
@@ -381,6 +397,58 @@
             "ReferenceName": "UserID"
           },
           "Nullable": true
+        }
+      ]
+    },
+    {
+      "Name": "ApiKeyRecordCreatedByUser",
+      "Fields": [
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Type",
+          "JsonName": "type",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Username",
+          "JsonName": "username",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "ApiKeyRecordUser",
+      "Fields": [
+        {
+          "Name": "Id",
+          "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Type",
+          "JsonName": "type",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Username",
+          "JsonName": "username",
+          "Type": {
+            "Type": "String"
+          }
         }
       ]
     },

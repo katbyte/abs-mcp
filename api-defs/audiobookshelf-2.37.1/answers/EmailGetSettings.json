@@ -17,6 +17,24 @@
           "testAddress": null,
           "user": null
         }
+      },
+      {
+        "settings": {
+          "ereaderDevices": [
+            {
+              "availabilityOption": "adminOrUp",
+              "email": "sdk@example.invalid",
+              "name": "SDK Reader",
+              "users": null
+            },
+            {
+              "users": [
+                "202c569c-ec3e-49cf-af5c-1bde913a8799"
+              ]
+            }
+          ],
+          "fromAddress": "sdk@example.invalid"
+        }
       }
     ]
   }

@@ -94,6 +94,106 @@
             }
           }
         ]
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "autoDownloadEpisodes": false,
+              "autoDownloadSchedule": "0 * * * *",
+              "lastEpisodeCheck": null,
+              "maxEpisodesToKeep": 0,
+              "maxNewEpisodesToDownload": 3,
+              "metadata": {
+                "author": null,
+                "feedUrl": null,
+                "imageUrl": null,
+                "itunesArtistId": null,
+                "itunesId": null,
+                "itunesPageUrl": null,
+                "releaseDate": null,
+                "type": "episodic"
+              },
+              "numEpisodes": 2
+            },
+            "recentEpisode": {
+              "addedAt": 1792081953651,
+              "audioFile": {
+                "addedAt": 1792081953643,
+                "bitRate": 32000,
+                "channelLayout": "mono",
+                "channels": 1,
+                "chapters": [],
+                "codec": "mp3",
+                "discNumFromFilename": null,
+                "discNumFromMeta": null,
+                "duration": 1,
+                "embeddedCoverArt": null,
+                "error": null,
+                "exclude": false,
+                "format": "MP2/3 (MPEG audio layer 2/3)",
+                "index": 1,
+                "ino": "1504153",
+                "language": null,
+                "manuallyVerified": false,
+                "metaTags": {
+                  "tagEncoder": "Lavf63.1.102"
+                },
+                "metadata": {
+                  "birthtimeMs": 1792081942721,
+                  "ctimeMs": 1792081942856,
+                  "ext": ".mp3",
+                  "filename": "Episode 1.mp3",
+                  "mtimeMs": 1792081942724,
+                  "path": "/podcasts/Well There's Your Problem/Episode 1.mp3",
+                  "relPath": "Episode 1.mp3",
+                  "size": 4386
+                },
+                "mimeType": "audio/mpeg",
+                "timeBase": "1/14112000",
+                "trackNumFromFilename": null,
+                "trackNumFromMeta": null,
+                "updatedAt": 1792081953643
+              },
+              "chapters": [],
+              "description": null,
+              "enclosure": null,
+              "episode": null,
+              "episodeType": null,
+              "guid": null,
+              "id": "6b7b5d40-1a59-4f4c-baba-3688c7f6ada8",
+              "index": null,
+              "libraryItemId": "11b6f155-3c4e-4293-8530-97d66cea4a2c",
+              "oldEpisodeId": null,
+              "podcastId": "f08061de-9331-4506-8d9f-896ff6cec021",
+              "pubDate": null,
+              "publishedAt": null,
+              "season": null,
+              "subtitle": null,
+              "title": "Episode 1",
+              "updatedAt": 1792081953651
+            }
+          },
+          {
+            "media": {
+              "coverPath": "/metadata/items/4082b652-27e7-4238-a4cb-9949a40d71b5/cover.jpg"
+            }
+          }
+        ]
+      },
+      {
+        "libraryItems": [
+          {
+            "media": {
+              "metadata": {
+                "asin": "B0BV7MGYFH",
+                "description": "<p><b><i>Segunda Fundación</i></b><b> es el quinto volumen del «Ciclo de la Fundación», pero también es el cierre de la original «Trilogía de la Fundación» o «Ciclo de Trántor», que puede leerse independientemente y que fue galardonada con el Premio Hugo a la mejor serie de ciencia ficción de todos los tiempos.</b></p> <p>La Fundación yace en ruinas, arrasada por la inteligencia mutante del Mulo. Sin embargo, se rumorea que Hari Seldon, el científico que lo inició todo, ha establecido una Segunda Fundación al otro lado de la galaxia, cuya ubicación exacta es un secreto guardado desde hace tiempo. Obligada a revelar su existencia, la Segunda Fundación deberá enfrentarse a la voluntad destructora del Mulo, con el añadido de que los supervivientes de la Primera Fundación también quieren acabar con ella…</p> <p>«Un talento de proporciones cósmicas».<br /> <i>Chicago Tribune</i></p> <p><b>Please note: This audiobook is in Spanish.</b></p>",
+                "isbn": "9788466371452",
+                "subtitle": "Ciclo de la Fundación 5 [Foundation Cycle, Book 5]"
+              }
+            }
+          }
+        ]
       }
     ]
   }

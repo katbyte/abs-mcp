@@ -166,6 +166,22 @@
             ]
           }
         ]
+      },
+      {
+        "results": [
+          {
+            "books": [
+              {
+                "media": {
+                  "metadata": {
+                    "isbn": "9788466371452",
+                    "subtitle": "Ciclo de la Fundación 5 [Foundation Cycle, Book 5]"
+                  }
+                }
+              }
+            ]
+          }
+        ]
       }
     ]
   }

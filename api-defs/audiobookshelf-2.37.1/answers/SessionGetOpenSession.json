@@ -318,6 +318,84 @@
         "timeListening": 0,
         "updatedAt": 1792029536050,
         "userId": "e2682b5d-a1fb-4847-b7e2-39b7c7564f87"
+      },
+      {
+        "audioTracks": [
+          {
+            "trackNumFromMeta": null
+          }
+        ],
+        "libraryItem": {
+          "media": {
+            "audioFiles": [
+              {
+                "trackNumFromMeta": null
+              }
+            ],
+            "metadata": {
+              "asin": null,
+              "description": null,
+              "descriptionPlain": null,
+              "isbn": null,
+              "language": null,
+              "publishedYear": null,
+              "publisher": null,
+              "subtitle": null
+            },
+            "tracks": [
+              {
+                "trackNumFromMeta": null
+              }
+            ]
+          }
+        },
+        "mediaMetadata": {
+          "asin": null,
+          "description": null,
+          "isbn": null,
+          "language": null,
+          "publishedYear": null,
+          "publisher": null,
+          "subtitle": null
+        }
+      },
+      {
+        "audioTracks": [
+          {
+            "metaTags": {
+              "tagAlbumArtist": "Isaac Asimov",
+              "tagArtist": "Isaac Asimov",
+              "tagComposer": "SDK Reader",
+              "tagGenre": "Science Fiction"
+            }
+          }
+        ],
+        "coverPath": null,
+        "libraryItem": {
+          "media": {
+            "audioFiles": [
+              {
+                "metaTags": {
+                  "tagAlbumArtist": "Isaac Asimov",
+                  "tagArtist": "Isaac Asimov",
+                  "tagComposer": "SDK Reader",
+                  "tagGenre": "Science Fiction"
+                }
+              }
+            ],
+            "coverPath": null,
+            "tracks": [
+              {
+                "metaTags": {
+                  "tagAlbumArtist": "Isaac Asimov",
+                  "tagArtist": "Isaac Asimov",
+                  "tagComposer": "SDK Reader",
+                  "tagGenre": "Science Fiction"
+                }
+              }
+            ]
+          }
+        }
       }
     ]
   }

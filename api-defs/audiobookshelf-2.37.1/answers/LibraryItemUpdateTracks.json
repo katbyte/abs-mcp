@@ -185,6 +185,28 @@
             }
           ]
         }
+      },
+      {
+        "media": {
+          "audioFiles": [
+            {
+              "metaTags": {
+                "tagAlbumArtist": "Isaac Asimov",
+                "tagArtist": "Isaac Asimov",
+                "tagComposer": "SDK Reader",
+                "tagGenre": "Science Fiction"
+              }
+            }
+          ],
+          "metadata": {
+            "genres": [
+              "Science Fiction"
+            ]
+          },
+          "tags": [
+            "sdk"
+          ]
+        }
       }
     ]
   }
