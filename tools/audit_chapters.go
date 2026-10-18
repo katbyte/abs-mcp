@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strconv"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -81,7 +81,7 @@ type chaptersOut struct {
 // their chapter lists once fetched.
 type chapterSweep struct {
 	scanned, read int
-	pending       []api.LibraryItemID // books with chapters, still to fetch
+	pending       []abs.LibraryItemID // books with chapters, still to fetch
 	rows          []chapterRow
 	// singleOnly judges from the listing alone, which carries each book's
 	// chapter count and length but not its chapters: one chapter over a
@@ -92,7 +92,7 @@ type chapterSweep struct {
 }
 
 // add takes one item from a listing: a book with chapters is held to fetch.
-func (c *chapterSweep) add(it *api.LibraryItemMinified) {
+func (c *chapterSweep) add(it *abs.LibraryItemMinified) {
 	if it.IsPodcast() {
 		return
 	}
@@ -111,7 +111,7 @@ func (c *chapterSweep) add(it *api.LibraryItemMinified) {
 }
 
 // resolve fetches the held books whole, a batch at a time, and judges each.
-func (c *chapterSweep) resolve(ctx context.Context, gen *api.Client) error {
+func (c *chapterSweep) resolve(ctx context.Context, gen *abs.Client) error {
 	pending := c.pending
 	c.pending = nil
 	for chunk := range slices.Chunk(pending, embedBatchSize) {
@@ -128,11 +128,11 @@ func (c *chapterSweep) resolve(ctx context.Context, gen *api.Client) error {
 }
 
 // library sweeps one library's listing and judges its books.
-func (c *chapterSweep) library(ctx context.Context, gen *api.Client, lib *api.Library) error {
+func (c *chapterSweep) library(ctx context.Context, gen *abs.Client, lib *abs.Library) error {
 	if lib.IsPodcast() {
 		return nil
 	}
-	if err := eachItem(ctx, gen, lib.Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+	if err := eachItem(ctx, gen, lib.Id, abs.LibraryGetLibraryItemsOptions{}, func(it *abs.LibraryItemMinified) bool {
 		c.add(it)
 		return true
 	}); err != nil {
@@ -176,7 +176,7 @@ func secs(v float64) string {
 
 // chapterProblems is everything wrong with a whole book's chapter list,
 // one row per problem.
-func chapterProblems(it *api.LibraryItemExpanded) []chapterRow {
+func chapterProblems(it *abs.LibraryItemExpanded) []chapterRow {
 	chapters, end := it.Media.Chapters, it.Media.Duration
 	if it.IsPodcast() || len(chapters) == 0 || end <= 0 {
 		return nil
@@ -195,7 +195,7 @@ func chapterProblems(it *api.LibraryItemExpanded) []chapterRow {
 		}
 	}
 
-	if first := slices.IndexFunc(chapters, func(ch api.Chapter) bool { return ch.Start >= end }); first >= 0 {
+	if first := slices.IndexFunc(chapters, func(ch abs.Chapter) bool { return ch.Start >= end }); first >= 0 {
 		past := 0
 		for _, ch := range chapters {
 			if ch.Start >= end {
@@ -246,7 +246,7 @@ func chapterProblems(it *api.LibraryItemExpanded) []chapterRow {
 // covers audio a track added left after it. A list out of order is refused
 // rather than fitted: fitting keeps the order it finds, and the order is what
 // is wrong.
-func fitChapters(it *api.LibraryItemExpanded) (kept []api.Chapter, dropped int, err error) {
+func fitChapters(it *abs.LibraryItemExpanded) (kept []abs.Chapter, dropped int, err error) {
 	end := it.Media.Duration
 	switch {
 	case len(it.Media.Chapters) == 0:

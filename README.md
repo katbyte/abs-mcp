@@ -62,7 +62,7 @@ Each audit sweeps the whole library for one kind of mistake. Each name links to 
 ## What else is here
 
 - **100 tools** cover the whole Audiobookshelf API, so what an audit finds can be fixed in the same session.
-- **A Go client**, `sdk/abs-byhand`, works on its own. It covers all 202 API routes.
+- **A Go client**, `sdk/abs`, works on its own. It covers all 202 API routes.
 - **An OpenAPI document of the whole Audiobookshelf REST API**, in `api-defs/`. Audiobookshelf publishes no current one, so this is read from the server's own source: every route but sign-in and audio streaming, 218 in all. [pandorest](https://github.com/katbyte/pandorest) generates the Go client in `sdk/abs` from it. See [how it is made](docs/sdk.md#an-api-document-read-from-the-source).
 - **Proven on a real library.** A large collection, gathered over years, was cleaned up with these tools. Most of the audits exist because that library had the problem.
 
@@ -79,7 +79,7 @@ Each audit sweeps the whole library for one kind of mistake. Each name links to 
 - [Choosing which tools load](docs/toolsets.md): toolsets, and adding or dropping single tools.
 - [A typical curation session](docs/curation.md): the order to run things in.
 - [After a folder is renamed or moved](docs/recovery.md): putting a book's two records back together.
-- [The Go client and the API document](docs/sdk.md): using `sdk/abs-byhand` or the generated `sdk/abs` without the server, and the OpenAPI document read from the source.
+- [The Go client and the API document](docs/sdk.md): using `sdk/abs` without the server, and the OpenAPI document it is generated from.
 - [Development and tests](docs/testing.md): building, the test suites and the fixtures.
 - [Audiobookshelf API notes](docs/README.md), the [roadmap](docs/ROADMAP.md), and [how the audio comparison was tuned](docs/CALIBRATION.md).
 - [Contributing](CONTRIBUTING.md): how releases are cut.

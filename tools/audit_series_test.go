@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // A library set to hide single-book series lists none of them, and a
@@ -222,11 +222,11 @@ func TestAuditSeriesCrossReferences(t *testing.T) {
 		return `{"id":"` + id + `","libraryId":"` + libID + `","mediaType":"book","media":{"metadata":{"series":{"id":"` + seriesID + `","name":"x","sequence":"` + seq + `"}}}}`
 	}
 	filtered := map[string]string{
-		api.ListFilter("series", belgariad): page(sequenced("b1", belgariad, "1"), sequenced("b2", belgariad, "2"), sequenced("b3", belgariad, "3"), sequenced("b5", belgariad, "5")),
-		api.ListFilter("series", wheel):     page(sequenced("w1", wheel, "1"), sequenced("w3", wheel, "3"), sequenced("w6", wheel, "6"), sequenced("w7", wheel, "7")),
-		api.ListFilter("series", theWheel):  page(sequenced("w2", theWheel, "2"), sequenced("w4", theWheel, "4"), sequenced("w5", theWheel, "5")),
-		api.ListFilter("series", witchery):  page(sequenced("v1", witchery, "1"), sequenced("v2", witchery, "2")),
-		api.ListFilter("series", expanse):   page(sequenced("e1", expanse, "1"), sequenced("e2", expanse, "2")),
+		abs.ListFilter("series", belgariad): page(sequenced("b1", belgariad, "1"), sequenced("b2", belgariad, "2"), sequenced("b3", belgariad, "3"), sequenced("b5", belgariad, "5")),
+		abs.ListFilter("series", wheel):     page(sequenced("w1", wheel, "1"), sequenced("w3", wheel, "3"), sequenced("w6", wheel, "6"), sequenced("w7", wheel, "7")),
+		abs.ListFilter("series", theWheel):  page(sequenced("w2", theWheel, "2"), sequenced("w4", theWheel, "4"), sequenced("w5", theWheel, "5")),
+		abs.ListFilter("series", witchery):  page(sequenced("v1", witchery, "1"), sequenced("v2", witchery, "2")),
+		abs.ListFilter("series", expanse):   page(sequenced("e1", expanse, "1"), sequenced("e2", expanse, "2")),
 	}
 	f.mux.HandleFunc("GET /api/libraries/"+libID+"/items", func(w http.ResponseWriter, r *http.Request) {
 		if body, ok := filtered[r.URL.Query().Get("filter")]; ok {

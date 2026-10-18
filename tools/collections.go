@@ -7,30 +7,30 @@ import (
 	"slices"
 	"strings"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/lock"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // resolveCollection finds a collection by name (case-insensitive) or id.
-func resolveCollection(ctx context.Context, gen *api.Client, nameOrID string) (*api.Collection, error) {
+func resolveCollection(ctx context.Context, gen *abs.Client, nameOrID string) (*abs.Collection, error) {
 	nameOrID = strings.TrimSpace(nameOrID)
 	if nameOrID == "" {
 		return nil, errors.New("collection name or id is required")
 	}
 	if looksLikeID(nameOrID) {
-		return getCollection(ctx, gen, api.CollectionID(nameOrID))
+		return getCollection(ctx, gen, abs.CollectionID(nameOrID))
 	}
 	all, err := record(gen.CollectionFindAll(ctx))
 	if err != nil {
 		return nil, err
 	}
 
-	return oneNamed("collection", nameOrID, all.Collections, func(c *api.Collection) string { return c.Name }, func(c *api.Collection) string { return string(c.Id) })
+	return oneNamed("collection", nameOrID, all.Collections, func(c *abs.Collection) string { return c.Name }, func(c *abs.Collection) string { return string(c.Id) })
 }
 
 // getCollection is one collection, with its books.
-func getCollection(ctx context.Context, gen *api.Client, id api.CollectionID) (*api.Collection, error) {
+func getCollection(ctx context.Context, gen *abs.Client, id abs.CollectionID) (*abs.Collection, error) {
 	c, err := record(gen.CollectionFindOne(ctx, id))
 	if err != nil {
 		return nil, err
@@ -40,7 +40,7 @@ func getCollection(ctx context.Context, gen *api.Client, id api.CollectionID) (*
 }
 
 // libraryCollections are the collections of one library.
-func libraryCollections(ctx context.Context, gen *api.Client, library api.LibraryID) ([]api.Collection, error) {
+func libraryCollections(ctx context.Context, gen *abs.Client, library abs.LibraryID) ([]abs.Collection, error) {
 	got, err := record(gen.LibraryGetCollectionsForLibrary(ctx, library))
 	if err != nil {
 		return nil, err
@@ -53,16 +53,16 @@ func libraryCollections(ctx context.Context, gen *api.Client, library api.Librar
 // The server's batch routes drop what they cannot use without saying so - an
 // id from another library, a podcast, an id that names nothing - so each is
 // checked here and refused by name. A book named twice is kept once.
-func libraryBooks(ctx context.Context, gen *api.Client, libraryID api.LibraryID, refs []string) ([]api.LibraryItemExpanded, error) {
+func libraryBooks(ctx context.Context, gen *abs.Client, libraryID abs.LibraryID, refs []string) ([]abs.LibraryItemExpanded, error) {
 	if len(refs) == 0 {
 		return nil, errors.New("at least one item is required")
 	}
-	out := make([]api.LibraryItemExpanded, 0, len(refs))
+	out := make([]abs.LibraryItemExpanded, 0, len(refs))
 	for _, ref := range refs {
-		var it *api.LibraryItemExpanded
+		var it *abs.LibraryItemExpanded
 		var err error
 		if looksLikeID(ref) {
-			it, err = getItem(ctx, gen, api.LibraryItemID(ref))
+			it, err = getItem(ctx, gen, abs.LibraryItemID(ref))
 		} else {
 			it, err = resolveItemToChange(ctx, gen, string(libraryID), ref)
 		}
@@ -79,7 +79,7 @@ func libraryBooks(ctx context.Context, gen *api.Client, libraryID api.LibraryID,
 		case it.IsPodcast():
 			return nil, fmt.Errorf("%q is a podcast: a collection holds books", it.Title())
 		}
-		if !slices.ContainsFunc(out, func(o api.LibraryItemExpanded) bool { return o.Id == it.Id }) {
+		if !slices.ContainsFunc(out, func(o abs.LibraryItemExpanded) bool { return o.Id == it.Id }) {
 			out = append(out, *it)
 		}
 	}
@@ -88,7 +88,7 @@ func libraryBooks(ctx context.Context, gen *api.Client, libraryID api.LibraryID,
 }
 
 // bookIDs lists the ids of items, in order.
-func bookIDs(items []api.LibraryItemExpanded) []string {
+func bookIDs(items []abs.LibraryItemExpanded) []string {
 	ids := make([]string, 0, len(items))
 	for i := range items {
 		ids = append(ids, string(items[i].Id))
@@ -97,7 +97,7 @@ func bookIDs(items []api.LibraryItemExpanded) []string {
 }
 
 // titles lists the titles of items, in order.
-func titles(items []api.LibraryItemExpanded) []string {
+func titles(items []abs.LibraryItemExpanded) []string {
 	out := make([]string, 0, len(items))
 	for i := range items {
 		out = append(out, items[i].Title())
@@ -116,7 +116,7 @@ func registerCollectionTools(r *registry) {
 		Description string `json:"description,omitempty"`
 		Updated     string `json:"updated,omitempty"`
 	}
-	rowOf := func(c *api.Collection) row {
+	rowOf := func(c *abs.Collection) row {
 		return row{ID: string(c.Id), Name: c.Name, Library: string(c.LibraryId), Books: len(c.Books), Description: c.Description, Updated: fmtDate(c.LastUpdate)}
 	}
 
@@ -134,7 +134,7 @@ func registerCollectionTools(r *registry) {
 		Name:        "collection_list",
 		Description: "List collections (shared, curated groups of books) with their sizes.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in listIn) (*mcp.CallToolResult, listOut, error) {
-		var cols []api.Collection
+		var cols []abs.Collection
 		if in.Library != "" {
 			lib, err := resolveLibrary(ctx, gen, in.Library)
 			if err != nil {
@@ -213,7 +213,7 @@ func registerCollectionTools(r *registry) {
 		if err != nil {
 			return nil, row{}, err
 		}
-		c, err := record(gen.CollectionCreate(ctx, api.CollectionCreateRequest{LibraryId: lib.Id, Name: name, Description: in.Description, Books: bookIDs(books)}))
+		c, err := record(gen.CollectionCreate(ctx, abs.CollectionCreateRequest{LibraryId: lib.Id, Name: name, Description: in.Description, Books: bookIDs(books)}))
 		if err != nil {
 			return nil, row{}, err
 		}
@@ -253,7 +253,7 @@ func registerCollectionTools(r *registry) {
 		}
 		// what it holds is judged once held, so two adds of one book at once
 		// do not both say they added it
-		defer r.locks.By(lock.ID[api.Collection](string(c.Id)))()
+		defer r.locks.By(lock.ID[abs.Collection](string(c.Id)))()
 		if c, err = getCollection(ctx, gen, c.Id); err != nil {
 			return nil, editOut{}, err
 		}
@@ -271,7 +271,7 @@ func registerCollectionTools(r *registry) {
 
 		// everything is resolved before anything is sent, so a book named
 		// wrongly changes nothing at all
-		var adding, removing []api.LibraryItemExpanded
+		var adding, removing []abs.LibraryItemExpanded
 		if len(in.AddItems) > 0 {
 			if adding, err = libraryBooks(ctx, gen, c.LibraryId, in.AddItems); err != nil {
 				return nil, editOut{}, err
@@ -283,18 +283,18 @@ func registerCollectionTools(r *registry) {
 			}
 		}
 		for i := range adding {
-			if slices.ContainsFunc(removing, func(b api.LibraryItemExpanded) bool { return b.Id == adding[i].Id }) {
+			if slices.ContainsFunc(removing, func(b abs.LibraryItemExpanded) bool { return b.Id == adding[i].Id }) {
 				return nil, editOut{}, fmt.Errorf("%q is in both add_items and remove_items; one or the other", adding[i].Title())
 			}
 		}
-		holds := func(c *api.Collection, id api.LibraryItemID) bool {
-			return slices.ContainsFunc(c.Books, func(b api.LibraryItemExpanded) bool { return b.Id == id })
+		holds := func(c *abs.Collection, id abs.LibraryItemID) bool {
+			return slices.ContainsFunc(c.Books, func(b abs.LibraryItemExpanded) bool { return b.Id == id })
 		}
 		// the server answers 200 to adding a book it holds and to removing one
 		// it does not, and changes nothing: the split is made here, so what
 		// comes back says what was actually done
 		out := editOut{}
-		var add, remove []api.LibraryItemExpanded
+		var add, remove []abs.LibraryItemExpanded
 		for i := range adding {
 			if holds(c, adding[i].Id) {
 				out.AlreadyHeld = append(out.AlreadyHeld, adding[i].Title())
@@ -320,7 +320,7 @@ func registerCollectionTools(r *registry) {
 			return fmt.Errorf("%s, but %s failed: %w", strings.Join(done, " and "), what, err)
 		}
 		if name != "" || in.Description != "" {
-			updated, err := record(gen.CollectionUpdate(ctx, c.Id, api.CollectionUpdateRequest{Name: name, Description: in.Description}))
+			updated, err := record(gen.CollectionUpdate(ctx, c.Id, abs.CollectionUpdateRequest{Name: name, Description: in.Description}))
 			if err != nil {
 				return nil, editOut{}, err
 			}
@@ -328,7 +328,7 @@ func registerCollectionTools(r *registry) {
 			done = append(done, "the name or description was changed")
 		}
 		if len(add) > 0 {
-			updated, err := record(gen.CollectionAddBatch(ctx, c.Id, api.CollectionAddBatchRequest{Books: bookIDs(add)}))
+			updated, err := record(gen.CollectionAddBatch(ctx, c.Id, abs.CollectionAddBatchRequest{Books: bookIDs(add)}))
 			if err != nil {
 				return nil, editOut{}, failed("adding the books", err)
 			}
@@ -342,7 +342,7 @@ func registerCollectionTools(r *registry) {
 			done = append(done, fmt.Sprintf("%d books were added", len(add)))
 		}
 		if len(remove) > 0 {
-			updated, err := record(gen.CollectionRemoveBatch(ctx, c.Id, api.CollectionRemoveBatchRequest{Books: bookIDs(remove)}))
+			updated, err := record(gen.CollectionRemoveBatch(ctx, c.Id, abs.CollectionRemoveBatchRequest{Books: bookIDs(remove)}))
 			if err != nil {
 				return nil, editOut{}, failed("removing the books", err)
 			}

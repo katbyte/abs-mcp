@@ -9,7 +9,7 @@ import (
 
 	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/pointer"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -72,7 +72,7 @@ func (p providerConfig) providersFor(named []string, libraryProvider string) []s
 // region gets the blame. lookup is for a caller that looks an asin up, which
 // only an Audible store can. The library's own provider, the last fallback,
 // is the server's own setting and is not checked.
-func (p providerConfig) checkProviders(ctx context.Context, gen *api.Client, named []string, lookup bool) error {
+func (p providerConfig) checkProviders(ctx context.Context, gen *abs.Client, named []string, lookup bool) error {
 	names := named
 	if len(names) == 0 {
 		names = p.providers
@@ -100,7 +100,7 @@ func (p providerConfig) checkProviders(ctx context.Context, gen *api.Client, nam
 // with no providers named and none configured, a lookup asks the library's
 // own provider, and only an Audible store can look an asin up. A new library
 // is on google unless someone changed it.
-func (p providerConfig) lookupRefusal(named []string, lib *api.Library) error {
+func (p providerConfig) lookupRefusal(named []string, lib *abs.Library) error {
 	if len(named) > 0 || len(p.providers) > 0 || lib.IsPodcast() || isAudible(lib.Provider) {
 		return nil
 	}
@@ -189,7 +189,7 @@ func (p providerConfig) withProviderTag(tags []string, provider string) []string
 // list that already holds it, and no other store, is left in the order the
 // collector has it: withProviderTag puts the tag last, and a list compared in
 // order was written back only to move it there.
-func (p providerConfig) tagProvider(ctx context.Context, gen *api.Client, itemID api.LibraryItemID, tags []string, provider string) error {
+func (p providerConfig) tagProvider(ctx context.Context, gen *abs.Client, itemID abs.LibraryItemID, tags []string, provider string) error {
 	want := p.withProviderTag(tags, provider)
 	have, next := slices.Clone(tags), slices.Clone(want)
 	slices.Sort(have)
@@ -197,7 +197,7 @@ func (p providerConfig) tagProvider(ctx context.Context, gen *api.Client, itemID
 	if slices.Equal(have, next) {
 		return nil
 	}
-	_, err := gen.LibraryItemUpdateMedia(ctx, itemID, api.MediaUpdate{Tags: want})
+	_, err := gen.LibraryItemUpdateMedia(ctx, itemID, abs.MediaUpdate{Tags: want})
 	return err
 }
 
@@ -220,7 +220,7 @@ func (p providerConfig) providerOrder(tags, providers []string) []string {
 // tagOne records a store on one book, from its tags as they are once held
 // rather than as a listing had them. The hold is let go however the call
 // ends: one left behind by a panic would stall every later edit of the book.
-func (r *registry) tagOne(ctx context.Context, itemID api.LibraryItemID, provider string) error {
+func (r *registry) tagOne(ctx context.Context, itemID abs.LibraryItemID, provider string) error {
 	release := r.locks.By(itemLocks(itemID)...)
 	defer release()
 	fresh, err := getItem(ctx, r.gen, itemID)
@@ -291,8 +291,8 @@ func registerMatchTagTool(r *registry) {
 				return nil, tagOut{}, err
 			}
 		}
-		var items []api.LibraryItemMinified
-		more, err := matchedWindow(ctx, gen, lib.Id, bookWindow{Filter: filter, Matched: hasASINOrISBN, Offset: offset, Limit: limit}, func(it *api.LibraryItemMinified) error {
+		var items []abs.LibraryItemMinified
+		more, err := matchedWindow(ctx, gen, lib.Id, bookWindow{Filter: filter, Matched: hasASINOrISBN, Offset: offset, Limit: limit}, func(it *abs.LibraryItemMinified) error {
 			items = append(items, *it)
 			return nil
 		})

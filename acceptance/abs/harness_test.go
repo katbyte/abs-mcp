@@ -15,6 +15,7 @@ package abs_test
 import (
 	"bytes"
 	"context"
+	"flag"
 	"fmt"
 	"image"
 	_ "image/jpeg" // the covers the suite sets are JPEGs
@@ -23,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/katbyte/abs-mcp/sdk/abs"
@@ -30,13 +32,16 @@ import (
 	"github.com/katbyte/go-kt/test/env"
 	"github.com/katbyte/go-kt/test/replayproxy"
 	pclient "github.com/katbyte/pandorest/client"
+	"github.com/katbyte/pandorest/definitions"
+	"github.com/katbyte/pandorest/sweep"
 )
 
 var (
 	client   *abs.Client
-	recorder *answers.Recorder // saves what the server answers when ABS_TEST_ANSWERS is set, for the API document; nil otherwise
-	fiction  abs.LibraryID     // the book library these tests create and scan
-	podcasts abs.LibraryID     // the podcast library, for the episode endpoints
+	calls    = &pclient.Calls{} // every call the suite's clients make, for the operations it never reached
+	recorder *answers.Recorder  // saves what the server answers when ABS_TEST_ANSWERS is set, for the API document; nil otherwise
+	fiction  abs.LibraryID      // the book library these tests create and scan
+	podcasts abs.LibraryID      // the podcast library, for the episode endpoints
 )
 
 var (
@@ -110,6 +115,13 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 	stopProxy()
 
+	if code == 0 {
+		if err := everyOperationCalled(); err != nil {
+			fmt.Fprintln(os.Stderr, "\n"+err.Error())
+			code = 1
+		}
+	}
+
 	if misses := proxyMisses; len(misses) > 0 {
 		fmt.Fprintf(os.Stderr, "\nprovider proxy: %d request(s) had no recording:\n", len(misses))
 		for _, m := range misses {
@@ -140,9 +152,31 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// connect is a client for the suite's server with an account's key, which records what it reads when the suite records.
+// connect is a client for the suite's server with an account's key, which records what it reads when the suite records, and counts every
+// call it makes.
 func connect(key string, opts ...pclient.Option) (*abs.Client, error) {
-	return abs.New(os.Getenv("ABS_SERVER"), key, append(opts, pclient.WithTransport(recorder.Transport()))...)
+	return abs.New(os.Getenv("ABS_SERVER"), key, append(opts, pclient.WithTransport(recorder.Transport()), pclient.WithCalls(calls))...)
+}
+
+// everyOperationCalled fails a whole run that left an operation of the API document uncalled: what nothing calls against a real server is
+// unproven, and a route the document gains is noticed here. A run of some tests only is not held to it.
+func everyOperationCalled() error {
+	if f := flag.Lookup("test.run"); f == nil || f.Value.String() != "" {
+		return nil
+	}
+	if f := flag.Lookup("test.skip"); f == nil || f.Value.String() != "" {
+		return nil
+	}
+
+	defs, err := definitions.Load(filepath.Join("..", "..", "api-defs", "audiobookshelf-"+abs.DocumentVersion))
+	if err != nil {
+		return err
+	}
+	if problems := sweep.NeverCalled(defs, calls.Seen(), nil); len(problems) > 0 {
+		return fmt.Errorf("operations of the API document the suite never called:\n  %s", strings.Join(problems, "\n  "))
+	}
+
+	return nil
 }
 
 func skipUnlessLive(t *testing.T) context.Context {

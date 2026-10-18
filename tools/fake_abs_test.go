@@ -27,7 +27,7 @@ import (
 
 	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/pandorest/client"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -107,10 +107,10 @@ func (f *fakeABS) answer(route string, r reply) {
 }
 
 // gen is a client of the fake. It tries again as a real client does, without the waits between tries.
-func (f *fakeABS) gen(t *testing.T) *api.Client {
+func (f *fakeABS) gen(t *testing.T) *abs.Client {
 	t.Helper()
 
-	c, err := api.New(f.srv.URL, "test", client.WithRetry(httpc.Retry{Wait: func(int) time.Duration { return 0 }}))
+	c, err := abs.New(f.srv.URL, "test", client.WithRetry(httpc.Retry{Wait: func(int) time.Duration { return 0 }}))
 	if err != nil {
 		t.Fatal(err)
 	}

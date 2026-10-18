@@ -4,7 +4,6 @@ package abs
 
 // SearchFindBooksAnswerSeries is an object the document declares inline.
 type SearchFindBooksAnswerSeries struct {
-	Name     string `json:"name,omitempty"`
 	Sequence string `json:"sequence,omitempty"`
 	Series   string `json:"series,omitempty"`
 }

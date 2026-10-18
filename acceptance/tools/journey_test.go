@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/abs-mcp/tools"
 	"github.com/katbyte/go-kt/mcp/acctest"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -80,7 +80,7 @@ func adminGet(t *testing.T, path string) any {
 
 // adminClient is the SDK on the suite's admin key, for the setup a journey
 // needs that no tool offers: users, playback sessions, deleting a library.
-func adminClient(t *testing.T) *api.Client {
+func adminClient(t *testing.T) *abs.Client {
 	t.Helper()
 
 	if !suite.Ready {
@@ -190,7 +190,7 @@ func (u *userSession) callErr(t *testing.T, name string, args map[string]any) st
 
 // newUser creates a non-admin account, activates it with a login, gives it an
 // API key and an MCP server of its own, and removes all of it afterwards.
-func newUser(t *testing.T, username string, create api.UserCreateRequest) *userSession {
+func newUser(t *testing.T, username string, create abs.UserCreateRequest) *userSession {
 	t.Helper()
 
 	return newUserWith(t, username, create, tools.Options{})
@@ -198,7 +198,7 @@ func newUser(t *testing.T, username string, create api.UserCreateRequest) *userS
 
 // newUserWith is newUser with the account's MCP server registering the tools
 // opts allows, such as the delete tools.
-func newUserWith(t *testing.T, username string, create api.UserCreateRequest, opts tools.Options) *userSession {
+func newUserWith(t *testing.T, username string, create abs.UserCreateRequest, opts tools.Options) *userSession {
 	t.Helper()
 
 	admin := adminClient(t)
@@ -222,7 +222,7 @@ func newUserWith(t *testing.T, username string, create api.UserCreateRequest, op
 
 // newAccount makes an account, one an earlier run that died left by that name taken away first, logs it in once so the server takes a key
 // for it, and gives it a key; both go when the test ends. It answers the account's id and key.
-func newAccount(t *testing.T, admin *api.Client, username string, create api.UserCreateRequest) (user api.UserID, key string) {
+func newAccount(t *testing.T, admin *abs.Client, username string, create abs.UserCreateRequest) (user abs.UserID, key string) {
 	t.Helper()
 
 	existing, err := record(admin.UserFindAll(ctx))
@@ -250,7 +250,7 @@ func newAccount(t *testing.T, admin *api.Client, username string, create api.Use
 	if err := login(username, username+"-password"); err != nil {
 		t.Fatalf("activating %s: %v", username, err)
 	}
-	issued, err := record(admin.ApiKeyCreate(ctx, api.ApiKeyCreateRequest{Name: username, UserId: user, IsActive: new(true)}))
+	issued, err := record(admin.ApiKeyCreate(ctx, abs.ApiKeyCreateRequest{Name: username, UserId: user, IsActive: new(true)}))
 	if err != nil {
 		t.Fatalf("an api key for %s: %v", username, err)
 	}
@@ -935,7 +935,7 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 		madeID := acctest.Str(made["id"])
 		t.Cleanup(func() {
 			eventually(t, "deleting a collection", func() error {
-				_, err := admin.CollectionDelete(context.WithoutCancel(ctx), api.CollectionID(madeID))
+				_, err := admin.CollectionDelete(context.WithoutCancel(ctx), abs.CollectionID(madeID))
 				return err
 			})
 		})
@@ -944,7 +944,7 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 			t.Errorf("a create under a taken name: %s", msg)
 		}
 		// the server itself makes a second happily; with two, a name is refused
-		shared, err := record(admin.CollectionCreate(ctx, api.CollectionCreateRequest{LibraryId: api.LibraryID(libraryID(t, "Fiction")), Name: "Zzyzx Shared", Books: []string{itemID(t, "Fiction", "Second Foundation")}}))
+		shared, err := record(admin.CollectionCreate(ctx, abs.CollectionCreateRequest{LibraryId: abs.LibraryID(libraryID(t, "Fiction")), Name: "Zzyzx Shared", Books: []string{itemID(t, "Fiction", "Second Foundation")}}))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -972,7 +972,7 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 		t.Cleanup(func() {
 			for _, id := range []string{made, other} {
 				eventually(t, "deleting a collection", func() error {
-					_, err := admin.CollectionDelete(context.WithoutCancel(ctx), api.CollectionID(id))
+					_, err := admin.CollectionDelete(context.WithoutCancel(ctx), abs.CollectionID(id))
 					return err
 				})
 			}
@@ -997,7 +997,7 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 		madeID := acctest.Str(made["id"])
 		t.Cleanup(func() {
 			eventually(t, "deleting a playlist", func() error {
-				_, err := admin.PlaylistDelete(context.WithoutCancel(ctx), api.PlaylistID(madeID))
+				_, err := admin.PlaylistDelete(context.WithoutCancel(ctx), abs.PlaylistID(madeID))
 				return err
 			})
 		})
@@ -1005,7 +1005,7 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 		if msg := suite.CallErr(t, "playlist_create", map[string]any{"library": "Fiction", "name": "Zzyzx Shared List"}); !strings.Contains(msg, madeID) {
 			t.Errorf("a create under a taken name: %s", msg)
 		}
-		shared, err := record(admin.PlaylistCreate(ctx, api.PlaylistCreateRequest{LibraryId: api.LibraryID(libraryID(t, "Fiction")), Name: "Zzyzx Shared List", Items: []api.PlaylistEntry{{LibraryItemId: api.LibraryItemID(itemID(t, "Fiction", "Second Foundation"))}}}))
+		shared, err := record(admin.PlaylistCreate(ctx, abs.PlaylistCreateRequest{LibraryId: abs.LibraryID(libraryID(t, "Fiction")), Name: "Zzyzx Shared List", Items: []abs.PlaylistEntry{{LibraryItemId: abs.LibraryItemID(itemID(t, "Fiction", "Second Foundation"))}}}))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1025,7 +1025,7 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 	t.Run("libraries sharing a name", func(t *testing.T) {
 		// Audiobookshelf takes a second library by an existing name too
 		original := libraryID(t, "Podcasts")
-		made, err := record(admin.LibraryCreate(ctx, api.LibraryCreateRequest{Name: "Podcasts", MediaType: "book", Folders: []api.LibraryFolder{{FullPath: "/scratch"}}}))
+		made, err := record(admin.LibraryCreate(ctx, abs.LibraryCreateRequest{Name: "Podcasts", MediaType: "book", Folders: []abs.LibraryFolder{{FullPath: "/scratch"}}}))
 		if err != nil {
 			t.Fatal(err)
 		}

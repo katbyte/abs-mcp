@@ -1,7 +1,9 @@
-// Command apicheck reports how much of the Audiobookshelf API sdk/abs-byhand covers, and fails when a route is missing.
+// Command apicheck reports how much of the Audiobookshelf API the API document covers, and fails when a route is missing. The client in
+// sdk/abs is generated from the document, an operation for each of its routes, so what the document covers the client does.
 //
 // The public API docs say they are unmaintained, and the server's own OpenAPI file covers under a quarter of the routes and stopped in 2024. So the
-// route table in the server source is the reference: this reads it, reads the paths sdk/abs-byhand builds, and lists every route nothing builds.
+// route table in the server source is the reference: this reads it, reads the routes of the document in api-defs, and lists every route the
+// document lacks, as when the server gains one after the version the document was read from.
 //
 //	go run ./sdk/apicheck              # against the server's master branch
 //	go run ./sdk/apicheck -list        # also list every route not covered
@@ -13,11 +15,9 @@ package main
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"io"
 	"math"
 	"net/http"
@@ -25,32 +25,22 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // routerURL is the server's route table at a git ref.
 const routerURL = "https://raw.githubusercontent.com/advplyr/audiobookshelf/%s/server/routers/ApiRouter.js"
 
-// anyVerb marks a path the client builds where the verb cannot be seen, such as one put in a variable first or handed to a helper. It can
-// only make a route look covered that is not, never hide one that is, and the package is ours.
-const anyVerb = "*"
-
 var (
 	routeRE    = regexp.MustCompile(`router\.(get|post|patch|delete|put)\(\s*'([^']+)'`)
-	slashesRE  = regexp.MustCompile(`/+`)
 	paramRE    = regexp.MustCompile(`:\w+`)
 	optionalRE = regexp.MustCompile(`:\w+\?`)
+	// documentParamRE is a parameter as the document writes one in a path, {id}
+	documentParamRE = regexp.MustCompile(`\{\w+\}`)
 )
-
-// requestVerbs are the client's request helpers that name their verb, and the verb each sends.
-var requestVerbs = map[string]string{
-	"get":   http.MethodGet,
-	"post":  http.MethodPost,
-	"patch": http.MethodPatch,
-	"del":   http.MethodDelete,
-}
 
 // route is one verb and path.
 type route struct {
@@ -58,12 +48,12 @@ type route struct {
 	path string
 }
 
-// check is one run: where the route table is, where the client's source is, and whether to list what is missing.
+// check is one run: where the route table is, where the API document is, and whether to list what is missing.
 type check struct {
-	ref    string // the server's git ref, named in the report
-	router string // the route table's address
-	dir    string // the client's source
-	list   bool   // list every route not covered
+	ref      string // the server's git ref, named in the report
+	router   string // the route table's address
+	document string // the API document's file
+	list     bool   // list every route not covered
 }
 
 func main() {
@@ -71,20 +61,20 @@ func main() {
 	list := flag.Bool("list", false, "list every route not covered")
 	flag.Parse()
 
-	c := check{ref: *ref, router: fmt.Sprintf(routerURL, *ref), dir: "sdk/abs-byhand", list: *list}
+	c := check{ref: *ref, router: fmt.Sprintf(routerURL, *ref), document: filepath.Join("api-defs", "audiobookshelf-openapi-"+abs.DocumentVersion+".json"), list: *list}
 	missing, err := c.run(context.Background(), os.Stdout)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "apicheck:", err)
 		os.Exit(1)
 	}
 
-	// a gap is a regression: the client is meant to cover the whole API
+	// a gap is a regression: the document, and so the client, is meant to cover the whole API
 	if missing > 0 {
 		os.Exit(1)
 	}
 }
 
-// run writes the report and returns how many routes nothing in the client builds.
+// run writes the report and returns how many routes the document lacks.
 func (c check) run(ctx context.Context, w io.Writer) (int, error) {
 	src, err := fetch(ctx, c.router)
 	if err != nil {
@@ -96,7 +86,7 @@ func (c check) run(ctx context.Context, w io.Writer) (int, error) {
 		return 0, fmt.Errorf("no routes found at %s; did the file move?", c.router)
 	}
 
-	ours, err := clientPaths(c.dir)
+	ours, err := documentRoutes(c.document)
 	if err != nil {
 		return 0, err
 	}
@@ -110,11 +100,11 @@ func (c check) run(ctx context.Context, w io.Writer) (int, error) {
 
 	done := len(routes) - len(missing)
 	_, _ = fmt.Fprintf(w, "Audiobookshelf %s: %d routes\n", c.ref, len(routes))
-	_, _ = fmt.Fprintf(w, "  covered by sdk/abs-byhand   %3d   %d%%\n", done, int(math.Round(100*float64(done)/float64(len(routes)))))
-	_, _ = fmt.Fprintf(w, "  not implemented      %3d\n", len(missing))
+	_, _ = fmt.Fprintf(w, "  in the API document    %3d   %d%%\n", done, int(math.Round(100*float64(done)/float64(len(routes)))))
+	_, _ = fmt.Fprintf(w, "  not in it              %3d\n", len(missing))
 
 	if len(missing) > 0 && c.list {
-		_, _ = fmt.Fprintln(w, "\nnot implemented:")
+		_, _ = fmt.Fprintln(w, "\nnot in the API document:")
 		for _, r := range missing {
 			_, _ = fmt.Fprintf(w, "  %-6s %s\n", r.verb, r.path)
 		}
@@ -168,10 +158,10 @@ func serverRoutes(src string) []route {
 	return out
 }
 
-// covered is whether the client builds the route, with or without its trailing optional parameters.
+// covered is whether the document has the route, with or without its trailing optional parameters.
 func covered(ours map[route]bool, r route) bool {
 	for _, p := range variants(r.path) {
-		if ours[route{r.verb, p}] || ours[route{anyVerb, p}] {
+		if ours[route{r.verb, p}] {
 			return true
 		}
 	}
@@ -193,119 +183,30 @@ func variants(path string) []string {
 	return out
 }
 
-// clientPaths are the paths the client's source builds, each with the verb it is sent with, or anyVerb where that cannot be seen.
-func clientPaths(dir string) (map[route]bool, error) {
-	entries, err := os.ReadDir(dir)
+// documentRoutes are the routes of the API document, each verb and path with every parameter written :id.
+func documentRoutes(file string) (map[route]bool, error) {
+	b, err := os.ReadFile(filepath.Clean(file))
 	if err != nil {
-		return nil, fmt.Errorf("reading the client's source (run from the repository root): %w", err)
+		return nil, fmt.Errorf("reading the API document (run from the repository root): %w", err)
+	}
+	var doc struct {
+		Paths map[string]map[string]json.RawMessage `json:"paths"`
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		return nil, fmt.Errorf("reading %s: %w", file, err)
+	}
+	if len(doc.Paths) == 0 {
+		return nil, fmt.Errorf("%s has no routes", file)
 	}
 
-	fset := token.NewFileSet()
 	ours := map[route]bool{}
-	for _, e := range entries {
-		name := e.Name()
-		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
+	for path, verbs := range doc.Paths {
+		for verb := range verbs {
+			ours[route{strings.ToUpper(verb), trimSlash(documentParamRE.ReplaceAllString(path, ":id"))}] = true
 		}
-
-		f, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, parser.SkipObjectResolution)
-		if err != nil {
-			return nil, err
-		}
-
-		ast.Inspect(f, func(n ast.Node) bool {
-			if call, ok := n.(*ast.CallExpr); ok {
-				if r, ok := requestRoute(call); ok {
-					ours[r] = true
-				}
-				return true
-			}
-
-			if e, ok := n.(ast.Expr); ok {
-				if p, ok := apiPath(e); ok {
-					ours[route{anyVerb, p}] = true
-					return false
-				}
-			}
-
-			return true
-		})
 	}
 
 	return ours, nil
-}
-
-// requestRoute is the verb and path of a call to one of the client's request helpers: c.get(ctx, path, ...) and the like, or
-// c.do(ctx, http.MethodPut, path, ...).
-func requestRoute(call *ast.CallExpr) (route, bool) {
-	sel, ok := call.Fun.(*ast.SelectorExpr)
-	if !ok || !isIdent(sel.X, "c") {
-		return route{}, false
-	}
-
-	if verb, ok := requestVerbs[sel.Sel.Name]; ok && len(call.Args) > 1 {
-		return route{verb, buildPath(operands(call.Args[1]))}, true
-	}
-
-	if (sel.Sel.Name == "do" || sel.Sel.Name == "doRaw") && len(call.Args) > 2 {
-		if m, ok := call.Args[1].(*ast.SelectorExpr); ok && isIdent(m.X, "http") && strings.HasPrefix(m.Sel.Name, "Method") {
-			return route{strings.ToUpper(strings.TrimPrefix(m.Sel.Name, "Method")), buildPath(operands(call.Args[2]))}, true
-		}
-	}
-
-	return route{}, false
-}
-
-// apiPath is the path an expression builds from its first "/api/" text on, when it has one.
-func apiPath(e ast.Expr) (string, bool) {
-	ops := operands(e)
-	for i, o := range ops {
-		if s, ok := text(o); ok && strings.HasPrefix(s, "/api/") {
-			return buildPath(ops[i:]), true
-		}
-	}
-
-	return "", false
-}
-
-// operands are the pieces of a string joined with +, in order.
-func operands(e ast.Expr) []ast.Expr {
-	if b, ok := e.(*ast.BinaryExpr); ok && b.Op == token.ADD {
-		return append(operands(b.X), operands(b.Y)...)
-	}
-
-	return []ast.Expr{e}
-}
-
-// buildPath joins the pieces of a path, with anything that is not written out, such as url.PathEscape(id), as :id.
-func buildPath(ops []ast.Expr) string {
-	var b strings.Builder
-	for _, o := range ops {
-		if s, ok := text(o); ok {
-			b.WriteString(s)
-		} else {
-			b.WriteString(":id")
-		}
-	}
-
-	return paramRE.ReplaceAllString(trimSlash(slashesRE.ReplaceAllString(b.String(), "/")), ":id")
-}
-
-// text is the value of a string written out in the source.
-func text(e ast.Expr) (string, bool) {
-	lit, ok := e.(*ast.BasicLit)
-	if !ok || lit.Kind != token.STRING {
-		return "", false
-	}
-
-	s, err := strconv.Unquote(lit.Value)
-
-	return s, err == nil
-}
-
-func isIdent(e ast.Expr, name string) bool {
-	id, ok := e.(*ast.Ident)
-	return ok && id.Name == name
 }
 
 // trimSlash drops a trailing slash, leaving the root as "/".

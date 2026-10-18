@@ -3048,6 +3048,14 @@
           "Nullable": true
         },
         {
+          "Name": "MediaType",
+          "JsonName": "mediaType",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
           "Name": "Name",
           "JsonName": "name",
           "Type": {

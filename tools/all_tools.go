@@ -14,7 +14,7 @@ package tools
 import (
 	"slices"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/lock"
 	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -143,7 +143,7 @@ const (
 // against every tool before any is registered.
 type registry struct {
 	// gen is the client for the server and account the tools serve, generated from the API document
-	gen  *api.Client
+	gen  *abs.Client
 	opts Options
 	// tools holds every tool queued, made when the first is (see queued)
 	tools *mcpregistry.Registry
@@ -205,7 +205,7 @@ func add[In, Out any](r *registry, kind mcpregistry.Kind, t *mcp.Tool, h mcp.Too
 // queuedFor is every tool queued for these options, with the options made
 // the server's own: registration never calls the client, only the handlers
 // do.
-func queuedFor(gen *api.Client, opts Options) (*registry, error) {
+func queuedFor(gen *abs.Client, opts Options) (*registry, error) {
 	opts.Providers = slices.Clone(opts.Providers) // the server's own, whatever the caller does with its slice
 	var err error
 	if opts.AuditSkip, err = auditSkips(opts.AuditSkip); err != nil {
@@ -220,7 +220,7 @@ func queuedFor(gen *api.Client, opts Options) (*registry, error) {
 // RegisterAll adds every tool permitted by opts to the MCP server and returns
 // the names registered. It fails when an allow/deny pattern matches no tool,
 // so a typo cannot silently hide one.
-func RegisterAll(server *mcp.Server, gen *api.Client, opts Options) ([]string, error) {
+func RegisterAll(server *mcp.Server, gen *abs.Client, opts Options) ([]string, error) {
 	r, err := queuedFor(gen, opts)
 	if err != nil {
 		return nil, err
@@ -282,7 +282,7 @@ type ToolInfo = mcpregistry.Info
 // described is every tool queued with no server behind it, for the answers
 // that need none.
 func described(opts Options) (*registry, error) {
-	gen, err := api.New("https://describe.invalid", "describe")
+	gen, err := abs.New("https://describe.invalid", "describe")
 	if err != nil {
 		return nil, err
 	}

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -63,7 +63,7 @@ func registerSendEbookTool(r *registry) {
 		case it.Media.EbookFile == nil:
 			return nil, sendOut{}, noMainEbook(it)
 		}
-		if _, err := gen.EmailSendEBookToDevice(ctx, api.EmailSendEBookToDeviceRequest{LibraryItemId: it.Id, DeviceName: device}); err != nil {
+		if _, err := gen.EmailSendEBookToDevice(ctx, abs.EmailSendEBookToDeviceRequest{LibraryItemId: it.Id, DeviceName: device}); err != nil {
 			return nil, sendOut{}, err
 		}
 		out.Sent, out.Ebook, out.Device = true, mainEbook(it), device
@@ -73,7 +73,7 @@ func registerSendEbookTool(r *registry) {
 
 // noMainEbook says why a book has nothing to send: no ebook at all, or only
 // supplementary ones.
-func noMainEbook(it *api.LibraryItemExpanded) error {
+func noMainEbook(it *abs.LibraryItemExpanded) error {
 	for _, f := range it.LibraryFiles {
 		if f.FileType == "ebook" {
 			return fmt.Errorf("%q has no main ebook, only supplementary ones: item_edit ebook makes one the main one", it.Title())

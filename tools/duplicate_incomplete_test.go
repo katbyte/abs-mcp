@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // A copy with files missing beside the whole one is not a duplicate but a
@@ -115,10 +115,10 @@ func TestDuplicatesFindAnIncompleteCopy(t *testing.T) {
 func TestHeldTracksFollowPlayOrder(t *testing.T) {
 	t.Parallel()
 
-	files := func(lengths ...float64) []api.AudioFile {
-		out := make([]api.AudioFile, 0, len(lengths))
+	files := func(lengths ...float64) []abs.AudioFile {
+		out := make([]abs.AudioFile, 0, len(lengths))
 		for i, l := range lengths {
-			out = append(out, api.AudioFile{Index: i + 1, Duration: l, Metadata: &api.FileMetadata{Filename: fmt.Sprintf("%02d.mp3", i+1)}})
+			out = append(out, abs.AudioFile{Index: i + 1, Duration: l, Metadata: &abs.FileMetadata{Filename: fmt.Sprintf("%02d.mp3", i+1)}})
 		}
 		return out
 	}
@@ -136,7 +136,7 @@ func TestHeldTracksFollowPlayOrder(t *testing.T) {
 	for i := range cd {
 		cd[i] = 180 + float64(i)
 	}
-	two := []api.AudioFile{{Index: 1, Duration: 200.4, Metadata: &api.FileMetadata{Filename: "extra 1.mp3"}}, {Index: 2, Duration: 245.6, Metadata: &api.FileMetadata{Filename: "extra 2.mp3"}}}
+	two := []abs.AudioFile{{Index: 1, Duration: 200.4, Metadata: &abs.FileMetadata{Filename: "extra 1.mp3"}}, {Index: 2, Duration: 245.6, Metadata: &abs.FileMetadata{Filename: "extra 2.mp3"}}}
 	if _, _, ok := heldTracks(two, files(cd...)); ok {
 		t.Error("two tracks matching two of a hundred by length alone were held")
 	}

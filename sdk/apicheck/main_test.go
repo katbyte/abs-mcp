@@ -23,29 +23,16 @@ const routerJS = `
     this.router.put('/series/:id', SeriesController.update.bind(this))
 `
 
-// clientGo is a cut of the client: each helper, a path put in a variable first, and a path handed to a helper with no verb.
-const clientGo = `package abs
-
-func (c *Client) a(ctx context.Context, id string) error {
-	if err := c.get(ctx, "/api/libraries", q, &out); err != nil {
-		return err
-	}
-	if err := c.do(ctx, http.MethodPatch, "/api/me/progress/"+url.PathEscape(id), q, body, &out); err != nil {
-		return err
-	}
-	path := "/api/items/" + url.PathEscape(id)
-	if err := c.del(ctx, path, q); err != nil {
-		return err
-	}
-	return c.openPlaybackSession(ctx, "/api/items/"+url.PathEscape(id)+"/play/", body)
-}
-`
-
-// clientTestGo is a test file, whose paths do not count.
-const clientTestGo = `package abs
-
-func f(c *Client) { c.post(ctx, "/api/libraries", q, body, &out) }
-`
+// documentJSON is a cut of the API document: a parameter in braces, a route with and without its optional parameter, and a route the server
+// does not route through the API router.
+const documentJSON = `{"paths": {
+  "/api/libraries": {"get": {}, "post": {}},
+  "/api/items/{id}": {"delete": {}},
+  "/api/items/{id}/play": {"get": {}},
+  "/api/items/{id}/play/{episodeId}": {"get": {}},
+  "/api/me/progress/{libraryItemId}/{episodeId}": {"patch": {}},
+  "/status": {"get": {}}
+}}`
 
 func TestServerRoutes(t *testing.T) {
 	t.Parallel()
@@ -83,38 +70,42 @@ func TestVariants(t *testing.T) {
 	}
 }
 
-func TestClientPaths(t *testing.T) {
+func TestDocumentRoutes(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "client.go"), clientGo)
-	writeFile(t, filepath.Join(dir, "client_test.go"), clientTestGo)
-	writeFile(t, filepath.Join(dir, "notes.txt"), `c.get(ctx, "/api/notes", q, &out)`)
+	file := filepath.Join(t.TempDir(), "document.json")
+	writeFile(t, file, documentJSON)
 
-	got, err := clientPaths(dir)
+	got, err := documentRoutes(file)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	want := map[route]bool{
-		{"GET", "/api/libraries"}:         true,
-		{"PATCH", "/api/me/progress/:id"}: true,
-		{"DELETE", ":id"}:                 true,
-		{anyVerb, "/api/libraries"}:       true,
-		{anyVerb, "/api/me/progress/:id"}: true,
-		{anyVerb, "/api/items/:id"}:       true,
-		{anyVerb, "/api/items/:id/play"}:  true,
+		{"GET", "/api/libraries"}:             true,
+		{"POST", "/api/libraries"}:            true,
+		{"DELETE", "/api/items/:id"}:          true,
+		{"GET", "/api/items/:id/play"}:        true,
+		{"GET", "/api/items/:id/play/:id"}:    true,
+		{"PATCH", "/api/me/progress/:id/:id"}: true,
+		{"GET", "/status"}:                    true,
 	}
 	if !maps.Equal(got, want) {
-		t.Errorf("clientPaths:\n got %v\nwant %v", got, want)
+		t.Errorf("documentRoutes:\n got %v\nwant %v", got, want)
 	}
 }
 
-func TestClientPathsNoDir(t *testing.T) {
+func TestDocumentRoutesRefuses(t *testing.T) {
 	t.Parallel()
 
-	if _, err := clientPaths(filepath.Join(t.TempDir(), "missing")); err == nil {
-		t.Error("clientPaths of a folder that is not there: no error")
+	dir := t.TempDir()
+	for name, content := range map[string]string{"empty.json": `{"paths": {}}`, "broken.json": `{"paths":`} {
+		writeFile(t, filepath.Join(dir, name), content)
+	}
+	for _, name := range []string{"missing.json", "empty.json", "broken.json"} {
+		if _, err := documentRoutes(filepath.Join(dir, name)); err == nil {
+			t.Errorf("documentRoutes of %s: no error", name)
+		}
 	}
 }
 
@@ -133,23 +124,23 @@ func TestRun(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "client.go"), clientGo)
+	document := filepath.Join(t.TempDir(), "document.json")
+	writeFile(t, document, documentJSON)
 
 	t.Run("gaps listed", func(t *testing.T) {
 		t.Parallel()
 
 		var out bytes.Buffer
-		missing, err := check{ref: "v1", router: srv.URL + "/routes.js", dir: dir, list: true}.run(t.Context(), &out)
+		missing, err := check{ref: "v1", router: srv.URL + "/routes.js", document: document, list: true}.run(t.Context(), &out)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		want := `Audiobookshelf v1: 6 routes
-  covered by sdk/abs-byhand     5   83%
-  not implemented        1
+  in the API document      5   83%
+  not in it                1
 
-not implemented:
+not in the API document:
   PUT    /api/series/:id
 `
 		if missing != 1 || out.String() != want {
@@ -161,10 +152,10 @@ not implemented:
 		t.Parallel()
 
 		var out bytes.Buffer
-		if _, err := (check{ref: "v1", router: srv.URL + "/routes.js", dir: dir}).run(t.Context(), &out); err != nil {
+		if _, err := (check{ref: "v1", router: srv.URL + "/routes.js", document: document}).run(t.Context(), &out); err != nil {
 			t.Fatal(err)
 		}
-		if bytes.Contains(out.Bytes(), []byte("not implemented:")) {
+		if bytes.Contains(out.Bytes(), []byte("not in the API document:")) {
 			t.Errorf("run without list listed the gaps:\n%s", out.String())
 		}
 	})
@@ -173,9 +164,9 @@ not implemented:
 		t.Parallel()
 
 		for name, c := range map[string]check{
-			"no route table":   {router: srv.URL + "/missing.js", dir: dir},
-			"no routes in it":  {router: srv.URL + "/empty.js", dir: dir},
-			"no client source": {router: srv.URL + "/routes.js", dir: filepath.Join(dir, "missing")},
+			"no route table":  {router: srv.URL + "/missing.js", document: document},
+			"no routes in it": {router: srv.URL + "/empty.js", document: document},
+			"no document":     {router: srv.URL + "/routes.js", document: document + ".missing"},
 		} {
 			if _, err := c.run(t.Context(), &bytes.Buffer{}); err == nil {
 				t.Errorf("%s: no error", name)

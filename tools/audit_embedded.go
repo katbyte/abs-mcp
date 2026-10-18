@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/pointer"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -47,13 +47,13 @@ func registerEmbeddedAudit(r *registry) {
 // sweepUnembedded adds a book library's never- or stale-embedded books to
 // out, keeping at most limit of them as findings but counting every one. A
 // podcast library is skipped: nothing embeds into a podcast.
-func sweepUnembedded(ctx context.Context, gen *api.Client, lib *api.Library, limit int, out *auditOut) error {
+func sweepUnembedded(ctx context.Context, gen *abs.Client, lib *abs.Library, limit int, out *auditOut) error {
 	if lib.IsPodcast() {
 		return nil
 	}
 	// the cheap sweep picks the candidates: books with audio
-	var ids []api.LibraryItemID
-	if err := eachItem(ctx, gen, lib.Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+	var ids []abs.LibraryItemID
+	if err := eachItem(ctx, gen, lib.Id, abs.LibraryGetLibraryItemsOptions{}, func(it *abs.LibraryItemMinified) bool {
 		if !it.IsPodcast() && (it.Media.NumAudioFiles > 0 || it.Media.NumTracks > 0) {
 			ids = append(ids, it.Id)
 		}
@@ -86,7 +86,7 @@ func sweepUnembedded(ctx context.Context, gen *api.Client, lib *api.Library, lim
 
 // checkEmbedded reports whether any of an item's audio files lacks the
 // library's metadata in its tags, and says which files and which fields.
-func checkEmbedded(it *api.LibraryItemExpanded) (string, bool) {
+func checkEmbedded(it *abs.LibraryItemExpanded) (string, bool) {
 	files := it.Media.AudioFiles
 	if len(files) == 0 {
 		return "", false
@@ -128,7 +128,7 @@ func checkEmbedded(it *api.LibraryItemExpanded) (string, bool) {
 // tagsEmpty reports whether a file has none of the tags an embed writes.
 // Track numbers and an encoder name are what a ripper leaves; they do not
 // count.
-func tagsEmpty(af *api.AudioFile) bool {
+func tagsEmpty(af *abs.AudioFile) bool {
 	tags := pointer.From(af.MetaTags)
 	for _, v := range []string{tags.TagTitle, tags.TagAlbum, tags.TagArtist, tags.TagAlbumArtist} {
 		if strings.TrimSpace(v) != "" {
@@ -145,7 +145,7 @@ func tagsEmpty(af *api.AudioFile) bool {
 // item does not have are not expected in the file either, and nor is a
 // publisher in anything but an mp3: the server writes it to an m4b only as
 // the copyright, which its scan does not read back as the publisher.
-func embedMismatches(m *api.LibraryItemExpandedMediaMetadata, af *api.AudioFile) []string {
+func embedMismatches(m *abs.LibraryItemExpandedMediaMetadata, af *abs.AudioFile) []string {
 	tags := pointer.From(af.MetaTags)
 	tag := strings.TrimSpace
 	var out []string
@@ -201,7 +201,7 @@ func sameText(a, b string) bool {
 // isMP3 reports whether an audio file is an mp3, the one format the server
 // writes a publisher tag into on embed. Its mime type says so, or failing
 // that its extension.
-func isMP3(af *api.AudioFile) bool {
+func isMP3(af *abs.AudioFile) bool {
 	if af.MimeType != "" {
 		return strings.EqualFold(af.MimeType, "audio/mpeg")
 	}

@@ -3,7 +3,7 @@ package tools
 import (
 	"github.com/katbyte/go-kt/lock"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // The calls of one turn are kept from undoing each other with go-kt's locks.
@@ -28,7 +28,7 @@ const bookmarksLock = "bookmarks"
 func itemLocks[ID ~string](ids ...ID) []lock.Thing {
 	things := make([]lock.Thing, 0, len(ids))
 	for _, id := range ids {
-		things = append(things, lock.ID[api.LibraryItemExpanded](string(id)))
+		things = append(things, lock.ID[abs.LibraryItemExpanded](string(id)))
 	}
 
 	return things

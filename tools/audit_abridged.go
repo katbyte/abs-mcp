@@ -12,7 +12,7 @@ import (
 	"strings"
 	"unicode"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/pointer"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -189,7 +189,7 @@ func (o *abridgedOut) add(f abridgedFinding) {
 // book's own name counts: a shelf folder called "Abridged" says nothing about
 // a book filed under it by mistake. A production is left out with them: a
 // dramatisation, a full cast, a radio or audio drama or play.
-func saysAbridged(it *api.LibraryItemMinified) bool {
+func saysAbridged(it *abs.LibraryItemMinified) bool {
 	m := it.Media.Metadata
 	text := m.Title + " " + m.Subtitle + " " + path.Base(strings.Trim(it.RelPath, "/"))
 	// the reader credit counts for a production, "Full Cast" read it, and
@@ -229,7 +229,7 @@ const abridgedLimitMax = 50
 // abridgedRefusal refuses a library whose stores cannot say how long an
 // edition is or whether it is abridged: only the Audible stores do, and a new
 // library is on google.
-func abridgedRefusal(prov providerConfig, named []string, lib *api.Library) error {
+func abridgedRefusal(prov providerConfig, named []string, lib *abs.Library) error {
 	if lib.IsPodcast() {
 		return nil
 	}
@@ -255,7 +255,7 @@ func abridgedRefusal(prov providerConfig, named []string, lib *api.Library) erro
 // folder names its reader, "Heartfire (Nana Visitor)", and the store knows
 // the book as Heartfire. The copy has its own media and metadata, so the
 // book itself keeps its title.
-func storeTitled(it *api.LibraryItemMinified) *api.LibraryItemMinified {
+func storeTitled(it *abs.LibraryItemMinified) *abs.LibraryItemMinified {
 	probe := *it
 	if title := strings.TrimSpace(readingNote.ReplaceAllString(it.Title(), " ")); title != "" {
 		media := pointer.From(it.Media)
@@ -270,11 +270,11 @@ func storeTitled(it *api.LibraryItemMinified) *api.LibraryItemMinified {
 // judgeEditions compares a book with the store's editions of it: the hits
 // with the same title and author and a length. It says how many there were,
 // so a store with none can be passed over for the next.
-func judgeEditions(it *api.LibraryItemMinified, results []api.SearchFindBooksAnswer, provider string) (row *abridgedFinding, editions int) {
+func judgeEditions(it *abs.LibraryItemMinified, results []abs.SearchFindBooksAnswer, provider string) (row *abridgedFinding, editions int) {
 	book, probe := it.Media.Duration, storeTitled(it)
 	// the closest abridged edition in tolerance; the shortest unabridged;
 	// the shortest abridged, whatever its length
-	var near, shortest, shortestCut *api.SearchFindBooksAnswer
+	var near, shortest, shortestCut *abs.SearchFindBooksAnswer
 	nearDelta, unabridgedNear, productionNear := math.Inf(1), false, false
 	for i := range results {
 		r := &results[i]
@@ -313,7 +313,7 @@ func judgeEditions(it *api.LibraryItemMinified, results []api.SearchFindBooksAns
 	}
 	// a cut near the book's length is on sale: the book may be one
 	cutNear := shortestCut != nil && shortestCut.Duration*60 < shorterWorkCutRatio*book
-	edition := func(r *api.SearchFindBooksAnswer) *storeEdition {
+	edition := func(r *abs.SearchFindBooksAnswer) *storeEdition {
 		return &storeEdition{ASIN: r.Asin, Title: r.Title, Narrator: r.Narrator, Duration: wholeSec(r.Duration * 60), Abridged: abridgedEdition(r), Provider: provider}
 	}
 	f := abridgedFinding{ID: string(it.Id), Title: it.Title(), Author: it.Media.Metadata.AuthorDisplay(), Path: it.RelPath, Duration: wholeSec(book)}
@@ -346,7 +346,7 @@ func judgeEditions(it *api.LibraryItemMinified, results []api.SearchFindBooksAns
 
 // abridgedEdition reports whether the store says an edition is abridged: its
 // format, or its title.
-func abridgedEdition(r *api.SearchFindBooksAnswer) bool {
+func abridgedEdition(r *abs.SearchFindBooksAnswer) bool {
 	return r.Abridged || abridgedWord.MatchString(nameWords(r.Title+" "+r.Subtitle))
 }
 
@@ -386,7 +386,7 @@ func readBy(narrator string) string {
 // checkAbridgedStore searches the stores for one book, the one it was
 // matched from first, until one has editions of it with a length, and adds a
 // finding when the book's length gives it away.
-func checkAbridgedStore(ctx context.Context, gen *api.Client, it *api.LibraryItemMinified, providers []string, out *abridgedOut) error {
+func checkAbridgedStore(ctx context.Context, gen *abs.Client, it *abs.LibraryItemMinified, providers []string, out *abridgedOut) error {
 	for _, provider := range providers {
 		if !isAudible(provider) {
 			continue // a provider tag can name a store with no lengths
@@ -421,7 +421,7 @@ type abridgedScope struct {
 
 // sweepAbridged runs both checks over the whole of one library, as audit_all
 // does.
-func sweepAbridged(ctx context.Context, gen *api.Client, prov providerConfig, lib *api.Library, out *abridgedOut) error {
+func sweepAbridged(ctx context.Context, gen *abs.Client, prov providerConfig, lib *abs.Library, out *abridgedOut) error {
 	if err := sweepReadings(ctx, gen, lib, "", out); err != nil {
 		return err
 	}
@@ -431,7 +431,7 @@ func sweepAbridged(ctx context.Context, gen *api.Client, prov providerConfig, li
 
 // sweepAbridgedStore searches a window of a library's books at the store.
 // more says a book lies past the window.
-func sweepAbridgedStore(ctx context.Context, gen *api.Client, prov providerConfig, lib *api.Library, scope abridgedScope, out *abridgedOut) (more bool, err error) {
+func sweepAbridgedStore(ctx context.Context, gen *abs.Client, prov providerConfig, lib *abs.Library, scope abridgedScope, out *abridgedOut) (more bool, err error) {
 	if lib.IsPodcast() {
 		return false, nil
 	}
@@ -441,7 +441,7 @@ func sweepAbridgedStore(ctx context.Context, gen *api.Client, prov providerConfi
 	providers := prov.providersFor(scope.Providers, lib.Provider)
 	// every book counts toward the window, searched or not, so marking one
 	// abridged between calls moves no book across the offset
-	return matchedWindow(ctx, gen, lib.Id, bookWindow{Filter: scope.Filter, Offset: scope.Offset, Limit: scope.Limit, seen: scope.seen}, func(it *api.LibraryItemMinified) error {
+	return matchedWindow(ctx, gen, lib.Id, bookWindow{Filter: scope.Filter, Offset: scope.Offset, Limit: scope.Limit, seen: scope.seen}, func(it *abs.LibraryItemMinified) error {
 		out.Scanned++
 		if saysAbridged(it) || it.Media.Duration < abridgedMinSeconds || prov.markedUnmatchable(it.Media.Tags) {
 			return nil
@@ -453,7 +453,7 @@ func sweepAbridgedStore(ctx context.Context, gen *api.Client, prov providerConfi
 
 // readingKey files a book under its title and first author, loosely: a
 // second reading's folder often adds the reader, "Heartfire (Nana Visitor)".
-func readingKey(it *api.LibraryItemMinified) string {
+func readingKey(it *abs.LibraryItemMinified) string {
 	title := cleanTitle(readingNote.ReplaceAllString(it.Title(), " "))
 	if title == "" {
 		return ""
@@ -470,13 +470,13 @@ func readingKey(it *api.LibraryItemMinified) string {
 // against the reading it differs from most. The listing carries a chapter
 // count and not the chapters, so the books held more than once are fetched
 // whole, fifty to a request; nothing is asked of a store.
-func sweepReadings(ctx context.Context, gen *api.Client, lib *api.Library, filter string, out *abridgedOut) error {
+func sweepReadings(ctx context.Context, gen *abs.Client, lib *abs.Library, filter string, out *abridgedOut) error {
 	if lib.IsPodcast() {
 		return nil
 	}
-	groups := map[string][]api.LibraryItemID{}
+	groups := map[string][]abs.LibraryItemID{}
 	var keys []string
-	if err := eachItem(ctx, gen, lib.Id, api.LibraryGetLibraryItemsOptions{Filter: filter}, func(it *api.LibraryItemMinified) bool {
+	if err := eachItem(ctx, gen, lib.Id, abs.LibraryGetLibraryItemsOptions{Filter: filter}, func(it *abs.LibraryItemMinified) bool {
 		if it.IsPodcast() || it.Media.NumChapters == 0 {
 			return true
 		}
@@ -492,13 +492,13 @@ func sweepReadings(ctx context.Context, gen *api.Client, lib *api.Library, filte
 	}); err != nil {
 		return err
 	}
-	var ids []api.LibraryItemID
+	var ids []abs.LibraryItemID
 	for _, k := range keys {
 		if len(groups[k]) > 1 {
 			ids = append(ids, groups[k]...)
 		}
 	}
-	whole := map[api.LibraryItemID]*api.LibraryItemExpanded{}
+	whole := map[abs.LibraryItemID]*abs.LibraryItemExpanded{}
 	for chunk := range slices.Chunk(ids, embedBatchSize) {
 		items, err := itemsBatch(ctx, gen, chunk)
 		if err != nil {
@@ -510,7 +510,7 @@ func sweepReadings(ctx context.Context, gen *api.Client, lib *api.Library, filte
 	}
 
 	var rows []abridgedFinding
-	at := map[api.LibraryItemID]int{} // the shorter reading's row
+	at := map[abs.LibraryItemID]int{} // the shorter reading's row
 	for _, k := range keys {
 		group := groups[k]
 		for i := range group {
@@ -567,14 +567,14 @@ func sweepReadings(ctx context.Context, gen *api.Client, lib *api.Library, filte
 // spread is the 90th percentile of the ratios over the 10th. A title that
 // names only a disc, a track or the book itself is left out: two releases
 // split differently share it without sharing the text.
-func chapterSpread(long, short *api.LibraryItemExpanded) (spread, lo, hi float64, n int, ok bool) {
+func chapterSpread(long, short *abs.LibraryItemExpanded) (spread, lo, hi float64, n int, ok bool) {
 	book := map[string]bool{}
-	for _, it := range []*api.LibraryItemExpanded{long, short} {
+	for _, it := range []*abs.LibraryItemExpanded{long, short} {
 		for w := range strings.FieldsSeq(norm(it.Title() + " " + it.Media.Metadata.AuthorDisplay())) {
 			book[w] = true
 		}
 	}
-	lengths := func(it *api.LibraryItemExpanded) map[string]float64 {
+	lengths := func(it *abs.LibraryItemExpanded) map[string]float64 {
 		out := map[string]float64{}
 		for _, ch := range it.Media.Chapters {
 			if t := chapterKey(ch.Title, book); t != "" {

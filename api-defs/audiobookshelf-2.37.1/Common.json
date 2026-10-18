@@ -3425,20 +3425,6 @@
           "Nullable": true
         },
         {
-          "Name": "AuthorName",
-          "JsonName": "authorName",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "AuthorNameLF",
-          "JsonName": "authorNameLF",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
           "Name": "Authors",
           "JsonName": "authors",
           "Type": {
@@ -3456,13 +3442,6 @@
             "Type": "String"
           },
           "Nullable": true
-        },
-        {
-          "Name": "DescriptionPlain",
-          "JsonName": "descriptionPlain",
-          "Type": {
-            "Type": "String"
-          }
         },
         {
           "Name": "Explicit",
@@ -3539,13 +3518,6 @@
           "Nullable": true
         },
         {
-          "Name": "NarratorName",
-          "JsonName": "narratorName",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
           "Name": "Narrators",
           "JsonName": "narrators",
           "Type": {
@@ -3596,13 +3568,6 @@
               "Type": "Reference",
               "ReferenceName": "SeriesMinimal"
             }
-          }
-        },
-        {
-          "Name": "SeriesName",
-          "JsonName": "seriesName",
-          "Type": {
-            "Type": "String"
           }
         },
         {
@@ -4325,13 +4290,6 @@
           "Type": {
             "Type": "ID",
             "ReferenceName": "UserID"
-          }
-        },
-        {
-          "Name": "Name",
-          "JsonName": "name",
-          "Type": {
-            "Type": "String"
           }
         },
         {

@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/pointer"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -58,8 +58,8 @@ func newPassword() string {
 // permissions is the part of an account change that the server keeps in its
 // permissions object, and what each should read back as; one not asked for
 // is left out.
-func (f accountFields) permissions() api.UserPermissions {
-	out := api.UserPermissions{
+func (f accountFields) permissions() abs.UserPermissions {
+	out := abs.UserPermissions{
 		Download: f.CanDownload, Update: f.CanUpdate, Delete: f.CanDelete, Upload: f.CanUpload,
 		CreateEreader: f.CanUseEreader, AccessExplicitContent: f.Explicit,
 	}
@@ -89,7 +89,7 @@ func (f accountFields) check() error {
 
 // libraryIDs resolves library names or ids to ids; nil with all for every
 // library.
-func libraryIDs(ctx context.Context, gen *api.Client, refs []string) (ids []string, all bool, err error) {
+func libraryIDs(ctx context.Context, gen *abs.Client, refs []string) (ids []string, all bool, err error) {
 	switch {
 	case len(refs) == 0:
 		return nil, false, nil
@@ -101,7 +101,7 @@ func libraryIDs(ctx context.Context, gen *api.Client, refs []string) (ids []stri
 		return nil, false, err
 	}
 	for _, ref := range refs {
-		i := slices.IndexFunc(libs, func(l api.Library) bool { return string(l.Id) == ref || strings.EqualFold(l.Name, ref) })
+		i := slices.IndexFunc(libs, func(l abs.Library) bool { return string(l.Id) == ref || strings.EqualFold(l.Name, ref) })
 		if i < 0 {
 			names := make([]string, 0, len(libs))
 			for _, l := range libs {
@@ -117,7 +117,7 @@ func libraryIDs(ctx context.Context, gen *api.Client, refs []string) (ids []stri
 }
 
 // heldTo says what of an account change the server did not keep.
-func heldTo(u *api.UserForBrowser, f accountFields, libs []string, allLibs bool) error {
+func heldTo(u *abs.UserForBrowser, f accountFields, libs []string, allLibs bool) error {
 	var off []string
 	have, want := pointer.From(u.Permissions), f.permissions()
 	for _, p := range []struct {
@@ -209,7 +209,7 @@ func registerAccountTools(r *registry) {
 			password = newPassword()
 			out.Password = password
 		}
-		req := api.UserCreateRequest{
+		req := abs.UserCreateRequest{
 			Username: strings.TrimSpace(in.Username), Password: password, Type: in.Type, Email: in.Email,
 			IsActive: new(true), ItemTagsSelected: orTags(in.Tags, in.DeniedTags),
 		}
@@ -217,7 +217,7 @@ func registerAccountTools(r *registry) {
 		if len(libs) > 0 {
 			perms.AccessAllLibraries, req.LibrariesAccessible = new(false), libs
 		}
-		if perms != (api.UserPermissions{}) {
+		if perms != (abs.UserPermissions{}) {
 			req.Permissions = &perms
 		}
 		made, err := record(gen.UserCreate(ctx, req))
@@ -274,7 +274,7 @@ func registerAccountTools(r *registry) {
 		}
 
 		out := accountOut{}
-		upd := api.UserUpdateRequest{Type: in.Type, Email: in.Email, IsActive: in.Active}
+		upd := abs.UserUpdateRequest{Type: in.Type, Email: in.Email, IsActive: in.Active}
 		if name := strings.TrimSpace(in.Username); name != "" && name != u.Username {
 			upd.Username = name
 		}
@@ -293,7 +293,7 @@ func registerAccountTools(r *registry) {
 		case len(libs) > 0:
 			perms.AccessAllLibraries, upd.LibrariesAccessible = new(false), libs
 		}
-		if perms != (api.UserPermissions{}) {
+		if perms != (abs.UserPermissions{}) {
 			upd.Permissions = &perms
 		}
 		if tags := orTags(in.Tags, in.DeniedTags); len(tags) > 0 {

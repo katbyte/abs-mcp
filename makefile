@@ -302,7 +302,7 @@ testenv-up: ## Start and seed a throwaway Audiobookshelf container
 testenv-down: ## Remove the throwaway Audiobookshelf container
 	@.scripts/abs-testenv.sh down
 
-apicheck: ## Report how much of the Audiobookshelf API sdk/abs-byhand covers
+apicheck: ## Report how much of the Audiobookshelf API the API document, and so sdk/abs, covers
 	@go run ./sdk/apicheck -list
 
 spec: ## Write api-defs/audiobookshelf-openapi-<version>.json from an Audiobookshelf checkout: make spec SOURCE=../audiobookshelf

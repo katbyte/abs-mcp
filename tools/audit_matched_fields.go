@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // A match applied the default way fills only the empty fields, so what the
@@ -32,7 +32,7 @@ type fieldDiff struct {
 // aside; a field the provider leaves blank is not a difference, since a
 // match would not blank it either. series is the book's series as lines,
 // "Discworld #3", from its whole record when the caller has one.
-func fieldDiffs(m *api.LibraryItemMinifiedMediaMetadata, series []string, hit *api.SearchFindBooksAnswer) []fieldDiff {
+func fieldDiffs(m *abs.LibraryItemMinifiedMediaMetadata, series []string, hit *abs.SearchFindBooksAnswer) []fieldDiff {
 	var out []fieldDiff
 	text := func(field, local, provider string) {
 		if strings.TrimSpace(provider) == "" || norm(local) == norm(provider) {
@@ -61,9 +61,9 @@ func fieldDiffs(m *api.LibraryItemMinifiedMediaMetadata, series []string, hit *a
 	var theirs []string
 	for _, s := range hit.Series {
 		if s.Sequence != "" {
-			theirs = append(theirs, s.Title()+" #"+s.Sequence)
+			theirs = append(theirs, s.Series+" #"+s.Sequence)
 		} else {
-			theirs = append(theirs, s.Title())
+			theirs = append(theirs, s.Series)
 		}
 	}
 	list("series", series, theirs)

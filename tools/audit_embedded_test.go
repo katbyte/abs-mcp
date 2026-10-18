@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // The server joins genres with "; " on embed and writes an m4b's publisher
@@ -13,12 +13,12 @@ import (
 func TestEmbeddedReadsTheTagsTheServerWrites(t *testing.T) {
 	t.Parallel()
 
-	m := &api.LibraryItemExpandedMediaMetadata{Title: "X", Genres: []string{"Mystery, Thriller & Suspense", "Fiction"}, Publisher: "Tantor"}
+	m := &abs.LibraryItemExpandedMediaMetadata{Title: "X", Genres: []string{"Mystery, Thriller & Suspense", "Fiction"}, Publisher: "Tantor"}
 	genre := "Mystery, Thriller & Suspense; Fiction"
-	if got := embedMismatches(m, &api.AudioFile{MimeType: "audio/mp4", Metadata: &api.FileMetadata{Ext: ".m4b"}, MetaTags: &api.AudioMetaTags{TagTitle: "X", TagGenre: genre}}); len(got) != 0 {
+	if got := embedMismatches(m, &abs.AudioFile{MimeType: "audio/mp4", Metadata: &abs.FileMetadata{Ext: ".m4b"}, MetaTags: &abs.AudioMetaTags{TagTitle: "X", TagGenre: genre}}); len(got) != 0 {
 		t.Errorf("an m4b embedded by the server = %v, want nothing stale", got)
 	}
-	mp3 := &api.AudioFile{MimeType: "audio/mpeg", MetaTags: &api.AudioMetaTags{TagTitle: "X", TagGenre: genre}}
+	mp3 := &abs.AudioFile{MimeType: "audio/mpeg", MetaTags: &abs.AudioMetaTags{TagTitle: "X", TagGenre: genre}}
 	if got := embedMismatches(m, mp3); !slices.Equal(got, []string{"no publisher tag"}) {
 		t.Errorf("an mp3 without its publisher = %v, want the publisher missing", got)
 	}
@@ -99,22 +99,22 @@ func TestAuditUnembeddedReadsFileTags(t *testing.T) {
 func TestEmbedMismatches(t *testing.T) {
 	t.Parallel()
 
-	m := &api.LibraryItemExpandedMediaMetadata{Title: "Dune", AuthorName: "Frank Herbert", Genres: []string{"SF"}, PublishedYear: "1965"}
-	af := func(tags api.AudioMetaTags) *api.AudioFile { return &api.AudioFile{MetaTags: &tags} }
+	m := &abs.LibraryItemExpandedMediaMetadata{Title: "Dune", AuthorName: "Frank Herbert", Genres: []string{"SF"}, PublishedYear: "1965"}
+	af := func(tags abs.AudioMetaTags) *abs.AudioFile { return &abs.AudioFile{MetaTags: &tags} }
 
-	if got := embedMismatches(m, af(api.AudioMetaTags{TagTitle: "Chapter 1", TagAlbum: "Dune: A Novel", TagArtist: "FRANK HERBERT", TagGenre: "sf", TagDate: "1965"})); len(got) != 0 {
+	if got := embedMismatches(m, af(abs.AudioMetaTags{TagTitle: "Chapter 1", TagAlbum: "Dune: A Novel", TagArtist: "FRANK HERBERT", TagGenre: "sf", TagDate: "1965"})); len(got) != 0 {
 		t.Errorf("a chaptered track under the right album was flagged: %v", got)
 	}
-	got := embedMismatches(m, af(api.AudioMetaTags{TagTitle: "Dune", TagArtist: "Unknown"}))
+	got := embedMismatches(m, af(abs.AudioMetaTags{TagTitle: "Dune", TagArtist: "Unknown"}))
 	if !slices.Equal(got, []string{`author "Unknown" vs "Frank Herbert"`, "no genres tag", "no year tag"}) {
 		t.Errorf("mismatches = %v", got)
 	}
 	// fields the item lacks are not expected in the file
-	if got := embedMismatches(&api.LibraryItemExpandedMediaMetadata{Title: "Dune"}, af(api.AudioMetaTags{TagTitle: "Dune"})); len(got) != 0 {
+	if got := embedMismatches(&abs.LibraryItemExpandedMediaMetadata{Title: "Dune"}, af(abs.AudioMetaTags{TagTitle: "Dune"})); len(got) != 0 {
 		t.Errorf("absent metadata demanded a tag: %v", got)
 	}
 
-	if !tagsEmpty(af(api.AudioMetaTags{TagTrack: "3", TagEncoder: "LAME"})) || tagsEmpty(af(api.AudioMetaTags{TagAlbum: "x"})) {
+	if !tagsEmpty(af(abs.AudioMetaTags{TagTrack: "3", TagEncoder: "LAME"})) || tagsEmpty(af(abs.AudioMetaTags{TagAlbum: "x"})) {
 		t.Error("tagsEmpty: ripper leftovers count as tags, or an album does not")
 	}
 	for tag, want := range map[string]bool{"SF; Classic": true, "classic/sf": true, "SF": false, "SF; Classic; Space Opera": false} {

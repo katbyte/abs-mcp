@@ -10,14 +10,14 @@ import (
 	"testing"
 	"time"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
-func serve(t *testing.T, h http.HandlerFunc) *api.Client {
+func serve(t *testing.T, h http.HandlerFunc) *abs.Client {
 	t.Helper()
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	c, err := api.New(srv.URL, "k")
+	c, err := abs.New(srv.URL, "k")
 	if err != nil {
 		t.Fatal(err)
 	}

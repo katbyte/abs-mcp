@@ -2,7 +2,7 @@
 
 ## API reference
 
-Audiobookshelf's public API docs (<https://api.audiobookshelf.org>) state that they are out of date and no longer maintained. The reference for `sdk/abs-byhand` is the server source:
+Audiobookshelf's public API docs (<https://api.audiobookshelf.org>) state that they are out of date and no longer maintained. The reference for the API document, and so for `sdk/abs`, is the server source:
 
 | What | Where in <https://github.com/advplyr/audiobookshelf> |
 |---|---|
@@ -22,10 +22,12 @@ grep -oE "router\.(get|post|patch|delete)\('[^']+'" server/routers/ApiRouter.js 
 
 - Auth is `Authorization: Bearer <api key>`. A key acts as one user; admin-only routes return 403 for other accounts.
 - Timestamps are epoch milliseconds; durations are seconds.
-- List endpoints (`/api/libraries/:id/items`, `/authors`, `/series`) page with `limit` and `page` (0-based) and return `{results, total, ...}`. `minified=1` returns the compact item shape; item detail uses `expanded=1`.
-- The `filter` parameter is `<group>.<base64(value)>` (`abs.EncodeFilter`). Groups the book filters accept: genres, tags, series, authors, narrators, languages, publishers, publishedDecades, progress, missing, ebooks, tracks, issues, abridged, explicit, feed-open, recent.
-- Items filtered by series come back with `media.metadata.series` as a single object rather than an array; `abs.SeriesRefs` decodes both.
+- List endpoints (`/api/libraries/:id/items`, `/authors`, `/series`) page with `limit` and `page` (0-based) and return `{results, total, ...}`. `/authors` pages only when given both, and otherwise answers every author as `authors`. `minified=1` returns the compact item shape; item detail uses `expanded=1`.
+- The `filter` parameter is `<group>.<base64(value)>` (`abs.ListFilter`). Groups the book filters accept: genres, tags, series, authors, narrators, languages, publishers, publishedDecades, progress, missing, ebooks, tracks, issues, abridged, explicit, feed-open, recent.
+- Items filtered by series come back with `media.metadata.series` as a single object rather than an array, which the list's short form of an item holds.
 - Scans, match-all and metadata embeds return 200 immediately and run as tasks (`/api/tasks`).
+- Most writes answer a plain `OK`. `PATCH /api/me/password` answers JSON with new sign-in tokens only to a request carrying `x-refresh-token`, and `OK` to an API key.
+- `GET /api/users/online` lists each account as its public profile: id, username, type, its open session, when it was last seen and joined, and how many connections it has open.
 
 ## Server behaviour the tools work around
 
@@ -53,7 +55,7 @@ Found by the acceptance journeys against Audiobookshelf 2.36; each has a unit te
 - `POST /api/filesystem/pathexists` answers `exists` for a path not on disk that sits one or two levels inside an item's folder, naming the item; only `exists` with no item named is a path really there.
 - `POST /api/tools/item/:id/encode-m4b` always re-encodes, at 128k stereo AAC unless told otherwise; names the m4b after the book's folder, or for a book that is one file after that file; and moves the files merged into `metadata/cache/items/<id>`. The task leaves `/api/tasks` when it ends, failed or finished alike: only the book and the log say which.
 - `GET /api/items/:id` honours `include` (`progress`, `rssfeed`, `share`, `downloads`) only with `expanded=1`.
-- `GET /api/feeds` gives each feed's url inside `meta`, where opening a feed gives it at the top.
+- `GET /api/feeds` gives each feed's url at the top and again inside `meta`; opening a feed gives it at the top only.
 - `POST /api/users` makes an inactive account unless `isActive` is sent, and drops a permission it does not know, or one that is not true or false, with only a log line. `PATCH /api/users/:id` takes a library list only beside a `permissions` object, and leaves the root account's type as it was whatever is asked.
 - A permission is granted by the permission alone and only while the account is active, not by the account's type: an admin without `delete` may not delete.
 - `GET /api/stats/year/:year` (the whole server) answers a shape of its own, not `/api/me/stats/year/:year`'s, and refuses a year before 2000.

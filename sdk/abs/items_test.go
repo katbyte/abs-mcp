@@ -90,13 +90,6 @@ func TestItemReadings(t *testing.T) {
 	if got := (LibraryItemExpandedMediaMetadata{NarratorName: "A and B", Narrators: []string{"A"}}).NarratorDisplay(); got != "A and B" {
 		t.Errorf("a whole book's narrators written out = %q, want \"A and B\"", got)
 	}
-
-	if got := (SearchFindBooksAnswerSeries{Series: "Discworld", Sequence: "3"}).Title(); got != "Discworld" {
-		t.Errorf("a built-in provider's series = %q, want Discworld", got)
-	}
-	if got := (SearchFindBooksAnswerSeries{Name: "Discworld"}).Title(); got != "Discworld" {
-		t.Errorf("a custom provider's series = %q, want Discworld", got)
-	}
 }
 
 // fill gives every field of v a value that is not its zero, through records, lists and pointers, a few levels down.

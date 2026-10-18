@@ -2,21 +2,21 @@
 
 ### Breaking
 
-- the hand-written Go client moves from `sdk/abs` to `sdk/abs-byhand`, still package `abs`: change the import path. `sdk/abs` is to be the client generated from the API document
-- the Go client's errors and options come from go-kt's `httpc`, which go-kt 0.8.0 renamed from `chttp`: a refused call is a `*httpc.StatusError`, and an option takes `*httpc.Options`
+- the Go client in `sdk/abs` is generated from the API document in place of written by hand: each call is named for its operation, `LibraryGetLibraryItems` for `Items`, and takes the kind of id it needs
 
 ### Changed
 
 - `library_list`, `server_info`, `server_sessions`, `server_backups` and `server_backup_create` take no arguments and now refuse one, as every other tool refuses an argument it does not take
 - an address in an error loses its sign-in, its query values and what follows a `#`, so a stored key cannot come back in one
 - the API coverage check and the calibration download are Go, not Python: `make apicheck` as before, and `go run ./lib/audiosample/calibration` in place of `scripts/calibration-fetch.py`
-- the tools talk to Audiobookshelf through the generated client in `sdk/abs`; nothing in the server uses `sdk/abs-byhand` any more
-- the Go client live suite tests the generated client: the calls that change something, in the order a caller makes them, with every read left to the read sweep
+- `make apicheck` checks the API document against the server's routes
+- the tools talk to Audiobookshelf through the generated client
+- the Go client live suite tests the calls that change something, in the order a caller makes them, and fails a run that leaves an operation of the API document uncalled
 
 ### Added
 
 - `api-defs/audiobookshelf-openapi-2.37.1.json`, an OpenAPI document of every Audiobookshelf route, read from the server source by `make spec`
-- `make spec` fills in what the source leaves untyped from the hand-written client, and lists where the two disagree
+- `make spec` takes what the source does not say from statements in `sdk/pandorest`, each naming the line of the source it comes from
 - `make pandorest-import` reads the document into pandorest's definitions, with each kind of id its own type, times read as dates, and the lists that page marked so every page can be read
 - `ABS_TEST_ANSWERS=1 make testacc` saves what Audiobookshelf answers, and `make spec` fills in and corrects the API document from it
 - `sdk/abs`, the Go client generated from the API document by pandorest, written by `make generate` and checked by `make gencheck`
@@ -28,9 +28,9 @@
 ### Fixed
 
 - the Go client live suite removes what its tests make: its clean-up ran after the test had ended, and did nothing
-- the Go client's `UpdateAPIKey` refuses a key's name or expiry, which Audiobookshelf cannot change and quietly ignored, rather than send it
 - a tool that deletes, scans, embeds or sets progress no longer leaves its connection to the server open
 - the generated client can upload a book, and change a password without failing on the server's plain "OK"
+- the Go client reads who is online as the server sends it: each account's public profile and open session
 
 ## 0.7.0 (2026-10-09)
 

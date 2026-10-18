@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -199,22 +199,22 @@ func parseQuery(t *testing.T, raw string) url.Values {
 }
 
 // at is a moment as the server writes one, from its milliseconds since 1970.
-func at(ms int64) api.UnixMilli { return api.UnixMilli{Time: time.UnixMilli(ms).UTC()} }
+func at(ms int64) abs.UnixMilli { return abs.UnixMilli{Time: time.UnixMilli(ms).UTC()} }
 
 // shortBook is a book as a library's list sends it: an id, a path and a title.
-func shortBook(id, path, title string) *api.LibraryItemMinified {
-	return &api.LibraryItemMinified{Id: api.LibraryItemID(id), MediaType: "book", RelPath: path, Media: &api.LibraryItemMinifiedMedia{Metadata: &api.LibraryItemMinifiedMediaMetadata{Title: title}}}
+func shortBook(id, path, title string) *abs.LibraryItemMinified {
+	return &abs.LibraryItemMinified{Id: abs.LibraryItemID(id), MediaType: "book", RelPath: path, Media: &abs.LibraryItemMinifiedMedia{Metadata: &abs.LibraryItemMinifiedMediaMetadata{Title: title}}}
 }
 
-func numbered(id, path, series, seq string) *api.LibraryItemMinified {
-	meta := &api.LibraryItemMinifiedMediaMetadata{Title: path, Series: &api.SeriesMinimal{Name: series, Sequence: seq}}
-	return &api.LibraryItemMinified{Id: api.LibraryItemID(id), MediaType: "book", RelPath: path, Media: &api.LibraryItemMinifiedMedia{Metadata: meta}}
+func numbered(id, path, series, seq string) *abs.LibraryItemMinified {
+	meta := &abs.LibraryItemMinifiedMediaMetadata{Title: path, Series: &abs.SeriesMinimal{Name: series, Sequence: seq}}
+	return &abs.LibraryItemMinified{Id: abs.LibraryItemID(id), MediaType: "book", RelPath: path, Media: &abs.LibraryItemMinifiedMedia{Metadata: meta}}
 }
 
-func newTestClient(t *testing.T) *api.Client {
+func newTestClient(t *testing.T) *abs.Client {
 	t.Helper()
 
-	c, err := api.New("http://127.0.0.1:1", "test")
+	c, err := abs.New("http://127.0.0.1:1", "test")
 	if err != nil {
 		t.Fatal(err)
 	}

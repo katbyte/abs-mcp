@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/mcp/acctest"
 	"github.com/katbyte/go-kt/pointer"
 )
@@ -210,8 +210,8 @@ func TestFeedEditLinkExpiresAndDownloads(t *testing.T) {
 }
 
 // itemShare is the share link open on a book, as the server holds it, or nil for none.
-func itemShare(admin *api.Client, id string) (*api.MediaItemShareForClient, error) {
-	it, err := record(admin.LibraryItemFindOne(ctx, api.LibraryItemID(id), api.LibraryItemFindOneOptions{Expanded: "1", Include: "share"}))
+func itemShare(admin *abs.Client, id string) (*abs.MediaItemShareForClient, error) {
+	it, err := record(admin.LibraryItemFindOne(ctx, abs.LibraryItemID(id), abs.LibraryItemFindOneOptions{Expanded: "1", Include: "share"}))
 	if err != nil {
 		return nil, err
 	}

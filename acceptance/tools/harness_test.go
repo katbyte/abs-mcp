@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/abs-mcp/sdk/pandorest/answers"
 	"github.com/katbyte/abs-mcp/tools"
 	"github.com/katbyte/go-kt/mcp/acctest"
@@ -290,8 +290,8 @@ func stopProxy() {
 var recorder *answers.Recorder
 
 // connect is a client for the suite's server on a key, its exchanges recorded when the suite records them.
-func connect(key string) (*api.Client, error) {
-	return api.New(os.Getenv("ABS_SERVER"), key, client.WithTransport(recorder.Transport()))
+func connect(key string) (*abs.Client, error) {
+	return abs.New(os.Getenv("ABS_SERVER"), key, client.WithTransport(recorder.Transport()))
 }
 
 // errorOf is a call's error, its answer dropped, for a step that only needs to know it went through.

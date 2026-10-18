@@ -12,7 +12,7 @@ import (
 	"strings"
 	"unicode"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/pointer"
 )
 
@@ -561,7 +561,7 @@ func candidateApart(a, b int) float64 {
 // lengths come from the listing already swept; the album rule reads the
 // first file's tags, fetched only for the pairs by one author whose lengths
 // already agree, a batch at a time.
-func (d *dupCollector) candidates(ctx context.Context, gen *api.Client, groups []dupGroup, skip map[string]bool) ([]dupCandidate, error) {
+func (d *dupCollector) candidates(ctx context.Context, gen *abs.Client, groups []dupGroup, skip map[string]bool) ([]dupCandidate, error) {
 	group := map[string]int{} // item id -> its group, for the pairs already joined
 	for g := range groups {
 		for _, it := range groups[g].Items {
@@ -653,9 +653,9 @@ func (d *dupCollector) candidates(ctx context.Context, gen *api.Client, groups [
 		}
 	}
 	albums := map[string]string{}
-	ids := make([]api.LibraryItemID, 0, len(need))
+	ids := make([]abs.LibraryItemID, 0, len(need))
 	for id := range need {
-		ids = append(ids, api.LibraryItemID(id))
+		ids = append(ids, abs.LibraryItemID(id))
 	}
 	slices.Sort(ids)
 	for chunk := range slices.Chunk(ids, embedBatchSize) {
@@ -724,9 +724,9 @@ func (d *dupCollector) titleCandidate(i, j int, fi, fj *candidateFacts) string {
 }
 
 // candidateAlbum is the album tag of an item's first audio file.
-func candidateAlbum(it *api.LibraryItemExpanded) string {
+func candidateAlbum(it *abs.LibraryItemExpanded) string {
 	files := slices.Clone(it.Media.AudioFiles)
-	slices.SortStableFunc(files, func(a, b api.AudioFile) int { return cmp.Compare(a.Index, b.Index) })
+	slices.SortStableFunc(files, func(a, b abs.AudioFile) int { return cmp.Compare(a.Index, b.Index) })
 	for _, f := range files {
 		if !f.Exclude {
 			return strings.TrimSpace(pointer.From(f.MetaTags).TagAlbum)

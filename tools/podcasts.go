@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 	"github.com/katbyte/go-kt/pointer"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -20,7 +20,7 @@ import (
 var errNotPodcast = errors.New("this item is a book, not a podcast")
 
 // resolvePodcast resolves an item and checks it is a podcast.
-func resolvePodcast(ctx context.Context, gen *api.Client, library, idOrTitle string) (*api.LibraryItemExpanded, error) {
+func resolvePodcast(ctx context.Context, gen *abs.Client, library, idOrTitle string) (*abs.LibraryItemExpanded, error) {
 	it, err := resolveItem(ctx, gen, library, idOrTitle)
 	if err != nil {
 		return nil, err
@@ -34,7 +34,7 @@ func resolvePodcast(ctx context.Context, gen *api.Client, library, idOrTitle str
 // resolvePodcastToChange is resolvePodcast for a tool that writes or
 // deletes: a title must be the podcast's whole title (see
 // resolveItemToChange).
-func resolvePodcastToChange(ctx context.Context, gen *api.Client, library, idOrTitle string) (*api.LibraryItemExpanded, error) {
+func resolvePodcastToChange(ctx context.Context, gen *abs.Client, library, idOrTitle string) (*abs.LibraryItemExpanded, error) {
 	it, err := resolveItemToChange(ctx, gen, library, idOrTitle)
 	if err != nil {
 		return nil, err
@@ -50,12 +50,12 @@ func resolvePodcastToChange(ctx context.Context, gen *api.Client, library, idOrT
 // under the same title, so a title can name the original and its copy, and
 // taking the first would act on whichever the server lists first: a title
 // that names several is refused with their ids.
-func findEpisode(it *api.LibraryItemExpanded, idOrTitle string) (*api.PodcastEpisode, error) {
+func findEpisode(it *abs.LibraryItemExpanded, idOrTitle string) (*abs.PodcastEpisode, error) {
 	idOrTitle = strings.TrimSpace(idOrTitle)
 	if idOrTitle == "" {
 		return nil, errors.New("episode id or title is required (podcast_episodes lists them)")
 	}
-	var named []*api.PodcastEpisode
+	var named []*abs.PodcastEpisode
 	for i := range it.Media.Episodes {
 		e := &it.Media.Episodes[i]
 		if string(e.Id) == idOrTitle {
@@ -81,7 +81,7 @@ func findEpisode(it *api.LibraryItemExpanded, idOrTitle string) (*api.PodcastEpi
 
 // episodeLabel is an episode's id with what tells two of one title apart:
 // when it was published and added, and its file.
-func episodeLabel(e *api.PodcastEpisode) string {
+func episodeLabel(e *abs.PodcastEpisode) string {
 	var about []string
 	if published := cmp.Or(fmtDate(e.PublishedAt), e.PubDate); published != "" {
 		about = append(about, "published "+published)
@@ -100,9 +100,9 @@ func episodeLabel(e *api.PodcastEpisode) string {
 }
 
 // episodeFile is where an episode's audio is on the server, empty when it has none.
-func episodeFile(e *api.PodcastEpisode) api.FileMetadata {
+func episodeFile(e *abs.PodcastEpisode) abs.FileMetadata {
 	if e.AudioFile == nil {
-		return api.FileMetadata{}
+		return abs.FileMetadata{}
 	}
 
 	return pointer.From(e.AudioFile.Metadata)
@@ -119,7 +119,7 @@ type feedEpisodeRow struct {
 	Description string `json:"description,omitempty"`
 }
 
-func feedEpisodeRows(eps []api.RssPodcastEpisode, withDescription bool) []feedEpisodeRow {
+func feedEpisodeRows(eps []abs.RssPodcastEpisode, withDescription bool) []feedEpisodeRow {
 	rows := make([]feedEpisodeRow, 0, len(eps))
 	for i, e := range eps {
 		row := feedEpisodeRow{Index: &i, Title: e.Title, Season: e.Season, Episode: e.Episode, Type: e.EpisodeType, Published: fmtDate(e.PublishedAt)}
@@ -171,7 +171,7 @@ func registerPodcastTools(r *registry) {
 					continue
 				}
 				podcastLibs++
-				recent, err := record(gen.LibraryGetRecentEpisodes(ctx, libs[i].Id, api.LibraryGetRecentEpisodesOptions{Limit: new(mcpregistry.LimitOr(in.Limit, defaultLimit)), Page: new(0)}))
+				recent, err := record(gen.LibraryGetRecentEpisodes(ctx, libs[i].Id, abs.LibraryGetRecentEpisodesOptions{Limit: new(mcpregistry.LimitOr(in.Limit, defaultLimit)), Page: new(0)}))
 				if err != nil {
 					return nil, episodesOut{}, err
 				}
@@ -191,7 +191,7 @@ func registerPodcastTools(r *registry) {
 		if err != nil {
 			return nil, episodesOut{}, err
 		}
-		progress := map[api.EpisodeID]*api.MediaProgress{}
+		progress := map[abs.EpisodeID]*abs.MediaProgress{}
 		me, err := record(gen.MeGetCurrentUser(ctx))
 		if err != nil {
 			return nil, episodesOut{}, fmt.Errorf("reading the episodes' progress: %w", err)
@@ -320,7 +320,7 @@ func registerPodcastTools(r *registry) {
 		}
 
 		out := episodeEditOut{Podcast: it.Title(), Changed: []string{}}
-		var upd api.PodcastUpdateEpisodeRequest
+		var upd abs.PodcastUpdateEpisodeRequest
 		for _, f := range []struct {
 			name, now, want string
 			to              *string
@@ -343,7 +343,7 @@ func registerPodcastTools(r *registry) {
 			}
 		}
 		if upd.PubDate != "" {
-			upd.PublishedAt = api.UnixMilli{Time: time.UnixMilli(publishedMs)}
+			upd.PublishedAt = abs.UnixMilli{Time: time.UnixMilli(publishedMs)}
 		}
 		switch {
 		case len(out.Changed)+len(out.Unchanged) == 0:
@@ -412,7 +412,7 @@ func registerPodcastTools(r *registry) {
 			return nil, out, nil
 		}
 
-		var hard api.PodcastRemoveEpisodeOptions
+		var hard abs.PodcastRemoveEpisodeOptions
 		if in.DeleteFile {
 			hard.Hard = "1"
 		}
@@ -449,7 +449,7 @@ func registerPodcastTools(r *registry) {
 		if err != nil {
 			return nil, checkNewOut{}, err
 		}
-		var opts api.PodcastCheckNewEpisodesOptions
+		var opts abs.PodcastCheckNewEpisodesOptions
 		if in.Limit > 0 {
 			opts.Limit = &in.Limit
 		}
@@ -532,7 +532,7 @@ func registerPodcastTools(r *registry) {
 
 		// the server downloads an episode it already has a second time, under
 		// a filename with a random suffix, and adds it as another episode
-		var pick []api.RssPodcastEpisode
+		var pick []abs.RssPodcastEpisode
 		out := downloadOut{Podcast: it.Title()}
 		picked := map[int]bool{}
 		for _, i := range in.Indexes {
@@ -584,7 +584,7 @@ func registerPodcastTools(r *registry) {
 			return nil, downloadsOut{}, err
 		}
 		out := downloadsOut{Downloads: []downloadRow{}}
-		rowOf := func(d *api.PodcastEpisodeDownload, status string) downloadRow {
+		rowOf := func(d *abs.PodcastEpisodeDownload, status string) downloadRow {
 			switch {
 			case d.Failed:
 				status = "failed"
@@ -636,7 +636,7 @@ func registerPodcastTools(r *registry) {
 		if strings.TrimSpace(in.Query) == "" {
 			return nil, searchOut{}, errors.New("query is required")
 		}
-		found, err := gen.SearchFindPodcasts(ctx, api.SearchFindPodcastsOptions{Term: in.Query, Country: in.Country})
+		found, err := gen.SearchFindPodcasts(ctx, abs.SearchFindPodcastsOptions{Term: in.Query, Country: in.Country})
 		if err != nil {
 			return nil, searchOut{}, err
 		}
@@ -680,7 +680,7 @@ func registerPodcastTools(r *registry) {
 		if err != nil {
 			return nil, addOut{}, err
 		}
-		var lib *api.Library
+		var lib *abs.Library
 		for i := range libs {
 			if libs[i].IsPodcast() {
 				if lib != nil {
@@ -696,7 +696,7 @@ func registerPodcastTools(r *registry) {
 			return nil, addOut{}, fmt.Errorf("library %q has no folders", lib.Name)
 		}
 
-		parsed, err := record(gen.PodcastGetPodcastFeed(ctx, api.PodcastGetPodcastFeedRequest{RssFeed: in.FeedURL}))
+		parsed, err := record(gen.PodcastGetPodcastFeed(ctx, abs.PodcastGetPodcastFeedRequest{RssFeed: in.FeedURL}))
 		if err != nil {
 			return nil, addOut{}, err
 		}
@@ -705,7 +705,7 @@ func registerPodcastTools(r *registry) {
 		// the server refuses only a folder it already has a podcast in; the
 		// same feed under another folder would be a second copy of the show
 		var dup error
-		if err := eachItem(ctx, gen, lib.Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+		if err := eachItem(ctx, gen, lib.Id, abs.LibraryGetLibraryItemsOptions{}, func(it *abs.LibraryItemMinified) bool {
 			have := strings.TrimSpace(it.Media.Metadata.FeedUrl)
 			if have != "" && (strings.EqualFold(have, strings.TrimSpace(in.FeedURL)) || strings.EqualFold(have, strings.TrimSpace(meta.FeedUrl))) {
 				dup = fmt.Errorf("%s already subscribes to this feed as %q (%s): podcast_check_new fetches its new episodes", lib.Name, it.Title(), it.Id)
@@ -729,9 +729,9 @@ func registerPodcastTools(r *registry) {
 			return nil, addOut{}, err
 		}
 
-		made, err := record(gen.PodcastCreate(ctx, api.PodcastCreateRequest{
+		made, err := record(gen.PodcastCreate(ctx, abs.PodcastCreateRequest{
 			LibraryId: lib.Id, FolderId: lib.Folders[0].Id, Path: dir,
-			Media: &api.PodcastCreateRequestMedia{AutoDownloadEpisodes: new(in.AutoDownload), Metadata: &api.PodcastCreateRequestMediaMetadata{
+			Media: &abs.PodcastCreateRequestMedia{AutoDownloadEpisodes: new(in.AutoDownload), Metadata: &abs.PodcastCreateRequestMediaMetadata{
 				Title: meta.Title, Author: meta.Author, Description: meta.Description, ReleaseDate: meta.PubDate, Genres: meta.Categories,
 				FeedUrl: cmp.Or(meta.FeedUrl, in.FeedURL), ImageUrl: meta.Image, ItunesPageUrl: meta.Link, Language: meta.Language,
 				Explicit: new(strings.EqualFold(meta.Explicit, "yes") || meta.Explicit == "true"), Type: meta.Type,
@@ -747,7 +747,7 @@ func registerPodcastTools(r *registry) {
 		// the create, and dropped the ones sent there without a word
 		if in.Download > 0 && len(feed.Episodes) > 0 {
 			newest := slices.Clone(feed.Episodes)
-			slices.SortStableFunc(newest, func(a, b api.RssPodcastEpisode) int { return b.PublishedAt.Compare(a.PublishedAt.Time) })
+			slices.SortStableFunc(newest, func(a, b abs.RssPodcastEpisode) int { return b.PublishedAt.Compare(a.PublishedAt.Time) })
 			newest = newest[:min(in.Download, len(newest))]
 			if _, derr := gen.PodcastDownloadEpisodes(ctx, it.Id, newest); derr != nil {
 				out.Warning = "the podcast was added, but queueing its newest episodes failed: " + derr.Error()
@@ -797,7 +797,7 @@ func registerPodcastTools(r *registry) {
 		if err != nil {
 			return nil, settingsOut{}, err
 		}
-		upd := api.MediaUpdate{
+		upd := abs.MediaUpdate{
 			AutoDownloadEpisodes:     in.AutoDownload,
 			AutoDownloadSchedule:     schedule,
 			MaxEpisodesToKeep:        in.KeepEpisodes,
@@ -831,10 +831,10 @@ func registerPodcastTools(r *registry) {
 // publisher wrote it, the search in order of how near each title is - so
 // both are sorted here, where podcast_feed_episodes and
 // podcast_episode_download both read them and their indexes agree.
-func feedEpisodes(ctx context.Context, gen *api.Client, it *api.LibraryItemExpanded, title string) ([]api.RssPodcastEpisode, error) {
-	var eps []api.RssPodcastEpisode
+func feedEpisodes(ctx context.Context, gen *abs.Client, it *abs.LibraryItemExpanded, title string) ([]abs.RssPodcastEpisode, error) {
+	var eps []abs.RssPodcastEpisode
 	if strings.TrimSpace(title) != "" {
-		found, err := record(gen.PodcastFindEpisode(ctx, it.Id, api.PodcastFindEpisodeOptions{Title: title}))
+		found, err := record(gen.PodcastFindEpisode(ctx, it.Id, abs.PodcastFindEpisodeOptions{Title: title}))
 		if err != nil {
 			return nil, err
 		}
@@ -847,13 +847,13 @@ func feedEpisodes(ctx context.Context, gen *api.Client, it *api.LibraryItemExpan
 		if it.Media.Metadata.FeedUrl == "" {
 			return nil, errors.New("podcast has no feed url")
 		}
-		feed, err := record(gen.PodcastGetPodcastFeed(ctx, api.PodcastGetPodcastFeedRequest{RssFeed: it.Media.Metadata.FeedUrl}))
+		feed, err := record(gen.PodcastGetPodcastFeed(ctx, abs.PodcastGetPodcastFeedRequest{RssFeed: it.Media.Metadata.FeedUrl}))
 		if err != nil {
 			return nil, err
 		}
 		eps = pointer.From(feed.Podcast).Episodes
 	}
-	slices.SortStableFunc(eps, func(a, b api.RssPodcastEpisode) int { return b.PublishedAt.Compare(a.PublishedAt.Time) })
+	slices.SortStableFunc(eps, func(a, b abs.RssPodcastEpisode) int { return b.PublishedAt.Compare(a.PublishedAt.Time) })
 
 	return eps, nil
 }
@@ -881,7 +881,7 @@ func parsePubDate(s string) (time.Time, error) {
 var episodeTypes = []string{"full", "trailer", "bonus"}
 
 // episodeByID is the podcast's episode with an id, or nil.
-func episodeByID(it *api.LibraryItemExpanded, id api.EpisodeID) *api.PodcastEpisode {
+func episodeByID(it *abs.LibraryItemExpanded, id abs.EpisodeID) *abs.PodcastEpisode {
 	if it.Media == nil {
 		return nil
 	}
@@ -984,22 +984,22 @@ func (c *cronField) value(s string) (int, bool) {
 // server lists them in the order they were downloaded, so an episode fetched
 // from the back catalogue would otherwise come ahead of this week's. One with
 // no publish date goes by when it was added.
-func newestEpisodes(eps []api.PodcastEpisode) []api.PodcastEpisode {
+func newestEpisodes(eps []abs.PodcastEpisode) []abs.PodcastEpisode {
 	out := slices.Clone(eps)
-	when := func(e *api.PodcastEpisode) time.Time {
+	when := func(e *abs.PodcastEpisode) time.Time {
 		if e.PublishedAt.UnixMilli() > 0 {
 			return e.PublishedAt.Time
 		}
 		return e.AddedAt.Time
 	}
-	slices.SortStableFunc(out, func(a, b api.PodcastEpisode) int { return when(&b).Compare(when(&a)) })
+	slices.SortStableFunc(out, func(a, b abs.PodcastEpisode) int { return when(&b).Compare(when(&a)) })
 	return out
 }
 
 // heldEpisode is the episode a podcast already has for a feed entry, matched
 // the way the server's own new-episode check matches: by guid, or by the
 // audio url. Not by title, which an edit changes.
-func heldEpisode(it *api.LibraryItemExpanded, fe *api.RssPodcastEpisode) *api.PodcastEpisode {
+func heldEpisode(it *abs.LibraryItemExpanded, fe *abs.RssPodcastEpisode) *abs.PodcastEpisode {
 	for i := range it.Media.Episodes {
 		e := &it.Media.Episodes[i]
 		if fe.Guid != "" && e.Guid == fe.Guid {
@@ -1014,7 +1014,7 @@ func heldEpisode(it *api.LibraryItemExpanded, fe *api.RssPodcastEpisode) *api.Po
 
 // queuedURLs are the audio urls of a podcast's episodes downloading or
 // waiting to: the server drops a second request for one without saying so.
-func queuedURLs(ctx context.Context, gen *api.Client, it *api.LibraryItemExpanded) (map[string]bool, error) {
+func queuedURLs(ctx context.Context, gen *abs.Client, it *abs.LibraryItemExpanded) (map[string]bool, error) {
 	current, queue, err := downloadQueue(ctx, gen, it.LibraryId)
 	if err != nil {
 		return nil, err
@@ -1030,8 +1030,8 @@ func queuedURLs(ctx context.Context, gen *api.Client, it *api.LibraryItemExpande
 
 // downloadQueue is the episode a library is downloading and those waiting. The server keeps every read under /api/libraries until its database
 // is next written, and the queue is not in it, so the queue is asked for in a random sort, the one read that is never kept.
-func downloadQueue(ctx context.Context, gen *api.Client, library api.LibraryID) (current *api.PodcastEpisodeDownload, queue []api.PodcastEpisodeDownload, err error) {
-	got, err := record(gen.LibraryGetEpisodeDownloadQueue(ctx, library, api.LibraryGetEpisodeDownloadQueueOptions{Sort: "random"}))
+func downloadQueue(ctx context.Context, gen *abs.Client, library abs.LibraryID) (current *abs.PodcastEpisodeDownload, queue []abs.PodcastEpisodeDownload, err error) {
+	got, err := record(gen.LibraryGetEpisodeDownloadQueue(ctx, library, abs.LibraryGetEpisodeDownloadQueueOptions{Sort: "random"}))
 	if err != nil {
 		return nil, nil, err
 	}

@@ -12,8 +12,8 @@ import (
 )
 
 // service is what is Audiobookshelf's own about being talked to, which the base client every generated method sends through is made from (see
-// New): what it is called, how its refusals read, and what is known of them. This file is written by hand and lives beside the generated ones;
-// everything else in the package is pandorest's.
+// New): what it is called, how its refusals read, and what is known of them. This file is written by hand and lives beside the generated ones,
+// as do the few other files that say so; everything else in the package is pandorest's.
 var service = client.Service{
 	Name:      "Audiobookshelf",
 	UserAgent: "abs-mcp/" + version.Version,

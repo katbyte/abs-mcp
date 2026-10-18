@@ -160,8 +160,7 @@ func unite(a, b *schema) *schema {
 }
 
 // loosen makes every whole number of a schema read from answers a number marked as seen whole, since a count in a small test library does not
-// prove a value is never a fraction, and marks every record as sampled, since a test library does not send every field there is. The
-// hand-written client may settle both.
+// prove a value is never a fraction; the names of whole numbers settle it.
 func loosen(s *schema) *schema {
 	if s == nil {
 		return nil
@@ -170,7 +169,6 @@ func loosen(s *schema) *schema {
 	case "integer":
 		s.Type, s.whole = "number", true
 	case "object":
-		s.sampled = true
 	}
 	loosen(s.Items)
 	loosen(s.Values)

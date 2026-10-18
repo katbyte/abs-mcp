@@ -7,30 +7,30 @@ import (
 	"slices"
 	"strings"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/lock"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // resolvePlaylist finds one of the API key user's playlists by name or id.
-func resolvePlaylist(ctx context.Context, gen *api.Client, nameOrID string) (*api.Playlist, error) {
+func resolvePlaylist(ctx context.Context, gen *abs.Client, nameOrID string) (*abs.Playlist, error) {
 	nameOrID = strings.TrimSpace(nameOrID)
 	if nameOrID == "" {
 		return nil, errors.New("playlist name or id is required")
 	}
 	if looksLikeID(nameOrID) {
-		return getPlaylist(ctx, gen, api.PlaylistID(nameOrID))
+		return getPlaylist(ctx, gen, abs.PlaylistID(nameOrID))
 	}
 	all, err := record(gen.PlaylistFindAllForUser(ctx))
 	if err != nil {
 		return nil, err
 	}
 
-	return oneNamed("playlist", nameOrID, all.Playlists, func(p *api.Playlist) string { return p.Name }, func(p *api.Playlist) string { return string(p.Id) })
+	return oneNamed("playlist", nameOrID, all.Playlists, func(p *abs.Playlist) string { return p.Name }, func(p *abs.Playlist) string { return string(p.Id) })
 }
 
 // getPlaylist is one of the API key user's playlists, with its entries.
-func getPlaylist(ctx context.Context, gen *api.Client, id api.PlaylistID) (*api.Playlist, error) {
+func getPlaylist(ctx context.Context, gen *abs.Client, id abs.PlaylistID) (*abs.Playlist, error) {
 	p, err := record(gen.PlaylistFindOne(ctx, id))
 	if err != nil {
 		return nil, err
@@ -39,7 +39,7 @@ func getPlaylist(ctx context.Context, gen *api.Client, id api.PlaylistID) (*api.
 }
 
 // libraryPlaylists are the API key user's playlists in one library.
-func libraryPlaylists(ctx context.Context, gen *api.Client, library api.LibraryID) ([]api.Playlist, error) {
+func libraryPlaylists(ctx context.Context, gen *abs.Client, library abs.LibraryID) ([]abs.Playlist, error) {
 	got, err := record(gen.LibraryGetUserPlaylistsForLibrary(ctx, library))
 	if err != nil {
 		return nil, err
@@ -56,8 +56,8 @@ type playlistEntryIn struct {
 // playlistEntry is an entry resolved against the server: the item it names
 // and, for a podcast, the episode.
 type playlistEntry struct {
-	Item    *api.LibraryItemExpanded
-	Episode *api.PodcastEpisode
+	Item    *abs.LibraryItemExpanded
+	Episode *abs.PodcastEpisode
 }
 
 func (e *playlistEntry) key() string {
@@ -74,8 +74,8 @@ func (e *playlistEntry) label() string {
 	return e.Item.Title()
 }
 
-func (e *playlistEntry) ref() api.PlaylistEntry {
-	out := api.PlaylistEntry{LibraryItemId: e.Item.Id}
+func (e *playlistEntry) ref() abs.PlaylistEntry {
+	out := abs.PlaylistEntry{LibraryItemId: e.Item.Id}
 	if e.Episode != nil {
 		out.EpisodeId = e.Episode.Id
 	}
@@ -83,7 +83,7 @@ func (e *playlistEntry) ref() api.PlaylistEntry {
 }
 
 // playlistKey is the key of an entry a playlist already holds.
-func playlistKey(pi *api.PlaylistItems) string {
+func playlistKey(pi *abs.PlaylistItems) string {
 	if pi.EpisodeId != "" {
 		return string(pi.LibraryItemId) + "/" + string(pi.EpisodeId)
 	}
@@ -97,16 +97,16 @@ func playlistKey(pi *api.PlaylistItems) string {
 // process); a podcast sent without an episode is stored as a broken book
 // entry; and an item from another library is accepted into the playlist. So
 // every entry is checked here first. An entry named twice is kept once.
-func resolvePlaylistEntries(ctx context.Context, gen *api.Client, libraryID api.LibraryID, entries []playlistEntryIn) ([]playlistEntry, error) {
+func resolvePlaylistEntries(ctx context.Context, gen *abs.Client, libraryID abs.LibraryID, entries []playlistEntryIn) ([]playlistEntry, error) {
 	if len(entries) == 0 {
 		return nil, errors.New("at least one entry is required")
 	}
 	out := make([]playlistEntry, 0, len(entries))
 	for _, e := range entries {
-		var it *api.LibraryItemExpanded
+		var it *abs.LibraryItemExpanded
 		var err error
 		if looksLikeID(e.Item) {
-			it, err = getItem(ctx, gen, api.LibraryItemID(e.Item))
+			it, err = getItem(ctx, gen, abs.LibraryItemID(e.Item))
 		} else {
 			it, err = resolveItemToChange(ctx, gen, string(libraryID), e.Item)
 		}
@@ -143,7 +143,7 @@ func resolvePlaylistEntries(ctx context.Context, gen *api.Client, libraryID api.
 // playlistNameInUse refuses a name the API key's user already has a playlist
 // by in a library: the server would make a second, and a name that means two
 // playlists can no longer be looked up by name.
-func playlistNameInUse(ctx context.Context, gen *api.Client, libraryID api.LibraryID, name string, except api.PlaylistID) error {
+func playlistNameInUse(ctx context.Context, gen *abs.Client, libraryID abs.LibraryID, name string, except abs.PlaylistID) error {
 	pls, err := libraryPlaylists(ctx, gen, libraryID)
 	if err != nil {
 		return err
@@ -167,7 +167,7 @@ func registerPlaylistTools(r *registry) {
 		Description string `json:"description,omitempty"`
 		Updated     string `json:"updated,omitempty"`
 	}
-	rowOf := func(p *api.Playlist) row {
+	rowOf := func(p *abs.Playlist) row {
 		return row{ID: string(p.Id), Name: p.Name, Library: string(p.LibraryId), Entries: len(p.Items), Description: p.Description, Updated: fmtDate(p.LastUpdate)}
 	}
 
@@ -185,7 +185,7 @@ func registerPlaylistTools(r *registry) {
 		Name:        "playlist_list",
 		Description: "List the API key user's playlists (personal, ordered queues of books or podcast episodes).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in listIn) (*mcp.CallToolResult, listOut, error) {
-		var pls []api.Playlist
+		var pls []abs.Playlist
 		if in.Library != "" {
 			lib, err := resolveLibrary(ctx, gen, in.Library)
 			if err != nil {
@@ -287,7 +287,7 @@ func registerPlaylistTools(r *registry) {
 				rename = name
 			}
 			if rename != "" || in.Description != "" {
-				if p, err = record(gen.PlaylistUpdate(ctx, p.Id, api.PlaylistUpdateRequest{Name: rename, Description: in.Description})); err != nil {
+				if p, err = record(gen.PlaylistUpdate(ctx, p.Id, abs.PlaylistUpdateRequest{Name: rename, Description: in.Description})); err != nil {
 					return nil, row{}, err
 				}
 			}
@@ -305,7 +305,7 @@ func registerPlaylistTools(r *registry) {
 		if err := playlistNameInUse(ctx, gen, lib.Id, name, ""); err != nil {
 			return nil, row{}, err
 		}
-		var refs []api.PlaylistEntry
+		var refs []abs.PlaylistEntry
 		if len(in.Entries) > 0 {
 			entries, eerr := resolvePlaylistEntries(ctx, gen, lib.Id, in.Entries)
 			if eerr != nil {
@@ -315,7 +315,7 @@ func registerPlaylistTools(r *registry) {
 				refs = append(refs, entries[i].ref())
 			}
 		}
-		p, err := record(gen.PlaylistCreate(ctx, api.PlaylistCreateRequest{LibraryId: lib.Id, Name: name, Description: in.Description, Items: refs}))
+		p, err := record(gen.PlaylistCreate(ctx, abs.PlaylistCreateRequest{LibraryId: lib.Id, Name: name, Description: in.Description, Items: refs}))
 		if err != nil {
 			return nil, row{}, err
 		}
@@ -356,7 +356,7 @@ func registerPlaylistTools(r *registry) {
 		}
 		// what it holds is judged once held, so two adds of one entry at once
 		// do not both say they added it
-		defer r.locks.By(lock.ID[api.Playlist](string(p.Id)))()
+		defer r.locks.By(lock.ID[abs.Playlist](string(p.Id)))()
 		if p, err = getPlaylist(ctx, gen, p.Id); err != nil {
 			return nil, editOut{}, err
 		}
@@ -412,7 +412,7 @@ func registerPlaylistTools(r *registry) {
 		if len(remove) > 0 && len(p.Items)+len(add)-len(remove) == 0 && !r.opts.EnableDelete {
 			return nil, editOut{}, fmt.Errorf("removing every entry of %q deletes the playlist, as Audiobookshelf keeps no empty one; that needs the delete tools switched on (--enable-delete), and then playlist_delete says so plainly", p.Name)
 		}
-		refs := func(entries []playlistEntry) (refs []api.PlaylistEntry, labels []string) {
+		refs := func(entries []playlistEntry) (refs []abs.PlaylistEntry, labels []string) {
 			for i := range entries {
 				refs, labels = append(refs, entries[i].ref()), append(labels, entries[i].label())
 			}
@@ -429,7 +429,7 @@ func registerPlaylistTools(r *registry) {
 			return fmt.Errorf("%s, but %s failed: %w", strings.Join(done, " and "), what, err)
 		}
 		if name != "" || in.Description != "" {
-			updated, uerr := record(gen.PlaylistUpdate(ctx, p.Id, api.PlaylistUpdateRequest{Name: name, Description: in.Description}))
+			updated, uerr := record(gen.PlaylistUpdate(ctx, p.Id, abs.PlaylistUpdateRequest{Name: name, Description: in.Description}))
 			if uerr != nil {
 				return nil, editOut{}, uerr
 			}
@@ -438,7 +438,7 @@ func registerPlaylistTools(r *registry) {
 		}
 		if len(add) > 0 {
 			send, labels := refs(add)
-			updated, aerr := record(gen.PlaylistAddBatch(ctx, p.Id, api.PlaylistAddBatchRequest{Items: send}))
+			updated, aerr := record(gen.PlaylistAddBatch(ctx, p.Id, abs.PlaylistAddBatchRequest{Items: send}))
 			if aerr != nil {
 				return nil, editOut{}, failed("adding the entries", aerr)
 			}
@@ -457,16 +457,16 @@ func registerPlaylistTools(r *registry) {
 		}
 		if len(remove) > 0 {
 			send, labels := refs(remove)
-			if _, err = gen.PlaylistRemoveBatch(ctx, p.Id, api.PlaylistRemoveBatchRequest{Items: send}); err != nil {
+			if _, err = gen.PlaylistRemoveBatch(ctx, p.Id, abs.PlaylistRemoveBatchRequest{Items: send}); err != nil {
 				return nil, editOut{}, failed("removing the entries", err)
 			}
 			out.Removed = labels
 			// the reply is the playlist as it was before the server deleted
 			// an emptied one, so the playlist is read back rather than trusted
-			var after *api.Playlist
+			var after *abs.Playlist
 			after, err = getPlaylist(ctx, gen, p.Id)
 			switch {
-			case api.IsNotFound(err):
+			case abs.IsNotFound(err):
 				out.row, out.Deleted = rowOf(p), true
 				out.Entries = 0
 				return nil, out, nil

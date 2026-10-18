@@ -109,10 +109,6 @@ func (m LibraryItemExpandedMediaMetadata) SeriesDisplay() []string {
 	return out
 }
 
-// Title is the series' name, whichever key carried it: the built-in providers write it as series, and a custom provider may write name, the
-// way an item's metadata does.
-func (s SearchFindBooksAnswerSeries) Title() string { return cmp.Or(s.Series, s.Name) }
-
 func seriesLine(name, sequence string) string {
 	if sequence == "" {
 		return name

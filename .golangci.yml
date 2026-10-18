@@ -116,12 +116,6 @@ linters:
         text: 'deep-exit'
         linters:
           - revive
-      # the hand-written client keeps its package name, abs, in sdk/abs-byhand, so a program that uses it changes
-      # only the import path; it goes when the client generated into sdk/abs takes its place
-      - path: 'sdk/abs-byhand/'
-        text: 'package-directory-mismatch'
-        linters:
-          - revive
       # the idiomatic `if err := f(); err != nil` scoping shadows err on purpose; still flag other variables
       # and err shadows outside the if-statement form (source scopes the rule to the if idiom only)
       - text: 'shadow: declaration of "err"'

@@ -4,7 +4,7 @@ import (
 	"cmp"
 	"strings"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // progressSummary is the trimmed view of a listening-progress record.
@@ -18,7 +18,7 @@ type progressSummary struct {
 	ProgressID  string `json:"progress_id,omitempty"          jsonschema:"the id of the progress record"`
 }
 
-func progressOf(p *api.MediaProgress) *progressSummary {
+func progressOf(p *abs.MediaProgress) *progressSummary {
 	if p == nil {
 		return nil
 	}
@@ -70,7 +70,7 @@ type itemSummary struct {
 }
 
 // summarize is the summary of an item as a library's list sends it.
-func summarize(it *api.LibraryItemMinified) itemSummary {
+func summarize(it *abs.LibraryItemMinified) itemSummary {
 	filledMinified(it)
 	m := it.Media.Metadata
 	s := itemSummary{
@@ -112,7 +112,7 @@ func summarize(it *api.LibraryItemMinified) itemSummary {
 
 // summarizeWhole is the summary of an item fetched whole: the list's summary, its counts taken from the files and episodes where the record
 // has none, and the API key user's progress in it.
-func summarizeWhole(it *api.LibraryItemExpanded) itemSummary {
+func summarizeWhole(it *abs.LibraryItemExpanded) itemSummary {
 	filledExpanded(it)
 	m := it.Minified()
 	s := summarize(&m)
@@ -143,7 +143,7 @@ func summarizeWhole(it *api.LibraryItemExpanded) itemSummary {
 }
 
 // summarizeAll summarizes the items of a list.
-func summarizeAll(items []api.LibraryItemMinified) []itemSummary {
+func summarizeAll(items []abs.LibraryItemMinified) []itemSummary {
 	out := make([]itemSummary, 0, len(items))
 	for i := range items {
 		out = append(out, summarize(&items[i]))
@@ -153,7 +153,7 @@ func summarizeAll(items []api.LibraryItemMinified) []itemSummary {
 }
 
 // summarizeAllWhole summarizes items fetched whole.
-func summarizeAllWhole(items []api.LibraryItemExpanded) []itemSummary {
+func summarizeAllWhole(items []abs.LibraryItemExpanded) []itemSummary {
 	out := make([]itemSummary, 0, len(items))
 	for i := range items {
 		out = append(out, summarizeWhole(&items[i]))
@@ -179,7 +179,7 @@ type episodeSummary struct {
 }
 
 // summarizeEpisode is the summary of a podcast's episode, with the API key user's progress in it when known.
-func summarizeEpisode(e *api.PodcastEpisode, podcastTitle string, withDescription bool, progress *api.MediaProgress) episodeSummary {
+func summarizeEpisode(e *abs.PodcastEpisode, podcastTitle string, withDescription bool, progress *abs.MediaProgress) episodeSummary {
 	s := episodeSummary{
 		ID:        string(e.Id),
 		PodcastID: string(e.LibraryItemId),
@@ -205,7 +205,7 @@ func summarizeEpisode(e *api.PodcastEpisode, podcastTitle string, withDescriptio
 }
 
 // episodeLength is an episode's length in seconds: its own, or its file's.
-func episodeLength(e *api.PodcastEpisode) float64 {
+func episodeLength(e *abs.PodcastEpisode) float64 {
 	switch {
 	case e.Duration > 0:
 		return e.Duration
@@ -227,7 +227,7 @@ type libraryRow struct {
 	LastScan  string   `json:"last_scan,omitempty"`
 }
 
-func libraryRowOf(l *api.Library) libraryRow {
+func libraryRowOf(l *abs.Library) libraryRow {
 	r := libraryRow{ID: string(l.Id), Name: l.Name, MediaType: l.MediaType, Provider: l.Provider, LastScan: fmtTime(l.LastScan)}
 	for _, f := range l.Folders {
 		r.Folders = append(r.Folders, f.FullPath)
@@ -255,7 +255,7 @@ type sessionSummary struct {
 }
 
 // summarizeSession is the summary of a playback session as the server holds it.
-func summarizeSession(s *api.PlaybackSession) sessionSummary {
+func summarizeSession(s *abs.PlaybackSession) sessionSummary {
 	out := sessionSummary{
 		ID:          s.Id,
 		UserID:      string(s.UserId),
@@ -274,14 +274,14 @@ func summarizeSession(s *api.PlaybackSession) sessionSummary {
 		out.Percent = percent(s.CurrentTime / s.Duration)
 	}
 	if s.User != nil {
-		out.User = cmp.Or(s.User.Name, s.User.Username)
+		out.User = s.User.Username
 	}
 
 	return out
 }
 
 // describeDevice is what played a session, as one line: the app or browser, and the device or system it ran on.
-func describeDevice(d *api.DeviceInfo) string {
+func describeDevice(d *abs.DeviceInfo) string {
 	if d == nil {
 		return ""
 	}

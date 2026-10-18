@@ -8,6 +8,7 @@ package abs_test
 
 import (
 	"net/http"
+	"net/http/cookiejar"
 	"os"
 	"path/filepath"
 	"slices"
@@ -255,6 +256,22 @@ func TestSharing(t *testing.T) {
 	if got := sharedAs(t, full.Id); got == nil || got.Id != share.Id || got.Slug != "sdk-share" {
 		t.Errorf("the book's link = %+v, want the one just opened", got)
 	}
+	// someone opening the link plays it in a session of the link's own, which a cookie carries, and that session's place is kept
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	visitor, err := connect(os.Getenv("ABS_TOKEN"), pclient.WithCookies(jar))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := errorOf(visitor.ShareGetMediaItemShareBySlug(ctx, share.Slug)); err != nil {
+		t.Fatalf("opening the link: %v", err)
+	}
+	if err := errorOf(visitor.ShareUpdateMediaItemShareProgress(ctx, share.Slug, abs.ShareUpdateMediaItemShareProgressRequest{CurrentTime: 1})); err != nil {
+		t.Errorf("keeping the place in the link's session: %v", err)
+	}
+
 	if err := errorOf(client.ShareDeleteMediaItemShare(ctx, share.Id)); err != nil {
 		t.Fatalf("closing the link: %v", err)
 	}
@@ -268,6 +285,19 @@ func sharedAs(t *testing.T, id abs.LibraryItemID) *abs.MediaItemShareForClient {
 	t.Helper()
 
 	return must(client.LibraryItemFindOne(t.Context(), id, abs.LibraryItemFindOneOptions{Expanded: "1", Include: "share"})).MediaItemShare
+}
+
+// Setting up a server that has its root account already is refused, and changes nothing.
+func TestSetupRefused(t *testing.T) {
+	ctx := skipUnlessLive(t)
+
+	err := errorOf(client.ServerPostInit(ctx, abs.ServerPostInitRequest{NewRoot: map[string]string{"username": "sdk-root"}}))
+	if pclient.StatusCode(err) != http.StatusInternalServerError {
+		t.Errorf("setting up a server already set up = %v, want the 500 it refuses with", err)
+	}
+	if me := must(client.MeGetCurrentUser(ctx)); me.Username != "root" {
+		t.Errorf("the account after a refused setup is %q, want root", me.Username)
+	}
 }
 
 // The OPML lists a show by its feed, which the fixture shows have none of, so one is made with one and removed, files and all, after.

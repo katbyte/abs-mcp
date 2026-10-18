@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // readingOf is a book fetched whole, its chapters laid end to end from the
@@ -321,11 +321,11 @@ func TestChapterSpreadIsSectionRatios(t *testing.T) {
 	if lo, hi := decile(tenths, 1), decile(tenths, 9); math.Abs(lo-1.1) > 1e-9 || math.Abs(hi-9.9) > 1e-9 {
 		t.Errorf("deciles of 1..10 = %v, %v; statistics.quantiles gives 1.1 and 9.9", lo, hi)
 	}
-	book := func(titles []string, lengths []float64) *api.LibraryItemExpanded {
-		it := &api.LibraryItemExpanded{Media: &api.LibraryItemExpandedMedia{Metadata: &api.LibraryItemExpandedMediaMetadata{Title: "Zzyzx Gods", AuthorName: "Zzyzx Author"}}}
+	book := func(titles []string, lengths []float64) *abs.LibraryItemExpanded {
+		it := &abs.LibraryItemExpanded{Media: &abs.LibraryItemExpandedMedia{Metadata: &abs.LibraryItemExpandedMediaMetadata{Title: "Zzyzx Gods", AuthorName: "Zzyzx Author"}}}
 		start := 0.0
 		for i, l := range lengths {
-			it.Media.Chapters = append(it.Media.Chapters, api.Chapter{Id: i, Start: start, End: start + l, Title: titles[i]})
+			it.Media.Chapters = append(it.Media.Chapters, abs.Chapter{Id: i, Start: start, End: start + l, Title: titles[i]})
 			start += l
 		}
 		it.Media.Duration = start
@@ -522,7 +522,7 @@ func TestAuditAbridgedReadingsThatDoNotLineUp(t *testing.T) {
 }
 
 // judged is a book of the given length against the store's editions of it.
-func judged(t *testing.T, seconds float64, editions ...api.SearchFindBooksAnswer) *abridgedFinding {
+func judged(t *testing.T, seconds float64, editions ...abs.SearchFindBooksAnswer) *abridgedFinding {
 	t.Helper()
 
 	it := shortBook("b", "Roald Dahl/Matilda", "Matilda")
@@ -540,12 +540,12 @@ func judged(t *testing.T, seconds float64, editions ...api.SearchFindBooksAnswer
 func TestShorterWorkNotBesideACutOfItsLength(t *testing.T) {
 	t.Parallel()
 
-	unabridged := api.SearchFindBooksAnswer{Asin: "B0MATILDAU", Duration: 280}
-	if row := judged(t, 3000, unabridged, api.SearchFindBooksAnswer{Asin: "B0MATILDAA", Duration: 58, Abridged: true}); row == nil || row.Problem != "far_shorter" {
+	unabridged := abs.SearchFindBooksAnswer{Asin: "B0MATILDAU", Duration: 280}
+	if row := judged(t, 3000, unabridged, abs.SearchFindBooksAnswer{Asin: "B0MATILDAA", Duration: 58, Abridged: true}); row == nil || row.Problem != "far_shorter" {
 		t.Errorf("beside a 58-minute cut = %+v, want far_shorter", row)
 	}
 	// a cut at twice the book's length or more says nothing of it
-	if row := judged(t, 3000, unabridged, api.SearchFindBooksAnswer{Asin: "B0MATILDAL", Duration: 100, Abridged: true}); row == nil || row.Problem != "shorter_work" {
+	if row := judged(t, 3000, unabridged, abs.SearchFindBooksAnswer{Asin: "B0MATILDAL", Duration: 100, Abridged: true}); row == nil || row.Problem != "shorter_work" {
 		t.Errorf("beside a 100-minute cut = %+v, want shorter_work", row)
 	}
 	if row := judged(t, 3000, unabridged); row == nil || row.Problem != "shorter_work" {
@@ -575,7 +575,7 @@ func TestSharesReadUnderTheirLimit(t *testing.T) {
 		// limit is 60%, at the share it is
 		{3599.99999999, 300, "far_shorter", "20.0% of the shortest unabridged edition"},
 	} {
-		row := judged(t, c.seconds, api.SearchFindBooksAnswer{Asin: "B0MATILDAU", Duration: c.minutes})
+		row := judged(t, c.seconds, abs.SearchFindBooksAnswer{Asin: "B0MATILDAU", Duration: c.minutes})
 		if row == nil || row.Problem != c.problem || !strings.Contains(row.Detail, c.share) {
 			t.Errorf("%v s of %v min = %+v, want %s at %q", c.seconds, c.minutes, row, c.problem, c.share)
 		}
@@ -589,22 +589,22 @@ func TestSharesReadUnderTheirLimit(t *testing.T) {
 func TestStoreProductionsAreNotReadings(t *testing.T) {
 	t.Parallel()
 
-	unabridged := api.SearchFindBooksAnswer{Asin: "B0BOOKUNAB", Duration: 630}
-	drama := api.SearchFindBooksAnswer{Asin: "B0BOOKDRAM", Title: "Matilda (Dramatised)", Duration: 115}
+	unabridged := abs.SearchFindBooksAnswer{Asin: "B0BOOKUNAB", Duration: 630}
+	drama := abs.SearchFindBooksAnswer{Asin: "B0BOOKDRAM", Title: "Matilda (Dramatised)", Duration: 115}
 	row := judged(t, 6*3600, unabridged, drama)
 	if row == nil || row.Problem != "far_shorter" || row.Edition == nil || row.Edition.ASIN != "B0BOOKUNAB" || !strings.Contains(row.Detail, "57.1% of the shortest unabridged edition") {
 		t.Errorf("6h against 630 min and a dramatisation = %+v, want far_shorter at 57.1%% of the unabridged", row)
 	}
-	credited := api.SearchFindBooksAnswer{Asin: "B0BOOKORIG", Title: "Matilda", Narrator: "Full Cast", Duration: 220}
+	credited := abs.SearchFindBooksAnswer{Asin: "B0BOOKORIG", Title: "Matilda", Narrator: "Full Cast", Duration: 220}
 	if row := judged(t, 6*3600, unabridged, credited); row == nil || row.Problem != "far_shorter" || row.Edition.ASIN != "B0BOOKUNAB" {
 		t.Errorf("6h beside a production credited to a full cast = %+v, want far_shorter against the unabridged", row)
 	}
-	castCut := api.SearchFindBooksAnswer{Asin: "B0BOOKCAST", Subtitle: "A Full Cast Production", Duration: 360, Abridged: true}
+	castCut := abs.SearchFindBooksAnswer{Asin: "B0BOOKCAST", Subtitle: "A Full Cast Production", Duration: 360, Abridged: true}
 	if row := judged(t, 6*3600, unabridged, castCut); row != nil {
 		t.Errorf("6h beside a 6h full-cast production = %+v, want no row: the copy is that production", row)
 	}
-	bbc := api.SearchFindBooksAnswer{Asin: "B0MATILBBC", Subtitle: "BBC Radio 4 Full-Cast Dramatisation", Duration: 220}
-	if row := judged(t, 220*60, api.SearchFindBooksAnswer{Asin: "B0MATILUNA", Duration: 626}, bbc); row != nil {
+	bbc := abs.SearchFindBooksAnswer{Asin: "B0MATILBBC", Subtitle: "BBC Radio 4 Full-Cast Dramatisation", Duration: 220}
+	if row := judged(t, 220*60, abs.SearchFindBooksAnswer{Asin: "B0MATILUNA", Duration: 626}, bbc); row != nil {
 		t.Errorf("a 3h40m copy beside the BBC's 3h40m dramatisation = %+v, want no row", row)
 	}
 }
@@ -663,8 +663,8 @@ func TestProductionAtTheFirstStoreSettlesIt(t *testing.T) {
 
 	it := shortBook("b", "J.R.R. Tolkien/The Hobbit", "The Hobbit")
 	it.Media.Metadata.AuthorName, it.Media.Duration = "J.R.R. Tolkien", 220*60
-	bbc := api.SearchFindBooksAnswer{Asin: "B0HOBBITBB", Title: "The Hobbit", Subtitle: "BBC Radio Full-Cast Dramatisation", Author: "J.R.R. Tolkien", Duration: 220}
-	row, editions := judgeEditions(it, []api.SearchFindBooksAnswer{bbc}, "audible.ca")
+	bbc := abs.SearchFindBooksAnswer{Asin: "B0HOBBITBB", Title: "The Hobbit", Subtitle: "BBC Radio Full-Cast Dramatisation", Author: "J.R.R. Tolkien", Duration: 220}
+	row, editions := judgeEditions(it, []abs.SearchFindBooksAnswer{bbc}, "audible.ca")
 	if row != nil || editions == 0 {
 		t.Errorf("a copy the length of the store's only edition, a production = %+v with %d editions; want no row, and the store counted as having the book", row, editions)
 	}
@@ -676,7 +676,7 @@ func TestProductionAtTheFirstStoreSettlesIt(t *testing.T) {
 func TestUnabridgedFullCastIsAReading(t *testing.T) {
 	t.Parallel()
 
-	cast := api.SearchFindBooksAnswer{Asin: "B0CASTUNAB", Subtitle: "A Full-Cast Unabridged Recording", Duration: 630}
+	cast := abs.SearchFindBooksAnswer{Asin: "B0CASTUNAB", Subtitle: "A Full-Cast Unabridged Recording", Duration: 630}
 	if row := judged(t, 6*3600, cast); row == nil || row.Problem != "far_shorter" || row.Edition.ASIN != "B0CASTUNAB" {
 		t.Errorf("6h against an unabridged full-cast 630 min = %+v, want far_shorter against it", row)
 	}

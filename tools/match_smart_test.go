@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 func TestCleanPeople(t *testing.T) {
@@ -20,14 +20,14 @@ func TestCleanPeople(t *testing.T) {
 func TestSmartDecide(t *testing.T) {
 	t.Parallel()
 
-	it := &api.LibraryItemExpanded{MediaType: "book", RelPath: "K. Patrick/Mrs S", Media: &api.LibraryItemExpandedMedia{Metadata: &api.LibraryItemExpandedMediaMetadata{
+	it := &abs.LibraryItemExpanded{MediaType: "book", RelPath: "K. Patrick/Mrs S", Media: &abs.LibraryItemExpandedMedia{Metadata: &abs.LibraryItemExpandedMediaMetadata{
 		Title: "Mrs. S .mp3", AuthorName: "Nicole LePera", NarratorName: "Black Library, Heavy Entertainment",
-		Series: []api.SeriesMinimal{{Name: "Nemesis", Sequence: "2"}}, Genres: []string{"Audiobook"},
+		Series: []abs.SeriesMinimal{{Name: "Nemesis", Sequence: "2"}}, Genres: []string{"Audiobook"},
 		Publisher: "Isis", PublishedYear: "2023-10-12T00:00:00", Language: "eng", Description: "Read by X",
 	}}}
-	hit := &api.SearchFindBooksAnswer{
+	hit := &abs.SearchFindBooksAnswer{
 		Title: "Mrs S", Author: "Dr. Nicole LePera, Someone - translator", Narrator: "Nicolette Chin",
-		Series: []api.SearchFindBooksAnswerSeries{{Series: "Nemesis Series", Sequence: "2"}}, Genres: []string{"Literary Fiction"},
+		Series: []abs.SearchFindBooksAnswerSeries{{Series: "Nemesis Series", Sequence: "2"}}, Genres: []string{"Literary Fiction"},
 		Publisher: "Fourth Estate", PublishedYear: "2023", Language: "English", Description: "A long description of the book that runs well past the stub threshold and says something about the plot.",
 	}
 	// "Nemesis #2" against "Nemesis Series #2": the name differs, the
@@ -50,10 +50,10 @@ func TestSmartDecide(t *testing.T) {
 
 	// curated values are kept, a different reader is for review, an empty
 	// field is filled by the match
-	it.Media.Metadata = &api.LibraryItemExpandedMediaMetadata{Title: "Feet of Clay", AuthorName: "Terry Pratchett", NarratorName: "Nigel Planer", Genres: []string{"Fantasy"}, PublishedYear: "1996", Description: string(make([]byte, 200))}
-	hit = &api.SearchFindBooksAnswer{Title: "Feet Of Clay", Author: "Terry Pratchett", Narrator: "Jon Culshaw, Bill Nighy", Genres: []string{"Science Fiction & Fantasy"}, PublishedYear: "2023", Subtitle: "Discworld, Book 19", Description: "x"}
-	it.Media.Metadata.Series = []api.SeriesMinimal{{Name: "Foundation", Sequence: "7"}}
-	hit.Series = []api.SearchFindBooksAnswerSeries{{Series: "The Foundation Series", Sequence: "2"}}
+	it.Media.Metadata = &abs.LibraryItemExpandedMediaMetadata{Title: "Feet of Clay", AuthorName: "Terry Pratchett", NarratorName: "Nigel Planer", Genres: []string{"Fantasy"}, PublishedYear: "1996", Description: string(make([]byte, 200))}
+	hit = &abs.SearchFindBooksAnswer{Title: "Feet Of Clay", Author: "Terry Pratchett", Narrator: "Jon Culshaw, Bill Nighy", Genres: []string{"Science Fiction & Fantasy"}, PublishedYear: "2023", Subtitle: "Discworld, Book 19", Description: "x"}
+	it.Media.Metadata.Series = []abs.SeriesMinimal{{Name: "Foundation", Sequence: "7"}}
+	hit.Series = []abs.SearchFindBooksAnswerSeries{{Series: "The Foundation Series", Sequence: "2"}}
 	got := map[string]string{}
 	for _, d := range smartDecide(it, hit) {
 		got[d.Field] = d.Action
@@ -73,8 +73,8 @@ func TestSmartDecide(t *testing.T) {
 	// a bare extra name from the provider is for review, never written:
 	// Audible lists illustrators, translators and pen names this way as
 	// often as co-authors
-	it.Media.Metadata = &api.LibraryItemExpandedMediaMetadata{Title: "The Rithmatist", AuthorName: "Brandon Sanderson"}
-	hit = &api.SearchFindBooksAnswer{Title: "The Rithmatist", Author: "Brandon Sanderson, Ben McSweeney"}
+	it.Media.Metadata = &abs.LibraryItemExpandedMediaMetadata{Title: "The Rithmatist", AuthorName: "Brandon Sanderson"}
+	hit = &abs.SearchFindBooksAnswer{Title: "The Rithmatist", Author: "Brandon Sanderson, Ben McSweeney"}
 	decided := false
 	for _, d := range smartDecide(it, hit) {
 		if d.Field != "authors" {

@@ -15,7 +15,7 @@ import (
 
 	"github.com/katbyte/abs-mcp/lib/audioprobe"
 	"github.com/katbyte/abs-mcp/lib/audiosample"
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/pointer"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -189,7 +189,7 @@ func (o *unplayableOut) finish(rows []unplayableFinding, limit int) {
 }
 
 // skip notes a file whose playability is not known, and why.
-func (o *unplayableOut) skip(it *api.LibraryItemExpanded, file, why string) {
+func (o *unplayableOut) skip(it *abs.LibraryItemExpanded, file, why string) {
 	o.UncheckedCount++
 	if len(o.Unchecked) < unplayableUncheckedCap {
 		o.Unchecked = append(o.Unchecked, unplayableSkip{ID: string(it.Id), Title: it.Title(), File: file, Why: why})
@@ -199,12 +199,12 @@ func (o *unplayableOut) skip(it *api.LibraryItemExpanded, file, why string) {
 // sweepUnplayable adds a book library's unplayable books to rows. The
 // listing picks the books; their expanded records, fifty at a time, carry
 // the files; and each file that can be locked is read, a few at once.
-func sweepUnplayable(ctx context.Context, gen *api.Client, lib *api.Library, sampler *audiosample.Sampler, out *unplayableOut, rows *[]unplayableFinding) error {
+func sweepUnplayable(ctx context.Context, gen *abs.Client, lib *abs.Library, sampler *audiosample.Sampler, out *unplayableOut, rows *[]unplayableFinding) error {
 	if lib.IsPodcast() {
 		return nil
 	}
-	var ids []api.LibraryItemID
-	if err := eachItem(ctx, gen, lib.Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+	var ids []abs.LibraryItemID
+	if err := eachItem(ctx, gen, lib.Id, abs.LibraryGetLibraryItemsOptions{}, func(it *abs.LibraryItemMinified) bool {
 		if !it.IsPodcast() {
 			ids = append(ids, it.Id)
 		}
@@ -228,7 +228,7 @@ func sweepUnplayable(ctx context.Context, gen *api.Client, lib *api.Library, sam
 // unplayableFile is one audio file's verdict.
 type unplayableFile struct {
 	item   int
-	file   *api.AudioFile
+	file   *abs.AudioFile
 	report audioprobe.Report
 	read   bool     // the container was read
 	health []string // what went wrong playing it, with decode
@@ -236,7 +236,7 @@ type unplayableFile struct {
 }
 
 // unplayableChunk judges a batch of expanded items.
-func unplayableChunk(ctx context.Context, gen *api.Client, items []api.LibraryItemExpanded, sampler *audiosample.Sampler, out *unplayableOut, rows *[]unplayableFinding) error {
+func unplayableChunk(ctx context.Context, gen *abs.Client, items []abs.LibraryItemExpanded, sampler *audiosample.Sampler, out *unplayableOut, rows *[]unplayableFinding) error {
 	var probes, plays []*unplayableFile
 	byItem := make([][]*unplayableFile, len(items))
 	for i := range items {
@@ -329,7 +329,7 @@ func serverFailure(ctx context.Context, title string, err error) error {
 
 // needsProbe reports whether a file's container is worth reading: every one
 // that can carry a lock, and any whose codec its name does not fit.
-func needsProbe(af *api.AudioFile) bool {
+func needsProbe(af *abs.AudioFile) bool {
 	ext := fileExt(af)
 	switch extContainer[ext] {
 	// the ones that can be locked, and a name that promises nothing: read
@@ -344,7 +344,7 @@ func needsProbe(af *api.AudioFile) bool {
 }
 
 // fileExt is a file's extension, lower-case with its dot.
-func fileExt(af *api.AudioFile) string {
+func fileExt(af *abs.AudioFile) string {
 	meta := pointer.From(af.Metadata)
 	if meta.Ext != "" {
 		return strings.ToLower(meta.Ext)
@@ -353,11 +353,11 @@ func fileExt(af *api.AudioFile) string {
 }
 
 // fileName is a file's name, or "" when the server gave the file none.
-func fileName(af *api.AudioFile) string { return pointer.From(af.Metadata).Filename }
+func fileName(af *abs.AudioFile) string { return pointer.From(af.Metadata).Filename }
 
 // lockedOriginalOnly reports a book with no audio but a store's locked
 // download beside it: what is left when the conversion never happened.
-func lockedOriginalOnly(it *api.LibraryItemExpanded) (unplayableFinding, bool) {
+func lockedOriginalOnly(it *abs.LibraryItemExpanded) (unplayableFinding, bool) {
 	var files, kinds []string
 	for _, lf := range it.LibraryFiles {
 		meta := pointer.From(lf.Metadata)
@@ -381,7 +381,7 @@ func lockedOriginalOnly(it *api.LibraryItemExpanded) (unplayableFinding, bool) {
 
 // judgeUnplayable turns an item's file verdicts into findings, one per
 // problem, naming the files.
-func judgeUnplayable(it *api.LibraryItemExpanded, files []*unplayableFile, out *unplayableOut) []unplayableFinding {
+func judgeUnplayable(it *abs.LibraryItemExpanded, files []*unplayableFile, out *unplayableOut) []unplayableFinding {
 	var locked, unread, cut, damaged, wrongExt []*unplayableFile
 	for _, f := range files {
 		switch {
@@ -457,7 +457,7 @@ func judgeUnplayable(it *api.LibraryItemExpanded, files []*unplayableFile, out *
 	return rows
 }
 
-func unplayableRow(it *api.LibraryItemExpanded, problem string, plays bool, files []string, detail string) unplayableFinding {
+func unplayableRow(it *abs.LibraryItemExpanded, problem string, plays bool, files []string, detail string) unplayableFinding {
 	return unplayableFinding{
 		ID: string(it.Id), Title: it.Title(), Author: it.Media.Metadata.AuthorDisplay(), Path: it.RelPath,
 		Problem: problem, Plays: plays, Detail: detail, Files: files,
@@ -569,7 +569,7 @@ const (
 // playStretches plays a file at its start, middle and end and says what
 // went wrong, nothing when it played cleanly. An error is the server or
 // the proxy failing, which leaves the file unknown.
-func playStretches(ctx context.Context, s *audiosample.Sampler, itemID string, af *api.AudioFile) ([]string, error) {
+func playStretches(ctx context.Context, s *audiosample.Sampler, itemID string, af *abs.AudioFile) ([]string, error) {
 	d := af.Duration
 	if d <= 0 {
 		return []string{"the server gives it no length, so there is nothing to play"}, nil

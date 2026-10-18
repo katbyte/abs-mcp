@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/pointer"
 	"github.com/katbyte/go-kt/version"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -92,9 +92,9 @@ func registerServerTools(r *registry) {
 		st, err := record(gen.StatsGetServerStats(ctx))
 		switch {
 		case err == nil:
-			books := cmp.Or(st.Books, &api.StatsGetServerStatsAnswerBooks{})
-			podcasts := cmp.Or(st.Podcasts, &api.StatsGetServerStatsAnswerPodcasts{})
-			total := cmp.Or(st.Total, &api.StatsGetServerStatsAnswerTotal{})
+			books := cmp.Or(st.Books, &abs.StatsGetServerStatsAnswerBooks{})
+			podcasts := cmp.Or(st.Podcasts, &abs.StatsGetServerStatsAnswerPodcasts{})
+			total := cmp.Or(st.Total, &abs.StatsGetServerStatsAnswerTotal{})
 			t := totalsOut{
 				Books:        int(books.NumItems),
 				Podcasts:     int(podcasts.NumItems),
@@ -113,7 +113,7 @@ func registerServerTools(r *registry) {
 			}
 			t.Users, t.OpenSessions = len(users.Users), len(sessions.Sessions)
 			out.Totals = &t
-		case api.IsForbidden(err):
+		case abs.IsForbidden(err):
 			out.Note = fmt.Sprintf("server-wide totals need an admin key and are not included: this key acts as %s (%s). "+
 				"The libraries and permissions above are complete. Treat the totals as unknown rather than zero, "+
 				"and expect the other admin-only tools (server_sessions, server_tasks, server_backups, server_tags, user_list) to be refused as well.",
@@ -221,7 +221,7 @@ func registerServerTools(r *registry) {
 		Description: "What is playing right now: open playback sessions across all users with title, position and device. Admin only. For history use user_history.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, sessionsOut, error) {
 		open, err := record(gen.SessionGetOpenSessions(ctx))
-		if api.IsNotFound(err) {
+		if abs.IsNotFound(err) {
 			return nil, sessionsOut{}, fmt.Errorf("open sessions are admin only: Audiobookshelf answers anyone else as if the route did not exist (%w)", err)
 		}
 		if err != nil {
@@ -262,7 +262,7 @@ func registerServerTools(r *registry) {
 		Location string      `json:"location,omitempty"`
 		Backups  []backupRow `json:"backups"`
 	}
-	backupRows := func(bs []api.Backup) []backupRow {
+	backupRows := func(bs []abs.Backup) []backupRow {
 		rows := make([]backupRow, 0, len(bs))
 		for _, b := range bs {
 			rows = append(rows, backupRow{ID: b.Id, Filename: b.Filename, Size: int64(b.FileSize), Created: fmtTime(b.CreatedAt), Version: b.ServerVersion})
@@ -305,8 +305,8 @@ func registerServerTools(r *registry) {
 		}
 		// the one made is the newest; its id can be one listed before, when
 		// it replaced a backup made earlier in the same minute
-		newest := slices.MaxFunc(after, func(a, b api.Backup) int { return a.CreatedAt.Compare(b.CreatedAt.Time) })
-		out := backupCreateOut{Created: backupRows([]api.Backup{newest})[0], Backups: backupRows(after)}
+		newest := slices.MaxFunc(after, func(a, b abs.Backup) int { return a.CreatedAt.Compare(b.CreatedAt.Time) })
+		out := backupCreateOut{Created: backupRows([]abs.Backup{newest})[0], Backups: backupRows(after)}
 		kept := map[string]bool{}
 		for _, b := range after {
 			kept[b.Id] = true
@@ -378,7 +378,7 @@ const (
 )
 
 // providerValues are the providers' names as a match takes them.
-func providerValues(opts []api.ProviderOption) []string {
+func providerValues(opts []abs.ProviderOption) []string {
 	out := make([]string, 0, len(opts))
 	for _, o := range opts {
 		if o.Value != "" {

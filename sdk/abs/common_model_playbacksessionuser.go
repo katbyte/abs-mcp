@@ -5,12 +5,5 @@ package abs
 // PlaybackSessionUser is the "PlaybackSessionUser" schema.
 type PlaybackSessionUser struct {
 	Id       UserID `json:"id,omitempty"`
-	Name     string `json:"name,omitempty"`
 	Username string `json:"username,omitempty"`
 }
-
-// GetName is the record's Name, for code that handles records of several types alike.
-func (m PlaybackSessionUser) GetName() string { return m.Name }
-
-// GetId is the record's Id, for code that handles records of several types alike.
-func (m PlaybackSessionUser) GetId() UserID { return m.Id }

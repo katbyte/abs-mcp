@@ -11,14 +11,14 @@ import (
 
 	"github.com/katbyte/go-kt/httpc"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // ItemFile is a Fetch over one file of an item, through the server's file
 // route with byte ranges.
-func ItemFile(gen *api.Client, itemID api.LibraryItemID, fileID string) Fetch {
+func ItemFile(gen *abs.Client, itemID abs.LibraryItemID, fileID string) Fetch {
 	return func(ctx context.Context, off, n int64) ([]byte, int64, error) {
-		got, err := gen.LibraryItemGetLibraryFile(ctx, itemID, fileID, api.LibraryItemGetLibraryFileOptions{Range: fmt.Sprintf("bytes=%d-%d", off, off+n-1)})
+		got, err := gen.LibraryItemGetLibraryFile(ctx, itemID, fileID, abs.LibraryItemGetLibraryFileOptions{Range: fmt.Sprintf("bytes=%d-%d", off, off+n-1)})
 		if err != nil {
 			// a range past the end of an empty file: nothing to read
 			if httpc.StatusCode(err) == http.StatusRequestedRangeNotSatisfiable && off == 0 {

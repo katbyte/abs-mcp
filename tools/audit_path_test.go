@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // Every row is a folder seen on a real library on 2026-09-13, with what the
@@ -68,7 +68,7 @@ func TestCheckPathStyles(t *testing.T) {
 		{rel: "Someone Else/Unrelated Folder", title: "Dune", author: "Frank Herbert"},
 		{rel: "Leadership/Rise", title: "Rise: 3 Practical Steps", author: "Patty Azzarello", genres: []string{"Business"}},
 	}
-	item := func(r row) *api.LibraryItemMinified {
+	item := func(r row) *abs.LibraryItemMinified {
 		it := shortBook("", r.rel, r.title)
 		it.Media.Metadata.AuthorName, it.Media.Metadata.Genres = r.author, r.genres
 		placed := make([]string, 0, len(r.series))
@@ -117,7 +117,7 @@ func TestCheckPathYear(t *testing.T) {
 		{"Frank Herbert/2007 - Dune", "Dune", "Frank Herbert", "1978"},
 		{"Frank Herbert/Dune - 2007", "Dune", "Frank Herbert", "1978-01-01"},
 	}
-	item := func(r row) *api.LibraryItemMinified {
+	item := func(r row) *abs.LibraryItemMinified {
 		it := shortBook("", r.rel, r.title)
 		it.Media.Metadata.AuthorName, it.Media.Metadata.PublishedYear = r.author, r.year
 		return it
@@ -191,7 +191,7 @@ func TestCheckPathSeries(t *testing.T) {
 		{"Orson Scott Card/Children of the Mind (Unabridged)", "Children of the Mind", "Orson Scott Card", "The Ender Saga #4, The Enderverse #14"},
 		{"Britney Jackson/Pirates of Aletharia", "Pirates of Aletharia", "Britney Jackson", "Lesbians, Pirates, and Dragons #1"},
 	}
-	item := func(r row) *api.LibraryItemMinified {
+	item := func(r row) *abs.LibraryItemMinified {
 		it := shortBook("", r.rel, r.title)
 		it.Media.Metadata.AuthorName, it.Media.Metadata.SeriesName = r.author, r.series
 		return it
@@ -217,7 +217,7 @@ func TestCheckPathSeries(t *testing.T) {
 	// a list filtered by series carries that one apart, and is judged the same
 	filtered := item(bad[0])
 	filtered.Media.Metadata.SeriesName = ""
-	filtered.Media.Metadata.Series = &api.SeriesMinimal{Name: "The Salvation Sequence", Sequence: "2"}
+	filtered.Media.Metadata.Series = &abs.SeriesMinimal{Name: "The Salvation Sequence", Sequence: "2"}
 	if detail, flagged := checkPath(filtered); !flagged || !strings.HasSuffix(detail, `does not say it is "The Salvation Sequence #2"`) {
 		t.Errorf("filtered by series: %v %q, want the series it has a place in", flagged, detail)
 	}
@@ -229,7 +229,7 @@ func TestPathRulesLeaveSeriesOut(t *testing.T) {
 	t.Parallel()
 
 	off := pathRules{}
-	book := func(rel, title, year string) *api.LibraryItemMinified {
+	book := func(rel, title, year string) *abs.LibraryItemMinified {
 		it := shortBook("", rel, title)
 		m := it.Media.Metadata
 		m.AuthorName, m.SeriesName, m.PublishedYear = "Peter F. Hamilton", "The Salvation Sequence #2", year
@@ -242,7 +242,7 @@ func TestPathRulesLeaveSeriesOut(t *testing.T) {
 	if detail, flagged := off.check(lost); flagged {
 		t.Errorf("with the series rule left out: %s", detail)
 	}
-	for what, it := range map[string]*api.LibraryItemMinified{
+	for what, it := range map[string]*abs.LibraryItemMinified{
 		"another title":   book("Peter F. Hamilton/Salvation Lost", "Pandora's Star", ""),
 		"another author":  book("Philip K. Dick/Salvation Lost", "Salvation Lost", ""),
 		"an earlier year": book("Peter F. Hamilton/Salvation Lost (2019)", "Salvation Lost", "2001"),
@@ -335,7 +335,7 @@ func TestPlacedSeries(t *testing.T) {
 		// a name with no place cannot be told from the start of the next
 		"The Cosmere, The Mistborn Saga #1": {"The Cosmere, The Mistborn Saga #1"},
 	} {
-		if got := placedSeries(&api.LibraryItemMinifiedMediaMetadata{SeriesName: line}); !slices.Equal(got, want) {
+		if got := placedSeries(&abs.LibraryItemMinifiedMediaMetadata{SeriesName: line}); !slices.Equal(got, want) {
 			t.Errorf("placedSeries(%q) = %q, want %q", line, got, want)
 		}
 	}
@@ -368,14 +368,14 @@ func TestFileStem(t *testing.T) {
 func TestCheckFiles(t *testing.T) {
 	t.Parallel()
 
-	item := func(rel, title string, isFile bool, files ...string) *api.LibraryItemExpanded {
-		it := &api.LibraryItemExpanded{MediaType: "book", RelPath: rel, IsFile: &isFile, Media: &api.LibraryItemExpandedMedia{Metadata: &api.LibraryItemExpandedMediaMetadata{Title: title, AuthorName: "Frank Herbert"}}}
+	item := func(rel, title string, isFile bool, files ...string) *abs.LibraryItemExpanded {
+		it := &abs.LibraryItemExpanded{MediaType: "book", RelPath: rel, IsFile: &isFile, Media: &abs.LibraryItemExpandedMedia{Metadata: &abs.LibraryItemExpandedMediaMetadata{Title: title, AuthorName: "Frank Herbert"}}}
 		for _, f := range files {
-			it.Media.AudioFiles = append(it.Media.AudioFiles, api.AudioFile{Metadata: &api.FileMetadata{Filename: f}})
+			it.Media.AudioFiles = append(it.Media.AudioFiles, abs.AudioFile{Metadata: &abs.FileMetadata{Filename: f}})
 		}
 		return it
 	}
-	fine := []*api.LibraryItemExpanded{
+	fine := []*abs.LibraryItemExpanded{
 		item("Frank Herbert/Dune", "Dune", false, "Dune - 01.mp3", "Dune - 02.mp3"),
 		item("Frank Herbert/Dune", "Dune", false, "01 - Arrakis.mp3", "02 - Caladan.mp3"),
 		item("Frank Herbert/Dune", "Dune", false, "Frank Herbert - 01.mp3", "Frank Herbert - 02.mp3"),
@@ -393,7 +393,7 @@ func TestCheckFiles(t *testing.T) {
 			t.Errorf("%s: flagged: %s", it.RelPath, detail)
 		}
 	}
-	bad := []*api.LibraryItemExpanded{
+	bad := []*abs.LibraryItemExpanded{
 		item("Frank Herbert/Dune", "Dune", false, "Neuromancer - 01.mp3", "Neuromancer - 02.mp3"),
 		item("Frank Herbert/Neuromancer.m4b", "Dune", true, "Neuromancer.m4b"),
 		item("Terry Pratchett/Discworld - 26 - Thief of Time", "Thief of Time", false, "Theif of Time - 01.mp3", "Theif of Time - 02.mp3"), //nolint:misspell // the misspelt filename is the case under test

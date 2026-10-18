@@ -11,7 +11,7 @@ import (
 
 	ktspelling "github.com/katbyte/go-kt/spelling"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -114,7 +114,7 @@ func knownLanguage(value string) bool {
 // (authorName, narratorName), so both fall back to splitting that; the
 // narrator audits fill the lists in first (joinedNames), since a name may
 // hold a comma.
-func valuesOf(field string, it *api.LibraryItemMinified) []string {
+func valuesOf(field string, it *abs.LibraryItemMinified) []string {
 	m := it.Media.Metadata
 	switch field {
 	case "genres":
@@ -398,7 +398,7 @@ func registerSpellingTools(r *registry) {
 		counts := newSpellingCounts(fields)
 		out := vocabOut{Groups: []vocabGroup{}}
 		for i := range libs {
-			if err := eachItem(ctx, gen, libs[i].Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+			if err := eachItem(ctx, gen, libs[i].Id, abs.LibraryGetLibraryItemsOptions{}, func(it *abs.LibraryItemMinified) bool {
 				out.Scanned++
 				counts.add(namedBook{LibraryItemMinified: it})
 				return true
@@ -551,7 +551,7 @@ func registerSpellingTools(r *registry) {
 			// is the spaced name, and a library with only the tidy one has
 			// nothing to do with it
 			type named struct {
-				lib  api.Library
+				lib  abs.Library
 				name string
 			}
 			var holding []named
@@ -595,7 +595,7 @@ func registerSpellingTools(r *registry) {
 			if preview {
 				out.Preview = &removePreview{Items: []string{}}
 				for _, h := range holding {
-					p, cerr := carrying(ctx, gen, []api.Library{h.lib}, field, h.name)
+					p, cerr := carrying(ctx, gen, []abs.Library{h.lib}, field, h.name)
 					if cerr != nil {
 						return nil, renameOut{}, cerr
 					}
@@ -619,7 +619,7 @@ func registerSpellingTools(r *registry) {
 			if err != nil {
 				return nil, renameOut{}, err
 			}
-			if !slices.ContainsFunc(named, func(a api.Author) bool { return a.Name != to }) {
+			if !slices.ContainsFunc(named, func(a abs.Author) bool { return a.Name != to }) {
 				out.Unchanged = true
 				break
 			}
@@ -634,7 +634,7 @@ func registerSpellingTools(r *registry) {
 			if err != nil {
 				return nil, renameOut{}, err
 			}
-			renamed, err := record(gen.AuthorUpdate(ctx, a.Id, api.AuthorUpdateRequest{Name: to}))
+			renamed, err := record(gen.AuthorUpdate(ctx, a.Id, abs.AuthorUpdateRequest{Name: to}))
 			if err != nil {
 				return nil, renameOut{}, err
 			}
@@ -671,7 +671,7 @@ type removePreview struct {
 // carrying finds the items in libs that carry a tag, genre or narrator, by the
 // server's own filter for the field, which matches the value the way its
 // remove does: whole and exactly.
-func carrying(ctx context.Context, gen *api.Client, libs []api.Library, field, value string) (*removePreview, error) {
+func carrying(ctx context.Context, gen *abs.Client, libs []abs.Library, field, value string) (*removePreview, error) {
 	p := &removePreview{Items: []string{}}
 	for i := range libs {
 		// a podcast library has no narrators, and answers a filter it does
@@ -679,7 +679,7 @@ func carrying(ctx context.Context, gen *api.Client, libs []api.Library, field, v
 		if libs[i].IsPodcast() && !slices.Contains(podcastGroups, field) {
 			continue
 		}
-		res, err := record(gen.LibraryGetLibraryItems(ctx, libs[i].Id, api.LibraryGetLibraryItemsOptions{Limit: new(previewCap), Sort: "media.metadata.title", Filter: api.ListFilter(field, value), Minified: "1"}))
+		res, err := record(gen.LibraryGetLibraryItems(ctx, libs[i].Id, abs.LibraryGetLibraryItemsOptions{Limit: new(previewCap), Sort: "media.metadata.title", Filter: abs.ListFilter(field, value), Minified: "1"}))
 		if err != nil {
 			return nil, err
 		}
@@ -707,25 +707,25 @@ func partly(changed int, err error) error {
 }
 
 // renameVocabulary renames or removes a tag or genre server-wide, and answers how many items changed.
-func renameVocabulary(ctx context.Context, gen *api.Client, field, from, to string, remove bool) (int, error) {
+func renameVocabulary(ctx context.Context, gen *abs.Client, field, from, to string, remove bool) (int, error) {
 	var n int
 	var err error
 	switch {
 	case field == "tags" && remove:
-		var got api.MiscDeleteTagAnswer
-		got, err = record(gen.MiscDeleteTag(ctx, api.PathName(from)))
+		var got abs.MiscDeleteTagAnswer
+		got, err = record(gen.MiscDeleteTag(ctx, abs.PathName(from)))
 		n = got.NumItemsUpdated
 	case field == "tags":
-		var got api.MiscRenameTagAnswer
-		got, err = record(gen.MiscRenameTag(ctx, api.MiscRenameTagRequest{Tag: from, NewTag: to}))
+		var got abs.MiscRenameTagAnswer
+		got, err = record(gen.MiscRenameTag(ctx, abs.MiscRenameTagRequest{Tag: from, NewTag: to}))
 		n = got.NumItemsUpdated
 	case remove:
-		var got api.MiscDeleteGenreAnswer
-		got, err = record(gen.MiscDeleteGenre(ctx, api.PathName(from)))
+		var got abs.MiscDeleteGenreAnswer
+		got, err = record(gen.MiscDeleteGenre(ctx, abs.PathName(from)))
 		n = got.NumItemsUpdated
 	default:
-		var got api.MiscRenameGenreAnswer
-		got, err = record(gen.MiscRenameGenre(ctx, api.MiscRenameGenreRequest{Genre: from, NewGenre: to}))
+		var got abs.MiscRenameGenreAnswer
+		got, err = record(gen.MiscRenameGenre(ctx, abs.MiscRenameGenreRequest{Genre: from, NewGenre: to}))
 		n = got.NumItemsUpdated
 	}
 
@@ -733,12 +733,12 @@ func renameVocabulary(ctx context.Context, gen *api.Client, field, from, to stri
 }
 
 // renameNarrator renames or removes a narrator in one library, and answers how many items changed.
-func renameNarrator(ctx context.Context, gen *api.Client, library api.LibraryID, name, to string, remove bool) (int, error) {
+func renameNarrator(ctx context.Context, gen *abs.Client, library abs.LibraryID, name, to string, remove bool) (int, error) {
 	if remove {
-		got, err := record(gen.LibraryRemoveNarrator(ctx, library, api.PathName(name)))
+		got, err := record(gen.LibraryRemoveNarrator(ctx, library, abs.PathName(name)))
 		return got.Updated, err
 	}
-	got, err := record(gen.LibraryUpdateNarrator(ctx, library, api.PathName(name), api.LibraryUpdateNarratorRequest{Name: to}))
+	got, err := record(gen.LibraryUpdateNarrator(ctx, library, abs.PathName(name), abs.LibraryUpdateNarratorRequest{Name: to}))
 
 	return got.Updated, err
 }
@@ -749,7 +749,7 @@ func renameNarrator(ctx context.Context, gen *api.Client, library api.LibraryID,
 // in one field, so this walks every library and batch-updates the items. An
 // item that already carries a part keeps one copy, and items without the
 // value are not touched, so a part that is a genre elsewhere stays one.
-func splitVocabulary(ctx context.Context, gen *api.Client, field, from string, toGenres, toTags []string) (int, error) {
+func splitVocabulary(ctx context.Context, gen *abs.Client, field, from string, toGenres, toTags []string) (int, error) {
 	clean := func(in []string) []string {
 		out := make([]string, 0, len(in))
 		for _, p := range in {
@@ -771,10 +771,10 @@ func splitVocabulary(ctx context.Context, gen *api.Client, field, from string, t
 			}
 		}
 	}
-	var updates []api.LibraryItemBatchUpdateRequest
+	var updates []abs.LibraryItemBatchUpdateRequest
 	shows := map[string]bool{}
 	for i := range libs {
-		if err := eachItem(ctx, gen, libs[i].Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+		if err := eachItem(ctx, gen, libs[i].Id, abs.LibraryGetLibraryItemsOptions{}, func(it *abs.LibraryItemMinified) bool {
 			genres, tags := slices.Clone(it.Media.Metadata.Genres), slices.Clone(it.Media.Tags)
 			src := &genres
 			if field == "tags" {
@@ -792,7 +792,7 @@ func splitVocabulary(ctx context.Context, gen *api.Client, field, from string, t
 			if tags == nil {
 				tags = []string{}
 			}
-			updates = append(updates, api.LibraryItemBatchUpdateRequest{Id: string(it.Id), MediaPayload: &api.MediaUpdate{Tags: tags, Metadata: &api.MediaUpdateMetadata{Genres: genres}}})
+			updates = append(updates, abs.LibraryItemBatchUpdateRequest{Id: string(it.Id), MediaPayload: &abs.MediaUpdate{Tags: tags, Metadata: &abs.MediaUpdateMetadata{Genres: genres}}})
 			shows[string(it.Id)] = it.IsPodcast()
 			return true
 		}); err != nil {
@@ -808,17 +808,17 @@ func splitVocabulary(ctx context.Context, gen *api.Client, field, from string, t
 // "english" must not touch the 400 books that say "English"). An empty to
 // clears the value. With dryRun it changes nothing and answers how many items
 // it would have changed.
-func renameBySweep(ctx context.Context, gen *api.Client, library, field, from, to string, dryRun bool) (updated int, titles []string, err error) {
+func renameBySweep(ctx context.Context, gen *abs.Client, library, field, from, to string, dryRun bool) (updated int, titles []string, err error) {
 	libs, err := resolveLibraries(ctx, gen, library)
 	if err != nil {
 		return 0, nil, err
 	}
 
-	var updates []api.LibraryItemBatchUpdateRequest
+	var updates []abs.LibraryItemBatchUpdateRequest
 	shows := map[string]bool{}
 	titles = []string{}
 	for i := range libs {
-		if err := eachItem(ctx, gen, libs[i].Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+		if err := eachItem(ctx, gen, libs[i].Id, abs.LibraryGetLibraryItemsOptions{}, func(it *abs.LibraryItemMinified) bool {
 			m := it.Media.Metadata
 			var carries bool
 			switch field {
@@ -831,13 +831,13 @@ func renameBySweep(ctx context.Context, gen *api.Client, library, field, from, t
 				return true
 			}
 
-			md := api.MediaUpdateMetadata{}
+			md := abs.MediaUpdateMetadata{}
 			if field == "languages" {
 				md.Language = &to
 			} else {
 				md.Publisher = &to
 			}
-			updates = append(updates, api.LibraryItemBatchUpdateRequest{Id: string(it.Id), MediaPayload: &api.MediaUpdate{Metadata: &md}})
+			updates = append(updates, abs.LibraryItemBatchUpdateRequest{Id: string(it.Id), MediaPayload: &abs.MediaUpdate{Metadata: &md}})
 			shows[string(it.Id)] = it.IsPodcast()
 			if len(titles) < 50 {
 				titles = append(titles, it.Title())

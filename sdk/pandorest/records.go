@@ -44,6 +44,8 @@ var recordsAt = []recordAt{
 	{"GET /api/sessions/open 200 .shareSessions[]", "PlaybackSession"},
 	// UserController.getOnlineUsers: the open sessions as they are held, written by their toJSON
 	{"GET /api/users/online 200 .openSessions[]", "PlaybackSession"},
+	// SocketAuthority.getUsersOnline: each account online with its open session, as User.toJSONForPublic writes it by toJSONForClient
+	{"GET /api/users/online 200 .usersOnline[].session", "PlaybackSessionForClient"},
 	// UserController.findAll: a user's latest session from Database.getPlaybackSessions, written by its toJSON
 	{"UserForBrowser .latestSession", "PlaybackSession"},
 	// ShareController.getMediaItemShareBySlug: the share as ShareManager holds it for clients, with its playback session as toJSONForClient

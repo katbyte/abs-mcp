@@ -14,7 +14,7 @@ import (
 	"time"
 	"unicode"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 	"github.com/katbyte/go-kt/pointer"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -95,7 +95,7 @@ var missingFields = []string{
 }
 
 // auditCheck returns (detail, true) when the item is suspect.
-type auditCheck func(it *api.LibraryItemMinified) (string, bool)
+type auditCheck func(it *abs.LibraryItemMinified) (string, bool)
 
 // rulePathSeries is audit_path holding a book to the series its record
 // places it in.
@@ -321,8 +321,8 @@ func registerAuditTools(r *registry) {
 			lib := &libs[i]
 			// one pass over the library evaluating every predicate and
 			// feeding every collector, rather than one pass per audit
-			var feeds []api.LibraryItemID // podcasts stale_feed has to see whole
-			if err := eachItem(ctx, gen, lib.Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+			var feeds []abs.LibraryItemID // podcasts stale_feed has to see whole
+			if err := eachItem(ctx, gen, lib.Id, abs.LibraryGetLibraryItemsOptions{}, func(it *abs.LibraryItemMinified) bool {
 				out.Scanned++
 				for _, spec := range auditSpecs {
 					if _, suspect := checkFor(spec.Check)(it); suspect {
@@ -359,7 +359,7 @@ func registerAuditTools(r *registry) {
 			}); err != nil {
 				return nil, allOut{}, err
 			}
-			if err := podcastRecords(ctx, gen, feeds, func(it *api.LibraryItemExpanded) {
+			if err := podcastRecords(ctx, gen, feeds, func(it *abs.LibraryItemExpanded) {
 				if _, suspect := staleFeed(new(it.Minified()), it.Media.Episodes); suspect {
 					found["audit_podcasts"]++
 				}
@@ -442,8 +442,8 @@ func registerAuditTools(r *registry) {
 
 		// an audit that can only fire for a book says nothing about a
 		// library of podcasts: it is not applicable there, not clean
-		hasBooks := slices.ContainsFunc(libs, func(l api.Library) bool { return !l.IsPodcast() })
-		hasPodcasts := slices.ContainsFunc(libs, func(l api.Library) bool { return l.IsPodcast() })
+		hasBooks := slices.ContainsFunc(libs, func(l abs.Library) bool { return !l.IsPodcast() })
+		hasPodcasts := slices.ContainsFunc(libs, func(l abs.Library) bool { return l.IsPodcast() })
 		notRun := func(tool, field, reason string) {
 			out.NotRun = append(out.NotRun, allNotRun{Audit: tool, Field: field, Reason: reason})
 		}
@@ -550,7 +550,7 @@ func registerAuditTools(r *registry) {
 
 		collector := newDupCollector()
 		for i := range libs {
-			if err := eachItem(ctx, gen, libs[i].Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+			if err := eachItem(ctx, gen, libs[i].Id, abs.LibraryGetLibraryItemsOptions{}, func(it *abs.LibraryItemMinified) bool {
 				collector.add(it)
 				return true
 			}); err != nil {
@@ -622,7 +622,7 @@ type dupCollector struct {
 	excluded  map[int]bool               // the copies incomplete reported, left out of the groups
 	titleKeys []string                   // each item's title key, "" for none
 	splits    []dupSplit                 // each title whose copies the groups kept apart, and why
-	tracks    map[string][]api.AudioFile // the audio files of books read for incomplete, by id
+	tracks    map[string][]abs.AudioFile // the audio files of books read for incomplete, by id
 	close     []dupClose                 // pairs kept apart only on uncertain evidence, their lengths near enough for one recording
 }
 
@@ -680,7 +680,7 @@ func newDupCollector() *dupCollector {
 	return &dupCollector{byKey: map[string][]int{}}
 }
 
-func (d *dupCollector) add(it *api.LibraryItemMinified) {
+func (d *dupCollector) add(it *abs.LibraryItemMinified) {
 	d.items = append(d.items, summarize(it))
 	m := it.Media.Metadata
 	i := len(d.items) - 1
@@ -1112,7 +1112,7 @@ type gapsOut struct {
 // sweepSeriesGaps checks every multi-book series in a book library for
 // interior gaps and numbers far from the rest, counting them all and keeping
 // at most limit as rows. A podcast library has no series and is skipped.
-func sweepSeriesGaps(ctx context.Context, gen *api.Client, lib *api.Library, limit int, out *gapsOut) error {
+func sweepSeriesGaps(ctx context.Context, gen *abs.Client, lib *abs.Library, limit int, out *gapsOut) error {
 	if lib.IsPodcast() {
 		return nil
 	}
@@ -1131,7 +1131,7 @@ func sweepSeriesGaps(ctx context.Context, gen *api.Client, lib *api.Library, lim
 		// the series listing carries no sequence numbers, and neither does a
 		// plain item listing: only an item query filtered by the series does
 		// (see docs/README.md)
-		res, err := record(gen.LibraryGetLibraryItems(ctx, lib.Id, api.LibraryGetLibraryItemsOptions{Limit: new(len(s.Books)), Filter: api.ListFilter("series", string(s.Id))}))
+		res, err := record(gen.LibraryGetLibraryItems(ctx, lib.Id, abs.LibraryGetLibraryItemsOptions{Limit: new(len(s.Books)), Filter: abs.ListFilter("series", string(s.Id))}))
 		if err != nil {
 			return err
 		}
@@ -1170,7 +1170,7 @@ func sweepSeriesGaps(ctx context.Context, gen *api.Client, lib *api.Library, lim
 //
 // items must come from a series-filtered query; the series listing and plain
 // item listings both return metadata with no sequence at all.
-func seriesSequences(items []api.LibraryItemMinified, seriesID api.SeriesID) (have, missing []string) {
+func seriesSequences(items []abs.LibraryItemMinified, seriesID abs.SeriesID) (have, missing []string) {
 	have, nums := seriesNumbers(items, seriesID)
 	return have, missingBetween(nums)
 }
@@ -1178,7 +1178,7 @@ func seriesSequences(items []api.LibraryItemMinified, seriesID api.SeriesID) (ha
 // seriesNumbers is the sequence numbers items carry for the series seriesID,
 // as written and as numbers, both in order and each number once. A list
 // filtered by a series gives each book that series alone.
-func seriesNumbers(items []api.LibraryItemMinified, seriesID api.SeriesID) (have []string, nums []float64) {
+func seriesNumbers(items []abs.LibraryItemMinified, seriesID abs.SeriesID) (have []string, nums []float64) {
 	seen := map[float64]string{}
 	for i := range items {
 		media := pointer.From(items[i].Media)
@@ -1314,7 +1314,7 @@ func allScope(tool, field string) string {
 
 // runCheck evaluates one named predicate over a library, using the server's
 // own filter when it has one (far cheaper than a sweep) and paging otherwise.
-func runCheck(ctx context.Context, gen *api.Client, prov providerConfig, lib *api.Library, name string, limit int, out *auditOut) error {
+func runCheck(ctx context.Context, gen *abs.Client, prov providerConfig, lib *abs.Library, name string, limit int, out *auditOut) error {
 	if lib.IsPodcast() && bookOnlyChecks[name] {
 		return nil
 	}
@@ -1326,7 +1326,7 @@ func runCheck(ctx context.Context, gen *api.Client, prov providerConfig, lib *ap
 	if filter := nativeFilter[name]; filter != "" && (!lib.IsPodcast() || name == "issues") {
 		// the filtered query says how many match, not how many were looked
 		// at; the library's size is one more request, for one row
-		all, err := record(gen.LibraryGetLibraryItems(ctx, lib.Id, api.LibraryGetLibraryItemsOptions{Limit: new(1), Minified: "1"}))
+		all, err := record(gen.LibraryGetLibraryItems(ctx, lib.Id, abs.LibraryGetLibraryItemsOptions{Limit: new(1), Minified: "1"}))
 		if err != nil {
 			return err
 		}
@@ -1335,7 +1335,7 @@ func runCheck(ctx context.Context, gen *api.Client, prov providerConfig, lib *ap
 		// once the worklist is full only the count is wanted, and a limit of 0
 		// would mean "no limit" to the server: ask for one row and keep none
 		remaining := max(limit-len(out.Findings), 1)
-		res, err := record(gen.LibraryGetLibraryItems(ctx, lib.Id, api.LibraryGetLibraryItemsOptions{Limit: new(remaining), Filter: filter, Minified: "1"}))
+		res, err := record(gen.LibraryGetLibraryItems(ctx, lib.Id, abs.LibraryGetLibraryItemsOptions{Limit: new(remaining), Filter: filter, Minified: "1"}))
 		if err != nil {
 			return err
 		}
@@ -1356,7 +1356,7 @@ func runCheck(ctx context.Context, gen *api.Client, prov providerConfig, lib *ap
 		return nil
 	}
 
-	report := func(it *api.LibraryItemMinified, detail string, suspect bool) {
+	report := func(it *abs.LibraryItemMinified, detail string, suspect bool) {
 		if !suspect {
 			return
 		}
@@ -1365,8 +1365,8 @@ func runCheck(ctx context.Context, gen *api.Client, prov providerConfig, lib *ap
 			out.Findings = append(out.Findings, finding(it, detail))
 		}
 	}
-	var feeds []api.LibraryItemID // podcasts stale_feed has to see whole
-	if err := eachItem(ctx, gen, lib.Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+	var feeds []abs.LibraryItemID // podcasts stale_feed has to see whole
+	if err := eachItem(ctx, gen, lib.Id, abs.LibraryGetLibraryItemsOptions{}, func(it *abs.LibraryItemMinified) bool {
 		out.Scanned++
 		if name == "stale_feed" && staleFeedNeedsRecord(it) {
 			feeds = append(feeds, it.Id)
@@ -1379,7 +1379,7 @@ func runCheck(ctx context.Context, gen *api.Client, prov providerConfig, lib *ap
 		return err
 	}
 
-	return podcastRecords(ctx, gen, feeds, func(it *api.LibraryItemExpanded) {
+	return podcastRecords(ctx, gen, feeds, func(it *abs.LibraryItemExpanded) {
 		short := it.Minified()
 		detail, suspect := staleFeed(&short, it.Media.Episodes)
 		report(&short, detail, suspect)
@@ -1392,7 +1392,7 @@ const podcastBatchSize = 10
 
 // podcastRecords fetches podcasts whole, a batch at a time, and hands each to
 // fn.
-func podcastRecords(ctx context.Context, gen *api.Client, ids []api.LibraryItemID, fn func(it *api.LibraryItemExpanded)) error {
+func podcastRecords(ctx context.Context, gen *abs.Client, ids []abs.LibraryItemID, fn func(it *abs.LibraryItemExpanded)) error {
 	for chunk := range slices.Chunk(ids, podcastBatchSize) {
 		items, err := itemsBatch(ctx, gen, chunk)
 		if err != nil {
@@ -1408,12 +1408,12 @@ func podcastRecords(ctx context.Context, gen *api.Client, ids []api.LibraryItemI
 // staleFeedNeedsRecord reports whether stale_feed has to see the whole
 // podcast: the listing says how many episodes a podcast holds, not when the
 // newest came out.
-func staleFeedNeedsRecord(it *api.LibraryItemMinified) bool {
+func staleFeedNeedsRecord(it *abs.LibraryItemMinified) bool {
 	return it.IsPodcast() && it.Media.Metadata.FeedUrl != "" && !it.Media.LastEpisodeCheck.IsZero() && it.Media.NumEpisodes > 0
 }
 
 // staleFeed is stale_feed's judgement of a podcast and the episodes it holds, which only its whole record carries (staleFeedNeedsRecord).
-func staleFeed(it *api.LibraryItemMinified, episodes []api.PodcastEpisode) (string, bool) {
+func staleFeed(it *abs.LibraryItemMinified, episodes []abs.PodcastEpisode) (string, bool) {
 	if !it.IsPodcast() {
 		return "", false
 	}
@@ -1426,7 +1426,7 @@ func staleFeed(it *api.LibraryItemMinified, episodes []api.PodcastEpisode) (stri
 	// the server stamps lastEpisodeCheck on every check, whatever it
 	// finds, so it says the feed was read, not that anything came of it:
 	// the newest episode's date is what says the show is still going
-	var newest api.UnixMilli
+	var newest abs.UnixMilli
 	for i := range episodes {
 		if episodes[i].PublishedAt.After(newest.Time) {
 			newest = episodes[i].PublishedAt
@@ -1442,7 +1442,7 @@ func staleFeed(it *api.LibraryItemMinified, episodes []api.PodcastEpisode) (stri
 }
 
 // findingWhole is an item fetched whole as a finding.
-func findingWhole(it *api.LibraryItemExpanded, detail string) auditFinding {
+func findingWhole(it *abs.LibraryItemExpanded, detail string) auditFinding {
 	return auditFinding{
 		ID:     string(it.Id),
 		Title:  it.Title(),
@@ -1452,7 +1452,7 @@ func findingWhole(it *api.LibraryItemExpanded, detail string) auditFinding {
 	}
 }
 
-func finding(it *api.LibraryItemMinified, detail string) auditFinding {
+func finding(it *abs.LibraryItemMinified, detail string) auditFinding {
 	return auditFinding{
 		ID:     string(it.Id),
 		Title:  it.Title(),
@@ -1466,15 +1466,15 @@ func finding(it *api.LibraryItemMinified, detail string) auditFinding {
 // filter value.
 var nativeFilter = map[string]string{
 	"issues":    "issues",
-	"cover":     api.ListFilter("missing", "cover"),
-	"narrator":  api.ListFilter("missing", "narrators"),
-	"series":    api.ListFilter("missing", "series"),
-	"author":    api.ListFilter("missing", "authors"),
-	"genres":    api.ListFilter("missing", "genres"),
-	"year":      api.ListFilter("missing", "publishedYear"),
-	"publisher": api.ListFilter("missing", "publisher"),
-	"language":  api.ListFilter("missing", "language"),
-	"no_audio":  api.ListFilter("tracks", "none"),
+	"cover":     abs.ListFilter("missing", "cover"),
+	"narrator":  abs.ListFilter("missing", "narrators"),
+	"series":    abs.ListFilter("missing", "series"),
+	"author":    abs.ListFilter("missing", "authors"),
+	"genres":    abs.ListFilter("missing", "genres"),
+	"year":      abs.ListFilter("missing", "publishedYear"),
+	"publisher": abs.ListFilter("missing", "publisher"),
+	"language":  abs.ListFilter("missing", "language"),
+	"no_audio":  abs.ListFilter("tracks", "none"),
 }
 
 const (
@@ -1491,7 +1491,7 @@ func (p providerConfig) auditCheck(name string) auditCheck {
 	if name != "unmatched" {
 		return check
 	}
-	return func(it *api.LibraryItemMinified) (string, bool) {
+	return func(it *abs.LibraryItemMinified) (string, bool) {
 		if p.markedUnmatchable(it.Media.Tags) {
 			return "", false
 		}
@@ -1502,7 +1502,7 @@ func (p providerConfig) auditCheck(name string) auditCheck {
 var auditChecksByName = map[string]auditCheck{
 	// a book the provider tag marks as having nothing to match is left out
 	// by providerConfig.auditCheck, which knows the server's tag prefix
-	"unmatched": func(it *api.LibraryItemMinified) (string, bool) {
+	"unmatched": func(it *abs.LibraryItemMinified) (string, bool) {
 		if it.IsPodcast() {
 			return "", false
 		}
@@ -1512,7 +1512,7 @@ var auditChecksByName = map[string]auditCheck{
 		}
 		return "", false
 	},
-	"author_as_title": func(it *api.LibraryItemMinified) (string, bool) {
+	"author_as_title": func(it *abs.LibraryItemMinified) (string, bool) {
 		if it.IsPodcast() {
 			return "", false
 		}
@@ -1528,58 +1528,58 @@ var auditChecksByName = map[string]auditCheck{
 		}
 		return "", false
 	},
-	"cover": func(it *api.LibraryItemMinified) (string, bool) {
+	"cover": func(it *abs.LibraryItemMinified) (string, bool) {
 		if !it.HasCover() {
 			return "no cover", true
 		}
 		return "", false
 	},
-	"description": func(it *api.LibraryItemMinified) (string, bool) {
+	"description": func(it *abs.LibraryItemMinified) (string, bool) {
 		return stubDescription(it.Media.Metadata.Description)
 	},
-	"narrator": func(it *api.LibraryItemMinified) (string, bool) {
+	"narrator": func(it *abs.LibraryItemMinified) (string, bool) {
 		if !it.IsPodcast() && it.Media.Metadata.NarratorDisplay() == "" {
 			return "no narrator", true
 		}
 		return "", false
 	},
-	"series": func(it *api.LibraryItemMinified) (string, bool) {
+	"series": func(it *abs.LibraryItemMinified) (string, bool) {
 		if !it.IsPodcast() && len(it.Media.Metadata.SeriesDisplay()) == 0 {
 			return "no series", true
 		}
 		return "", false
 	},
-	"author": func(it *api.LibraryItemMinified) (string, bool) {
+	"author": func(it *abs.LibraryItemMinified) (string, bool) {
 		if it.Media.Metadata.AuthorDisplay() == "" {
 			return "no author", true
 		}
 		return "", false
 	},
-	"genres": func(it *api.LibraryItemMinified) (string, bool) {
+	"genres": func(it *abs.LibraryItemMinified) (string, bool) {
 		if len(it.Media.Metadata.Genres) == 0 {
 			return "no genres", true
 		}
 		return "", false
 	},
-	"year": func(it *api.LibraryItemMinified) (string, bool) {
+	"year": func(it *abs.LibraryItemMinified) (string, bool) {
 		if !it.IsPodcast() && it.Media.Metadata.PublishedYear == "" {
 			return "no published year", true
 		}
 		return "", false
 	},
-	"publisher": func(it *api.LibraryItemMinified) (string, bool) {
+	"publisher": func(it *abs.LibraryItemMinified) (string, bool) {
 		if !it.IsPodcast() && it.Media.Metadata.Publisher == "" {
 			return "no publisher", true
 		}
 		return "", false
 	},
-	"language": func(it *api.LibraryItemMinified) (string, bool) {
+	"language": func(it *abs.LibraryItemMinified) (string, bool) {
 		if it.Media.Metadata.Language == "" {
 			return "no language", true
 		}
 		return "", false
 	},
-	"chapters": func(it *api.LibraryItemMinified) (string, bool) {
+	"chapters": func(it *abs.LibraryItemMinified) (string, bool) {
 		if it.IsPodcast() || it.Media.NumChapters > 0 || it.Media.Duration < chapterlessMinHours*3600 {
 			return "", false
 		}
@@ -1590,7 +1590,7 @@ var auditChecksByName = map[string]auditCheck{
 		}
 		return fmt.Sprintf("%s of audio in %d files with no chapters", fmtDuration(it.Media.Duration), it.Media.NumTracks), true
 	},
-	"issues": func(it *api.LibraryItemMinified) (string, bool) {
+	"issues": func(it *abs.LibraryItemMinified) (string, bool) {
 		switch {
 		case it.IsMissing:
 			return "folder missing from disk", true
@@ -1599,7 +1599,7 @@ var auditChecksByName = map[string]auditCheck{
 		}
 		return "", false
 	},
-	"no_audio": func(it *api.LibraryItemMinified) (string, bool) {
+	"no_audio": func(it *abs.LibraryItemMinified) (string, bool) {
 		if !it.IsPodcast() && it.Media.NumTracks == 0 && it.Media.NumAudioFiles == 0 {
 			if it.Media.EbookFormat != "" {
 				return "ebook only (" + it.Media.EbookFormat + ")", true
@@ -1610,8 +1610,8 @@ var auditChecksByName = map[string]auditCheck{
 	},
 	"path": checkPath,
 	// the listing does not carry episodes: the sweeps fetch the podcasts whose newest episode decides it (staleFeedNeedsRecord)
-	"stale_feed": func(it *api.LibraryItemMinified) (string, bool) { return staleFeed(it, nil) },
-	"no_episodes": func(it *api.LibraryItemMinified) (string, bool) {
+	"stale_feed": func(it *abs.LibraryItemMinified) (string, bool) { return staleFeed(it, nil) },
+	"no_episodes": func(it *abs.LibraryItemMinified) (string, bool) {
 		if it.IsPodcast() && it.Media.NumEpisodes == 0 {
 			return "no episodes downloaded", true
 		}

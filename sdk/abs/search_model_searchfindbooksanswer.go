@@ -13,7 +13,7 @@ type SearchFindBooksAnswer struct {
 	Duration         float64                       `json:"duration,omitempty"`
 	Explicit         bool                          `json:"explicit"`
 	Genres           []string                      `json:"genres,omitzero"`
-	Id               any                           `json:"id,omitempty"`
+	Id               TextOrNumber                  `json:"id,omitzero"`
 	Isbn             string                        `json:"isbn,omitempty"`
 	Language         string                        `json:"language,omitempty"`
 	MatchConfidence  float64                       `json:"matchConfidence,omitempty"`

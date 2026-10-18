@@ -263,57 +263,6 @@ func TestAnswerFillMatchesOperations(t *testing.T) {
 	}
 }
 
-// The hand-written client settles a number the server only ever sent whole.
-func TestByhandSettlesAWholeNumber(t *testing.T) {
-	t.Parallel()
-
-	to := &schema{Type: "number", whole: true}
-	b := &byhand{visitedRef: map[string]bool{}}
-	b.merge(to, &schema{Type: "integer"}, nil, "count")
-	if to.Type != "integer" || to.whole || b.settled != 1 || b.filled != 0 {
-		t.Errorf("settled: %+v, settled %d, filled %d", to, b.settled, b.filled)
-	}
-
-	plain := &schema{Type: "number"}
-	b.merge(plain, &schema{Type: "integer"}, nil, "duration")
-	if plain.Type != "number" {
-		t.Errorf("a number the source says: %s, want it left a number", plain.Type)
-	}
-}
-
-// The hand-written client adds the fields it sends to a record a stated place made where the scan saw nothing, as it would to an untyped one,
-// and adds none to a record the source wrote.
-func TestByhandFillsAnUnseenRecord(t *testing.T) {
-	t.Parallel()
-
-	from := &schema{Type: "object", Properties: map[string]*schema{"title": {Type: "string"}, "feedUrl": {Type: "string"}}}
-	unseen := &schema{Type: "object", unseen: true, Properties: map[string]*schema{"title": {}}}
-	written := &schema{Type: "object", Properties: map[string]*schema{"title": {}}}
-
-	b := &byhand{visitedRef: map[string]bool{}}
-	b.merge(unseen, from, nil, "metadata")
-	b.merge(written, from, nil, "metadata")
-
-	if unseen.Properties["title"].Type != "string" || unseen.Properties["feedUrl"] == nil {
-		t.Errorf("the unseen record: %s, want its field typed and the field it lacked added", describe(unseen))
-	}
-	if written.Properties["title"].Type != "string" || written.Properties["feedUrl"] != nil {
-		t.Errorf("the source's record: %s, want its field typed and nothing added", describe(written))
-	}
-}
-
-// A value of several kinds is stated, so the hand-written client neither types it nor counts it as a disagreement.
-func TestByhandLeavesAUnion(t *testing.T) {
-	t.Parallel()
-
-	to := &schema{OneOf: []*schema{{Ref: "#/components/schemas/Book"}}}
-	b := &byhand{visitedRef: map[string]bool{}}
-	b.merge(to, &schema{Type: "object", Properties: map[string]*schema{"title": {Type: "string"}}}, nil, "shelf")
-	if to.Type != "" || len(to.OneOf) != 1 || b.filled != 0 || len(b.conflicts) != 0 {
-		t.Errorf("a union: %+v, filled %d, conflicts %q", to, b.filled, b.conflicts)
-	}
-}
-
 // Each record where the document has a union fills the member its field names, and a kind the union has no member for is listed.
 func TestAnswerFillThroughUnions(t *testing.T) {
 	t.Parallel()

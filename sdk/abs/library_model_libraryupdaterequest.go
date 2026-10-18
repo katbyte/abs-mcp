@@ -7,6 +7,7 @@ type LibraryUpdateRequest struct {
 	DisplayOrder any            `json:"displayOrder,omitempty"`
 	Folders      any            `json:"folders,omitempty"`
 	Icon         string         `json:"icon,omitempty"`
+	MediaType    string         `json:"mediaType,omitempty"`
 	Name         string         `json:"name,omitempty"`
 	Provider     string         `json:"provider,omitempty"`
 	Settings     map[string]any `json:"settings,omitzero"`

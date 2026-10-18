@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/pointer"
 )
 
@@ -21,7 +21,7 @@ import (
 
 // restrictedKey reports whether the API key's user is kept from some books by
 // tag or by the explicit flag.
-func restrictedKey(ctx context.Context, gen *api.Client) (bool, error) {
+func restrictedKey(ctx context.Context, gen *abs.Client) (bool, error) {
 	me, err := record(gen.MeGetCurrentUser(ctx))
 	if err != nil {
 		return false, err
@@ -42,16 +42,16 @@ type visibleLibrary struct {
 	Genres, Tags, Narrators, Languages, Publishers, Decades, AuthorBooks map[string]int
 
 	// from the author and series routes, which the server restricts itself
-	Authors          []api.AuthorMinimal
-	Series           []api.SeriesMinimal
-	Longest, Largest []api.LibraryItemMinified
+	Authors          []abs.AuthorMinimal
+	Series           []abs.SeriesMinimal
+	Longest, Largest []abs.LibraryItemMinified
 }
 
 const visibleTop = 10
 
 // sweepVisible reads a library through the item listing, as the API key's
 // user is allowed to see it.
-func sweepVisible(ctx context.Context, gen *api.Client, lib *api.Library) (*visibleLibrary, error) {
+func sweepVisible(ctx context.Context, gen *abs.Client, lib *abs.Library) (*visibleLibrary, error) {
 	v := &visibleLibrary{
 		Genres: map[string]int{}, Tags: map[string]int{}, Narrators: map[string]int{},
 		Languages: map[string]int{}, Publishers: map[string]int{}, Decades: map[string]int{}, AuthorBooks: map[string]int{},
@@ -65,8 +65,8 @@ func sweepVisible(ctx context.Context, gen *api.Client, lib *api.Library) (*visi
 			}
 		}
 	}
-	var all []api.LibraryItemMinified
-	err := eachItem(ctx, gen, lib.Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+	var all []abs.LibraryItemMinified
+	err := eachItem(ctx, gen, lib.Id, abs.LibraryGetLibraryItemsOptions{}, func(it *abs.LibraryItemMinified) bool {
 		v.Items++
 		v.AudioFiles += it.Media.NumAudioFiles
 		v.Duration += it.Media.Duration
@@ -90,25 +90,25 @@ func sweepVisible(ctx context.Context, gen *api.Client, lib *api.Library) (*visi
 		return nil, err
 	}
 
-	v.Longest = topItems(all, func(a, b api.LibraryItemMinified) int { return cmp.Compare(b.Media.Duration, a.Media.Duration) })
-	v.Largest = topItems(all, func(a, b api.LibraryItemMinified) int { return cmp.Compare(b.Size, a.Size) })
+	v.Longest = topItems(all, func(a, b abs.LibraryItemMinified) int { return cmp.Compare(b.Media.Duration, a.Media.Duration) })
+	v.Largest = topItems(all, func(a, b abs.LibraryItemMinified) int { return cmp.Compare(b.Size, a.Size) })
 
 	if lib.IsPodcast() {
 		return v, nil
 	}
-	authors, err := allAuthors(ctx, gen, lib.Id, api.LibraryGetAuthorsOptions{Sort: "name"})
+	authors, err := allAuthors(ctx, gen, lib.Id, abs.LibraryGetAuthorsOptions{Sort: "name"})
 	if err != nil {
 		return nil, err
 	}
 	for i := range authors {
-		v.Authors = append(v.Authors, api.AuthorMinimal{Id: authors[i].Id, Name: authors[i].Name})
+		v.Authors = append(v.Authors, abs.AuthorMinimal{Id: authors[i].Id, Name: authors[i].Name})
 	}
 	series, err := allSeries(ctx, gen, lib.Id)
 	if err != nil {
 		return nil, err
 	}
 	for i := range series {
-		v.Series = append(v.Series, api.SeriesMinimal{Id: series[i].Id, Name: series[i].Name})
+		v.Series = append(v.Series, abs.SeriesMinimal{Id: series[i].Id, Name: series[i].Name})
 	}
 
 	return v, nil

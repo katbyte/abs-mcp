@@ -3,20 +3,20 @@ package tools
 import (
 	"testing"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 func TestFieldDiffs(t *testing.T) {
 	t.Parallel()
 
-	m := &api.LibraryItemMinifiedMediaMetadata{
+	m := &abs.LibraryItemMinifiedMediaMetadata{
 		Title: "Mrs. S .mp3", AuthorName: "K. Patrick", NarratorName: "Nicolette Chin",
 		SeriesName: "Nemesis #2", Genres: []string{"Fiction", "LGBTQ+"},
 		Publisher: "Europa Editions", PublishedYear: "2023", Language: "english",
 	}
-	hit := &api.SearchFindBooksAnswer{
+	hit := &abs.SearchFindBooksAnswer{
 		Title: "Mrs S", Author: "K. Patrick", Narrator: "Chin, Nicolette",
-		Series: []api.SearchFindBooksAnswerSeries{{Series: "Nemesis", Sequence: "2"}}, Genres: []string{"LGBTQ+", "Fiction"},
+		Series: []abs.SearchFindBooksAnswerSeries{{Series: "Nemesis", Sequence: "2"}}, Genres: []string{"LGBTQ+", "Fiction"},
 		Publisher: "Europa Editions", PublishedYear: "2023", Language: "English", Description: "A novel.",
 	}
 	diffs := fieldDiffs(m, m.SeriesDisplay(), hit)
@@ -33,7 +33,7 @@ func TestFieldDiffs(t *testing.T) {
 
 	// a provider that is silent on a field is not a difference, and neither
 	// is punctuation or case
-	hit = &api.SearchFindBooksAnswer{Title: "MRS S MP3", Author: "k patrick"}
+	hit = &abs.SearchFindBooksAnswer{Title: "MRS S MP3", Author: "k patrick"}
 	if diffs := fieldDiffs(m, m.SeriesDisplay(), hit); len(diffs) != 0 {
 		t.Errorf("silent provider reported differences: %+v", diffs)
 	}

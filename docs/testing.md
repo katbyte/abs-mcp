@@ -15,7 +15,7 @@ The live suites need docker, ffmpeg and jq.
 `make test` needs nothing outside the repo and is fast. It covers:
 
 - **The pure logic.** Filter encoding, formatting, gap arithmetic, the audit rules and tool registration.
-- **The client against a canned server.** The `sdk/abs-byhand` requests and answers that have gone wrong before are each pinned in `sdk/abs-byhand/fake_server_test.go`. That is only some of the methods. What proves every method is the live suite.
+- **The client and the API document.** pandorest generates a test for every operation of `sdk/abs`, against a canned server built from the document, and the scanner that reads the document out of the server source has tests of its own in `sdk/pandorest`. What proves the document right is the live suite.
 - **The tools against a canned Audiobookshelf.** They run end to end over an in-memory MCP session, in `tools/fake_abs_test.go`. This is where the cases the live fixtures cannot reach are kept: a library with covers, inconsistent spellings, tagged and untagged audio files, more findings than the limit.
 
 ## Live suites
@@ -24,21 +24,21 @@ Everything else runs against a real Audiobookshelf in Docker, because a canned s
 
 | | Covers | Command |
 |---|---|---|
-| `acceptance/abs/` | the `sdk/abs-byhand` client: that every response decodes with its fields filled; and the generated `sdk/abs`, by the read sweep | `make testacc-sdk` |
+| `acceptance/abs/` | the client `sdk/abs`: every read by the read sweep, and every call that changes something, read back to see it took | `make testacc-sdk` |
 | `acceptance/tools/` | the tools: name lookup, trimmed answers, audits, provider flows, journeys, and a test of the built binary | `make testacc-tools` |
 
 With `ABS_SERVER` and `ABS_TOKEN` unset the suites skip, so they never fail for want of Docker.
 
 ## Nothing ships untested
 
-All 100 tools and all 214 client methods are run. Both are enforced, not just claimed:
+All 100 tools and every operation of the API document are run. Both are enforced, not just claimed:
 
 - The tool suite records every tool it calls, and fails if the server registered one that nothing called.
-- A unit test reads the live suite, and fails if the client has a method nothing in it calls.
+- The client suite records every call it makes, and a full run fails if an operation of the document was never called.
 
-So neither a new tool nor a new method can ship untested.
+So neither a new tool nor a route the document gains can ship untested.
 
-209 of the methods check a result. The other five only check that the call reached the server, because they need things a throwaway container has not got: sending an ebook by email, firing a notification, closing a device session, unlinking OpenID and syncing an offline session. Each says so where it is written.
+Almost every call checks a result. A few only check that the call reached the server, because they need things a throwaway container has not got: sending an ebook by email, firing a notification, closing a device session, unlinking OpenID, syncing an offline session, deleting an author's image, and uploading or putting back a backup. Each says so where it is written.
 
 Each test file is named for the code it tests, `tools/items_test.go` for `tools/items.go`. Each package makes its canned servers in one file.
 
@@ -108,7 +108,7 @@ The live suites can save every request they send Audiobookshelf and every answer
 ABS_TEST_ANSWERS=1 make testacc
 ```
 
-The answers go in `api-defs/audiobookshelf-<version>/answers/`, one file per operation of the document, and are committed. Both clients' requests are saved, the generated one's from the read sweep. Tokens, keys and passwords are blanked first. A file keeps its first answer whole, and from each later one only what is new, with the field that says which kind of record it is, so a second run against the same server changes nothing. A request that matches no operation of the document is listed at the end of the run, as a route the document lacks.
+The answers go in `api-defs/audiobookshelf-<version>/answers/`, one file per operation of the document, and are committed. Tokens, keys and passwords are blanked first. A file keeps its first answer whole, and from each later one only what is new, with the field that says which kind of record it is, so a second run against the same server changes nothing. A request that matches no operation of the document is listed at the end of the run, as a route the document lacks.
 
 ## Audio comparison
 

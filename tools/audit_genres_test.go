@@ -5,14 +5,14 @@ import (
 	"strings"
 	"testing"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 func TestGenresCollector(t *testing.T) {
 	t.Parallel()
 
-	book := func(id string, genres, tags []string) *api.LibraryItemMinified {
-		return &api.LibraryItemMinified{Id: api.LibraryItemID(id), MediaType: "book", Media: &api.LibraryItemMinifiedMedia{Tags: tags, Metadata: &api.LibraryItemMinifiedMediaMetadata{Title: id, Genres: genres}}}
+	book := func(id string, genres, tags []string) *abs.LibraryItemMinified {
+		return &abs.LibraryItemMinified{Id: abs.LibraryItemID(id), MediaType: "book", Media: &abs.LibraryItemMinifiedMedia{Tags: tags, Metadata: &abs.LibraryItemMinifiedMediaMetadata{Title: id, Genres: genres}}}
 	}
 	c := newGenresCollector()
 	c.add(book("a", []string{"Audiobook"}, []string{"Fantasy", "zz-provider:audible"}))
@@ -21,7 +21,7 @@ func TestGenresCollector(t *testing.T) {
 	c.add(book("d", nil, nil))
 	c.add(book("e", []string{"Audiobook - Fantasy"}, nil))
 	c.add(book("f", []string{"Fantasy"}, nil))
-	c.add(&api.LibraryItemMinified{Id: "p", MediaType: "podcast", Media: &api.LibraryItemMinifiedMedia{Metadata: &api.LibraryItemMinifiedMediaMetadata{Genres: []string{"Podcasts"}}}})
+	c.add(&abs.LibraryItemMinified{Id: "p", MediaType: "podcast", Media: &abs.LibraryItemMinifiedMedia{Metadata: &abs.LibraryItemMinifiedMediaMetadata{Genres: []string{"Podcasts"}}}})
 
 	out := c.findings(2, 10)
 	if out.Counts.Books != 6 {
@@ -61,7 +61,7 @@ func TestGenreSuggestionsConfirmTheirRemoves(t *testing.T) {
 	t.Parallel()
 
 	c := newGenresCollector()
-	c.add(&api.LibraryItemMinified{Id: "i1", MediaType: "book", Media: &api.LibraryItemMinifiedMedia{Tags: []string{"Fantasy"}, Metadata: &api.LibraryItemMinifiedMediaMetadata{Genres: []string{"Audiobook", "Fantasy"}}}})
+	c.add(&abs.LibraryItemMinified{Id: "i1", MediaType: "book", Media: &abs.LibraryItemMinifiedMedia{Tags: []string{"Fantasy"}, Metadata: &abs.LibraryItemMinifiedMediaMetadata{Genres: []string{"Audiobook", "Fantasy"}}}})
 	out := c.findings(1, 50)
 	for _, v := range slices.Concat(out.Placeholders, out.Redundant) {
 		if !strings.Contains(v.Suggest, "remove=true confirm=true") {

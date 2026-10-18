@@ -11,7 +11,7 @@ import (
 var wholeNumbers = slices.Concat(unixTimes, []string{
 	"bitRate", "channels", "count", "coverAspectRatio", "discNumFromFilename", "discNumFromMeta", "expiresAt", "fileSize", "id", "index",
 	"lengthMs", "limit", "maxEpisodesToKeep", "maxNewEpisodesToDownload", "numAudioFiles", "numAuthorsAdded", "numBooks", "numChapters",
-	"numEpisodes", "numFiles", "numItems", "numTracks", "page", "playMethod", "size", "startOffsetMs", "total", "trackCount",
+	"numEpisodes", "numFiles", "numIssues", "numItems", "numTracks", "page", "playMethod", "size", "startOffsetMs", "total", "trackCount",
 	"trackNumFromFilename", "trackNumFromMeta",
 })
 

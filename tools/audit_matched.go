@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -76,12 +76,12 @@ type bookWindow struct {
 // added: by title, a book retitled between two calls moved across the
 // offset and another was skipped. more says a matched book lies past the
 // window.
-func matchedWindow(ctx context.Context, gen *api.Client, libraryID api.LibraryID, w bookWindow, fn func(*api.LibraryItemMinified) error) (more bool, err error) {
+func matchedWindow(ctx context.Context, gen *abs.Client, libraryID abs.LibraryID, w bookWindow, fn func(*abs.LibraryItemMinified) error) (more bool, err error) {
 	seen := w.seen
 	if seen == nil {
 		seen = new(int)
 	}
-	lerr := eachItem(ctx, gen, libraryID, api.LibraryGetLibraryItemsOptions{Sort: "addedAt", Filter: w.Filter}, func(it *api.LibraryItemMinified) bool {
+	lerr := eachItem(ctx, gen, libraryID, abs.LibraryGetLibraryItemsOptions{Sort: "addedAt", Filter: w.Filter}, func(it *abs.LibraryItemMinified) bool {
 		if it.IsPodcast() || (w.Matched != nil && !w.Matched(it.Media.Metadata.Asin, it.Media.Metadata.Isbn)) {
 			return true
 		}
@@ -104,8 +104,8 @@ func matchedWindow(ctx context.Context, gen *api.Client, libraryID api.LibraryID
 
 // searchBooks asks a provider for the books matching a title and author, or an asin or isbn given as the title. With an item, the server
 // scores each hit against it and puts the Audible ones nearest its length first.
-func searchBooks(ctx context.Context, gen *api.Client, provider, title, author string, item api.LibraryItemID) ([]api.SearchFindBooksAnswer, error) {
-	got, err := gen.SearchFindBooks(ctx, api.SearchFindBooksOptions{Provider: provider, Title: title, Author: author, Id: string(item)})
+func searchBooks(ctx context.Context, gen *abs.Client, provider, title, author string, item abs.LibraryItemID) ([]abs.SearchFindBooksAnswer, error) {
+	got, err := gen.SearchFindBooks(ctx, abs.SearchFindBooksOptions{Provider: provider, Title: title, Author: author, Id: string(item)})
 	if err != nil {
 		return nil, err
 	}
@@ -118,17 +118,17 @@ func searchBooks(ctx context.Context, gen *api.Client, provider, title, author s
 // they disagree. A book bought from another store is not in the library's
 // region: the same recording has a different asin in each, and a Canadian
 // library set to the US store had none of its Black Library asins found there.
-func checkMatched(ctx context.Context, gen *api.Client, it *api.LibraryItemMinified, providers []string, tolerance float64, fields bool, out *matchedOut) error {
+func checkMatched(ctx context.Context, gen *abs.Client, it *abs.LibraryItemMinified, providers []string, tolerance float64, fields bool, out *matchedOut) error {
 	asin := strings.TrimSpace(it.Media.Metadata.Asin)
 	out.Scanned++
 	f := matchedFinding{ID: string(it.Id), Title: it.Title(), ASIN: asin, Duration: wholeSec(it.Media.Duration)}
-	var hit *api.SearchFindBooksAnswer
+	var hit *abs.SearchFindBooksAnswer
 	for _, provider := range providers {
 		results, err := searchBooks(ctx, gen, provider, asin, "", it.Id)
 		if err != nil {
 			return err
 		}
-		if idx := slices.IndexFunc(results, func(r api.SearchFindBooksAnswer) bool { return strings.EqualFold(r.Asin, asin) }); idx >= 0 {
+		if idx := slices.IndexFunc(results, func(r abs.SearchFindBooksAnswer) bool { return strings.EqualFold(r.Asin, asin) }); idx >= 0 {
 			hit, f.FoundIn = &results[idx], provider
 			break
 		}
@@ -193,7 +193,7 @@ type matchedScope struct {
 
 // sweepMatched checks the matched books a scope selects and says whether
 // more lie past the window.
-func sweepMatched(ctx context.Context, gen *api.Client, prov providerConfig, lib *api.Library, scope matchedScope, out *matchedOut) (more bool, err error) {
+func sweepMatched(ctx context.Context, gen *abs.Client, prov providerConfig, lib *abs.Library, scope matchedScope, out *matchedOut) (more bool, err error) {
 	if lib.IsPodcast() {
 		return false, nil
 	}
@@ -207,7 +207,7 @@ func sweepMatched(ctx context.Context, gen *api.Client, prov providerConfig, lib
 			return false, err
 		}
 	}
-	return matchedWindow(ctx, gen, lib.Id, bookWindow{Filter: filter, Matched: hasASIN, Offset: scope.Offset, Limit: scope.Limit, seen: scope.seen}, func(it *api.LibraryItemMinified) error {
+	return matchedWindow(ctx, gen, lib.Id, bookWindow{Filter: filter, Matched: hasASIN, Offset: scope.Offset, Limit: scope.Limit, seen: scope.seen}, func(it *abs.LibraryItemMinified) error {
 		return checkMatched(ctx, gen, it, prov.providerOrder(it.Media.Tags, providers), scope.Tolerance, scope.Fields, out)
 	})
 }

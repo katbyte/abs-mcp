@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -132,7 +132,7 @@ func note(into map[string]*genreUse, value string, ref genreRef) {
 	}
 }
 
-func (c *genresCollector) add(it *api.LibraryItemMinified) {
+func (c *genresCollector) add(it *abs.LibraryItemMinified) {
 	if it.IsPodcast() {
 		return
 	}
@@ -290,7 +290,7 @@ func registerGenresAudit(r *registry) {
 			if libs[i].IsPodcast() {
 				continue
 			}
-			if err := eachItem(ctx, gen, libs[i].Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+			if err := eachItem(ctx, gen, libs[i].Id, abs.LibraryGetLibraryItemsOptions{}, func(it *abs.LibraryItemMinified) bool {
 				c.add(it)
 				return true
 			}); err != nil {

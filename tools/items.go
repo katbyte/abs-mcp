@@ -13,7 +13,7 @@ import (
 	"github.com/katbyte/go-kt/lock"
 	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/pointer"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -243,8 +243,8 @@ func registerItemTools(r *registry) {
 			refs = []string{in.Item}
 		}
 		var (
-			items []*api.LibraryItemExpanded
-			ids   []api.LibraryItemID
+			items []*abs.LibraryItemExpanded
+			ids   []abs.LibraryItemID
 		)
 		for _, ref := range refs {
 			found, err := resolveItemToChange(ctx, gen, in.Library, ref)
@@ -268,12 +268,12 @@ func registerItemTools(r *registry) {
 		var err error
 		switch {
 		case many && (editSeries || editTags):
-			var fresh []api.LibraryItemExpanded
+			var fresh []abs.LibraryItemExpanded
 			if fresh, err = itemsBatch(ctx, gen, ids); err != nil {
 				return nil, editOut{}, err
 			}
 			for i := range items {
-				j := slices.IndexFunc(fresh, func(f api.LibraryItemExpanded) bool { return f.Id == items[i].Id })
+				j := slices.IndexFunc(fresh, func(f abs.LibraryItemExpanded) bool { return f.Id == items[i].Id })
 				if j < 0 {
 					// the batch leaves out what is gone: its tags and series
 					// from before the hold are not the ones to edit
@@ -287,8 +287,8 @@ func registerItemTools(r *registry) {
 			}
 		}
 
-		md := api.MediaUpdateMetadata{}
-		upd := api.MediaUpdate{}
+		md := abs.MediaUpdateMetadata{}
+		upd := abs.MediaUpdate{}
 		var fields []string
 		set := func(name string, dst **string, val string) {
 			if val != "" {
@@ -316,7 +316,7 @@ func registerItemTools(r *registry) {
 		}
 		if len(in.Authors) > 0 {
 			for _, a := range in.Authors {
-				md.Authors = append(md.Authors, api.AuthorMinimal{Name: strings.TrimSpace(a)})
+				md.Authors = append(md.Authors, abs.AuthorMinimal{Name: strings.TrimSpace(a)})
 			}
 			fields = append(fields, "authors")
 		}
@@ -371,7 +371,7 @@ func registerItemTools(r *registry) {
 			case "narrators", "narrator":
 				md.Narrators = []string{}
 			case "series":
-				md.Series = []api.SeriesMinimal{}
+				md.Series = []abs.SeriesMinimal{}
 			case "genres":
 				md.Genres = []string{}
 			case "tags":
@@ -397,7 +397,7 @@ func registerItemTools(r *registry) {
 		// one item's update: the change given, with the lists that are edited
 		// worked out from the item's own
 		tagsOnly := !slices.ContainsFunc(fields, func(f string) bool { return f != "tags" && f != "clear:tags" })
-		updateFor := func(it *api.LibraryItemExpanded) (api.MediaUpdate, error) {
+		updateFor := func(it *abs.LibraryItemExpanded) (abs.MediaUpdate, error) {
 			u, m := upd, md
 			if editSeries {
 				refs, serr := editSeriesList(it.Media.Metadata.Series, in.AddSeries, in.RemoveSeries)
@@ -420,14 +420,14 @@ func registerItemTools(r *registry) {
 				return nil, editOut{}, errors.New("nothing to change: pass at least one field")
 			}
 			out := editOut{Fields: fields, Items: make([]string, 0, len(items))}
-			updates := make([]api.LibraryItemBatchUpdateRequest, 0, len(items))
+			updates := make([]abs.LibraryItemBatchUpdateRequest, 0, len(items))
 			shows := map[string]bool{}
 			for _, it := range items {
-				var u api.MediaUpdate
+				var u abs.MediaUpdate
 				if u, err = updateFor(it); err != nil {
 					return nil, editOut{}, err
 				}
-				updates = append(updates, api.LibraryItemBatchUpdateRequest{Id: string(it.Id), MediaPayload: &u})
+				updates = append(updates, abs.LibraryItemBatchUpdateRequest{Id: string(it.Id), MediaPayload: &u})
 				out.Items = append(out.Items, it.Title())
 				shows[string(it.Id)] = it.IsPodcast()
 			}
@@ -446,20 +446,20 @@ func registerItemTools(r *registry) {
 		// the files are planned before anything is sent, so a list that names
 		// a file wrongly changes nothing at all
 		var (
-			order          []api.LibraryItemUpdateTracksRequestOrderedFileData
-			before, played []api.AudioFile
-			chapters       []api.Chapter
-			flip           *api.LibraryFile
+			order          []abs.LibraryItemUpdateTracksRequestOrderedFileData
+			before, played []abs.AudioFile
+			chapters       []abs.Chapter
+			flip           *abs.LibraryFile
 			wantEbook      string
 		)
 		out := editOut{}
 		if len(in.Tracks) > 0 {
-			var listed []api.AudioFile
+			var listed []abs.AudioFile
 			if order, listed, err = trackOrder(it, in.Tracks); err != nil {
 				return nil, editOut{}, err
 			}
 			before = playOrder(it.Media.AudioFiles)
-			played = slices.DeleteFunc(listed, func(af api.AudioFile) bool { return af.Exclude })
+			played = slices.DeleteFunc(listed, func(af abs.AudioFile) bool { return af.Exclude })
 			switch moved, ok := chaptersMoved(it.Media.Chapters, before, played); {
 			case sameTracks(before, played):
 				order, out.Chapters = nil, "unchanged"
@@ -507,7 +507,7 @@ func registerItemTools(r *registry) {
 			done = append(done, "the metadata")
 		}
 		if order != nil {
-			got, err := record(gen.LibraryItemUpdateTracks(ctx, it.Id, api.LibraryItemUpdateTracksRequest{OrderedFileData: order}))
+			got, err := record(gen.LibraryItemUpdateTracks(ctx, it.Id, abs.LibraryItemUpdateTracksRequest{OrderedFileData: order}))
 			if err != nil {
 				return nil, editOut{}, failed("reordering the tracks", err)
 			}
@@ -517,7 +517,7 @@ func registerItemTools(r *registry) {
 				return nil, editOut{}, failed("checking the order", fmt.Errorf("the server was sent %s but plays %s", strings.Join(trackNames(played), ", "), strings.Join(trackNames(now), ", ")))
 			}
 			if chapters != nil {
-				if _, err := gen.LibraryItemUpdateMediaChapters(ctx, it.Id, api.LibraryItemUpdateMediaChaptersRequest{Chapters: chapters}); err != nil {
+				if _, err := gen.LibraryItemUpdateMediaChapters(ctx, it.Id, abs.LibraryItemUpdateMediaChaptersRequest{Chapters: chapters}); err != nil {
 					return nil, editOut{}, failed("moving the chapters with their tracks (they still follow the old order: item_chapters_set)", err)
 				}
 				done = append(done, "the chapters")
@@ -625,9 +625,9 @@ func registerItemTools(r *registry) {
 			}
 			for _, s := range res.Series {
 				if s.Sequence != "" {
-					c.Series = append(c.Series, s.Title()+" #"+s.Sequence)
+					c.Series = append(c.Series, s.Series+" #"+s.Sequence)
 				} else {
-					c.Series = append(c.Series, s.Title())
+					c.Series = append(c.Series, s.Series)
 				}
 			}
 			out.Candidates = append(out.Candidates, c)
@@ -711,14 +711,14 @@ func registerItemTools(r *registry) {
 			return nil, applyOut{}, err
 		}
 		title, author := matchSearch(it, in.Title, in.Author)
-		opts := api.LibraryItemMatchRequest{Asin: strings.TrimSpace(in.ASIN), Isbn: strings.TrimSpace(in.ISBN), OverrideCover: new(in.OverrideCover), OverrideDetails: new(in.OverrideDetails)}
+		opts := abs.LibraryItemMatchRequest{Asin: strings.TrimSpace(in.ASIN), Isbn: strings.TrimSpace(in.ISBN), OverrideCover: new(in.OverrideCover), OverrideDetails: new(in.OverrideDetails)}
 		var applied appliedRef
 		var provider string
 
 		// a candidate comes from the first store with any, as item_match's
 		// did; an asin or isbn from the first store that holds it
 		if in.Candidate != nil && opts.Asin == "" && opts.Isbn == "" {
-			var results []api.SearchFindBooksAnswer
+			var results []abs.SearchFindBooksAnswer
 			var serr error
 			if provider, results, serr = searchProviders(ctx, gen, it.Id, providers, title, author); serr != nil {
 				return nil, applyOut{}, serr
@@ -869,7 +869,7 @@ func registerItemTools(r *registry) {
 		}
 		out := coverSearchOut{Item: it.Title(), Covers: []string{}}
 		for _, out.Provider = range providers {
-			got, err := record(gen.SearchFindCovers(ctx, api.SearchFindCoversOptions{Provider: out.Provider, Title: title, Author: author, Podcast: podcast}))
+			got, err := record(gen.SearchFindCovers(ctx, abs.SearchFindCoversOptions{Provider: out.Provider, Title: title, Author: author, Podcast: podcast}))
 			if err != nil {
 				return nil, coverSearchOut{}, err
 			}
@@ -920,9 +920,9 @@ func registerItemTools(r *registry) {
 		case in.URL != "":
 			err = coverFromURL(ctx, gen, it.Id, in.URL)
 		case in.File != "":
-			var f *api.LibraryFile
+			var f *abs.LibraryFile
 			if f, err = coverFile(ctx, gen, it, in.File); err == nil {
-				_, err = gen.LibraryItemUpdateCover(ctx, it.Id, api.LibraryItemUpdateCoverRequest{Cover: pointer.From(f.Metadata).Path})
+				_, err = gen.LibraryItemUpdateCover(ctx, it.Id, abs.LibraryItemUpdateCoverRequest{Cover: pointer.From(f.Metadata).Path})
 			}
 		default:
 			_, err = gen.LibraryItemRemoveCover(ctx, it.Id)
@@ -983,7 +983,7 @@ func registerItemTools(r *registry) {
 			return nil, chaptersSetOut{}, errNotBook
 		}
 
-		var chapters []api.Chapter
+		var chapters []abs.Chapter
 		out := chaptersSetOut{}
 		switch {
 		case in.Fit:
@@ -1007,7 +1007,7 @@ func registerItemTools(r *registry) {
 				if i+1 < len(in.Chapters) {
 					end = in.Chapters[i+1].Start
 				}
-				chapters = append(chapters, api.Chapter{Id: i, Title: ch.Title, Start: ch.Start, End: end})
+				chapters = append(chapters, abs.Chapter{Id: i, Title: ch.Title, Start: ch.Start, End: end})
 			}
 		default:
 			asin := in.FromASIN
@@ -1049,7 +1049,7 @@ func registerItemTools(r *registry) {
 			}
 		}
 
-		set, err := record(gen.LibraryItemUpdateMediaChapters(ctx, it.Id, api.LibraryItemUpdateMediaChaptersRequest{Chapters: chapters}))
+		set, err := record(gen.LibraryItemUpdateMediaChapters(ctx, it.Id, abs.LibraryItemUpdateMediaChaptersRequest{Chapters: chapters}))
 		if err != nil {
 			return nil, chaptersSetOut{}, err
 		}
@@ -1081,7 +1081,7 @@ func registerItemTools(r *registry) {
 	// stops a merge running. The server lists the merge only while it runs,
 	// failed and finished alike leaving the list, so the book is scanned and
 	// read back to learn which it was
-	mergeM4B := func(ctx context.Context, it *api.LibraryItemExpanded, kbps, channels int, confirm, cancel bool) (embedOut, error) {
+	mergeM4B := func(ctx context.Context, it *abs.LibraryItemExpanded, kbps, channels int, confirm, cancel bool) (embedOut, error) {
 		tasks, err := serverTasks(ctx, gen)
 		if err != nil {
 			return embedOut{}, err
@@ -1116,7 +1116,7 @@ func registerItemTools(r *registry) {
 		for _, af := range playOrder(it.Media.AudioFiles) {
 			before += af.Duration
 		}
-		if _, err := gen.ToolsEncodeM4b(ctx, it.Id, api.ToolsEncodeM4bOptions{Bitrate: strconv.Itoa(plan.Bitrate) + "k", Channels: strconv.Itoa(plan.Channels)}); err != nil {
+		if _, err := gen.ToolsEncodeM4b(ctx, it.Id, abs.ToolsEncodeM4bOptions{Bitrate: strconv.Itoa(plan.Bitrate) + "k", Channels: strconv.Itoa(plan.Channels)}); err != nil {
 			return embedOut{}, err
 		}
 		deadline := time.Now().Add(embedWait)
@@ -1193,7 +1193,7 @@ func registerItemTools(r *registry) {
 			out.Item = it.Title()
 			return nil, out, merr
 		}
-		embed := api.ToolsEmbedAudioFileMetadataOptions{ForceEmbedChapters: "1"}
+		embed := abs.ToolsEmbedAudioFileMetadataOptions{ForceEmbedChapters: "1"}
 		if in.Backup {
 			embed.Backup = "1"
 		}
@@ -1257,7 +1257,7 @@ func registerItemTools(r *registry) {
 	// deleteFile takes one file out of a book and off the disk, then looks at
 	// the disk: the server takes the file out of the book even when it cannot
 	// remove it, and the next scan would put it back
-	deleteFile := func(ctx context.Context, it *api.LibraryItemExpanded, name string, confirm bool) (deleteOut, error) {
+	deleteFile := func(ctx context.Context, it *abs.LibraryItemExpanded, name string, confirm bool) (deleteOut, error) {
 		release := r.locks.By(itemLocks(it.Id)...)
 		defer release()
 		it, err := getItem(ctx, gen, it.Id) // as it is once held
@@ -1282,7 +1282,7 @@ func registerItemTools(r *registry) {
 		out := deleteOut{Files: "the file " + meta.Path}
 		if ef := it.Media.EbookFile; ef != nil && ef.Ino == f.Ino {
 			out.Note = "it is the main ebook, and the book is left with none"
-			if slices.ContainsFunc(it.LibraryFiles, func(o api.LibraryFile) bool { return o.FileType == "ebook" && o.Ino != f.Ino }) {
+			if slices.ContainsFunc(it.LibraryFiles, func(o abs.LibraryFile) bool { return o.FileType == "ebook" && o.Ino != f.Ino }) {
 				out.Note += ": item_edit ebook makes one of the others the main one"
 			}
 		}
@@ -1348,7 +1348,7 @@ func registerItemTools(r *registry) {
 				out.Files = "the file " + it.Path
 			}
 		}
-		var marks []api.AudioBookmark
+		var marks []abs.AudioBookmark
 		for _, b := range me.Bookmarks {
 			if b.LibraryItemId == it.Id {
 				marks = append(marks, b)
@@ -1369,7 +1369,7 @@ func registerItemTools(r *registry) {
 			}
 			out.BookmarksRemoved++
 		}
-		del := api.LibraryItemDeleteOptions{}
+		del := abs.LibraryItemDeleteOptions{}
 		if in.DeleteFiles {
 			del.Hard = "1"
 		}
@@ -1401,7 +1401,7 @@ var (
 // library's own, with the store the item's provider tag records first, as the
 // store that had the book last time is the one to ask first. Stores a call
 // names are checked by checkNamed before this, once a call.
-func (p providerConfig) itemProviders(ctx context.Context, gen *api.Client, it *api.LibraryItemExpanded, named []string) ([]string, error) {
+func (p providerConfig) itemProviders(ctx context.Context, gen *abs.Client, it *abs.LibraryItemExpanded, named []string) ([]string, error) {
 	if len(named) > 0 {
 		return named, nil
 	}
@@ -1418,7 +1418,7 @@ func (p providerConfig) itemProviders(ctx context.Context, gen *api.Client, it *
 // checkNamed refuses a store a call named that the server does not have. The
 // server answers a name it does not know by searching Google, so a misspelt
 // audible.ca comes back as Google's guesses with nothing to say so.
-func (p providerConfig) checkNamed(ctx context.Context, gen *api.Client, named []string) error {
+func (p providerConfig) checkNamed(ctx context.Context, gen *abs.Client, named []string) error {
 	if len(named) == 0 {
 		return nil
 	}
@@ -1427,14 +1427,14 @@ func (p providerConfig) checkNamed(ctx context.Context, gen *api.Client, named [
 
 // matchSearch is the title and author a provider search asks for: the ones
 // given, else the item's own.
-func matchSearch(it *api.LibraryItemExpanded, title, author string) (searchTitle, searchAuthor string) {
+func matchSearch(it *abs.LibraryItemExpanded, title, author string) (searchTitle, searchAuthor string) {
 	return cmp.Or(title, it.Title()), cmp.Or(author, it.Media.Metadata.AuthorDisplay())
 }
 
 // searchProviders asks each store in turn for a title and author and answers
 // with the first that has any candidates, and which store that was; the last
 // one asked when none has.
-func searchProviders(ctx context.Context, gen *api.Client, item api.LibraryItemID, providers []string, title, author string) (string, []api.SearchFindBooksAnswer, error) {
+func searchProviders(ctx context.Context, gen *abs.Client, item abs.LibraryItemID, providers []string, title, author string) (string, []abs.SearchFindBooksAnswer, error) {
 	var provider string
 	for _, provider = range providers {
 		results, err := searchBooks(ctx, gen, provider, title, author, item)
@@ -1450,7 +1450,7 @@ func searchProviders(ctx context.Context, gen *api.Client, item api.LibraryItemI
 
 // providerHolding is the first of the stores that has a record for an asin
 // or isbn. One store alone is taken at its word, without asking it first.
-func providerHolding(ctx context.Context, gen *api.Client, item api.LibraryItemID, providers []string, asin, isbn string) (string, error) {
+func providerHolding(ctx context.Context, gen *abs.Client, item abs.LibraryItemID, providers []string, asin, isbn string) (string, error) {
 	if len(providers) == 1 {
 		return providers[0], nil
 	}
@@ -1483,9 +1483,9 @@ type seriesRef struct {
 }
 
 // parseSeriesRef reads "Name #2" or "Name" as a series entry.
-func parseSeriesRef(s string) api.SeriesMinimal {
+func parseSeriesRef(s string) abs.SeriesMinimal {
 	name, seq, _ := strings.Cut(s, " #")
-	return api.SeriesMinimal{Name: strings.TrimSpace(name), Sequence: strings.TrimSpace(seq)}
+	return abs.SeriesMinimal{Name: strings.TrimSpace(name), Sequence: strings.TrimSpace(seq)}
 }
 
 // sendError is a change to many items that failed part way: the requests
@@ -1511,8 +1511,8 @@ func (e *sendError) Unwrap() error { return e.err }
 // uses: the batch route answered 502 for two podcasts of a real library
 // where that route took the same change. No test server has reproduced it,
 // so they go the way that is known to work.
-func updateMany(ctx context.Context, gen *api.Client, updates []api.LibraryItemBatchUpdateRequest, shows map[string]bool) (int, error) {
-	var books, podcasts []api.LibraryItemBatchUpdateRequest
+func updateMany(ctx context.Context, gen *abs.Client, updates []abs.LibraryItemBatchUpdateRequest, shows map[string]bool) (int, error) {
+	var books, podcasts []abs.LibraryItemBatchUpdateRequest
 	for _, u := range updates {
 		if shows[u.Id] {
 			podcasts = append(podcasts, u)
@@ -1536,7 +1536,7 @@ func updateMany(ctx context.Context, gen *api.Client, updates []api.LibraryItemB
 		updated, sent = updated+got.Updates, sent+len(chunk)
 	}
 	for _, u := range podcasts {
-		got, err := record(gen.LibraryItemUpdateMedia(ctx, api.LibraryItemID(u.Id), pointer.From(u.MediaPayload)))
+		got, err := record(gen.LibraryItemUpdateMedia(ctx, abs.LibraryItemID(u.Id), pointer.From(u.MediaPayload)))
 		if err != nil {
 			return updated, failed(1, err)
 		}
@@ -1573,10 +1573,10 @@ func editTagList(have, add, remove []string) []string {
 // Stormlight books lost their Cosmere link to a replacement built from a
 // listing that showed one series per book. An added series the book is
 // already in takes the number given, or keeps its own when none is.
-func editSeriesList(have []api.SeriesMinimal, add, remove []string) ([]api.SeriesMinimal, error) {
+func editSeriesList(have []abs.SeriesMinimal, add, remove []string) ([]abs.SeriesMinimal, error) {
 	out := slices.Clone(have)
 	if out == nil {
-		out = []api.SeriesMinimal{}
+		out = []abs.SeriesMinimal{}
 	}
 	same := func(a, b string) bool { return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b)) }
 	for _, s := range add {
@@ -1584,7 +1584,7 @@ func editSeriesList(have []api.SeriesMinimal, add, remove []string) ([]api.Serie
 		if ref.Name == "" {
 			return nil, fmt.Errorf("add_series %q names no series", s)
 		}
-		if i := slices.IndexFunc(out, func(r api.SeriesMinimal) bool { return same(r.Name, ref.Name) }); i >= 0 {
+		if i := slices.IndexFunc(out, func(r abs.SeriesMinimal) bool { return same(r.Name, ref.Name) }); i >= 0 {
 			if ref.Sequence != "" {
 				out[i].Sequence = ref.Sequence
 			}
@@ -1597,15 +1597,15 @@ func editSeriesList(have []api.SeriesMinimal, add, remove []string) ([]api.Serie
 		if name == "" {
 			return nil, fmt.Errorf("remove_series %q names no series", s)
 		}
-		if !slices.ContainsFunc(out, func(r api.SeriesMinimal) bool { return same(r.Name, name) }) {
+		if !slices.ContainsFunc(out, func(r abs.SeriesMinimal) bool { return same(r.Name, name) }) {
 			return nil, fmt.Errorf("remove_series: the item is not in %q (it is in %s)", name, seriesNamesOf(have))
 		}
-		out = slices.DeleteFunc(out, func(r api.SeriesMinimal) bool { return same(r.Name, name) })
+		out = slices.DeleteFunc(out, func(r abs.SeriesMinimal) bool { return same(r.Name, name) })
 	}
 	return out, nil
 }
 
-func seriesNamesOf(refs []api.SeriesMinimal) string {
+func seriesNamesOf(refs []abs.SeriesMinimal) string {
 	if len(refs) == 0 {
 		return "no series"
 	}

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 	"github.com/katbyte/go-kt/pointer"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -41,7 +41,7 @@ type userRef struct {
 // is admin only. The caller's own account named by its username or id is
 // still the caller's own, read through the caller's own routes: a year in
 // review is kept only there, and a non-admin key may not look itself up.
-func resolveUser(ctx context.Context, gen *api.Client, nameOrID string) (*api.UserForBrowser, bool, error) {
+func resolveUser(ctx context.Context, gen *abs.Client, nameOrID string) (*abs.UserForBrowser, bool, error) {
 	nameOrID = strings.TrimSpace(nameOrID)
 	mine, meErr := record(gen.MeGetCurrentUser(ctx))
 	me := &mine
@@ -55,7 +55,7 @@ func resolveUser(ctx context.Context, gen *api.Client, nameOrID string) (*api.Us
 	}
 	// a key whose own account cannot be read can still look others up; if
 	// that fails as well, both are said
-	isMe := func(id api.UserID) bool { return meErr == nil && id == me.Id }
+	isMe := func(id abs.UserID) bool { return meErr == nil && id == me.Id }
 	withMe := func(err error) error {
 		if err != nil && meErr != nil {
 			return fmt.Errorf("%w; reading the key's own account failed too: %w", err, meErr)
@@ -63,10 +63,10 @@ func resolveUser(ctx context.Context, gen *api.Client, nameOrID string) (*api.Us
 		return err
 	}
 	if looksLikeID(nameOrID) {
-		if isMe(api.UserID(nameOrID)) {
+		if isMe(abs.UserID(nameOrID)) {
 			return me, true, nil
 		}
-		return otherUser(ctx, gen, api.UserID(nameOrID), withMe)
+		return otherUser(ctx, gen, abs.UserID(nameOrID), withMe)
 	}
 
 	all, lookupErr := record(gen.UserFindAll(ctx))
@@ -86,7 +86,7 @@ func resolveUser(ctx context.Context, gen *api.Client, nameOrID string) (*api.Us
 		lookupErr = fmt.Errorf("no user named %q (have: %s)", nameOrID, strings.Join(names, ", "))
 	// a key that may not list the accounts, answered as refused or as a
 	// route that is not there: it can still name its own
-	case api.IsForbidden(lookupErr) || api.IsNotFound(lookupErr):
+	case abs.IsForbidden(lookupErr) || abs.IsNotFound(lookupErr):
 	default:
 		return nil, false, withMe(fmt.Errorf("looking up the user %q: %w", nameOrID, lookupErr))
 	}
@@ -100,7 +100,7 @@ func resolveUser(ctx context.Context, gen *api.Client, nameOrID string) (*api.Us
 }
 
 // otherUser is another account, read by its id, with what went wrong reading the key's own account said beside a failure.
-func otherUser(ctx context.Context, gen *api.Client, id api.UserID, withMe func(error) error) (*api.UserForBrowser, bool, error) {
+func otherUser(ctx context.Context, gen *abs.Client, id abs.UserID, withMe func(error) error) (*abs.UserForBrowser, bool, error) {
 	u, err := record(gen.UserFindOne(ctx, id))
 	if err != nil {
 		return nil, false, withMe(err)
@@ -151,7 +151,7 @@ type userDetail struct {
 // permission by the permission alone, not by the account's type, and
 // only while the account is active: an admin without delete may not
 // delete
-func describeUser(u *api.UserForBrowser, self bool) userDetail {
+func describeUser(u *abs.UserForBrowser, self bool) userDetail {
 	active, perms := pointer.From(u.IsActive), pointer.From(u.Permissions)
 	row := userRow{ID: string(u.Id), Username: u.Username, Type: u.Type, Active: active, LastSeen: fmtTime(u.LastSeen)}
 	out := userDetail{
@@ -180,7 +180,7 @@ func describeUser(u *api.UserForBrowser, self bool) userDetail {
 		}
 	}
 	progress := slices.Clone(u.MediaProgress)
-	slices.SortFunc(progress, func(a, b api.MediaProgress) int { return b.LastUpdate.Compare(a.LastUpdate.Time) })
+	slices.SortFunc(progress, func(a, b abs.MediaProgress) int { return b.LastUpdate.Compare(a.LastUpdate.Time) })
 	for _, p := range progress {
 		switch {
 		case p.IsFinished:
@@ -208,7 +208,7 @@ func registerUserTools(r *registry) {
 		Name:        "user_list",
 		Description: "List the server's user accounts with type, last seen, and what they last listened to. Admin only; every other user tool defaults to the API key's own account and needs no admin rights.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in pageIn) (*mcp.CallToolResult, listOut, error) {
-		all, err := record(gen.UserFindAll(ctx, api.UserFindAllOptions{Include: "latestSession"}))
+		all, err := record(gen.UserFindAll(ctx, abs.UserFindAllOptions{Include: "latestSession"}))
 		if err != nil {
 			return nil, listOut{}, err
 		}
@@ -273,17 +273,17 @@ func registerUserTools(r *registry) {
 					hidden++
 				}
 			}
-			shelf, serr := record(gen.MeGetAllLibraryItemsInProgress(ctx, api.MeGetAllLibraryItemsInProgressOptions{Limit: new(limit + hidden)}))
+			shelf, serr := record(gen.MeGetAllLibraryItemsInProgress(ctx, abs.MeGetAllLibraryItemsInProgressOptions{Limit: new(limit + hidden)}))
 			if serr != nil {
 				return nil, inProgressOut{}, serr
 			}
 			for i := range shelf.LibraryItems {
 				it := &shelf.LibraryItems[i]
-				var want api.EpisodeID
+				var want abs.EpisodeID
 				if it.RecentEpisode != nil {
 					want = it.RecentEpisode.Id
 				}
-				var mine *api.MediaProgress
+				var mine *abs.MediaProgress
 				for j := range u.MediaProgress {
 					if p := &u.MediaProgress[j]; p.LibraryItemId == it.Id && p.EpisodeId == want {
 						mine = p
@@ -309,7 +309,7 @@ func registerUserTools(r *registry) {
 		}
 		// for anyone else the shelf has to be rebuilt from their progress
 		// records, which name items by id only
-		started := make([]api.MediaProgress, 0, len(u.MediaProgress))
+		started := make([]abs.MediaProgress, 0, len(u.MediaProgress))
 		for _, p := range u.MediaProgress {
 			if p.IsFinished || p.HideFromContinueListening {
 				continue
@@ -318,12 +318,12 @@ func registerUserTools(r *registry) {
 				started = append(started, p)
 			}
 		}
-		slices.SortFunc(started, func(a, b api.MediaProgress) int { return b.LastUpdate.Compare(a.LastUpdate.Time) })
+		slices.SortFunc(started, func(a, b abs.MediaProgress) int { return b.LastUpdate.Compare(a.LastUpdate.Time) })
 		if len(started) > limit {
 			started = started[:limit]
 		}
-		ids := make([]api.LibraryItemID, 0, len(started))
-		progressFor := make(map[api.LibraryItemID]*api.MediaProgress, len(started))
+		ids := make([]abs.LibraryItemID, 0, len(started))
+		progressFor := make(map[abs.LibraryItemID]*abs.MediaProgress, len(started))
 		for i := range started {
 			p := &started[i]
 			if _, seen := progressFor[p.LibraryItemId]; !seen {
@@ -340,11 +340,11 @@ func registerUserTools(r *registry) {
 			return nil, inProgressOut{}, err
 		}
 		// the batch answers in its own order; restore theirs
-		rank := map[api.LibraryItemID]int{}
+		rank := map[abs.LibraryItemID]int{}
 		for i, id := range ids {
 			rank[id] = i
 		}
-		slices.SortFunc(items, func(a, b api.LibraryItemExpanded) int { return cmp.Compare(rank[a.Id], rank[b.Id]) })
+		slices.SortFunc(items, func(a, b abs.LibraryItemExpanded) int { return cmp.Compare(rank[a.Id], rank[b.Id]) })
 
 		for i := range items {
 			it := &items[i]
@@ -547,7 +547,7 @@ func registerUserTools(r *registry) {
 			return nil, progressSetOut{}, fmt.Errorf("%q has no length to take a percent of: pass position_s", it.Title())
 		}
 
-		upd := api.ProgressUpdatePayload{IsFinished: in.Finished, HideFromContinueListening: in.Hide}
+		upd := abs.ProgressUpdatePayload{IsFinished: in.Finished, HideFromContinueListening: in.Hide}
 		switch {
 		case in.Position != nil:
 			upd.CurrentTime = in.Position
@@ -569,7 +569,7 @@ func registerUserTools(r *registry) {
 		if in.Episode == "" {
 			_, err = gen.MeCreateUpdateMediaProgress2(ctx, it.Id, upd)
 		} else {
-			_, err = gen.MeCreateUpdateMediaProgress(ctx, it.Id, api.EpisodeID(in.Episode), upd)
+			_, err = gen.MeCreateUpdateMediaProgress(ctx, it.Id, abs.EpisodeID(in.Episode), upd)
 		}
 		if err != nil {
 			return nil, progressSetOut{}, err
@@ -616,7 +616,7 @@ func registerUserTools(r *registry) {
 				return nil, bookmarksOut{}, err
 			}
 		}
-		var only api.LibraryItemID
+		var only abs.LibraryItemID
 		if in.Item != "" {
 			it, err := resolveItem(ctx, gen, in.Library, in.Item)
 			if err != nil {
@@ -625,8 +625,8 @@ func registerUserTools(r *registry) {
 			only = it.Id
 		}
 
-		titles := map[api.LibraryItemID]string{}
-		var ids []api.LibraryItemID
+		titles := map[abs.LibraryItemID]string{}
+		var ids []abs.LibraryItemID
 		for _, b := range bms {
 			if only != "" && b.LibraryItemId != only {
 				continue
@@ -636,7 +636,7 @@ func registerUserTools(r *registry) {
 				ids = append(ids, b.LibraryItemId)
 			}
 		}
-		deleted := map[api.LibraryItemID]bool{}
+		deleted := map[abs.LibraryItemID]bool{}
 		if len(ids) > 0 {
 			items, err := itemsBatch(ctx, gen, ids)
 			if err != nil {
@@ -653,7 +653,7 @@ func registerUserTools(r *registry) {
 				}
 				_, gerr := getItem(ctx, gen, id)
 				switch {
-				case api.IsNotFound(gerr):
+				case abs.IsNotFound(gerr):
 					deleted[id] = true
 				case gerr != nil:
 					return nil, bookmarksOut{}, fmt.Errorf("reading bookmarked item %s, which the batch left out: %w", id, gerr)
@@ -718,12 +718,12 @@ func registerUserTools(r *registry) {
 		}
 
 		it, err := resolveItemToChange(ctx, gen, in.Library, in.Item)
-		if err != nil && api.IsNotFound(err) && len(in.Remove) > 0 && looksLikeID(in.Item) {
+		if err != nil && abs.IsNotFound(err) && len(in.Remove) > 0 && looksLikeID(in.Item) {
 			me, merr := record(gen.MeGetCurrentUser(ctx))
 			if merr != nil {
 				return nil, bookmarkEditOut{}, fmt.Errorf("%w; reading the account's bookmarks to say whether one is left on it also failed: %w", err, merr)
 			}
-			if slices.ContainsFunc(me.Bookmarks, func(b api.AudioBookmark) bool { return string(b.LibraryItemId) == strings.TrimSpace(in.Item) }) {
+			if slices.ContainsFunc(me.Bookmarks, func(b abs.AudioBookmark) bool { return string(b.LibraryItemId) == strings.TrimSpace(in.Item) }) {
 				return nil, bookmarkEditOut{}, fmt.Errorf("the item %s has been deleted, and Audiobookshelf will not remove a bookmark on an item it no longer has: the bookmark stays in the account", in.Item)
 			}
 		}
@@ -734,7 +734,7 @@ func registerUserTools(r *registry) {
 		// saved whole by every add and removal
 		defer r.locks.ByString(bookmarksLock)()
 
-		rowOf := func(b *api.AudioBookmark) bookmarkRow {
+		rowOf := func(b *abs.AudioBookmark) bookmarkRow {
 			return bookmarkRow{
 				ItemID: string(it.Id), Item: it.Title(), Title: b.Title,
 				Time: b.Time, Created: fmtTime(b.CreatedAt),
@@ -782,13 +782,13 @@ func registerUserTools(r *registry) {
 		for _, a := range in.Add {
 			held := bookmarkAt(bms, it.Id, a.Seconds)
 			renamed := held != nil
-			rename := func() (api.AudioBookmark, error) {
-				return record(gen.MeUpdateBookmark(ctx, it.Id, api.MeUpdateBookmarkRequest{Time: a.Seconds, Title: a.Title}))
+			rename := func() (abs.AudioBookmark, error) {
+				return record(gen.MeUpdateBookmark(ctx, it.Id, abs.MeUpdateBookmarkRequest{Time: a.Seconds, Title: a.Title}))
 			}
-			var b api.AudioBookmark
+			var b abs.AudioBookmark
 			if renamed {
 				b, err = rename()
-			} else if b, err = record(gen.MeCreateBookmark(ctx, it.Id, api.MeCreateBookmarkRequest{Time: a.Seconds, Title: a.Title})); err != nil {
+			} else if b, err = record(gen.MeCreateBookmark(ctx, it.Id, abs.MeCreateBookmarkRequest{Time: a.Seconds, Title: a.Title})); err != nil {
 				// made meanwhile by another client: renamed rather than
 				// duplicated. When that fails too, both say what went wrong
 				renamed = true
@@ -837,7 +837,7 @@ func registerUserTools(r *registry) {
 		}
 		limit := mcpregistry.LimitOr(in.Limit, defaultLimit)
 
-		var onlyItem api.LibraryItemID
+		var onlyItem abs.LibraryItemID
 		if in.Item != "" {
 			it, rerr := resolveItem(ctx, gen, in.Library, in.Item)
 			if rerr != nil {
@@ -847,13 +847,13 @@ func registerUserTools(r *registry) {
 		}
 
 		cutoff := time.Now().AddDate(0, 0, -mcpregistry.LimitOr(in.Days, 60))
-		var sessions []api.PlaybackSession
+		var sessions []abs.PlaybackSession
 		var total int
 		searched := true
 		switch {
 		case self && onlyItem != "":
-			var got api.MeGetItemListeningSessions2Answer
-			got, err = record(gen.MeGetItemListeningSessions2(ctx, onlyItem, api.MeGetItemListeningSessions2Options{ItemsPerPage: &limit, Page: new(0)}))
+			var got abs.MeGetItemListeningSessions2Answer
+			got, err = record(gen.MeGetItemListeningSessions2(ctx, onlyItem, abs.MeGetItemListeningSessions2Options{ItemsPerPage: &limit, Page: new(0)}))
 			sessions, total = got.Sessions, got.Total
 			onlyItem = "" // the endpoint has already filtered
 		case onlyItem != "":
@@ -1063,7 +1063,7 @@ func registerUserTools(r *registry) {
 			return nil, out, nil
 		}
 
-		var st api.ListeningStats
+		var st abs.ListeningStats
 		if self {
 			st, err = record(gen.MeGetListeningStats(ctx))
 		} else {
@@ -1090,7 +1090,7 @@ func registerUserTools(r *registry) {
 		out.Last7Days, out.Last30Days = wholeSec(week), wholeSec(month)
 
 		items := slices.Collect(maps.Values(st.Items))
-		slices.SortFunc(items, func(a, b api.ListeningStatsItem) int { return cmp.Compare(b.TimeListening, a.TimeListening) })
+		slices.SortFunc(items, func(a, b abs.ListeningStatsItem) int { return cmp.Compare(b.TimeListening, a.TimeListening) })
 		for _, it := range items[:min(len(items), 10)] {
 			// an item the server sends no metadata for has no title to give
 			meta := pointer.From(it.MediaMetadata)
@@ -1103,7 +1103,7 @@ func registerUserTools(r *registry) {
 
 // bookmarkAt is the bookmark at a position in an item, or nil. The server
 // knows a bookmark by the two, and compares the time exactly.
-func bookmarkAt(bms []api.AudioBookmark, itemID api.LibraryItemID, seconds float64) *api.AudioBookmark {
+func bookmarkAt(bms []abs.AudioBookmark, itemID abs.LibraryItemID, seconds float64) *abs.AudioBookmark {
 	for i := range bms {
 		if bms[i].LibraryItemId == itemID && bms[i].Time == seconds {
 			return &bms[i]
@@ -1113,7 +1113,7 @@ func bookmarkAt(bms []api.AudioBookmark, itemID api.LibraryItemID, seconds float
 }
 
 // ownBookmarks are the API key user's bookmarks, in every item.
-func ownBookmarks(ctx context.Context, gen *api.Client) ([]api.AudioBookmark, error) {
+func ownBookmarks(ctx context.Context, gen *abs.Client) ([]abs.AudioBookmark, error) {
 	all, err := record(gen.MeGetAllBookmarks(ctx))
 	if err != nil {
 		return nil, err
@@ -1123,15 +1123,15 @@ func ownBookmarks(ctx context.Context, gen *api.Client) ([]api.AudioBookmark, er
 }
 
 // ownProgress is the API key user's progress in a book, or in an episode when one is named; nil when they have never started it.
-func ownProgress(ctx context.Context, gen *api.Client, item api.LibraryItemID, episode string) (*api.MediaProgress, error) {
-	var p api.MediaProgress
+func ownProgress(ctx context.Context, gen *abs.Client, item abs.LibraryItemID, episode string) (*abs.MediaProgress, error) {
+	var p abs.MediaProgress
 	var err error
 	if episode == "" {
 		p, err = record(gen.MeGetMediaProgress2(ctx, item))
 	} else {
-		p, err = record(gen.MeGetMediaProgress(ctx, item, api.EpisodeID(episode)))
+		p, err = record(gen.MeGetMediaProgress(ctx, item, abs.EpisodeID(episode)))
 	}
-	if api.IsNotFound(err) {
+	if abs.IsNotFound(err) {
 		return nil, nil //nolint:nilnil // no progress record is a normal state
 	}
 	if err != nil {
@@ -1143,17 +1143,17 @@ func ownProgress(ctx context.Context, gen *api.Client, item api.LibraryItemID, e
 
 // sessionPage is one page of an account's listening sessions, newest first, and how many it has in all: the API key's own through its own
 // route, which another's cannot be read by.
-func sessionPage(ctx context.Context, gen *api.Client, userID api.UserID, self bool, perPage, page int) ([]api.PlaybackSession, int, error) {
+func sessionPage(ctx context.Context, gen *abs.Client, userID abs.UserID, self bool, perPage, page int) ([]abs.PlaybackSession, int, error) {
 	if self {
-		got, err := record(gen.MeGetListeningSessions(ctx, api.MeGetListeningSessionsOptions{ItemsPerPage: &perPage, Page: &page}))
+		got, err := record(gen.MeGetListeningSessions(ctx, abs.MeGetListeningSessionsOptions{ItemsPerPage: &perPage, Page: &page}))
 		return got.Sessions, got.Total, err
 	}
 
-	got, err := record(gen.UserGetListeningSessions(ctx, userID, api.UserGetListeningSessionsOptions{ItemsPerPage: &perPage, Page: &page}))
+	got, err := record(gen.UserGetListeningSessions(ctx, userID, abs.UserGetListeningSessionsOptions{ItemsPerPage: &perPage, Page: &page}))
 	if err != nil {
 		return nil, 0, err
 	}
-	sessions := make([]api.PlaybackSession, 0, len(got.Sessions))
+	sessions := make([]abs.PlaybackSession, 0, len(got.Sessions))
 	for _, s := range got.Sessions {
 		sessions = append(sessions, s.Session())
 	}
@@ -1163,12 +1163,12 @@ func sessionPage(ctx context.Context, gen *api.Client, userID api.UserID, self b
 
 // sessionsOf finds sessions by id in one account's history, reading it a
 // page at a time, newest first, until each is found or the history ends.
-func sessionsOf(ctx context.Context, gen *api.Client, userID api.UserID, self bool, ids []string) (map[string]api.PlaybackSession, error) {
+func sessionsOf(ctx context.Context, gen *abs.Client, userID abs.UserID, self bool, ids []string) (map[string]abs.PlaybackSession, error) {
 	want := map[string]bool{}
 	for _, id := range ids {
 		want[id] = true
 	}
-	found := map[string]api.PlaybackSession{}
+	found := map[string]abs.PlaybackSession{}
 	for page := 0; len(found) < len(want); page++ {
 		sessions, total, err := sessionPage(ctx, gen, userID, self, historyPageSize, page)
 		if err != nil {
@@ -1200,7 +1200,7 @@ const (
 // read, which searched says was not the case. Those past the limit or the
 // cutoff are only counted: the listener's own route counts every session on
 // the item, and the two have to agree.
-func itemSessionsOf(ctx context.Context, gen *api.Client, userID api.UserID, itemID api.LibraryItemID, limit int, cutoff time.Time) (found []api.PlaybackSession, count int, searched bool, err error) {
+func itemSessionsOf(ctx context.Context, gen *abs.Client, userID abs.UserID, itemID abs.LibraryItemID, limit int, cutoff time.Time) (found []abs.PlaybackSession, count int, searched bool, err error) {
 	for page := range historyPages {
 		sessions, total, err := sessionPage(ctx, gen, userID, false, historyPageSize, page)
 		if err != nil {

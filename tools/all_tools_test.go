@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -108,7 +108,7 @@ func TestAPanicInAToolIsAnErrorNotACrash(t *testing.T) {
 	}}
 	type none struct{}
 	add(r, writeTool, &mcp.Tool{Name: "zzyzx_panic"}, func(context.Context, *mcp.CallToolRequest, none) (*mcp.CallToolResult, none, error) {
-		var found map[string]*api.Library
+		var found map[string]*abs.Library
 
 		return nil, none{}, errors.New(found["9"].Name) // a nil dereference
 	})

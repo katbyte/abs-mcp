@@ -8,7 +8,7 @@ import (
 
 	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -65,9 +65,9 @@ func candidateOf(s scored) batchCandidate {
 	}
 	for _, sr := range s.Result.Series {
 		if sr.Sequence != "" {
-			c.Series = append(c.Series, sr.Title()+" #"+sr.Sequence)
+			c.Series = append(c.Series, sr.Series+" #"+sr.Sequence)
 		} else {
-			c.Series = append(c.Series, sr.Title())
+			c.Series = append(c.Series, sr.Series)
 		}
 	}
 	return c
@@ -75,7 +75,7 @@ func candidateOf(s scored) batchCandidate {
 
 // searchForItem asks the provider about one item, once by its title and, when
 // that finds nothing and the title has a subtitle, once more by the main part.
-func searchForItem(ctx context.Context, gen *api.Client, it *api.LibraryItemMinified, provider string) ([]api.SearchFindBooksAnswer, error) {
+func searchForItem(ctx context.Context, gen *abs.Client, it *abs.LibraryItemMinified, provider string) ([]abs.SearchFindBooksAnswer, error) {
 	title, author := strings.TrimSpace(titleNoise.ReplaceAllString(it.Title(), " ")), it.Media.Metadata.AuthorDisplay()
 	results, err := searchBooks(ctx, gen, provider, title, author, it.Id)
 	if err != nil {
@@ -98,7 +98,7 @@ func searchForItem(ctx context.Context, gen *api.Client, it *api.LibraryItemMini
 // in each Audible region and is missing from some, so a book bought from the
 // Canadian store is exact on audible.ca and an edition, or nothing, on the US
 // store.
-func scoreItem(ctx context.Context, gen *api.Client, it *api.LibraryItemMinified, providers []string, tolerance float64, candidates int) (batchRow, error) {
+func scoreItem(ctx context.Context, gen *abs.Client, it *abs.LibraryItemMinified, providers []string, tolerance float64, candidates int) (batchRow, error) {
 	row := batchRow{ID: string(it.Id), Title: it.Title(), Author: it.Media.Metadata.AuthorDisplay(), Path: it.RelPath, Confidence: confNone}
 	if it.Media.Duration > 0 {
 		row.Duration = wholeSec(it.Media.Duration)
@@ -158,7 +158,7 @@ type applyResult struct {
 
 // smartRow runs the smart match for one row of a batch: the decisions land on
 // the row, and so does what happened.
-func smartRow(ctx context.Context, gen *api.Client, prov providerConfig, it *api.LibraryItemExpanded, provider string, res *applyResult, preview bool) {
+func smartRow(ctx context.Context, gen *abs.Client, prov providerConfig, it *abs.LibraryItemExpanded, provider string, res *applyResult, preview bool) {
 	decisions, r, err := smartApply(ctx, gen, it, provider, res.ASIN, res.ISBN, preview)
 	res.Fields = decisions
 	switch {
@@ -180,7 +180,7 @@ func smartRow(ctx context.Context, gen *api.Client, prov providerConfig, it *api
 // matchRow runs a plain match for one row of a batch, then restores the kept
 // fields and records the store. opts carries the override flags; the
 // provider, asin and isbn come from the row.
-func matchRow(ctx context.Context, gen *api.Client, prov providerConfig, it *api.LibraryItemExpanded, provider string, keep []string, opts api.LibraryItemMatchRequest, res *applyResult) {
+func matchRow(ctx context.Context, gen *abs.Client, prov providerConfig, it *abs.LibraryItemExpanded, provider string, keep []string, opts abs.LibraryItemMatchRequest, res *applyResult) {
 	opts.Provider, opts.Asin, opts.Isbn = provider, res.ASIN, res.ISBN
 	r, err := matchItem(ctx, gen, it.Id, opts)
 	if err != nil {
@@ -210,7 +210,7 @@ func matchRow(ctx context.Context, gen *api.Client, prov providerConfig, it *api
 // rowMatch is how every row of an item_match_apply_batch call is matched.
 type rowMatch struct {
 	keep           []string
-	opts           api.LibraryItemMatchRequest // the override flags; the provider and ids come from the row
+	opts           abs.LibraryItemMatchRequest // the override flags; the provider and ids come from the row
 	smart, preview bool
 }
 
@@ -218,7 +218,7 @@ type rowMatch struct {
 // from the snapshot the kept fields and the provider tag come from to the
 // last write, and let go however the row ends: a hold left behind by a panic
 // would stall every later edit of the book.
-func (r *registry) applyRow(ctx context.Context, itemID api.LibraryItemID, provider string, how rowMatch, res *applyResult) {
+func (r *registry) applyRow(ctx context.Context, itemID abs.LibraryItemID, provider string, how rowMatch, res *applyResult) {
 	release := r.locks.By(itemLocks(itemID)...)
 	defer release()
 	fresh, err := getItem(ctx, r.gen, itemID)
@@ -303,8 +303,8 @@ func registerMatchBatchTools(r *registry) {
 		}
 		providers := prov.providersFor(in.Providers, lib.Provider)
 		limit, offset := min(mcpregistry.LimitOr(in.Limit, 20), 50), max(in.Offset, 0)
-		items, total, err := window(offset, limit, func(page int) ([]api.LibraryItemMinified, int, error) {
-			res, ierr := record(gen.LibraryGetLibraryItems(ctx, lib.Id, api.LibraryGetLibraryItemsOptions{Limit: new(limit), Page: new(page), Sort: "media.metadata.title", Filter: encoded, Minified: "1"}))
+		items, total, err := window(offset, limit, func(page int) ([]abs.LibraryItemMinified, int, error) {
+			res, ierr := record(gen.LibraryGetLibraryItems(ctx, lib.Id, abs.LibraryGetLibraryItemsOptions{Limit: new(limit), Page: new(page), Sort: "media.metadata.title", Filter: encoded, Minified: "1"}))
 			if ierr != nil {
 				return nil, 0, ierr
 			}
@@ -390,7 +390,7 @@ func registerMatchBatchTools(r *registry) {
 		if err := prov.checkNamed(ctx, gen, in.Providers); err != nil {
 			return nil, applyBatchOut{}, err
 		}
-		how := rowMatch{keep: keep, opts: api.LibraryItemMatchRequest{OverrideCover: new(in.OverrideCover), OverrideDetails: new(in.OverrideDetails)}, smart: in.Smart, preview: !in.Confirm}
+		how := rowMatch{keep: keep, opts: abs.LibraryItemMatchRequest{OverrideCover: new(in.OverrideCover), OverrideDetails: new(in.OverrideDetails)}, smart: in.Smart, preview: !in.Confirm}
 		out := applyBatchOut{Results: []applyResult{}}
 		for _, m := range in.Matches {
 			res := applyResult{Item: m.Item, ASIN: strings.TrimSpace(m.ASIN), ISBN: strings.TrimSpace(m.ISBN)}

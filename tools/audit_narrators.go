@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -153,7 +153,7 @@ func registerNarratorAudit(r *registry) {
 		}
 		var people joinedNames // a name with a comma in it is not two names
 		for i := range libs {
-			if err := eachItem(ctx, gen, libs[i].Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+			if err := eachItem(ctx, gen, libs[i].Id, abs.LibraryGetLibraryItemsOptions{}, func(it *abs.LibraryItemMinified) bool {
 				out.Scanned++
 				if !people.hold(it) {
 					read(namedBook{LibraryItemMinified: it})

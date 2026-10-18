@@ -18,7 +18,7 @@ import (
 	"strings"
 	"testing"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
@@ -621,7 +621,7 @@ func TestJourneyListsHeldWholeArePaged(t *testing.T) {
 	t.Run("user_list", func(t *testing.T) {
 		for i := range 4 {
 			name := fmt.Sprintf("zzyzx-paged-%d", i)
-			u, err := record(admin.UserCreate(ctx, api.UserCreateRequest{Username: name, Password: name + "-password", Type: "user", IsActive: new(true)}))
+			u, err := record(admin.UserCreate(ctx, abs.UserCreateRequest{Username: name, Password: name + "-password", Type: "user", IsActive: new(true)}))
 			if err != nil {
 				t.Fatal(err)
 			}

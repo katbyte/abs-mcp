@@ -4,21 +4,11 @@ package abs
 
 // UserGetOnlineUsersAnswerUsersOnline is an object the document declares inline.
 type UserGetOnlineUsersAnswerUsersOnline struct {
-	Bookmarks                       []UserGetOnlineUsersAnswerUsersOnlineBookmarks     `json:"bookmarks,omitzero"`
-	Connections                     int                                                `json:"connections,omitempty"`
-	CreatedAt                       UnixMilli                                          `json:"createdAt,omitzero"`
-	Email                           string                                             `json:"email,omitempty"`
-	HasOpenIDLink                   bool                                               `json:"hasOpenIDLink"`
-	Id                              string                                             `json:"id,omitempty"`
-	IsActive                        bool                                               `json:"isActive"`
-	IsLocked                        bool                                               `json:"isLocked"`
-	ItemTagsSelected                []string                                           `json:"itemTagsSelected,omitzero"`
-	LastSeen                        UnixMilli                                          `json:"lastSeen,omitzero"`
-	LatestSession                   *UserGetOnlineUsersAnswerUsersOnlineLatestSession  `json:"latestSession,omitempty"`
-	LibrariesAccessible             []string                                           `json:"librariesAccessible,omitzero"`
-	MediaProgress                   []UserGetOnlineUsersAnswerUsersOnlineMediaProgress `json:"mediaProgress,omitzero"`
-	Permissions                     *UserGetOnlineUsersAnswerUsersOnlinePermissions    `json:"permissions,omitempty"`
-	SeriesHideFromContinueListening []string                                           `json:"seriesHideFromContinueListening,omitzero"`
-	Type                            string                                             `json:"type,omitempty"`
-	Username                        string                                             `json:"username,omitempty"`
+	Connections int                       `json:"connections,omitempty"`
+	CreatedAt   UnixMilli                 `json:"createdAt,omitzero"`
+	Id          string                    `json:"id,omitempty"`
+	LastSeen    UnixMilli                 `json:"lastSeen,omitzero"`
+	Session     *PlaybackSessionForClient `json:"session,omitempty"`
+	Type        string                    `json:"type,omitempty"`
+	Username    string                    `json:"username,omitempty"`
 }

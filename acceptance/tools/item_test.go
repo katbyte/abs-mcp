@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/mcp/acctest"
 	"github.com/katbyte/go-kt/pointer"
 )
@@ -357,8 +357,8 @@ func TestItemSendEbook(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	before := api.EmailUpdateEReaderDevicesRequest{EreaderDevices: pointer.From(settings.Settings).EreaderDevices}
-	if _, err := admin.EmailUpdateEReaderDevices(ctx, api.EmailUpdateEReaderDevicesRequest{EreaderDevices: append(slices.Clone(before.EreaderDevices), api.EreaderDevice{Name: "Zzyzx Reader", Email: "reader@zzyzx.test", AvailabilityOption: "adminOrUp"})}); err != nil {
+	before := abs.EmailUpdateEReaderDevicesRequest{EreaderDevices: pointer.From(settings.Settings).EreaderDevices}
+	if _, err := admin.EmailUpdateEReaderDevices(ctx, abs.EmailUpdateEReaderDevicesRequest{EreaderDevices: append(slices.Clone(before.EreaderDevices), abs.EreaderDevice{Name: "Zzyzx Reader", Email: "reader@zzyzx.test", AvailabilityOption: "adminOrUp"})}); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _, _ = admin.EmailUpdateEReaderDevices(ctx, before) })

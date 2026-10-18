@@ -1,5 +1,7 @@
 package abs
 
+// This file is written by hand, beside the generated ones.
+
 // Session is the session as a list of a user's own sessions sends it. A client's form is the same session with what playing it needs added, the
 // tracks, the whole item and the stream, which are left out here.
 func (s PlaybackSessionForClient) Session() PlaybackSession {

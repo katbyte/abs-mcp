@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // The item listing carries a book's authors and narrators as one string each,
@@ -24,13 +24,13 @@ import (
 
 // joinedNames holds a sweep's books whose joined names need reading.
 type joinedNames struct {
-	held []api.LibraryItemMinified
+	held []abs.LibraryItemMinified
 }
 
 // namedBook is a book from a library's list with its authors and narrators read apart where the list joined them; a field read no way, or
 // not joined, is left empty and values splits the joined string at its commas.
 type namedBook struct {
-	*api.LibraryItemMinified
+	*abs.LibraryItemMinified
 	authors, narrators []string
 }
 
@@ -46,7 +46,7 @@ func (b namedBook) values(field string) []string {
 }
 
 // wholeNames is a book fetched whole, which lists its authors and narrators, as namedBook.
-func wholeNames(it *api.LibraryItemExpanded) namedBook {
+func wholeNames(it *abs.LibraryItemExpanded) namedBook {
 	short := it.Minified()
 	b := namedBook{LibraryItemMinified: &short, narrators: it.Media.Metadata.Narrators}
 	for _, a := range it.Media.Metadata.Authors {
@@ -60,7 +60,7 @@ func wholeNames(it *api.LibraryItemExpanded) namedBook {
 // hold keeps an item whose author or narrator string joins several names,
 // for resolve; false when there is nothing to read and the item can be used
 // as it is.
-func (j *joinedNames) hold(it *api.LibraryItemMinified) bool {
+func (j *joinedNames) hold(it *abs.LibraryItemMinified) bool {
 	if it.IsPodcast() || (!joinsNames(it.Media.Metadata.NarratorName) && !joinsNames(it.Media.Metadata.AuthorName)) {
 		return false
 	}
@@ -77,11 +77,11 @@ func joinsNames(joined string) bool {
 // to fn: from the library's names where the string reads one way, and from
 // the book itself, fetched whole, where it reads more. It reads the
 // library's narrators and authors only when a held item needs them.
-func (j *joinedNames) resolve(ctx context.Context, gen *api.Client, libraryID api.LibraryID, fn func(b namedBook)) error {
+func (j *joinedNames) resolve(ctx context.Context, gen *abs.Client, libraryID abs.LibraryID, fn func(b namedBook)) error {
 	held := j.held
 	j.held = nil
 	var narrators, authors map[string]bool
-	var fetch []api.LibraryItemID
+	var fetch []abs.LibraryItemID
 	for i := range held {
 		m := held[i].Media.Metadata
 		if joinsNames(m.NarratorName) && narrators == nil {
@@ -95,7 +95,7 @@ func (j *joinedNames) resolve(ctx context.Context, gen *api.Client, libraryID ap
 			}
 		}
 		if joinsNames(m.AuthorName) && authors == nil {
-			records, err := allAuthors(ctx, gen, libraryID, api.LibraryGetAuthorsOptions{})
+			records, err := allAuthors(ctx, gen, libraryID, abs.LibraryGetAuthorsOptions{})
 			if err != nil {
 				return err
 			}

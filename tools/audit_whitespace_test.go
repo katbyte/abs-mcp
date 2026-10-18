@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // wholeWithFiles is a book fetched whole, holding the files named, each by
@@ -585,7 +585,7 @@ func TestAuditWhitespaceReadsOnlySpacedHiddenSeries(t *testing.T) {
 	})
 	gen := f.gen(t)
 	sweep := whitespaceSweep{namesOnly: true}
-	if err := eachItem(t.Context(), gen, libID, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+	if err := eachItem(t.Context(), gen, libID, abs.LibraryGetLibraryItemsOptions{}, func(it *abs.LibraryItemMinified) bool {
 		sweep.add(it)
 		return true
 	}); err != nil {

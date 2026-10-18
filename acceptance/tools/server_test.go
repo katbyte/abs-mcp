@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/abs-mcp/tools"
 	"github.com/katbyte/go-kt/mcp/acctest"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -182,7 +182,7 @@ func TestServerInfoNonAdmin(t *testing.T) {
 	}
 	// isActive has to be set explicitly: an account created without it cannot
 	// log in, and so can never activate an API key either
-	made, err := record(admin.UserCreate(ctx, api.UserCreateRequest{
+	made, err := record(admin.UserCreate(ctx, abs.UserCreateRequest{
 		Username: "plainuser", Password: "plainuser-password", Type: "user", IsActive: new(true),
 	}))
 	if err != nil {
@@ -199,7 +199,7 @@ func TestServerInfoNonAdmin(t *testing.T) {
 		t.Fatalf("activating the account with a login: %v", err)
 	}
 
-	key, err := record(admin.ApiKeyCreate(ctx, api.ApiKeyCreateRequest{Name: "acceptance-nonadmin", UserId: user, IsActive: new(true)}))
+	key, err := record(admin.ApiKeyCreate(ctx, abs.ApiKeyCreateRequest{Name: "acceptance-nonadmin", UserId: user, IsActive: new(true)}))
 	if err != nil {
 		t.Fatalf("creating an api key for them: %v", err)
 	}
@@ -316,10 +316,10 @@ func TestServerSessionsWithAPlaybackSession(t *testing.T) {
 		t.Fatalf("no id for %s: %v", book, item)
 	}
 
-	session, err := record(client.LibraryItemStartPlaybackSession(ctx, api.LibraryItemID(id), api.LibraryItemStartPlaybackSessionRequest{
+	session, err := record(client.LibraryItemStartPlaybackSession(ctx, abs.LibraryItemID(id), abs.LibraryItemStartPlaybackSessionRequest{
 		MediaPlayer:        "acceptance-player",
 		SupportedMimeTypes: []string{"audio/mpeg"},
-		DeviceInfo:         &api.LibraryItemStartPlaybackSessionRequestDeviceInfo{ClientName: "abs-mcp tests", DeviceName: "a test runner"},
+		DeviceInfo:         &abs.LibraryItemStartPlaybackSessionRequestDeviceInfo{ClientName: "abs-mcp tests", DeviceName: "a test runner"},
 		ForceDirectPlay:    new(true),
 	}))
 	if err != nil {
@@ -327,7 +327,7 @@ func TestServerSessionsWithAPlaybackSession(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		// a close that failed left the session playing for the next run
-		if _, err := client.SessionClose(ctx, session.Id, api.SessionCloseRequest{}); err != nil {
+		if _, err := client.SessionClose(ctx, session.Id, abs.SessionCloseRequest{}); err != nil {
 			t.Errorf("closing the session: %v", err)
 		}
 		suite.Call(t, "user_progress_set", map[string]any{"remove": true, "item": book})
@@ -366,7 +366,7 @@ func TestServerSessionsWithAPlaybackSession(t *testing.T) {
 	// a session only reaches the history once it has listened time against it.
 	// The fixtures are one second long, so stay inside that: syncing past the
 	// end marks the book finished.
-	if _, err := client.SessionSync(ctx, session.Id, api.SessionSyncRequest{CurrentTime: 0.3, TimeListened: 0.3}); err != nil {
+	if _, err := client.SessionSync(ctx, session.Id, abs.SessionSyncRequest{CurrentTime: 0.3, TimeListened: 0.3}); err != nil {
 		t.Fatalf("syncing listened time: %v", err)
 	}
 

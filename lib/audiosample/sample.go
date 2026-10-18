@@ -36,7 +36,7 @@ import (
 
 	"github.com/katbyte/go-kt/httpc"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/pointer"
 )
 
@@ -70,7 +70,7 @@ func (b *Book) Duration() float64 {
 // own track list, which leaves excluded files out and carries each file's
 // start, or, when the item came without one, its included audio files in
 // index order, which is what the server builds the list from.
-func BookOf(it *api.LibraryItemExpanded) (*Book, error) {
+func BookOf(it *abs.LibraryItemExpanded) (*Book, error) {
 	if it.IsPodcast() {
 		return nil, fmt.Errorf("%q is a podcast: its audio is its episodes, not one book", it.Title())
 	}
@@ -88,7 +88,7 @@ func BookOf(it *api.LibraryItemExpanded) (*Book, error) {
 	}
 	if len(b.Tracks) == 0 {
 		files := slices.Clone(media.AudioFiles)
-		slices.SortStableFunc(files, func(x, y api.AudioFile) int { return cmp.Compare(x.Index, y.Index) })
+		slices.SortStableFunc(files, func(x, y abs.AudioFile) int { return cmp.Compare(x.Index, y.Index) })
 		start := 0.0
 		for _, f := range files {
 			if f.Exclude || f.Ino == "" || f.Duration <= 0 {
@@ -110,7 +110,7 @@ func BookOf(it *api.LibraryItemExpanded) (*Book, error) {
 // must be closed. The proxy answers only under a random path, and only for
 // the items this sampler was asked to read.
 type Sampler struct {
-	gen    *api.Client
+	gen    *abs.Client
 	ffmpeg string
 	secret string
 	base   string // the proxy's address and secret path, what ffmpeg is given
@@ -128,7 +128,7 @@ type Sampler struct {
 
 // New starts a sampler reading through gen. It fails with ErrNoFFmpeg when
 // ffmpeg is not installed.
-func New(ctx context.Context, gen *api.Client) (*Sampler, error) {
+func New(ctx context.Context, gen *abs.Client) (*Sampler, error) {
 	bin, err := exec.LookPath("ffmpeg")
 	if err != nil {
 		return nil, ErrNoFFmpeg
@@ -501,7 +501,7 @@ func (s *Sampler) serve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	read := r.URL.Query().Get("read")
-	got, err := s.gen.LibraryItemGetLibraryFile(r.Context(), api.LibraryItemID(item), file, api.LibraryItemGetLibraryFileOptions{Range: r.Header.Get("Range")})
+	got, err := s.gen.LibraryItemGetLibraryFile(r.Context(), abs.LibraryItemID(item), file, abs.LibraryItemGetLibraryFileOptions{Range: r.Header.Get("Range")})
 	if err != nil {
 		status := http.StatusBadGateway
 		if code := httpc.StatusCode(err); code != 0 {

@@ -16,8 +16,7 @@ const serviceName = "audiobookshelf"
 var services = []config.Service{{
 	Name:    serviceName,
 	Package: "abs",
-	// in place of the hand-written client, which is at sdk/abs-byhand until the tools move over
-	Output: "sdk/abs",
+	Output:  "sdk/abs",
 	// the document is this repository's own, so each operationId is chosen: the handler that answers it, LibraryGetLibraryItems
 	Naming: config.OperationIDNaming,
 	Auth:   "Bearer",
@@ -52,8 +51,8 @@ var keepNull = []string{
 	"AuthorUpdateRequest.asin", "AuthorUpdateRequest.description",
 	"ProgressUpdatePayload.currentTime", "ProgressUpdatePayload.duration", "ProgressUpdatePayload.ebookLocation", "ProgressUpdatePayload.ebookProgress", "ProgressUpdatePayload.progress",
 	"MediaUpdate.maxEpisodesToKeep", "MediaUpdate.maxNewEpisodesToDownload",
-	"MediaUpdateMetadata.asin", "MediaUpdateMetadata.author", "MediaUpdateMetadata.description", "MediaUpdateMetadata.feedUrl", "MediaUpdateMetadata.imageUrl", "MediaUpdateMetadata.isbn", "MediaUpdateMetadata.itunesId",
-	"MediaUpdateMetadata.language", "MediaUpdateMetadata.publishedDate", "MediaUpdateMetadata.publishedYear", "MediaUpdateMetadata.publisher", "MediaUpdateMetadata.releaseDate", "MediaUpdateMetadata.subtitle", "MediaUpdateMetadata.title", "MediaUpdateMetadata.type",
+	"MediaUpdateMetadata.asin", "MediaUpdateMetadata.author", "MediaUpdateMetadata.description", "MediaUpdateMetadata.feedUrl", "MediaUpdateMetadata.imageUrl", "MediaUpdateMetadata.isbn", "MediaUpdateMetadata.itunesArtistId",
+	"MediaUpdateMetadata.itunesId", "MediaUpdateMetadata.itunesPageUrl", "MediaUpdateMetadata.language", "MediaUpdateMetadata.publishedDate", "MediaUpdateMetadata.publishedYear", "MediaUpdateMetadata.publisher", "MediaUpdateMetadata.releaseDate", "MediaUpdateMetadata.subtitle", "MediaUpdateMetadata.title", "MediaUpdateMetadata.type",
 }
 
 // fixes say what the document spec writes cannot: the source holds the value as a number and the server means a date by it.

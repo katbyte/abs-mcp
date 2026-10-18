@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 func TestReadJoined(t *testing.T) {
@@ -37,11 +37,11 @@ func TestReadJoined(t *testing.T) {
 func TestNamedBookValues(t *testing.T) {
 	t.Parallel()
 
-	whole := wholeNames(&api.LibraryItemExpanded{Media: &api.LibraryItemExpandedMedia{Tags: []string{"x"}, Metadata: &api.LibraryItemExpandedMediaMetadata{
-		Narrators: []string{"Jim Dale", "Kate Reading"}, Authors: []api.AuthorMinimal{{Name: "A"}, {Name: "B"}},
+	whole := wholeNames(&abs.LibraryItemExpanded{Media: &abs.LibraryItemExpandedMedia{Tags: []string{"x"}, Metadata: &abs.LibraryItemExpandedMediaMetadata{
+		Narrators: []string{"Jim Dale", "Kate Reading"}, Authors: []abs.AuthorMinimal{{Name: "A"}, {Name: "B"}},
 		Language: "English", Publisher: "Bantam", Genres: []string{"SF"},
 	}}})
-	listed := namedBook{LibraryItemMinified: &api.LibraryItemMinified{Media: &api.LibraryItemMinifiedMedia{Tags: []string{"x"}, Metadata: &api.LibraryItemMinifiedMediaMetadata{
+	listed := namedBook{LibraryItemMinified: &abs.LibraryItemMinified{Media: &abs.LibraryItemMinifiedMedia{Tags: []string{"x"}, Metadata: &abs.LibraryItemMinifiedMediaMetadata{
 		NarratorName: "Jim Dale, Kate Reading", AuthorName: "A, B",
 		Language: "English", Publisher: "Bantam", Genres: []string{"SF"},
 	}}}}

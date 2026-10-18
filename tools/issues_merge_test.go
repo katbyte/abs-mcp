@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // movedLibrary is a canned server that remembers: its records, accounts,
@@ -23,21 +23,21 @@ type movedLibrary struct {
 	f  *fakeABS
 	mu sync.Mutex
 
-	items       map[string]*api.LibraryItemExpanded
-	users       []*api.UserForBrowser // the first is the admin, whose key is "test"
+	items       map[string]*abs.LibraryItemExpanded
+	users       []*abs.UserForBrowser // the first is the admin, whose key is "test"
 	tokens      map[string]string
 	refused     map[string]bool // accounts the server lets no key act as
 	keys        map[string]string
-	collections []*api.Collection
-	playlists   []*api.Playlist
-	feeds       []api.Feed
+	collections []*abs.Collection
+	playlists   []*abs.Playlist
+	feeds       []abs.Feed
 	covers      map[string][]byte
 	// breakDetails makes every change of a record's details fail
 	breakDetails bool
 }
 
 // account is an account as the fake keeps it: the record the server answers for one, progress and bookmarks included.
-type account = api.UserForBrowser
+type account = abs.UserForBrowser
 
 const (
 	movedAdmin = "u-admin"
@@ -46,24 +46,24 @@ const (
 )
 
 // audio is a record's audio files, each by its name and size.
-func audio(files ...any) []api.AudioFile {
-	out := make([]api.AudioFile, 0, len(files)/2)
+func audio(files ...any) []abs.AudioFile {
+	out := make([]abs.AudioFile, 0, len(files)/2)
 	for i := 0; i+1 < len(files); i += 2 {
 		name, named := files[i].(string)
 		size, sized := files[i+1].(int)
 		if !named || !sized {
 			panic("audio takes each file's name and then its size")
 		}
-		out = append(out, api.AudioFile{Index: i/2 + 1, Duration: 1800, Metadata: &api.FileMetadata{Filename: name, Size: size}})
+		out = append(out, abs.AudioFile{Index: i/2 + 1, Duration: 1800, Metadata: &abs.FileMetadata{Filename: name, Size: size}})
 	}
 
 	return out
 }
 
 // book is a record at a path with its audio, missing or not.
-func book(id, rel, title string, missing bool, files []api.AudioFile) *api.LibraryItemExpanded {
-	meta := &api.LibraryItemExpandedMediaMetadata{Title: title, Authors: []api.AuthorMinimal{{Name: "Orson Scott Card"}}}
-	it := &api.LibraryItemExpanded{Id: api.LibraryItemID(id), LibraryId: libID, MediaType: "book", RelPath: rel, Path: "/audiobooks/" + rel, IsMissing: missing, AddedAt: at(1756000000000), Media: &api.LibraryItemExpandedMedia{Metadata: meta}}
+func book(id, rel, title string, missing bool, files []abs.AudioFile) *abs.LibraryItemExpanded {
+	meta := &abs.LibraryItemExpandedMediaMetadata{Title: title, Authors: []abs.AuthorMinimal{{Name: "Orson Scott Card"}}}
+	it := &abs.LibraryItemExpanded{Id: abs.LibraryItemID(id), LibraryId: libID, MediaType: "book", RelPath: rel, Path: "/audiobooks/" + rel, IsMissing: missing, AddedAt: at(1756000000000), Media: &abs.LibraryItemExpandedMedia{Metadata: meta}}
 	it.Media.AudioFiles, it.Media.NumAudioFiles = files, len(files)
 	for _, f := range files {
 		it.Media.Duration += f.Duration
@@ -72,13 +72,13 @@ func book(id, rel, title string, missing bool, files []api.AudioFile) *api.Libra
 	return it
 }
 
-func newMovedLibrary(t *testing.T, items ...*api.LibraryItemExpanded) *movedLibrary {
+func newMovedLibrary(t *testing.T, items ...*abs.LibraryItemExpanded) *movedLibrary {
 	t.Helper()
 
 	w := &movedLibrary{
-		f: newFakeABS(t), items: map[string]*api.LibraryItemExpanded{}, tokens: map[string]string{"test": movedAdmin},
+		f: newFakeABS(t), items: map[string]*abs.LibraryItemExpanded{}, tokens: map[string]string{"test": movedAdmin},
 		refused: map[string]bool{}, keys: map[string]string{}, covers: map[string][]byte{},
-		users: []*api.UserForBrowser{
+		users: []*abs.UserForBrowser{
 			{Id: movedAdmin, Username: "kt", Type: "root", IsActive: new(true)},
 			{Id: movedAnn, Username: "ann", Type: "user", IsActive: new(true)},
 			{Id: movedBob, Username: "bob", Type: "user", IsActive: new(true)},
@@ -113,7 +113,7 @@ func newMovedLibrary(t *testing.T, items ...*api.LibraryItemExpanded) *movedLibr
 
 	// a library's list sends the short form, as the real one does
 	mux.HandleFunc("GET /api/libraries/{lib}/items", locked(func(rw http.ResponseWriter, r *http.Request, _ *account) {
-		var rows []api.LibraryItemMinified
+		var rows []abs.LibraryItemMinified
 		for _, id := range w.ids() {
 			if it := w.items[id]; r.URL.Query().Get("filter") == "" || it.IsMissing {
 				rows = append(rows, it.Minified())
@@ -130,7 +130,7 @@ func newMovedLibrary(t *testing.T, items ...*api.LibraryItemExpanded) *movedLibr
 			IDs []string `json:"libraryItemIds"`
 		}
 		read(r, &asked)
-		rows := []*api.LibraryItemExpanded{}
+		rows := []*abs.LibraryItemExpanded{}
 		for _, id := range asked.IDs {
 			if it, ok := w.items[id]; ok {
 				rows = append(rows, it)
@@ -155,8 +155,8 @@ func newMovedLibrary(t *testing.T, items ...*api.LibraryItemExpanded) *movedLibr
 		var upd struct {
 			Metadata *struct {
 				Title, Asin *string
-				Series      []api.SeriesMinimal
-				Authors     []api.AuthorMinimal
+				Series      []abs.SeriesMinimal
+				Authors     []abs.AuthorMinimal
 			} `json:"metadata"`
 			Tags []string `json:"tags"`
 		}
@@ -172,28 +172,28 @@ func newMovedLibrary(t *testing.T, items ...*api.LibraryItemExpanded) *movedLibr
 			// them in the order it was tied: one it already has stays where
 			// it is, one it lacks goes last, and one not sent is untied
 			if m.Series != nil {
-				var next []api.SeriesMinimal
+				var next []abs.SeriesMinimal
 				for _, has := range it.Media.Metadata.Series {
-					if k := slices.IndexFunc(m.Series, func(s api.SeriesMinimal) bool { return s.Name == has.Name }); k >= 0 {
+					if k := slices.IndexFunc(m.Series, func(s abs.SeriesMinimal) bool { return s.Name == has.Name }); k >= 0 {
 						next = append(next, m.Series[k])
 					}
 				}
 				for _, sent := range m.Series {
-					if !slices.ContainsFunc(next, func(s api.SeriesMinimal) bool { return s.Name == sent.Name }) {
+					if !slices.ContainsFunc(next, func(s abs.SeriesMinimal) bool { return s.Name == sent.Name }) {
 						next = append(next, sent)
 					}
 				}
 				it.Media.Metadata.Series = next
 			}
 			if m.Authors != nil {
-				var next []api.AuthorMinimal
+				var next []abs.AuthorMinimal
 				for _, has := range it.Media.Metadata.Authors {
-					if slices.ContainsFunc(m.Authors, func(a api.AuthorMinimal) bool { return a.Name == has.Name }) {
+					if slices.ContainsFunc(m.Authors, func(a abs.AuthorMinimal) bool { return a.Name == has.Name }) {
 						next = append(next, has)
 					}
 				}
 				for _, sent := range m.Authors {
-					if !slices.ContainsFunc(next, func(a api.AuthorMinimal) bool { return a.Name == sent.Name }) {
+					if !slices.ContainsFunc(next, func(a abs.AuthorMinimal) bool { return a.Name == sent.Name }) {
 						next = append(next, sent)
 					}
 				}
@@ -207,7 +207,7 @@ func newMovedLibrary(t *testing.T, items ...*api.LibraryItemExpanded) *movedLibr
 	}))
 	mux.HandleFunc("POST /api/items/{id}/chapters", locked(func(rw http.ResponseWriter, r *http.Request, _ *account) {
 		var sent struct {
-			Chapters []api.Chapter `json:"chapters"`
+			Chapters []abs.Chapter `json:"chapters"`
 		}
 		read(r, &sent)
 		w.items[r.PathValue("id")].Media.Chapters = sent.Chapters
@@ -236,19 +236,19 @@ func newMovedLibrary(t *testing.T, items ...*api.LibraryItemExpanded) *movedLibr
 		id := r.PathValue("id")
 		delete(w.items, id)
 		for _, c := range w.collections {
-			c.Books = slices.DeleteFunc(c.Books, func(b api.LibraryItemExpanded) bool { return string(b.Id) == id })
+			c.Books = slices.DeleteFunc(c.Books, func(b abs.LibraryItemExpanded) bool { return string(b.Id) == id })
 		}
 		for _, p := range w.playlists {
-			p.Items = slices.DeleteFunc(p.Items, func(e api.PlaylistItems) bool { return string(e.LibraryItemId) == id })
+			p.Items = slices.DeleteFunc(p.Items, func(e abs.PlaylistItems) bool { return string(e.LibraryItemId) == id })
 		}
 		_, _ = io.WriteString(rw, "OK")
 	}))
 
 	mux.HandleFunc("GET /api/me", locked(func(rw http.ResponseWriter, _ *http.Request, as *account) { send(rw, as) }))
 	mux.HandleFunc("GET /api/users", locked(func(rw http.ResponseWriter, _ *http.Request, _ *account) {
-		rows := make([]api.UserForBrowser, 0, len(w.users))
+		rows := make([]abs.UserForBrowser, 0, len(w.users))
 		for _, u := range w.users {
-			rows = append(rows, api.UserForBrowser{Id: u.Id, Username: u.Username, Type: u.Type, IsActive: u.IsActive})
+			rows = append(rows, abs.UserForBrowser{Id: u.Id, Username: u.Username, Type: u.Type, IsActive: u.IsActive})
 		}
 		send(rw, map[string]any{"users": rows})
 	}))
@@ -265,7 +265,7 @@ func newMovedLibrary(t *testing.T, items ...*api.LibraryItemExpanded) *movedLibr
 		read(r, &sent)
 		for _, c := range w.collections {
 			if string(c.Id) == r.PathValue("id") {
-				c.Books = append(c.Books, api.LibraryItemExpanded{Id: api.LibraryItemID(sent.ID)})
+				c.Books = append(c.Books, abs.LibraryItemExpanded{Id: abs.LibraryItemID(sent.ID)})
 				send(rw, c)
 				return
 			}
@@ -279,8 +279,8 @@ func newMovedLibrary(t *testing.T, items ...*api.LibraryItemExpanded) *movedLibr
 		read(r, &sent)
 		for _, c := range w.collections {
 			if string(c.Id) == r.PathValue("id") {
-				place := func(b api.LibraryItemExpanded) int { return slices.Index(sent.Books, string(b.Id)) }
-				slices.SortStableFunc(c.Books, func(a, b api.LibraryItemExpanded) int { return place(a) - place(b) })
+				place := func(b abs.LibraryItemExpanded) int { return slices.Index(sent.Books, string(b.Id)) }
+				slices.SortStableFunc(c.Books, func(a, b abs.LibraryItemExpanded) int { return place(a) - place(b) })
 				send(rw, c)
 				return
 			}
@@ -289,7 +289,7 @@ func newMovedLibrary(t *testing.T, items ...*api.LibraryItemExpanded) *movedLibr
 	}))
 	mux.HandleFunc("PATCH /api/playlists/{id}", locked(func(rw http.ResponseWriter, r *http.Request, as *account) {
 		var sent struct {
-			Items []api.PlaylistEntry `json:"items"`
+			Items []abs.PlaylistEntry `json:"items"`
 		}
 		read(r, &sent)
 		for _, p := range w.playlists {
@@ -300,17 +300,17 @@ func newMovedLibrary(t *testing.T, items ...*api.LibraryItemExpanded) *movedLibr
 				http.Error(rw, "Invalid playlist items. Length mismatch", http.StatusBadRequest)
 				return
 			}
-			place := func(e api.PlaylistItems) int {
-				return slices.IndexFunc(sent.Items, func(s api.PlaylistEntry) bool { return s.LibraryItemId == e.LibraryItemId })
+			place := func(e abs.PlaylistItems) int {
+				return slices.IndexFunc(sent.Items, func(s abs.PlaylistEntry) bool { return s.LibraryItemId == e.LibraryItemId })
 			}
-			slices.SortStableFunc(p.Items, func(a, b api.PlaylistItems) int { return place(a) - place(b) })
+			slices.SortStableFunc(p.Items, func(a, b abs.PlaylistItems) int { return place(a) - place(b) })
 			send(rw, p)
 			return
 		}
 		http.NotFound(rw, r)
 	}))
 	mux.HandleFunc("GET /api/libraries/{lib}/playlists", locked(func(rw http.ResponseWriter, _ *http.Request, as *account) {
-		rows := []*api.Playlist{}
+		rows := []*abs.Playlist{}
 		for _, p := range w.playlists {
 			if p.UserId == as.Id {
 				rows = append(rows, p)
@@ -319,11 +319,11 @@ func newMovedLibrary(t *testing.T, items ...*api.LibraryItemExpanded) *movedLibr
 		send(rw, map[string]any{"results": rows})
 	}))
 	mux.HandleFunc("POST /api/playlists/{id}/item", locked(func(rw http.ResponseWriter, r *http.Request, as *account) {
-		var sent api.PlaylistEntry
+		var sent abs.PlaylistEntry
 		read(r, &sent)
 		for _, p := range w.playlists {
 			if string(p.Id) == r.PathValue("id") && p.UserId == as.Id {
-				p.Items = append(p.Items, api.PlaylistItems{LibraryItemId: sent.LibraryItemId})
+				p.Items = append(p.Items, abs.PlaylistItems{LibraryItemId: sent.LibraryItemId})
 				send(rw, p)
 				return
 			}
@@ -336,12 +336,12 @@ func newMovedLibrary(t *testing.T, items ...*api.LibraryItemExpanded) *movedLibr
 			CurrentTime, Duration     *float64
 			IsFinished                *bool
 			HideFromContinueListening *bool
-			FinishedAt, LastUpdate    *api.UnixMilli
+			FinishedAt, LastUpdate    *abs.UnixMilli
 		}
 		read(r, &sent)
-		p := mergeProgressOn(as, api.LibraryItemID(r.PathValue("id")))
+		p := mergeProgressOn(as, abs.LibraryItemID(r.PathValue("id")))
 		if p == nil {
-			as.MediaProgress = append(as.MediaProgress, api.MediaProgress{LibraryItemId: api.LibraryItemID(r.PathValue("id")), StartedAt: at(1790000000000)})
+			as.MediaProgress = append(as.MediaProgress, abs.MediaProgress{LibraryItemId: abs.LibraryItemID(r.PathValue("id")), StartedAt: at(1790000000000)})
 			p = &as.MediaProgress[len(as.MediaProgress)-1]
 		}
 		now := at(1790000000000)
@@ -353,7 +353,7 @@ func newMovedLibrary(t *testing.T, items ...*api.LibraryItemExpanded) *movedLibr
 				p.FinishedAt = *sent.FinishedAt
 			}
 		case sent.IsFinished != nil && !*sent.IsFinished && p.IsFinished:
-			p.IsFinished, p.FinishedAt, p.CurrentTime = false, api.UnixMilli{}, 0
+			p.IsFinished, p.FinishedAt, p.CurrentTime = false, abs.UnixMilli{}, 0
 		case sent.FinishedAt != nil:
 			p.FinishedAt = *sent.FinishedAt
 		}
@@ -368,7 +368,7 @@ func newMovedLibrary(t *testing.T, items ...*api.LibraryItemExpanded) *movedLibr
 		}
 		// a finished book given a new position short of its end is begun again
 		if p.IsFinished && moved && p.Duration-p.CurrentTime >= 10 {
-			p.IsFinished, p.FinishedAt = false, api.UnixMilli{}
+			p.IsFinished, p.FinishedAt = false, abs.UnixMilli{}
 		}
 		if p.Duration > 0 {
 			p.Progress = p.CurrentTime / p.Duration
@@ -385,7 +385,7 @@ func newMovedLibrary(t *testing.T, items ...*api.LibraryItemExpanded) *movedLibr
 			Title string  `json:"title"`
 		}
 		read(r, &sent)
-		b := api.AudioBookmark{LibraryItemId: api.LibraryItemID(r.PathValue("id")), Time: sent.Time, Title: sent.Title}
+		b := abs.AudioBookmark{LibraryItemId: abs.LibraryItemID(r.PathValue("id")), Time: sent.Time, Title: sent.Title}
 		as.Bookmarks = append(as.Bookmarks, b)
 		send(rw, b)
 	}))
@@ -402,7 +402,7 @@ func newMovedLibrary(t *testing.T, items ...*api.LibraryItemExpanded) *movedLibr
 		}
 		id := "key-" + sent.UserID
 		w.keys[id], w.tokens["secret-"+sent.UserID] = "secret-"+sent.UserID, sent.UserID
-		send(rw, map[string]any{"apiKey": api.ApiKeyRecord{Id: api.APIKeyID(id), UserId: api.UserID(sent.UserID), ApiKey: "secret-" + sent.UserID}})
+		send(rw, map[string]any{"apiKey": abs.ApiKeyRecord{Id: abs.APIKeyID(id), UserId: abs.UserID(sent.UserID), ApiKey: "secret-" + sent.UserID}})
 	}))
 	mux.HandleFunc("DELETE /api/api-keys/{id}", locked(func(rw http.ResponseWriter, r *http.Request, _ *account) {
 		delete(w.tokens, w.keys[r.PathValue("id")])
@@ -423,26 +423,26 @@ func (w *movedLibrary) ids() []string {
 	return ids
 }
 
-func (w *movedLibrary) user(id string) *api.UserForBrowser {
-	return w.users[slices.IndexFunc(w.users, func(u *api.UserForBrowser) bool { return string(u.Id) == id })]
+func (w *movedLibrary) user(id string) *abs.UserForBrowser {
+	return w.users[slices.IndexFunc(w.users, func(u *abs.UserForBrowser) bool { return string(u.Id) == id })]
 }
 
 // stonefather is the book the tests move: an old record, curated and
 // listened to, whose folder is gone, and the bare record the scan made for
 // the folder under its new name.
-func stonefather(t *testing.T) (w *movedLibrary, fresh *api.LibraryItemExpanded) {
+func stonefather(t *testing.T) (w *movedLibrary, fresh *abs.LibraryItemExpanded) {
 	t.Helper()
 
 	files := audio("Stonefather - 1.m4b", 797460, "Stonefather - 2.m4b", 179485029)
 	old := book("old", "Orson Scott Card/Stonefather", "Stonefather", true, files)
 	old.Media.Metadata.Asin = "B071RWQ7MD"
-	old.Media.Metadata.Series = []api.SeriesMinimal{{Name: "Mithermages", Sequence: "0.5"}}
+	old.Media.Metadata.Series = []abs.SeriesMinimal{{Name: "Mithermages", Sequence: "0.5"}}
 	old.Media.Tags = []string{"zz-provider:audible.ca"}
-	old.Media.Chapters = []api.Chapter{{Id: 0, Title: "Opening Credits", End: 20}, {Id: 1, Title: "Stonefather", Start: 20, End: 3600}}
+	old.Media.Chapters = []abs.Chapter{{Id: 0, Title: "Opening Credits", End: 20}, {Id: 1, Title: "Stonefather", Start: 20, End: 3600}}
 	old.Media.CoverPath = "/metadata/items/old/cover.jpg"
 	fresh = book("new", "Orson Scott Card/Mithermages - 00.5 - Stonefather", "Mithermages - 00.5 - Stonefather", false, files)
 	fresh.AddedAt = at(1790000000000)
-	fresh.Media.Chapters = []api.Chapter{{Id: 0, Title: "Stonefather - 1", End: 20}}
+	fresh.Media.Chapters = []abs.Chapter{{Id: 0, Title: "Stonefather - 1", End: 20}}
 	fresh.Media.CoverPath = fresh.Path + "/folder.jpg"
 
 	w = newMovedLibrary(t, old, fresh,
@@ -456,15 +456,15 @@ func stonefather(t *testing.T) (w *movedLibrary, fresh *api.LibraryItemExpanded)
 	)
 	w.covers["old"], w.covers["new"] = []byte("the store's cover"), []byte("a picture in the folder")
 	kt, ann := w.user(movedAdmin), w.user(movedAnn)
-	kt.MediaProgress = []api.MediaProgress{{LibraryItemId: "old", CurrentTime: 1200, Duration: 3600, Progress: 1, IsFinished: true, FinishedAt: at(1711000000000), LastUpdate: at(1711000000000), StartedAt: at(1710000000000)}}
-	kt.Bookmarks = []api.AudioBookmark{{LibraryItemId: "old", Time: 90, Title: "the stone"}}
-	ann.MediaProgress = []api.MediaProgress{{LibraryItemId: "old", CurrentTime: 1440, Duration: 3600, Progress: 0.4, LastUpdate: at(1750000000000), StartedAt: at(1749000000000)}}
-	ann.Bookmarks = []api.AudioBookmark{{LibraryItemId: "old", Time: 30, Title: "ann's"}, {LibraryItemId: "other", Time: 5, Title: "elsewhere"}}
+	kt.MediaProgress = []abs.MediaProgress{{LibraryItemId: "old", CurrentTime: 1200, Duration: 3600, Progress: 1, IsFinished: true, FinishedAt: at(1711000000000), LastUpdate: at(1711000000000), StartedAt: at(1710000000000)}}
+	kt.Bookmarks = []abs.AudioBookmark{{LibraryItemId: "old", Time: 90, Title: "the stone"}}
+	ann.MediaProgress = []abs.MediaProgress{{LibraryItemId: "old", CurrentTime: 1440, Duration: 3600, Progress: 0.4, LastUpdate: at(1750000000000), StartedAt: at(1749000000000)}}
+	ann.Bookmarks = []abs.AudioBookmark{{LibraryItemId: "old", Time: 30, Title: "ann's"}, {LibraryItemId: "other", Time: 5, Title: "elsewhere"}}
 	// the book first in each, where a merge that only added it would leave it last
-	w.collections = []*api.Collection{{Id: "c1", LibraryId: libID, Name: "Card", Books: []api.LibraryItemExpanded{{Id: "old"}, {Id: "other"}}}}
-	w.playlists = []*api.Playlist{
-		{Id: "p-kt", LibraryId: libID, UserId: movedAdmin, Name: "Next", Items: []api.PlaylistItems{{LibraryItemId: "old"}, {LibraryItemId: "other"}}},
-		{Id: "p-ann", LibraryId: libID, UserId: movedAnn, Name: "Ann's queue", Items: []api.PlaylistItems{{LibraryItemId: "old"}, {LibraryItemId: "other"}}},
+	w.collections = []*abs.Collection{{Id: "c1", LibraryId: libID, Name: "Card", Books: []abs.LibraryItemExpanded{{Id: "old"}, {Id: "other"}}}}
+	w.playlists = []*abs.Playlist{
+		{Id: "p-kt", LibraryId: libID, UserId: movedAdmin, Name: "Next", Items: []abs.PlaylistItems{{LibraryItemId: "old"}, {LibraryItemId: "other"}}},
+		{Id: "p-ann", LibraryId: libID, UserId: movedAnn, Name: "Ann's queue", Items: []abs.PlaylistItems{{LibraryItemId: "old"}, {LibraryItemId: "other"}}},
 	}
 
 	return w, fresh
@@ -559,7 +559,7 @@ func TestIssuesMergePutsAMovedBookBackTogether(t *testing.T) {
 	if mergeProgressOn(bob, "new") != nil {
 		t.Error("bob, who never listened to it, has progress on it")
 	}
-	marks := func(u *api.UserForBrowser) (titles []string) {
+	marks := func(u *abs.UserForBrowser) (titles []string) {
 		for _, b := range u.Bookmarks {
 			if b.LibraryItemId == "new" {
 				titles = append(titles, b.Title)
@@ -574,7 +574,7 @@ func TestIssuesMergePutsAMovedBookBackTogether(t *testing.T) {
 	for _, b := range w.collections[0].Books {
 		shelf = append(shelf, string(b.Id))
 	}
-	queued := func(p *api.Playlist) (ids []string) {
+	queued := func(p *abs.Playlist) (ids []string) {
 		for _, e := range p.Items {
 			ids = append(ids, string(e.LibraryItemId))
 		}
@@ -619,7 +619,7 @@ func TestIssuesMergeKeepsARecordItCannotCarry(t *testing.T) {
 	t.Run("an open feed", func(t *testing.T) {
 		t.Parallel()
 		w, fresh := stonefather(t)
-		w.feeds = []api.Feed{{Id: "f1", EntityId: "old", Slug: "stonefather"}}
+		w.feeds = []abs.Feed{{Id: "f1", EntityId: "old", Slug: "stonefather"}}
 		for _, args := range []map[string]any{nil, {"confirm": true}} {
 			if _, why := kept(t, w, args); !strings.Contains(why, "an RSS feed is open on the old record") {
 				t.Errorf("kept = %q with %v", why, args)
@@ -684,7 +684,7 @@ func TestIssuesMergeLeavesACopyThatWasAlwaysThere(t *testing.T) {
 	old.LastScan = at(1790000000000) // found missing a year after the copy was added
 	standing := book("copy", "Orson Scott Card/Enchantment (Blackstone)", "Enchantment: A Novel", false, files)
 	w := newMovedLibrary(t, old, standing, book("other", "Orson Scott Card/Empire", "Empire", false, audio("Empire.m4b", 5000)))
-	w.user(movedAdmin).MediaProgress = []api.MediaProgress{{LibraryItemId: "old", CurrentTime: 600, Duration: 1800}}
+	w.user(movedAdmin).MediaProgress = []abs.MediaProgress{{LibraryItemId: "old", CurrentTime: 600, Duration: 1800}}
 	call := toolCaller(t, w.f)
 
 	out, err := call("library_issues_merge", map[string]any{"confirm": true})
@@ -732,11 +732,11 @@ func TestIssuesMergeCarriesTheOrderOfSeriesAndAuthors(t *testing.T) {
 
 	files := audio("Children of the Mind.m4b", 8000)
 	old := book("old", "Orson Scott Card/Children of the Mind", "Children of the Mind", true, files)
-	old.Media.Metadata.Series = []api.SeriesMinimal{{Name: "The Ender Saga", Sequence: "4"}, {Name: "The Enderverse", Sequence: "14"}}
-	old.Media.Metadata.Authors = []api.AuthorMinimal{{Name: "Orson Scott Card"}, {Name: "Aaron Johnston"}}
+	old.Media.Metadata.Series = []abs.SeriesMinimal{{Name: "The Ender Saga", Sequence: "4"}, {Name: "The Enderverse", Sequence: "14"}}
+	old.Media.Metadata.Authors = []abs.AuthorMinimal{{Name: "Orson Scott Card"}, {Name: "Aaron Johnston"}}
 	fresh := book("new", "Orson Scott Card/The Ender Saga - 04 - Children of the Mind", "Children of the Mind", false, files)
-	fresh.Media.Metadata.Series = []api.SeriesMinimal{{Name: "The Enderverse", Sequence: "14"}, {Name: "The Ender Saga", Sequence: "4"}}
-	fresh.Media.Metadata.Authors = []api.AuthorMinimal{{Name: "Aaron Johnston"}, {Name: "Orson Scott Card"}}
+	fresh.Media.Metadata.Series = []abs.SeriesMinimal{{Name: "The Enderverse", Sequence: "14"}, {Name: "The Ender Saga", Sequence: "4"}}
+	fresh.Media.Metadata.Authors = []abs.AuthorMinimal{{Name: "Aaron Johnston"}, {Name: "Orson Scott Card"}}
 	w := newMovedLibrary(t, old, fresh)
 	call := toolCaller(t, w.f)
 
@@ -771,7 +771,7 @@ func TestSameAudioFiles(t *testing.T) {
 	two := audio("a.mp3", 100, "b.mp3", 200)
 	for _, tc := range []struct {
 		name       string
-		old, fresh []api.AudioFile
+		old, fresh []abs.AudioFile
 		want       string
 	}{
 		{"the same files", two, audio("b.mp3", 200, "a.mp3", 100), "2 audio files of the same names and sizes"},
@@ -796,22 +796,22 @@ func TestSameAudioFiles(t *testing.T) {
 func TestSameProgress(t *testing.T) {
 	t.Parallel()
 
-	was := &api.MediaProgress{CurrentTime: 1200, IsFinished: true, FinishedAt: at(1711000000000)}
+	was := &abs.MediaProgress{CurrentTime: 1200, IsFinished: true, FinishedAt: at(1711000000000)}
 	for name, tc := range map[string]struct {
-		has  api.MediaProgress
+		has  abs.MediaProgress
 		same bool
 	}{
-		"as it was":              {api.MediaProgress{CurrentTime: 1200.4, IsFinished: true, FinishedAt: at(1711000000000)}, true},
-		"finished another day":   {api.MediaProgress{CurrentTime: 1200, IsFinished: true, FinishedAt: at(1790000000000)}, false},
-		"begun again":            {api.MediaProgress{CurrentTime: 1200}, false},
-		"somewhere else in it":   {api.MediaProgress{CurrentTime: 30, IsFinished: true, FinishedAt: at(1711000000000)}, false},
-		"off the shelf, wrongly": {api.MediaProgress{CurrentTime: 1200, IsFinished: true, FinishedAt: at(1711000000000), HideFromContinueListening: true}, false},
+		"as it was":              {abs.MediaProgress{CurrentTime: 1200.4, IsFinished: true, FinishedAt: at(1711000000000)}, true},
+		"finished another day":   {abs.MediaProgress{CurrentTime: 1200, IsFinished: true, FinishedAt: at(1790000000000)}, false},
+		"begun again":            {abs.MediaProgress{CurrentTime: 1200}, false},
+		"somewhere else in it":   {abs.MediaProgress{CurrentTime: 30, IsFinished: true, FinishedAt: at(1711000000000)}, false},
+		"off the shelf, wrongly": {abs.MediaProgress{CurrentTime: 1200, IsFinished: true, FinishedAt: at(1711000000000), HideFromContinueListening: true}, false},
 	} {
 		if got := sameProgress(was, &tc.has); got != tc.same {
 			t.Errorf("%s: sameProgress = %v, want %v", name, got, tc.same)
 		}
 	}
-	if !sameProgress(&api.MediaProgress{IsFinished: true}, &api.MediaProgress{IsFinished: true, FinishedAt: at(1790000000000)}) {
+	if !sameProgress(&abs.MediaProgress{IsFinished: true}, &abs.MediaProgress{IsFinished: true, FinishedAt: at(1790000000000)}) {
 		t.Error("a finish with no day recorded is never carried, as the server dates it on the way")
 	}
 }
@@ -821,15 +821,15 @@ func TestSameProgress(t *testing.T) {
 func TestMergeDetails(t *testing.T) {
 	t.Parallel()
 
-	whole := func(m api.LibraryItemExpandedMediaMetadata) *api.LibraryItemExpanded {
-		return &api.LibraryItemExpanded{Media: &api.LibraryItemExpandedMedia{Metadata: &m}}
+	whole := func(m abs.LibraryItemExpandedMediaMetadata) *abs.LibraryItemExpanded {
+		return &abs.LibraryItemExpanded{Media: &abs.LibraryItemExpandedMedia{Metadata: &m}}
 	}
-	if upd, names := mergeDetails(whole(api.LibraryItemExpandedMediaMetadata{}), whole(api.LibraryItemExpandedMediaMetadata{})); upd != nil || names != nil {
+	if upd, names := mergeDetails(whole(abs.LibraryItemExpandedMediaMetadata{}), whole(abs.LibraryItemExpandedMediaMetadata{})); upd != nil || names != nil {
 		t.Errorf("two records that agree = %v %v", upd, names)
 	}
 
-	old := whole(api.LibraryItemExpandedMediaMetadata{Title: "Stonefather", Narrators: []string{"Emily Janice Card"}, Authors: []api.AuthorMinimal{{Id: "a1", Name: "Orson Scott Card"}}})
-	fresh := whole(api.LibraryItemExpandedMediaMetadata{Title: "Mithermages", Subtitle: "00.5 - Stonefather", Narrators: []string{"Emily Janice Card"}, Authors: []api.AuthorMinimal{{Id: "a2", Name: "Orson Scott Card"}}, Genres: []string{"Fantasy"}})
+	old := whole(abs.LibraryItemExpandedMediaMetadata{Title: "Stonefather", Narrators: []string{"Emily Janice Card"}, Authors: []abs.AuthorMinimal{{Id: "a1", Name: "Orson Scott Card"}}})
+	fresh := whole(abs.LibraryItemExpandedMediaMetadata{Title: "Mithermages", Subtitle: "00.5 - Stonefather", Narrators: []string{"Emily Janice Card"}, Authors: []abs.AuthorMinimal{{Id: "a2", Name: "Orson Scott Card"}}, Genres: []string{"Fantasy"}})
 	fresh.Media.Tags = []string{"scanned"}
 	upd, names := mergeDetails(old, fresh)
 	if !slices.Equal(names, []string{"title", "subtitle", "genres", "tags"}) {

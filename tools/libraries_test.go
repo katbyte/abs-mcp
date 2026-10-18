@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // A share not mounted during a scan marks every book on it missing, and one
@@ -381,7 +381,7 @@ func TestBuildFilter(t *testing.T) {
 	f.json("GET /api/libraries/lib/authors", `{"results":[{"id":"a1","name":"Frank Herbert"}],"total":1}`)
 	f.json("GET /api/libraries/lib/series", `{"results":[{"id":"s1","name":"Dune"}],"total":1}`)
 	gen := f.gen(t)
-	lib := &api.Library{Id: "lib", Name: "Books"}
+	lib := &abs.Library{Id: "lib", Name: "Books"}
 	b64 := func(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) }
 
 	for _, tc := range []struct{ in, want string }{

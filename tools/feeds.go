@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -44,7 +44,7 @@ type feedRow struct {
 	URL   string `json:"url"`
 }
 
-func feedRowOf(f *api.Feed, address string) feedRow {
+func feedRowOf(f *abs.Feed, address string) feedRow {
 	kind := f.EntityType
 	if kind == "libraryItem" {
 		kind = "item"
@@ -57,7 +57,7 @@ func feedRowOf(f *api.Feed, address string) feedRow {
 }
 
 // feedPath is the url a feed keeps, which an older server wrote only in the feed's meta.
-func feedPath(f *api.Feed) string {
+func feedPath(f *abs.Feed) string {
 	if f.Meta == nil {
 		return f.FeedUrl
 	}
@@ -65,7 +65,7 @@ func feedPath(f *api.Feed) string {
 }
 
 // feeds are the RSS feeds the server is publishing.
-func feeds(ctx context.Context, gen *api.Client) ([]api.Feed, error) {
+func feeds(ctx context.Context, gen *abs.Client) ([]abs.Feed, error) {
 	all, err := record(gen.RSSFeedGetAll(ctx))
 	if err != nil {
 		return nil, err
@@ -165,7 +165,7 @@ func registerFeedTools(r *registry) {
 				return nil, editOut{}, fmt.Errorf("%q is a podcast: a link plays one book; open an RSS feed of the podcast instead", it.Title())
 			}
 			out := editOut{For: it.Title()}
-			shared, err := record(gen.LibraryItemFindOne(ctx, it.Id, api.LibraryItemFindOneOptions{Expanded: "1", Include: "share"}))
+			shared, err := record(gen.LibraryItemFindOne(ctx, it.Id, abs.LibraryItemFindOneOptions{Expanded: "1", Include: "share"}))
 			if err != nil {
 				return nil, editOut{}, err
 			}
@@ -189,7 +189,7 @@ func registerFeedTools(r *registry) {
 				expiresMs = time.Now().Add(time.Duration(in.ExpiresDays) * 24 * time.Hour).UnixMilli()
 			}
 			slug := cmp.Or(in.Slug, randomSlug())
-			made, err := record(gen.ShareCreateMediaItemShare(ctx, api.ShareCreateMediaItemShareRequest{MediaItemId: it.Media.Id, MediaItemType: api.MediaItemTypeBook, Slug: slug, ExpiresAt: int(expiresMs), IsDownloadable: &in.Downloadable}))
+			made, err := record(gen.ShareCreateMediaItemShare(ctx, abs.ShareCreateMediaItemShareRequest{MediaItemId: it.Media.Id, MediaItemType: abs.MediaItemTypeBook, Slug: slug, ExpiresAt: int(expiresMs), IsDownloadable: &in.Downloadable}))
 			if err != nil {
 				return nil, editOut{}, err
 			}
@@ -225,7 +225,7 @@ func registerFeedTools(r *registry) {
 		if err != nil {
 			return nil, editOut{}, err
 		}
-		var open []api.Feed
+		var open []abs.Feed
 		for _, f := range all {
 			if f.EntityId == id {
 				open = append(open, f)
@@ -250,22 +250,22 @@ func registerFeedTools(r *registry) {
 			return nil, out, nil
 		}
 		slug := cmp.Or(in.Slug, id)
-		if slices.ContainsFunc(all, func(f api.Feed) bool { return string(f.Id) == slug || f.Slug == slug }) {
+		if slices.ContainsFunc(all, func(f abs.Feed) bool { return string(f.Id) == slug || f.Slug == slug }) {
 			return nil, editOut{}, fmt.Errorf("another feed already has the slug %q: pass another", slug)
 		}
-		var feed *api.FeedMinified
+		var feed *abs.FeedMinified
 		switch kind {
 		case "item":
-			var got api.RSSFeedOpenRSSFeedForItemAnswer
-			got, err = record(gen.RSSFeedOpenRSSFeedForItem(ctx, api.LibraryItemID(id), api.RSSFeedOpenRSSFeedForItemRequest{Slug: slug, ServerAddress: address}))
+			var got abs.RSSFeedOpenRSSFeedForItemAnswer
+			got, err = record(gen.RSSFeedOpenRSSFeedForItem(ctx, abs.LibraryItemID(id), abs.RSSFeedOpenRSSFeedForItemRequest{Slug: slug, ServerAddress: address}))
 			feed = got.Feed
 		case "series":
-			var got api.RSSFeedOpenRSSFeedForSeriesAnswer
-			got, err = record(gen.RSSFeedOpenRSSFeedForSeries(ctx, api.SeriesID(id), api.RSSFeedOpenRSSFeedForSeriesRequest{Slug: slug, ServerAddress: address}))
+			var got abs.RSSFeedOpenRSSFeedForSeriesAnswer
+			got, err = record(gen.RSSFeedOpenRSSFeedForSeries(ctx, abs.SeriesID(id), abs.RSSFeedOpenRSSFeedForSeriesRequest{Slug: slug, ServerAddress: address}))
 			feed = got.Feed
 		default:
-			var got api.RSSFeedOpenRSSFeedForCollectionAnswer
-			got, err = record(gen.RSSFeedOpenRSSFeedForCollection(ctx, api.CollectionID(id), api.RSSFeedOpenRSSFeedForCollectionRequest{Slug: slug, ServerAddress: address}))
+			var got abs.RSSFeedOpenRSSFeedForCollectionAnswer
+			got, err = record(gen.RSSFeedOpenRSSFeedForCollection(ctx, abs.CollectionID(id), abs.RSSFeedOpenRSSFeedForCollectionRequest{Slug: slug, ServerAddress: address}))
 			feed = got.Feed
 		}
 		if err != nil {

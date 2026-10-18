@@ -19,6 +19,8 @@ var goTypesAt = []goTypeAt{
 	{"GET /api/logger-data 200 .currentDailyLogs", "ListOrEmpty[$item]"},
 	// FantLab.cleanBookData: publishedYear: work_year, the number FantLab sends, where every other provider writes text
 	{"GET /api/search/books 200 .[].publishedYear", "TextOrNumber"},
+	// the providers BookFinder searches write an id of their own kind: FantLab and iTunes a number, OpenLibrary text
+	{"GET /api/search/books 200 .[].id", "TextOrNumber"},
 }
 
 // goType is a type of the generated package's own, which the importer holds a value as in place of what its schema describes.

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/pointer"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -145,7 +145,7 @@ func containsWords(whole, part string) bool {
 // Author/Title, Author/Series/Title or Series/Title layout. A folder that
 // passes is then held to its year and to the series the record places it in.
 // This is the check with every rule on; a server runs registry.pathRules.
-func checkPath(it *api.LibraryItemMinified) (string, bool) {
+func checkPath(it *abs.LibraryItemMinified) (string, bool) {
 	return pathRules{series: true}.check(it)
 }
 
@@ -163,7 +163,7 @@ func (r *registry) pathRules() pathRules {
 	return pathRules{series: !r.skips(rulePathSeries)}
 }
 
-func (p pathRules) check(it *api.LibraryItemMinified) (string, bool) {
+func (p pathRules) check(it *abs.LibraryItemMinified) (string, bool) {
 	if it.IsPodcast() || it.RelPath == "" || pointer.From(it.IsFile) {
 		return "", false
 	}
@@ -258,7 +258,7 @@ var (
 // The Ringworld Engineers". A series the record gives no place in is left
 // alone: the stores list collections and imprints as series, and nobody
 // files by those.
-func checkPathSeries(rel string, m *api.LibraryItemMinifiedMediaMetadata) (string, bool) {
+func checkPathSeries(rel string, m *abs.LibraryItemMinifiedMediaMetadata) (string, bool) {
 	placed := placedSeries(m)
 	if len(placed) == 0 {
 		return "", false
@@ -318,7 +318,7 @@ func pathSeriesName(s string) string {
 // ("Creatures, Crystals and Dragons #1"), so a part with no place is taken
 // for the start of the name after it. A list filtered by series sends that
 // one apart.
-func placedSeries(m *api.LibraryItemMinifiedMediaMetadata) []string {
+func placedSeries(m *abs.LibraryItemMinifiedMediaMetadata) []string {
 	var out []string
 	if s := m.Series; s != nil {
 		if strings.TrimSpace(s.Name) != "" && s.Sequence != "" {
@@ -342,7 +342,7 @@ func placedSeries(m *api.LibraryItemMinifiedMediaMetadata) []string {
 
 // pathNamesAuthor reports whether a folder above a book is one of its
 // authors', written either way round.
-func pathNamesAuthor(folder string, m *api.LibraryItemMinifiedMediaMetadata) bool {
+func pathNamesAuthor(folder string, m *abs.LibraryItemMinifiedMediaMetadata) bool {
 	np := pathWords(folder)
 	for a := range strings.SplitSeq(m.AuthorDisplay(), ",") {
 		if na := pathWords(a); na != "" && np != "" && (strings.Contains(np, na) || strings.Contains(na, np) || lastFirstMatch(np, na)) {
@@ -365,7 +365,7 @@ var (
 // recording's, and either way the recording cannot be older: an earlier year
 // is another book or an older edition matched, or a year mistyped. A later
 // year is what a first printing's folder looks like, so it is not reported.
-func checkPathYear(base string, m *api.LibraryItemMinifiedMediaMetadata) (string, bool) {
+func checkPathYear(base string, m *abs.LibraryItemMinifiedMediaMetadata) (string, bool) {
 	have := m.PublishedYear
 	if len(have) < 4 || !pathYearWhole.MatchString(have[:4]) {
 		return "", false
@@ -469,7 +469,7 @@ func registerPathAudit(r *registry) {
 // sweepPath runs the folder check over a library and, with files, the
 // filename check over every book the folder check cleared: a book already
 // reported for its folder is not reported again for its files.
-func sweepPath(ctx context.Context, gen *api.Client, lib *api.Library, check auditCheck, files bool, limit int, out *auditOut) error {
+func sweepPath(ctx context.Context, gen *abs.Client, lib *abs.Library, check auditCheck, files bool, limit int, out *auditOut) error {
 	if lib.IsPodcast() {
 		return nil
 	}
@@ -480,8 +480,8 @@ func sweepPath(ctx context.Context, gen *api.Client, lib *api.Library, check aud
 		}
 	}
 
-	var ids []api.LibraryItemID
-	if err := eachItem(ctx, gen, lib.Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+	var ids []abs.LibraryItemID
+	if err := eachItem(ctx, gen, lib.Id, abs.LibraryGetLibraryItemsOptions{}, func(it *abs.LibraryItemMinified) bool {
 		out.Scanned++
 		if detail, suspect := check(it); suspect {
 			report(finding(it, detail))
@@ -578,7 +578,7 @@ func fileKey(s string) string {
 // checkFiles flags a book whose audio files are named for something other
 // than the book: a single file by its own name, a folder of tracks by the
 // name they share. Tracks that share nothing but numbers are not judged.
-func checkFiles(it *api.LibraryItemExpanded) (string, bool) {
+func checkFiles(it *abs.LibraryItemExpanded) (string, bool) {
 	files := it.Media.AudioFiles
 	if it.IsPodcast() || len(files) == 0 {
 		return "", false

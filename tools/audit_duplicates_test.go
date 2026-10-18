@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // A matched copy and the unmatched copy scanned in beside it share a title
@@ -75,14 +75,14 @@ func TestDuplicatesJoinACopyByAnyKey(t *testing.T) {
 func TestDuplicatesKeepTwoReadingsApart(t *testing.T) {
 	t.Parallel()
 
-	book := func(id, narrator string) *api.LibraryItemMinified {
+	book := func(id, narrator string) *abs.LibraryItemMinified {
 		it := shortBook(id, "", "")
 		it.Media.Metadata.Title = "Wyrd Sisters"
 		it.Media.Metadata.AuthorName = "Terry Pratchett"
 		it.Media.Metadata.NarratorName = narrator
 		return it
 	}
-	groupsOf := func(items ...*api.LibraryItemMinified) [][]string {
+	groupsOf := func(items ...*abs.LibraryItemMinified) [][]string {
 		d := newDupCollector()
 		for _, it := range items {
 			d.add(it)
@@ -116,7 +116,7 @@ func TestDuplicatesKeepTwoReadingsApart(t *testing.T) {
 func TestDuplicatesKeepBooksOfASeriesApart(t *testing.T) {
 	t.Parallel()
 
-	honor := func(id, path string, seconds float64) *api.LibraryItemMinified {
+	honor := func(id, path string, seconds float64) *abs.LibraryItemMinified {
 		it := shortBook(id, "Radclyffe/"+path, "")
 		it.Media.Metadata.Title = "Honor"
 		it.Media.Metadata.AuthorName = "Radclyffe"
@@ -124,7 +124,7 @@ func TestDuplicatesKeepBooksOfASeriesApart(t *testing.T) {
 		return it
 	}
 	d := newDupCollector()
-	for _, it := range []*api.LibraryItemMinified{
+	for _, it := range []*abs.LibraryItemMinified{
 		honor("1", "Honor - 01 - Above All", 30000),
 		honor("2", "Honor - 02 - Honor Bound", 31000),
 		honor("2b", "Honor - 02 - Honor Bound (single file)", 31020),
@@ -157,7 +157,7 @@ func TestDuplicatesKeepBooksOfASeriesApart(t *testing.T) {
 func TestDuplicatesGroupByTheBookNotItsNumber(t *testing.T) {
 	t.Parallel()
 
-	book := func(id, path, title string, seconds float64, series ...string) *api.LibraryItemMinified {
+	book := func(id, path, title string, seconds float64, series ...string) *abs.LibraryItemMinified {
 		it := shortBook(id, path, "")
 		it.Media.Metadata.Title = title
 		it.Media.Metadata.AuthorName = "Terry Pratchett"
@@ -165,7 +165,7 @@ func TestDuplicatesGroupByTheBookNotItsNumber(t *testing.T) {
 		it.Media.Duration = seconds
 		return it
 	}
-	groupsOf := func(items ...*api.LibraryItemMinified) [][]string {
+	groupsOf := func(items ...*abs.LibraryItemMinified) [][]string {
 		d := newDupCollector()
 		for _, it := range items {
 			d.add(it)
@@ -197,7 +197,7 @@ func TestDuplicatesGroupByTheBookNotItsNumber(t *testing.T) {
 	}
 	// copies joined by an isbn, two with their own asins: the same group
 	// whichever the listing gives first
-	isbn := func(id, asin string) *api.LibraryItemMinified {
+	isbn := func(id, asin string) *abs.LibraryItemMinified {
 		it := book(id, "Terry Pratchett/Small Gods "+id, "Small Gods "+id, 30000)
 		it.Media.Metadata.Isbn, it.Media.Metadata.Asin = "9780552152976", asin
 		return it
@@ -218,7 +218,7 @@ func TestDuplicatesGroupByTheBookNotItsNumber(t *testing.T) {
 func TestDuplicatesReadTheReaderInBrackets(t *testing.T) {
 	t.Parallel()
 
-	book := func(id, path string, seconds float64, narrator string) *api.LibraryItemMinified {
+	book := func(id, path string, seconds float64, narrator string) *abs.LibraryItemMinified {
 		it := shortBook(id, path, "")
 		it.Media.Metadata.Title = "Starship Troopers"
 		it.Media.Metadata.AuthorName = "Robert A. Heinlein"
@@ -226,7 +226,7 @@ func TestDuplicatesReadTheReaderInBrackets(t *testing.T) {
 		it.Media.Duration = seconds
 		return it
 	}
-	groupsOf := func(items ...*api.LibraryItemMinified) int {
+	groupsOf := func(items ...*abs.LibraryItemMinified) int {
 		d := newDupCollector()
 		for _, it := range items {
 			d.add(it)

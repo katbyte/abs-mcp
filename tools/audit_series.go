@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -136,7 +136,7 @@ func articleSeriesName(name string, titles []string) string {
 // list and, when asked, the articles list, from the listing alone, and
 // records whose series each name is and that the listing had it (listed,
 // by listedKey). Podcast libraries have no series.
-func seriesNames(ctx context.Context, gen *api.Client, lib *api.Library, out *seriesOut, names spellingCounts, authors map[string]string, listed map[string]bool, articles bool) error {
+func seriesNames(ctx context.Context, gen *abs.Client, lib *abs.Library, out *seriesOut, names spellingCounts, authors map[string]string, listed map[string]bool, articles bool) error {
 	if lib.IsPodcast() {
 		return nil
 	}
@@ -186,7 +186,7 @@ func listedKey(library, name string) string {
 // series is where a stray name most often sits. An odd one needs its id for
 // series_edit, which the listing would have carried: one of its books is
 // fetched for it when the sweep only had the name.
-func unlistedSeries(ctx context.Context, gen *api.Client, coll *numberingCollector, listed map[string]bool, out *seriesOut, names spellingCounts, authors map[string]string, articles bool) error {
+func unlistedSeries(ctx context.Context, gen *abs.Client, coll *numberingCollector, listed map[string]bool, out *seriesOut, names spellingCounts, authors map[string]string, articles bool) error {
 	type unlisted struct {
 		name, id, author, lookup string
 		titles                   []string
@@ -219,7 +219,7 @@ func unlistedSeries(ctx context.Context, gen *api.Client, coll *numberingCollect
 		article  string
 	}
 	var rows []row
-	var lookups []api.LibraryItemID
+	var lookups []abs.LibraryItemID
 	for _, key := range order {
 		u := found[key]
 		names.addValue("series", u.name, len(u.titles))
@@ -235,7 +235,7 @@ func unlistedSeries(ctx context.Context, gen *api.Client, coll *numberingCollect
 			continue
 		}
 		rows = append(rows, r)
-		if lookup := api.LibraryItemID(u.lookup); u.id == "" && !slices.Contains(lookups, lookup) {
+		if lookup := abs.LibraryItemID(u.lookup); u.id == "" && !slices.Contains(lookups, lookup) {
 			lookups = append(lookups, lookup)
 		}
 	}
@@ -376,7 +376,7 @@ func registerSeriesAudit(r *registry) {
 			if libs[i].IsPodcast() {
 				continue
 			}
-			if err := eachItem(ctx, gen, libs[i].Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+			if err := eachItem(ctx, gen, libs[i].Id, abs.LibraryGetLibraryItemsOptions{}, func(it *abs.LibraryItemMinified) bool {
 				out.Items++
 				numbering.add(it)
 				return true

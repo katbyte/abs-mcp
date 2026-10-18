@@ -4744,6 +4744,10 @@
                     "type": "string",
                     "nullable": true
                   },
+                  "mediaType": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "name": {
                     "type": "string"
                   },
@@ -9965,7 +9969,11 @@
                           "type": "string"
                         }
                       },
-                      "id": {},
+                      "id": {
+                        "x-go-type": {
+                          "name": "TextOrNumber"
+                        }
+                      },
                       "isbn": {
                         "type": "string"
                       },
@@ -10002,9 +10010,6 @@
                         "items": {
                           "type": "object",
                           "properties": {
-                            "name": {
-                              "type": "string"
-                            },
                             "sequence": {
                               "type": "string"
                             },
@@ -12795,285 +12800,21 @@
                       "items": {
                         "type": "object",
                         "properties": {
-                          "bookmarks": {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "properties": {
-                                "createdAt": {
-                                  "type": "integer"
-                                },
-                                "libraryItemId": {
-                                  "type": "string"
-                                },
-                                "time": {
-                                  "type": "number"
-                                },
-                                "title": {
-                                  "type": "string"
-                                }
-                              }
-                            }
-                          },
                           "connections": {
                             "type": "integer"
                           },
                           "createdAt": {
                             "type": "integer"
                           },
-                          "email": {
-                            "type": "string"
-                          },
-                          "hasOpenIDLink": {
-                            "type": "boolean"
-                          },
                           "id": {
                             "type": "string"
                           },
-                          "isActive": {
-                            "type": "boolean"
-                          },
-                          "isLocked": {
-                            "type": "boolean"
-                          },
-                          "itemTagsSelected": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
-                          },
                           "lastSeen": {
-                            "type": "integer"
+                            "type": "integer",
+                            "nullable": true
                           },
-                          "latestSession": {
-                            "type": "object",
-                            "nullable": true,
-                            "properties": {
-                              "bookId": {
-                                "type": "string"
-                              },
-                              "coverPath": {
-                                "type": "string"
-                              },
-                              "currentTime": {
-                                "type": "number"
-                              },
-                              "date": {
-                                "type": "string"
-                              },
-                              "dayOfWeek": {
-                                "type": "string"
-                              },
-                              "deviceInfo": {
-                                "type": "object",
-                                "nullable": true,
-                                "properties": {
-                                  "browserName": {
-                                    "type": "string"
-                                  },
-                                  "browserVersion": {
-                                    "type": "string"
-                                  },
-                                  "clientName": {
-                                    "type": "string"
-                                  },
-                                  "clientVersion": {
-                                    "type": "string"
-                                  },
-                                  "deviceId": {
-                                    "type": "string"
-                                  },
-                                  "deviceName": {
-                                    "type": "string"
-                                  },
-                                  "deviceType": {
-                                    "type": "string"
-                                  },
-                                  "id": {
-                                    "type": "string"
-                                  },
-                                  "ipAddress": {
-                                    "type": "string"
-                                  },
-                                  "manufacturer": {
-                                    "type": "string"
-                                  },
-                                  "model": {
-                                    "type": "string"
-                                  },
-                                  "osName": {
-                                    "type": "string"
-                                  },
-                                  "osVersion": {
-                                    "type": "string"
-                                  },
-                                  "sdkVersion": {
-                                    "type": "string"
-                                  }
-                                }
-                              },
-                              "displayAuthor": {
-                                "type": "string"
-                              },
-                              "displayTitle": {
-                                "type": "string"
-                              },
-                              "duration": {
-                                "type": "number"
-                              },
-                              "episodeId": {
-                                "type": "string"
-                              },
-                              "id": {
-                                "type": "string"
-                              },
-                              "libraryId": {
-                                "type": "string"
-                              },
-                              "libraryItemId": {
-                                "type": "string"
-                              },
-                              "mediaMetadata": {},
-                              "mediaPlayer": {
-                                "type": "string"
-                              },
-                              "mediaType": {
-                                "type": "string"
-                              },
-                              "playMethod": {
-                                "type": "integer"
-                              },
-                              "serverVersion": {
-                                "type": "string"
-                              },
-                              "startTime": {
-                                "type": "number"
-                              },
-                              "startedAt": {
-                                "type": "integer"
-                              },
-                              "timeListening": {
-                                "type": "number"
-                              },
-                              "updatedAt": {
-                                "type": "integer"
-                              },
-                              "user": {
-                                "type": "object",
-                                "nullable": true,
-                                "properties": {
-                                  "id": {
-                                    "type": "string"
-                                  },
-                                  "name": {
-                                    "type": "string"
-                                  }
-                                }
-                              },
-                              "userId": {
-                                "type": "string"
-                              }
-                            }
-                          },
-                          "librariesAccessible": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
-                          },
-                          "mediaProgress": {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "properties": {
-                                "currentTime": {
-                                  "type": "number"
-                                },
-                                "duration": {
-                                  "type": "number"
-                                },
-                                "ebookLocation": {
-                                  "type": "string"
-                                },
-                                "ebookProgress": {
-                                  "type": "number"
-                                },
-                                "episodeId": {
-                                  "type": "string"
-                                },
-                                "finishedAt": {
-                                  "type": "integer"
-                                },
-                                "hideFromContinueListening": {
-                                  "type": "boolean"
-                                },
-                                "id": {
-                                  "type": "string"
-                                },
-                                "isFinished": {
-                                  "type": "boolean"
-                                },
-                                "lastUpdate": {
-                                  "type": "integer"
-                                },
-                                "libraryItemId": {
-                                  "type": "string"
-                                },
-                                "mediaItemId": {
-                                  "type": "string"
-                                },
-                                "mediaItemType": {
-                                  "type": "string"
-                                },
-                                "progress": {
-                                  "type": "number"
-                                },
-                                "startedAt": {
-                                  "type": "integer"
-                                },
-                                "userId": {
-                                  "type": "string"
-                                }
-                              }
-                            }
-                          },
-                          "permissions": {
-                            "type": "object",
-                            "properties": {
-                              "accessAllLibraries": {
-                                "type": "boolean"
-                              },
-                              "accessAllTags": {
-                                "type": "boolean"
-                              },
-                              "accessExplicitContent": {
-                                "type": "boolean"
-                              },
-                              "createEreader": {
-                                "type": "boolean"
-                              },
-                              "delete": {
-                                "type": "boolean"
-                              },
-                              "download": {
-                                "type": "boolean"
-                              },
-                              "selectedTagsNotAccessible": {
-                                "type": "boolean"
-                              },
-                              "update": {
-                                "type": "boolean"
-                              },
-                              "upload": {
-                                "type": "boolean"
-                              }
-                            }
-                          },
-                          "seriesHideFromContinueListening": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
+                          "session": {
+                            "$ref": "#/components/schemas/PlaybackSessionForClient"
                           },
                           "type": {
                             "type": "string"
@@ -16016,12 +15757,6 @@
             "type": "string",
             "nullable": true
           },
-          "authorName": {
-            "type": "string"
-          },
-          "authorNameLF": {
-            "type": "string"
-          },
           "authors": {
             "type": "array",
             "items": {
@@ -16031,9 +15766,6 @@
           "description": {
             "type": "string",
             "nullable": true
-          },
-          "descriptionPlain": {
-            "type": "string"
           },
           "explicit": {
             "type": "boolean",
@@ -16073,9 +15805,6 @@
             "type": "string",
             "nullable": true
           },
-          "narratorName": {
-            "type": "string"
-          },
           "narrators": {
             "type": "array",
             "items": {
@@ -16103,9 +15832,6 @@
             "items": {
               "$ref": "#/components/schemas/SeriesMinimal"
             }
-          },
-          "seriesName": {
-            "type": "string"
           },
           "subtitle": {
             "type": "string",
@@ -16258,7 +15984,15 @@
               "isbn": {
                 "type": "string"
               },
+              "itunesArtistId": {
+                "type": "string",
+                "nullable": true
+              },
               "itunesId": {
+                "type": "string",
+                "nullable": true
+              },
+              "itunesPageUrl": {
                 "type": "string",
                 "nullable": true
               },
@@ -16656,9 +16390,6 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "string"
-          },
-          "name": {
             "type": "string"
           },
           "username": {

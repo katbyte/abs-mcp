@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // The numbering section of audit_series: does each book's series number agree
@@ -86,11 +86,11 @@ func seriesKey(name string) string {
 type numberedItem struct {
 	ID, Title, RelPath string
 	LibraryID, Author  string
-	Series             []api.SeriesMinimal
+	Series             []abs.SeriesMinimal
 }
 
 // numberedOf is an item as the numbering checks read it, with its series.
-func numberedOf(it *api.LibraryItemMinified, series []api.SeriesMinimal) numberedItem {
+func numberedOf(it *abs.LibraryItemMinified, series []abs.SeriesMinimal) numberedItem {
 	return numberedItem{ID: string(it.Id), Title: it.Title(), RelPath: it.RelPath, LibraryID: string(it.LibraryId), Author: it.Media.Metadata.AuthorDisplay(), Series: series}
 }
 
@@ -100,7 +100,7 @@ type numberingCollector struct {
 	names   map[string]string           // series key -> a display name, from the items' own series
 	seqs    map[string]map[float64]bool // series key -> every number present, across every spelling of the key
 	widths  map[string]int              // series key -> how many digits it pads to, worked out once
-	pending []api.LibraryItemID         // items whose series the listing cannot tell apart, for resolve
+	pending []abs.LibraryItemID         // items whose series the listing cannot tell apart, for resolve
 }
 
 func newNumberingCollector() *numberingCollector {
@@ -174,18 +174,18 @@ func (c *numberingCollector) styleNumber(seriesKey, number string) string {
 // the minified listing carries otherwise. The joined string cannot tell
 // "Love, Death & Robots #2" from two series; seriesAmbiguous says when to
 // fetch the item instead.
-func seriesRefsOf(it *api.LibraryItemMinified) []api.SeriesMinimal {
+func seriesRefsOf(it *abs.LibraryItemMinified) []abs.SeriesMinimal {
 	m := it.Media.Metadata
 	if m.Series != nil {
-		return []api.SeriesMinimal{*m.Series}
+		return []abs.SeriesMinimal{*m.Series}
 	}
-	var refs []api.SeriesMinimal
+	var refs []abs.SeriesMinimal
 	for part := range strings.SplitSeq(m.SeriesName, ", ") {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
 		}
-		ref := api.SeriesMinimal{Name: part}
+		ref := abs.SeriesMinimal{Name: part}
 		if i := strings.LastIndex(part, " #"); i > 0 {
 			ref.Name, ref.Sequence = strings.TrimSpace(part[:i]), strings.TrimSpace(part[i+2:])
 		}
@@ -199,7 +199,7 @@ func seriesRefsOf(it *api.LibraryItemMinified) []api.SeriesMinimal {
 // character a series name may hold. "Foundation #2, Robot #9" is two
 // numbered series; "Love, Death & Robots #2" has a part with no number,
 // which is either an unnumbered series or the front of a name.
-func seriesAmbiguous(it *api.LibraryItemMinified) bool {
+func seriesAmbiguous(it *abs.LibraryItemMinified) bool {
 	m := it.Media.Metadata
 	if m.Series != nil || !strings.Contains(m.SeriesName, ", ") {
 		return false
@@ -214,7 +214,7 @@ func seriesAmbiguous(it *api.LibraryItemMinified) bool {
 
 // add gathers one item from the sweep. One whose series string is
 // ambiguous is held back for resolve, which fetches it.
-func (c *numberingCollector) add(it *api.LibraryItemMinified) {
+func (c *numberingCollector) add(it *abs.LibraryItemMinified) {
 	if it.IsPodcast() {
 		return
 	}
@@ -247,7 +247,7 @@ func (c *numberingCollector) addRefs(n numberedItem) {
 // their series from the record, where each is its own entry. Most books are
 // in one series, or in several with a number in each, so this is a handful
 // of requests.
-func (c *numberingCollector) resolve(ctx context.Context, gen *api.Client) error {
+func (c *numberingCollector) resolve(ctx context.Context, gen *abs.Client) error {
 	pending := c.pending
 	c.pending = nil
 	for chunk := range slices.Chunk(pending, embedBatchSize) {
@@ -302,7 +302,7 @@ func (c *numberingCollector) findings() []numberingFinding {
 			continue
 		}
 		// the series the folder points at, if the item is in it
-		var inFolderSeries *api.SeriesMinimal
+		var inFolderSeries *abs.SeriesMinimal
 		for i := range it.Series {
 			if seriesKey(it.Series[i].Name) == folderKey {
 				inFolderSeries = &it.Series[i]

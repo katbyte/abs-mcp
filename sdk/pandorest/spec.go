@@ -81,10 +81,8 @@ type schema struct {
 	// Values is what each key of a map keyed by data holds, such as listening time by day, written as the document's additionalProperties
 	Values *schema `json:"-"`
 
-	// whole is set on a number typed from answers that were all whole, which the hand-written client may settle as a whole number
+	// whole is set on a number typed from answers that were all whole, which the names of whole numbers settle as a whole number
 	whole bool
-	// sampled is set on a record typed from answers, which show only the fields that happened to be sent, so the hand-written client may add more
-	sampled bool
 	// written is set on a whole number the source writes out, such as the 0 of total = 0, which says nothing of what the value takes elsewhere
 	written bool
 	// unseen is set on a record a stated place made where the scan saw nothing of it, which the answers fill as freely as one with no fields
@@ -143,13 +141,12 @@ func spec(args []string, dir string, w io.Writer) error {
 	fs := flag.NewFlagSet("spec", flag.ContinueOnError)
 	verbose := fs.Bool("v", false, "list every operation and how much of its answer is typed")
 	trace := fs.String("trace", "", "print what the scan works out for the handlers named, such as LibraryController.stats")
-	client := fs.String("client", "sdk/abs-byhand", "the hand-written client, whose types fill what the source leaves untyped; empty for none")
 	answerFlag := fs.String("answers", "", "a folder of answers saved from a real server by the live suites, which fill and correct the document; empty for <dir>/audiobookshelf-<version>/answers")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return errors.New("usage: go run ./sdk/pandorest spec [-v] [-answers dir] [-client dir] <audiobookshelf checkout>")
+		return errors.New("usage: go run ./sdk/pandorest spec [-v] [-answers dir] <audiobookshelf checkout>")
 	}
 
 	root, err := checkout(fs.Arg(0))
@@ -190,17 +187,13 @@ func spec(args []string, dir string, w io.Writer) error {
 	}
 	// a number the answers only showed whole is a whole number where its name says it is one
 	wholes := settleWhole(doc, wholeNumbers)
-
-	// what is still untyped, the hand-written client may type: it is proved against a running server
-	var hand *byhand
-	if *client != "" {
-		if hand, err = readClient(os.DirFS(*client), "."); err != nil {
-			return fmt.Errorf("reading the hand-written client: %w", err)
-		}
-		hand.fill(doc)
+	// what is still untyped, the source says by means the scan cannot follow
+	unvalued, valuedAlready, err := applyValues(doc, valuesAt)
+	if err != nil {
+		return err
 	}
 
-	// once the answers and the client have had their say, each fixed set of values becomes a record of its own, for a type of constants
+	// once the answers and the stated values have had their say, each fixed set of values becomes a record of its own, for a type of constants
 	if err := nameEnums(doc, enumNames); err != nil {
 		return err
 	}
@@ -249,6 +242,13 @@ func spec(args []string, dir string, w io.Writer) error {
 	for _, r := range unfound {
 		_, _ = fmt.Fprintln(w, "  no place for the record stated at", r)
 	}
+	_, _ = fmt.Fprintf(w, "  values stated        %4d   %d written\n", len(valuesAt), len(valuesAt)-len(unvalued)-len(valuedAlready))
+	for _, v := range unvalued {
+		_, _ = fmt.Fprintln(w, "  no place for the value stated at", v)
+	}
+	for _, v := range valuedAlready {
+		_, _ = fmt.Fprintln(w, "  typed already, so no longer to be stated:", v)
+	}
 	_, _ = fmt.Fprintf(w, "  types stated          %4d   %d written\n", len(goTypesAt), len(goTypesAt)-len(untyped))
 	for _, g := range untyped {
 		_, _ = fmt.Fprintln(w, "  no place for the type stated at", g)
@@ -280,9 +280,6 @@ func spec(args []string, dir string, w io.Writer) error {
 	_, _ = fmt.Fprintf(w, "  whole by name         %4d   numbers the answers showed whole, under %d names\n", wholes, len(wholeNumbers))
 	if heard != nil {
 		heard.write(w, answerDir, *verbose)
-	}
-	if hand != nil {
-		hand.write(w, *client, *verbose)
 	}
 	_, _ = fmt.Fprintln(w, "wrote", out)
 
@@ -355,7 +352,7 @@ func build(prog *program, version, trace string, w io.Writer) (doc *document, b 
 	return doc, b, routes
 }
 
-// measure is how much of a document is typed, once the hand-written client has filled what it can.
+// measure is how much of a document is typed, once the answers and the stated values have filled what they can.
 func measure(doc *document, b *builder, routes int) *report {
 	rep := &report{routes: routes}
 	for _, p := range sortedKeys(doc.Paths) {

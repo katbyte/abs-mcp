@@ -12,7 +12,7 @@ import (
 	"sync"
 	"testing"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // serveNamed answers a paged author or series listing of n records named
@@ -892,9 +892,9 @@ func seriesRoutes(f *fakeABS) {
 	}
 	f.mux.HandleFunc("GET /api/libraries/"+libID+"/items", func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Query().Get("filter") {
-		case api.ListFilter("series", seriesA):
+		case abs.ListFilter("series", seriesA):
 			_, _ = io.WriteString(w, page(collapsed("i3", "Oathbringer", seriesA, "Stormlight Archive", "3")))
-		case api.ListFilter("series", seriesB):
+		case abs.ListFilter("series", seriesB):
 			_, _ = io.WriteString(w, page(
 				collapsed("i2", "Words of Radiance", seriesB, "The Stormlight Archive", "2"),
 				collapsed("i4", "Rhythm of War", seriesB, "The Stormlight Archive", "4"),
@@ -974,23 +974,23 @@ func TestSeriesMergeKeepsNumbersAndOtherSeries(t *testing.T) {
 		ID      string `json:"id"`
 		Payload struct {
 			Metadata struct {
-				Series []api.SeriesMinimal `json:"series"`
+				Series []abs.SeriesMinimal `json:"series"`
 			} `json:"metadata"`
 		} `json:"mediaPayload"`
 	}
 	if err := json.Unmarshal([]byte(sent[0].Body), &updates); err != nil {
 		t.Fatal(err, sent[0].Body)
 	}
-	got := map[string][]api.SeriesMinimal{}
+	got := map[string][]abs.SeriesMinimal{}
 	for _, u := range updates {
 		got[u.ID] = u.Payload.Metadata.Series
 	}
 	// Words of Radiance: the old entry becomes the target in its place with its number, Cosmere stays
-	if want := []api.SeriesMinimal{{Name: "Stormlight Archive", Sequence: "2"}, {Id: "c", Name: "Cosmere"}}; !slices.Equal(got["i2"], want) {
+	if want := []abs.SeriesMinimal{{Name: "Stormlight Archive", Sequence: "2"}, {Id: "c", Name: "Cosmere"}}; !slices.Equal(got["i2"], want) {
 		t.Errorf("i2 series = %v, want %v", got["i2"], want)
 	}
 	// Rhythm of War was already in the target without a number: it takes the one it had
-	if want := []api.SeriesMinimal{{Id: "c", Name: "Cosmere"}, {Id: seriesA, Name: "Stormlight Archive", Sequence: "4"}}; !slices.Equal(got["i4"], want) {
+	if want := []abs.SeriesMinimal{{Id: "c", Name: "Cosmere"}, {Id: seriesA, Name: "Stormlight Archive", Sequence: "4"}}; !slices.Equal(got["i4"], want) {
 		t.Errorf("i4 series = %v, want %v", got["i4"], want)
 	}
 
@@ -1056,17 +1056,17 @@ func TestSeriesListDefaultsToEveryBookLibrary(t *testing.T) {
 func TestMergeSeriesRefs(t *testing.T) {
 	t.Parallel()
 
-	from := &api.Series{Id: "f", Name: "The Wheel of Time"}
-	into := &api.Series{Id: "i", Name: "Wheel of Time"}
+	from := &abs.Series{Id: "f", Name: "The Wheel of Time"}
+	into := &abs.Series{Id: "i", Name: "Wheel of Time"}
 	for _, tc := range []struct {
 		name string
-		have []api.SeriesMinimal
-		want []api.SeriesMinimal
+		have []abs.SeriesMinimal
+		want []abs.SeriesMinimal
 	}{
-		{"moves the number", []api.SeriesMinimal{{Id: "f", Name: "The Wheel of Time", Sequence: "5"}}, []api.SeriesMinimal{{Name: "Wheel of Time", Sequence: "5"}}},
-		{"keeps the rest", []api.SeriesMinimal{{Name: "Cosmere"}, {Name: "the wheel of time", Sequence: "5"}}, []api.SeriesMinimal{{Name: "Cosmere"}, {Name: "Wheel of Time", Sequence: "5"}}},
-		{"already in both, target numbered", []api.SeriesMinimal{{Id: "f", Name: "The Wheel of Time", Sequence: "5"}, {Id: "i", Name: "Wheel of Time", Sequence: "6"}}, []api.SeriesMinimal{{Id: "i", Name: "Wheel of Time", Sequence: "6"}}},
-		{"already in both, target unnumbered", []api.SeriesMinimal{{Id: "i", Name: "Wheel of Time"}, {Id: "f", Name: "The Wheel of Time", Sequence: "5"}}, []api.SeriesMinimal{{Id: "i", Name: "Wheel of Time", Sequence: "5"}}},
+		{"moves the number", []abs.SeriesMinimal{{Id: "f", Name: "The Wheel of Time", Sequence: "5"}}, []abs.SeriesMinimal{{Name: "Wheel of Time", Sequence: "5"}}},
+		{"keeps the rest", []abs.SeriesMinimal{{Name: "Cosmere"}, {Name: "the wheel of time", Sequence: "5"}}, []abs.SeriesMinimal{{Name: "Cosmere"}, {Name: "Wheel of Time", Sequence: "5"}}},
+		{"already in both, target numbered", []abs.SeriesMinimal{{Id: "f", Name: "The Wheel of Time", Sequence: "5"}, {Id: "i", Name: "Wheel of Time", Sequence: "6"}}, []abs.SeriesMinimal{{Id: "i", Name: "Wheel of Time", Sequence: "6"}}},
+		{"already in both, target unnumbered", []abs.SeriesMinimal{{Id: "i", Name: "Wheel of Time"}, {Id: "f", Name: "The Wheel of Time", Sequence: "5"}}, []abs.SeriesMinimal{{Id: "i", Name: "Wheel of Time", Sequence: "5"}}},
 	} {
 		if got := mergeSeriesRefs(tc.have, from, into); !slices.Equal(got, tc.want) {
 			t.Errorf("%s: got %v, want %v", tc.name, got, tc.want)
@@ -1075,19 +1075,19 @@ func TestMergeSeriesRefs(t *testing.T) {
 
 	// two records whose names differ only by a space: each entry goes by its
 	// id, so the book keeps the tidy series once, with its own number
-	spaced, tidy := &api.Series{Id: "sp", Name: "Mistborn "}, &api.Series{Id: "ti", Name: "Mistborn"}
-	have := []api.SeriesMinimal{{Id: "sp", Name: "Mistborn ", Sequence: "1"}, {Id: "ti", Name: "Mistborn", Sequence: "3"}}
-	if got, want := mergeSeriesRefs(have, spaced, tidy), []api.SeriesMinimal{{Id: "ti", Name: "Mistborn", Sequence: "3"}}; !slices.Equal(got, want) {
+	spaced, tidy := &abs.Series{Id: "sp", Name: "Mistborn "}, &abs.Series{Id: "ti", Name: "Mistborn"}
+	have := []abs.SeriesMinimal{{Id: "sp", Name: "Mistborn ", Sequence: "1"}, {Id: "ti", Name: "Mistborn", Sequence: "3"}}
+	if got, want := mergeSeriesRefs(have, spaced, tidy), []abs.SeriesMinimal{{Id: "ti", Name: "Mistborn", Sequence: "3"}}; !slices.Equal(got, want) {
 		t.Errorf("merging the spaced series into the tidy one: got %v, want %v", got, want)
 	}
 	// an entry whose name is out of date still goes by its id
-	have = []api.SeriesMinimal{{Id: "sp", Name: "Mistborn Era One", Sequence: "1"}}
-	if got, want := mergeSeriesRefs(have, spaced, tidy), []api.SeriesMinimal{{Name: "Mistborn", Sequence: "1"}}; !slices.Equal(got, want) {
+	have = []abs.SeriesMinimal{{Id: "sp", Name: "Mistborn Era One", Sequence: "1"}}
+	if got, want := mergeSeriesRefs(have, spaced, tidy), []abs.SeriesMinimal{{Name: "Mistborn", Sequence: "1"}}; !slices.Equal(got, want) {
 		t.Errorf("an entry with the spaced series' id under an old name: got %v, want %v", got, want)
 	}
 	// with no ids, a name as written picks its series before a name folded
-	have = []api.SeriesMinimal{{Name: "Mistborn ", Sequence: "1"}}
-	if got, want := mergeSeriesRefs(have, spaced, tidy), []api.SeriesMinimal{{Name: "Mistborn", Sequence: "1"}}; !slices.Equal(got, want) {
+	have = []abs.SeriesMinimal{{Name: "Mistborn ", Sequence: "1"}}
+	if got, want := mergeSeriesRefs(have, spaced, tidy), []abs.SeriesMinimal{{Name: "Mistborn", Sequence: "1"}}; !slices.Equal(got, want) {
 		t.Errorf("an entry with no id named as the spaced series: got %v, want %v", got, want)
 	}
 }

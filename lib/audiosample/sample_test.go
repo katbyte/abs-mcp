@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 const (
@@ -79,7 +79,7 @@ func newFakeFiles(t *testing.T, files map[string][]byte) *fakeFiles {
 func (f *fakeFiles) sampler(t *testing.T) *Sampler {
 	t.Helper()
 
-	client, err := api.New(f.srv.URL, "secret-key")
+	client, err := abs.New(f.srv.URL, "secret-key")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -292,7 +292,7 @@ func TestTheProxyServesOnlyWhatItWasAskedFor(t *testing.T) {
 func TestNoFFmpegIsNamed(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 
-	client, err := api.New("http://abs.invalid", "k")
+	client, err := abs.New("http://abs.invalid", "k")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +307,7 @@ func TestNoFFmpegIsNamed(t *testing.T) {
 func TestBookOfReadsThePlayOrder(t *testing.T) {
 	t.Parallel()
 
-	tracks := &api.LibraryItemExpanded{Id: testItem, MediaType: bookType, Media: &api.LibraryItemExpandedMedia{Tracks: []api.AudioTrack{
+	tracks := &abs.LibraryItemExpanded{Id: testItem, MediaType: bookType, Media: &abs.LibraryItemExpandedMedia{Tracks: []abs.AudioTrack{
 		{Index: 1, Ino: "11", StartOffset: 0, Duration: 100},
 		{Index: 2, ContentUrl: "/audiobookshelf/api/items/li_1/file/12", StartOffset: 100, Duration: 50.5},
 	}}}
@@ -319,7 +319,7 @@ func TestBookOfReadsThePlayOrder(t *testing.T) {
 		t.Errorf("from tracks: %+v, duration %g", b.Tracks, b.Duration())
 	}
 
-	files := &api.LibraryItemExpanded{Id: "li_2", MediaType: bookType, Media: &api.LibraryItemExpandedMedia{AudioFiles: []api.AudioFile{
+	files := &abs.LibraryItemExpanded{Id: "li_2", MediaType: bookType, Media: &abs.LibraryItemExpandedMedia{AudioFiles: []abs.AudioFile{
 		{Index: 3, Ino: "33", Duration: 30},
 		{Index: 1, Ino: "31", Duration: 10},
 		{Index: 2, Ino: "32", Duration: 20, Exclude: true},
@@ -332,10 +332,10 @@ func TestBookOfReadsThePlayOrder(t *testing.T) {
 		t.Errorf("from audio files: %+v, want 31 then 33 at 10 s, the excluded one left out", b.Tracks)
 	}
 
-	if _, err := BookOf(&api.LibraryItemExpanded{MediaType: "podcast", Media: &api.LibraryItemExpandedMedia{Metadata: &api.LibraryItemExpandedMediaMetadata{Title: "Pod"}}}); err == nil || !strings.Contains(err.Error(), "podcast") {
+	if _, err := BookOf(&abs.LibraryItemExpanded{MediaType: "podcast", Media: &abs.LibraryItemExpandedMedia{Metadata: &abs.LibraryItemExpandedMediaMetadata{Title: "Pod"}}}); err == nil || !strings.Contains(err.Error(), "podcast") {
 		t.Errorf("a podcast = %v, want refused", err)
 	}
-	if _, err := BookOf(&api.LibraryItemExpanded{MediaType: bookType, Media: &api.LibraryItemExpandedMedia{Metadata: &api.LibraryItemExpandedMediaMetadata{Title: "Ebook"}}}); err == nil || !strings.Contains(err.Error(), "no audio") {
+	if _, err := BookOf(&abs.LibraryItemExpanded{MediaType: bookType, Media: &abs.LibraryItemExpandedMedia{Metadata: &abs.LibraryItemExpandedMediaMetadata{Title: "Ebook"}}}); err == nil || !strings.Contains(err.Error(), "no audio") {
 		t.Errorf("an ebook = %v, want refused", err)
 	}
 }

@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -98,11 +98,11 @@ func surname(name string) string {
 
 // authorRecords gathers one library's author records into out: the findings
 // and the name spellings. Podcast libraries have no authors.
-func authorRecords(ctx context.Context, gen *api.Client, lib *api.Library, out *authorsOut, names spellingCounts) error {
+func authorRecords(ctx context.Context, gen *abs.Client, lib *abs.Library, out *authorsOut, names spellingCounts) error {
 	if lib.IsPodcast() {
 		return nil
 	}
-	authors, err := allAuthors(ctx, gen, lib.Id, api.LibraryGetAuthorsOptions{Sort: "numBooks", Desc: "1"})
+	authors, err := allAuthors(ctx, gen, lib.Id, abs.LibraryGetAuthorsOptions{Sort: "numBooks", Desc: "1"})
 	if err != nil {
 		return err
 	}
@@ -184,7 +184,7 @@ func registerAuthorAudit(r *registry) {
 		check := auditChecksByName["author_as_title"]
 		for i := range libs {
 			lib := &libs[i]
-			if err := eachItem(ctx, gen, lib.Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+			if err := eachItem(ctx, gen, lib.Id, abs.LibraryGetLibraryItemsOptions{}, func(it *abs.LibraryItemMinified) bool {
 				out.Scanned++
 				if _, suspect := check(it); suspect {
 					out.Items = append(out.Items, authorItemFinding{ID: string(it.Id), Title: it.Media.Metadata.Title, Author: it.Media.Metadata.AuthorName})

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -151,7 +151,7 @@ func TestAuditOrderIsStable(t *testing.T) {
 
 	c := newGenresCollector()
 	for i, g := range []string{"Thriller", "Horror", "Romance", "Fantasy", "Mystery"} {
-		c.add(&api.LibraryItemMinified{Id: api.LibraryItemID(strconv.Itoa(i)), MediaType: "book", Media: &api.LibraryItemMinifiedMedia{Tags: []string{g}, Metadata: &api.LibraryItemMinifiedMediaMetadata{Genres: []string{g}}}})
+		c.add(&abs.LibraryItemMinified{Id: abs.LibraryItemID(strconv.Itoa(i)), MediaType: "book", Media: &abs.LibraryItemMinifiedMedia{Tags: []string{g}, Metadata: &abs.LibraryItemMinifiedMediaMetadata{Genres: []string{g}}}})
 	}
 	redundant := c.findings(1, 50).Redundant
 	order := make([]string, 0, len(redundant))
@@ -572,32 +572,32 @@ func TestNormFoldsAccents(t *testing.T) {
 func TestAuditChecks(t *testing.T) {
 	t.Parallel()
 
-	book := func(m api.LibraryItemMinifiedMediaMetadata, media api.LibraryItemMinifiedMedia) *api.LibraryItemMinified {
+	book := func(m abs.LibraryItemMinifiedMediaMetadata, media abs.LibraryItemMinifiedMedia) *abs.LibraryItemMinified {
 		media.Metadata = &m
-		return &api.LibraryItemMinified{MediaType: "book", RelPath: "Frank Herbert/Dune", Media: &media}
+		return &abs.LibraryItemMinified{MediaType: "book", RelPath: "Frank Herbert/Dune", Media: &media}
 	}
 
-	if _, bad := auditChecksByName["unmatched"](book(api.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, api.LibraryItemMinifiedMedia{})); !bad {
+	if _, bad := auditChecksByName["unmatched"](book(abs.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, abs.LibraryItemMinifiedMedia{})); !bad {
 		t.Error("unmatched: no ids not flagged")
 	}
-	if _, bad := auditChecksByName["unmatched"](book(api.LibraryItemMinifiedMediaMetadata{Title: "Dune", Asin: "B0"}, api.LibraryItemMinifiedMedia{})); bad {
+	if _, bad := auditChecksByName["unmatched"](book(abs.LibraryItemMinifiedMediaMetadata{Title: "Dune", Asin: "B0"}, abs.LibraryItemMinifiedMedia{})); bad {
 		t.Error("unmatched: asin flagged")
 	}
-	if _, bad := auditChecksByName["chapters"](book(api.LibraryItemMinifiedMediaMetadata{}, api.LibraryItemMinifiedMedia{Duration: 3 * 3600, NumTracks: 1})); !bad {
+	if _, bad := auditChecksByName["chapters"](book(abs.LibraryItemMinifiedMediaMetadata{}, abs.LibraryItemMinifiedMedia{Duration: 3 * 3600, NumTracks: 1})); !bad {
 		t.Error("chapters: 3h without chapters not flagged")
 	}
-	if _, bad := auditChecksByName["chapters"](book(api.LibraryItemMinifiedMediaMetadata{}, api.LibraryItemMinifiedMedia{Duration: 3600})); bad {
+	if _, bad := auditChecksByName["chapters"](book(abs.LibraryItemMinifiedMediaMetadata{}, abs.LibraryItemMinifiedMedia{Duration: 3600})); bad {
 		t.Error("chapters: short book flagged")
 	}
 	// one chapter across a long book is as unnavigable as none, and the
 	// chapters check treats any chapter count above zero as fine: audit_chapters
 	// reports it, from the whole book (TestChapterProblems)
-	if _, bad := auditChecksByName["chapters"](book(api.LibraryItemMinifiedMediaMetadata{}, api.LibraryItemMinifiedMedia{Duration: 3 * 3600, NumChapters: 1})); bad {
+	if _, bad := auditChecksByName["chapters"](book(abs.LibraryItemMinifiedMediaMetadata{}, abs.LibraryItemMinifiedMedia{Duration: 3 * 3600, NumChapters: 1})); bad {
 		t.Error("chapters: a book with one chapter flagged as having none")
 	}
 
 	// path check: Author/Title layout matches; a foreign folder does not
-	it := book(api.LibraryItemMinifiedMediaMetadata{Title: "Dune", AuthorName: "Frank Herbert"}, api.LibraryItemMinifiedMedia{})
+	it := book(abs.LibraryItemMinifiedMediaMetadata{Title: "Dune", AuthorName: "Frank Herbert"}, abs.LibraryItemMinifiedMedia{})
 	if detail, bad := checkPath(it); bad {
 		t.Errorf("path: good layout flagged: %s", detail)
 	}
@@ -611,12 +611,12 @@ func TestAuditChecks(t *testing.T) {
 	}
 	it.RelPath = "Dune Saga/Dune"
 	it.Media.Metadata.SeriesName = "Dune Saga"
-	it.Media.Metadata.Series = &api.SeriesMinimal{Name: "Dune Saga", Sequence: "1"}
+	it.Media.Metadata.Series = &abs.SeriesMinimal{Name: "Dune Saga", Sequence: "1"}
 	if detail, bad := checkPath(it); bad {
 		t.Errorf("path: series folder flagged: %s", detail)
 	}
 
-	pod := &api.LibraryItemMinified{MediaType: "podcast", Media: &api.LibraryItemMinifiedMedia{Metadata: &api.LibraryItemMinifiedMediaMetadata{FeedUrl: "http://f"}}}
+	pod := &abs.LibraryItemMinified{MediaType: "podcast", Media: &abs.LibraryItemMinifiedMedia{Metadata: &abs.LibraryItemMinifiedMediaMetadata{FeedUrl: "http://f"}}}
 	if _, bad := auditChecksByName["stale_feed"](pod); !bad {
 		t.Error("stale_feed: never-checked feed not flagged")
 	}
@@ -630,11 +630,11 @@ func TestSeriesSequences(t *testing.T) {
 
 	// items as a series-filtered query returns them: the series listing has no
 	// sequence numbers at all
-	listed := func(series api.SeriesID, seq string) api.LibraryItemMinified {
-		return api.LibraryItemMinified{Media: &api.LibraryItemMinifiedMedia{Metadata: &api.LibraryItemMinifiedMediaMetadata{Series: &api.SeriesMinimal{Id: series, Sequence: seq}}}}
+	listed := func(series abs.SeriesID, seq string) abs.LibraryItemMinified {
+		return abs.LibraryItemMinified{Media: &abs.LibraryItemMinifiedMedia{Metadata: &abs.LibraryItemMinifiedMediaMetadata{Series: &abs.SeriesMinimal{Id: series, Sequence: seq}}}}
 	}
-	series := func(seqs ...string) []api.LibraryItemMinified {
-		items := make([]api.LibraryItemMinified, 0, len(seqs))
+	series := func(seqs ...string) []abs.LibraryItemMinified {
+		items := make([]abs.LibraryItemMinified, 0, len(seqs))
 		for _, seq := range seqs {
 			items = append(items, listed("s1", seq))
 		}
@@ -665,8 +665,8 @@ func TestSeriesSequences(t *testing.T) {
 	}
 
 	// a book listed under another series must not count, nor one listed with none
-	bare := api.LibraryItemMinified{}
-	if have, missing := seriesSequences([]api.LibraryItemMinified{listed("s2", "9"), listed("s1", "1"), bare}, "s1"); !slices.Equal(have, []string{"1"}) || missing != nil {
+	bare := abs.LibraryItemMinified{}
+	if have, missing := seriesSequences([]abs.LibraryItemMinified{listed("s2", "9"), listed("s1", "1"), bare}, "s1"); !slices.Equal(have, []string{"1"}) || missing != nil {
 		t.Errorf("cross-series: have=%v missing=%v", have, missing)
 	}
 }
@@ -721,44 +721,44 @@ func TestLastFirstMatch(t *testing.T) {
 func TestEveryAuditTripsAndClears(t *testing.T) {
 	t.Parallel()
 
-	book := func(m api.LibraryItemMinifiedMediaMetadata, media api.LibraryItemMinifiedMedia) *api.LibraryItemMinified {
+	book := func(m abs.LibraryItemMinifiedMediaMetadata, media abs.LibraryItemMinifiedMedia) *abs.LibraryItemMinified {
 		media.Metadata = &m
-		return &api.LibraryItemMinified{MediaType: "book", RelPath: "Frank Herbert/Dune", Media: &media}
+		return &abs.LibraryItemMinified{MediaType: "book", RelPath: "Frank Herbert/Dune", Media: &media}
 	}
-	pod := func(m api.LibraryItemMinifiedMediaMetadata, media api.LibraryItemMinifiedMedia) *api.LibraryItemMinified {
+	pod := func(m abs.LibraryItemMinifiedMediaMetadata, media abs.LibraryItemMinifiedMedia) *abs.LibraryItemMinified {
 		media.Metadata = &m
-		return &api.LibraryItemMinified{MediaType: "podcast", RelPath: "Behind the Bastards", Media: &media}
+		return &abs.LibraryItemMinified{MediaType: "podcast", RelPath: "Behind the Bastards", Media: &media}
 	}
 	// a book with nothing wrong with it
-	clean := func() *api.LibraryItemMinified {
-		return book(api.LibraryItemMinifiedMediaMetadata{
+	clean := func() *abs.LibraryItemMinified {
+		return book(abs.LibraryItemMinifiedMediaMetadata{
 			Title: "Dune", AuthorName: "Frank Herbert", Asin: "B0", Description: "Set on the desert planet Arrakis, Dune is the story of Paul Atreides, heir to a noble family tasked with ruling an inhospitable world where the only thing of value is the spice.",
 			NarratorName: "Scott Brick", SeriesName: "Dune", Genres: []string{"Science Fiction"},
 			PublishedYear: "1965", Publisher: "Bantam", Language: "English",
-		}, api.LibraryItemMinifiedMedia{Duration: 3600, NumTracks: 3, NumChapters: 20, NumAudioFiles: 3, CoverPath: "/c.jpg"})
+		}, abs.LibraryItemMinifiedMedia{Duration: 3600, NumTracks: 3, NumChapters: 20, NumAudioFiles: 3, CoverPath: "/c.jpg"})
 	}
 
-	trips := map[string]*api.LibraryItemMinified{
-		"unmatched":   book(api.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, api.LibraryItemMinifiedMedia{}),
-		"cover":       book(api.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, api.LibraryItemMinifiedMedia{}),
-		"description": book(api.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, api.LibraryItemMinifiedMedia{}),
-		"narrator":    book(api.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, api.LibraryItemMinifiedMedia{}),
-		"series":      book(api.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, api.LibraryItemMinifiedMedia{}),
-		"author":      book(api.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, api.LibraryItemMinifiedMedia{}),
-		"genres":      book(api.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, api.LibraryItemMinifiedMedia{}),
-		"year":        book(api.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, api.LibraryItemMinifiedMedia{}),
-		"publisher":   book(api.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, api.LibraryItemMinifiedMedia{}),
-		"language":    book(api.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, api.LibraryItemMinifiedMedia{}),
-		"chapters":    book(api.LibraryItemMinifiedMediaMetadata{}, api.LibraryItemMinifiedMedia{Duration: 3 * 3600, NumTracks: 3}),
-		"no_audio":    book(api.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, api.LibraryItemMinifiedMedia{}),
+	trips := map[string]*abs.LibraryItemMinified{
+		"unmatched":   book(abs.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, abs.LibraryItemMinifiedMedia{}),
+		"cover":       book(abs.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, abs.LibraryItemMinifiedMedia{}),
+		"description": book(abs.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, abs.LibraryItemMinifiedMedia{}),
+		"narrator":    book(abs.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, abs.LibraryItemMinifiedMedia{}),
+		"series":      book(abs.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, abs.LibraryItemMinifiedMedia{}),
+		"author":      book(abs.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, abs.LibraryItemMinifiedMedia{}),
+		"genres":      book(abs.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, abs.LibraryItemMinifiedMedia{}),
+		"year":        book(abs.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, abs.LibraryItemMinifiedMedia{}),
+		"publisher":   book(abs.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, abs.LibraryItemMinifiedMedia{}),
+		"language":    book(abs.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, abs.LibraryItemMinifiedMedia{}),
+		"chapters":    book(abs.LibraryItemMinifiedMediaMetadata{}, abs.LibraryItemMinifiedMedia{Duration: 3 * 3600, NumTracks: 3}),
+		"no_audio":    book(abs.LibraryItemMinifiedMediaMetadata{Title: "Dune"}, abs.LibraryItemMinifiedMedia{}),
 		// the server flags these itself; the predicate only reads the flags
-		"issues":          {MediaType: "book", IsMissing: true, Media: &api.LibraryItemMinifiedMedia{Metadata: &api.LibraryItemMinifiedMediaMetadata{Title: "Gone"}}},
-		"path":            book(api.LibraryItemMinifiedMediaMetadata{Title: "Neuromancer", AuthorName: "William Gibson"}, api.LibraryItemMinifiedMedia{}),
-		"author_as_title": book(api.LibraryItemMinifiedMediaMetadata{Title: "Mark of Calth", AuthorName: "Mark of Calth"}, api.LibraryItemMinifiedMedia{}),
-		"stale_feed":      pod(api.LibraryItemMinifiedMediaMetadata{FeedUrl: "http://f"}, api.LibraryItemMinifiedMedia{}),
-		"no_episodes":     pod(api.LibraryItemMinifiedMediaMetadata{FeedUrl: "http://f"}, api.LibraryItemMinifiedMedia{}),
+		"issues":          {MediaType: "book", IsMissing: true, Media: &abs.LibraryItemMinifiedMedia{Metadata: &abs.LibraryItemMinifiedMediaMetadata{Title: "Gone"}}},
+		"path":            book(abs.LibraryItemMinifiedMediaMetadata{Title: "Neuromancer", AuthorName: "William Gibson"}, abs.LibraryItemMinifiedMedia{}),
+		"author_as_title": book(abs.LibraryItemMinifiedMediaMetadata{Title: "Mark of Calth", AuthorName: "Mark of Calth"}, abs.LibraryItemMinifiedMedia{}),
+		"stale_feed":      pod(abs.LibraryItemMinifiedMediaMetadata{FeedUrl: "http://f"}, abs.LibraryItemMinifiedMedia{}),
+		"no_episodes":     pod(abs.LibraryItemMinifiedMediaMetadata{FeedUrl: "http://f"}, abs.LibraryItemMinifiedMedia{}),
 	}
-	clears := map[string]*api.LibraryItemMinified{
+	clears := map[string]*abs.LibraryItemMinified{
 		"unmatched":       clean(),
 		"cover":           clean(),
 		"description":     clean(),
@@ -776,8 +776,8 @@ func TestEveryAuditTripsAndClears(t *testing.T) {
 		"issues":          clean(),
 		// a podcast checked today that holds episodes: the list says no more, and its whole record has the last word
 		// (TestStaleFeedReadsTheNewestEpisode)
-		"stale_feed":  pod(api.LibraryItemMinifiedMediaMetadata{FeedUrl: "http://f"}, api.LibraryItemMinifiedMedia{LastEpisodeCheck: api.UnixMilli{Time: time.Now()}, NumEpisodes: 1}),
-		"no_episodes": pod(api.LibraryItemMinifiedMediaMetadata{FeedUrl: "http://f"}, api.LibraryItemMinifiedMedia{NumEpisodes: 3}),
+		"stale_feed":  pod(abs.LibraryItemMinifiedMediaMetadata{FeedUrl: "http://f"}, abs.LibraryItemMinifiedMedia{LastEpisodeCheck: abs.UnixMilli{Time: time.Now()}, NumEpisodes: 1}),
+		"no_episodes": pod(abs.LibraryItemMinifiedMediaMetadata{FeedUrl: "http://f"}, abs.LibraryItemMinifiedMedia{NumEpisodes: 3}),
 	}
 
 	cases := map[string]string{} // check -> the tool or field that exposes it

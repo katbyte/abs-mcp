@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // A match is fill-only or override, and neither is what a collector wants
@@ -81,7 +81,7 @@ func cleanPeople(names []string) []string {
 // smartDecide decides every field the provider would write differently.
 // hit is the provider's record for the item's asin; it is the item before
 // the match.
-func smartDecide(it *api.LibraryItemExpanded, hit *api.SearchFindBooksAnswer) []fieldDecision {
+func smartDecide(it *abs.LibraryItemExpanded, hit *abs.SearchFindBooksAnswer) []fieldDecision {
 	m := it.Media.Metadata
 	short := it.Minified()
 	var out []fieldDecision
@@ -183,8 +183,8 @@ func smartDecide(it *api.LibraryItemExpanded, hit *api.SearchFindBooksAnswer) []
 
 // smartUpdate is the update that writes the decisions marked written, with
 // the provider's values.
-func smartUpdate(decisions []fieldDecision, hit *api.SearchFindBooksAnswer) (api.MediaUpdate, bool) {
-	md := api.MediaUpdateMetadata{}
+func smartUpdate(decisions []fieldDecision, hit *abs.SearchFindBooksAnswer) (abs.MediaUpdate, bool) {
+	md := abs.MediaUpdateMetadata{}
 	changed := false
 	str := func(v string) *string { return &v }
 	for _, d := range decisions {
@@ -198,9 +198,9 @@ func smartUpdate(decisions []fieldDecision, hit *api.SearchFindBooksAnswer) (api
 		case "subtitle":
 			md.Subtitle = str(hit.Subtitle)
 		case "authors":
-			md.Authors = []api.AuthorMinimal{}
+			md.Authors = []abs.AuthorMinimal{}
 			for _, a := range cleanPeople(splitNames(hit.Author)) {
-				md.Authors = append(md.Authors, api.AuthorMinimal{Name: a})
+				md.Authors = append(md.Authors, abs.AuthorMinimal{Name: a})
 			}
 		case "narrators":
 			md.Narrators = splitNames(hit.Narrator)
@@ -216,11 +216,11 @@ func smartUpdate(decisions []fieldDecision, hit *api.SearchFindBooksAnswer) (api
 			md.Description = str(hit.Description)
 		}
 	}
-	return api.MediaUpdate{Metadata: &md}, changed
+	return abs.MediaUpdate{Metadata: &md}, changed
 }
 
 // providerRecord fetches the provider's record for an asin or isbn, for the item it is looked up for.
-func providerRecord(ctx context.Context, gen *api.Client, item api.LibraryItemID, provider, asin, isbn string) (*api.SearchFindBooksAnswer, error) {
+func providerRecord(ctx context.Context, gen *abs.Client, item abs.LibraryItemID, provider, asin, isbn string) (*abs.SearchFindBooksAnswer, error) {
 	query := asin
 	if query == "" {
 		query = isbn
@@ -249,7 +249,7 @@ func (e *noRecordError) Error() string {
 // smartApply decides the fields, and unless preview is set applies the
 // fill-only match and then writes the decided fields. The match result is
 // nil in preview.
-func smartApply(ctx context.Context, gen *api.Client, it *api.LibraryItemExpanded, provider, asin, isbn string, preview bool) ([]fieldDecision, *api.LibraryItemMatchAnswer, error) {
+func smartApply(ctx context.Context, gen *abs.Client, it *abs.LibraryItemExpanded, provider, asin, isbn string, preview bool) ([]fieldDecision, *abs.LibraryItemMatchAnswer, error) {
 	hit, err := providerRecord(ctx, gen, it.Id, provider, asin, isbn)
 	if err != nil {
 		return nil, nil, err
@@ -258,7 +258,7 @@ func smartApply(ctx context.Context, gen *api.Client, it *api.LibraryItemExpande
 	if preview {
 		return decisions, nil, nil
 	}
-	res, err := matchItem(ctx, gen, it.Id, api.LibraryItemMatchRequest{Provider: provider, Asin: asin, Isbn: isbn})
+	res, err := matchItem(ctx, gen, it.Id, abs.LibraryItemMatchRequest{Provider: provider, Asin: asin, Isbn: isbn})
 	if err != nil {
 		return decisions, nil, err
 	}
@@ -276,7 +276,7 @@ func smartApply(ctx context.Context, gen *api.Client, it *api.LibraryItemExpande
 
 // matchItem has the server match an item from a provider. Both override flags are always sent, false included, as a match asked from the
 // server's own page sends them.
-func matchItem(ctx context.Context, gen *api.Client, id api.LibraryItemID, req api.LibraryItemMatchRequest) (*api.LibraryItemMatchAnswer, error) {
+func matchItem(ctx context.Context, gen *abs.Client, id abs.LibraryItemID, req abs.LibraryItemMatchRequest) (*abs.LibraryItemMatchAnswer, error) {
 	if req.OverrideCover == nil {
 		req.OverrideCover = new(false)
 	}
@@ -319,10 +319,10 @@ func seriesCore(name string) string {
 
 // seriesNumberClash finds a series both sides name, spelling aside, at
 // different numbers, and returns the two numbers.
-func seriesNumberClash(local []api.SeriesMinimal, provider []api.SearchFindBooksAnswerSeries) (mine, theirs string, clash bool) {
+func seriesNumberClash(local []abs.SeriesMinimal, provider []abs.SearchFindBooksAnswerSeries) (mine, theirs string, clash bool) {
 	for _, l := range local {
 		for _, p := range provider {
-			if l.Sequence == "" || p.Sequence == "" || seriesCore(l.Name) != seriesCore(p.Title()) {
+			if l.Sequence == "" || p.Sequence == "" || seriesCore(l.Name) != seriesCore(p.Series) {
 				continue
 			}
 			if !sameNumber(l.Sequence, p.Sequence) {
