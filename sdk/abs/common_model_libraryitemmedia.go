@@ -4,18 +4,18 @@ package abs
 
 // LibraryItemMedia is an object the document declares inline.
 type LibraryItemMedia struct {
-	AudioFiles               []LibraryItemMediaAudioFiles `json:"audioFiles,omitzero"`
-	AutoDownloadEpisodes     *bool                        `json:"autoDownloadEpisodes,omitempty"`
-	AutoDownloadSchedule     string                       `json:"autoDownloadSchedule,omitempty"`
-	Chapters                 []LibraryItemMediaChapters   `json:"chapters,omitzero"`
-	CoverPath                string                       `json:"coverPath,omitempty"`
-	EbookFile                *LibraryItemMediaEbookFile   `json:"ebookFile,omitempty"`
-	Episodes                 []PodcastEpisode             `json:"episodes,omitzero"`
-	Id                       string                       `json:"id,omitempty"`
-	LastEpisodeCheck         UnixMilli                    `json:"lastEpisodeCheck,omitzero"`
-	LibraryItemId            LibraryItemID                `json:"libraryItemId,omitempty"`
-	MaxEpisodesToKeep        int                          `json:"maxEpisodesToKeep,omitempty"`
-	MaxNewEpisodesToDownload int                          `json:"maxNewEpisodesToDownload,omitempty"`
-	Metadata                 *LibraryItemMediaMetadata    `json:"metadata,omitempty"`
-	Tags                     []string                     `json:"tags,omitzero"`
+	AudioFiles               []AudioFile      `json:"audioFiles,omitzero"`
+	AutoDownloadEpisodes     *bool            `json:"autoDownloadEpisodes,omitempty"`
+	AutoDownloadSchedule     string           `json:"autoDownloadSchedule,omitempty"`
+	Chapters                 []Chapter        `json:"chapters,omitzero"`
+	CoverPath                string           `json:"coverPath,omitempty"`
+	EbookFile                *EBookFile       `json:"ebookFile,omitempty"`
+	Episodes                 []PodcastEpisode `json:"episodes,omitzero"`
+	Id                       string           `json:"id,omitempty"`
+	LastEpisodeCheck         UnixMilli        `json:"lastEpisodeCheck,omitzero"`
+	LibraryItemId            LibraryItemID    `json:"libraryItemId,omitempty"`
+	MaxEpisodesToKeep        int              `json:"maxEpisodesToKeep,omitempty"`
+	MaxNewEpisodesToDownload int              `json:"maxNewEpisodesToDownload,omitempty"`
+	Metadata                 *MediaMetadata   `json:"metadata,omitempty"`
+	Tags                     []string         `json:"tags,omitzero"`
 }

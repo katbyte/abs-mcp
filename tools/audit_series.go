@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -136,42 +136,41 @@ func articleSeriesName(name string, titles []string) string {
 // list and, when asked, the articles list, from the listing alone, and
 // records whose series each name is and that the listing had it (listed,
 // by listedKey). Podcast libraries have no series.
-func seriesNames(ctx context.Context, client *abs.Client, lib *abs.Library, out *seriesOut, names spellingCounts, authors map[string]string, listed map[string]bool, articles bool) error {
+func seriesNames(ctx context.Context, gen *api.Client, lib *api.Library, out *seriesOut, names spellingCounts, authors map[string]string, listed map[string]bool, articles bool) error {
 	if lib.IsPodcast() {
 		return nil
 	}
-	for page := 0; ; page++ {
-		series, total, err := client.SeriesList(ctx, lib.ID, abs.ListOptions{Limit: seriesPageSize, Page: page, Sort: "name"})
-		if err != nil {
-			return err
+	series, err := allSeries(ctx, gen, lib.Id)
+	if err != nil {
+		return err
+	}
+	for j := range series {
+		s := &series[j]
+		listed[listedKey(string(lib.Id), s.Name)] = true
+		listed[listedKey("", s.Name)] = true
+		names.addValue("series", s.Name, max(len(s.Books), 1))
+		for k := range s.Books {
+			filledMinified(&s.Books[k])
 		}
-		for j := range series {
-			s := &series[j]
-			listed[listedKey(lib.ID, s.Name)] = true
-			listed[listedKey("", s.Name)] = true
-			names.addValue("series", s.Name, max(len(s.Books), 1))
-			author := ""
-			if len(s.Books) > 0 {
-				author = s.Books[0].Media.Metadata.AuthorDisplay()
-			}
-			authors[s.Name] = author
-			if problems, suggest := oddSeriesName(s.Name, author); len(problems) > 0 {
-				out.Odd = append(out.Odd, oddSeries{ID: s.ID, Name: s.Name, Author: author, Books: len(s.Books), Problems: problems, Suggest: suggest})
-			}
-			if articles {
-				titles := make([]string, 0, len(s.Books))
-				for k := range s.Books {
-					titles = append(titles, s.Books[k].Title())
-				}
-				if suggest := articleSeriesName(s.Name, titles); suggest != "" {
-					out.Articles = append(out.Articles, articleSeries{ID: s.ID, Name: s.Name, Author: author, Books: len(s.Books), Suggest: suggest})
-				}
-			}
+		author := ""
+		if len(s.Books) > 0 {
+			author = s.Books[0].Media.Metadata.AuthorDisplay()
 		}
-		if len(series) == 0 || (page+1)*seriesPageSize >= total {
-			return nil
+		authors[s.Name] = author
+		if problems, suggest := oddSeriesName(s.Name, author); len(problems) > 0 {
+			out.Odd = append(out.Odd, oddSeries{ID: string(s.Id), Name: s.Name, Author: author, Books: len(s.Books), Problems: problems, Suggest: suggest})
+		}
+		if articles {
+			titles := make([]string, 0, len(s.Books))
+			for k := range s.Books {
+				titles = append(titles, s.Books[k].Title())
+			}
+			if suggest := articleSeriesName(s.Name, titles); suggest != "" {
+				out.Articles = append(out.Articles, articleSeries{ID: string(s.Id), Name: s.Name, Author: author, Books: len(s.Books), Suggest: suggest})
+			}
 		}
 	}
+	return nil
 }
 
 // listedKey is how seriesNames records a series the listing had: by library
@@ -187,7 +186,7 @@ func listedKey(library, name string) string {
 // series is where a stray name most often sits. An odd one needs its id for
 // series_edit, which the listing would have carried: one of its books is
 // fetched for it when the sweep only had the name.
-func unlistedSeries(ctx context.Context, client *abs.Client, coll *numberingCollector, listed map[string]bool, out *seriesOut, names spellingCounts, authors map[string]string, articles bool) error {
+func unlistedSeries(ctx context.Context, gen *api.Client, coll *numberingCollector, listed map[string]bool, out *seriesOut, names spellingCounts, authors map[string]string, articles bool) error {
 	type unlisted struct {
 		name, id, author, lookup string
 		titles                   []string
@@ -207,7 +206,7 @@ func unlistedSeries(ctx context.Context, client *abs.Client, coll *numberingColl
 				order = append(order, key)
 			}
 			if u.id == "" {
-				u.id = ref.ID
+				u.id = string(ref.Id)
 			}
 			u.titles = append(u.titles, it.Title)
 		}
@@ -220,7 +219,7 @@ func unlistedSeries(ctx context.Context, client *abs.Client, coll *numberingColl
 		article  string
 	}
 	var rows []row
-	var lookups []string
+	var lookups []api.LibraryItemID
 	for _, key := range order {
 		u := found[key]
 		names.addValue("series", u.name, len(u.titles))
@@ -236,23 +235,23 @@ func unlistedSeries(ctx context.Context, client *abs.Client, coll *numberingColl
 			continue
 		}
 		rows = append(rows, r)
-		if u.id == "" && !slices.Contains(lookups, u.lookup) {
-			lookups = append(lookups, u.lookup)
+		if lookup := api.LibraryItemID(u.lookup); u.id == "" && !slices.Contains(lookups, lookup) {
+			lookups = append(lookups, lookup)
 		}
 	}
 	for chunk := range slices.Chunk(lookups, embedBatchSize) {
-		items, err := client.ItemsBatch(ctx, chunk)
+		items, err := itemsBatch(ctx, gen, chunk)
 		if err != nil {
 			return err
 		}
 		for j := range items {
 			for _, r := range rows {
-				if r.u.id != "" || r.u.lookup != items[j].ID {
+				if r.u.id != "" || r.u.lookup != string(items[j].Id) {
 					continue
 				}
 				for _, ref := range items[j].Media.Metadata.Series {
 					if ref.Name == r.u.name {
-						r.u.id = ref.ID
+						r.u.id = string(ref.Id)
 					}
 				}
 			}
@@ -340,7 +339,7 @@ func crossReferenceGaps(gaps []seriesGap, names []vocabGroup, numbering []number
 }
 
 func registerSeriesAudit(r *registry) {
-	client := r.client
+	gen := r.gen
 
 	type seriesIn struct {
 		Library  string `json:"library,omitempty"  jsonschema:"library name or id; default every book library"`
@@ -356,7 +355,7 @@ func registerSeriesAudit(r *registry) {
 			"Titles: a book whose title is its series name, with or without a number ('Harry Hole 1', 'Beebo Brinker' on the book Odd Girl Out), or carries the series name and a number beside the real title ('The Bat - Harry Hole Series, Book 1', 'Bright Falls 03 - Iris Kelly Doesn't Date'), judged only where the folder is 'Series - 03 - Title' and so says what the title is; suggest is that title, for item_edit title=. No provider is asked. " +
 			"Whether a subtitle belongs in the name ('Siege of Terra: The Horus Heresy' or 'Siege of Terra') is a matter of taste and is not reported, and so is a leading article: articles=true lists 'The Expanse' and 'A Hanne Wilhelmsen Novel' with the bare name suggested, leaving out names that are a book's own title.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in seriesIn) (*mcp.CallToolResult, seriesOut, error) {
-		libs, err := resolveLibraries(ctx, client, in.Library)
+		libs, err := resolveLibraries(ctx, gen, in.Library)
 		if err != nil {
 			return nil, seriesOut{}, err
 		}
@@ -368,29 +367,27 @@ func registerSeriesAudit(r *registry) {
 		listed := map[string]bool{}
 		numbering := newNumberingCollector()
 		for i := range libs {
-			if err := sweepSeriesGaps(ctx, client, &libs[i], limit, &gaps); err != nil {
+			if err := sweepSeriesGaps(ctx, gen, &libs[i], limit, &gaps); err != nil {
 				return nil, seriesOut{}, err
 			}
-			if err := seriesNames(ctx, client, &libs[i], &out, names, authors, listed, in.Articles); err != nil {
+			if err := seriesNames(ctx, gen, &libs[i], &out, names, authors, listed, in.Articles); err != nil {
 				return nil, seriesOut{}, err
 			}
 			if libs[i].IsPodcast() {
 				continue
 			}
-			if err := client.ItemsAll(ctx, libs[i].ID, abs.ItemsOptions{}, func(items []abs.Item) bool {
-				for j := range items {
-					out.Items++
-					numbering.add(&items[j])
-				}
+			if err := eachItem(ctx, gen, libs[i].Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+				out.Items++
+				numbering.add(it)
 				return true
 			}); err != nil {
 				return nil, seriesOut{}, err
 			}
 		}
-		if err := numbering.resolve(ctx, client); err != nil {
+		if err := numbering.resolve(ctx, gen); err != nil {
 			return nil, seriesOut{}, err
 		}
-		if err := unlistedSeries(ctx, client, numbering, listed, &out, names, authors, in.Articles); err != nil {
+		if err := unlistedSeries(ctx, gen, numbering, listed, &out, names, authors, in.Articles); err != nil {
 			return nil, seriesOut{}, err
 		}
 		slices.SortFunc(out.Odd, func(x, y oddSeries) int {

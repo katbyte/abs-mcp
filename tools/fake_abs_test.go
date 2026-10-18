@@ -27,7 +27,8 @@ import (
 
 	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/pandorest/client"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -105,12 +106,11 @@ func (f *fakeABS) answer(route string, r reply) {
 	})
 }
 
-// client is a client of the fake.
-func (f *fakeABS) client(t *testing.T) *abs.Client {
+// gen is a client of the fake. It tries again as a real client does, without the waits between tries.
+func (f *fakeABS) gen(t *testing.T) *api.Client {
 	t.Helper()
 
-	// tries again as a real client does, without the waits between tries
-	c, err := abs.New(f.srv.URL, "test", abs.WithRetry(httpc.Retry{Wait: func(int) time.Duration { return 0 }}))
+	c, err := api.New(f.srv.URL, "test", client.WithRetry(httpc.Retry{Wait: func(int) time.Duration { return 0 }}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +186,7 @@ func callerWith(t *testing.T, f *fakeABS, opts Options) func(name string, args m
 	t.Helper()
 
 	srv := mcp.NewServer(&mcp.Implementation{Name: "t", Version: "0"}, nil)
-	if _, err := RegisterAll(srv, f.client(t), opts); err != nil {
+	if _, err := RegisterAll(srv, f.gen(t), opts); err != nil {
 		t.Fatal(err)
 	}
 
@@ -198,9 +198,8 @@ func callerWith(t *testing.T, f *fakeABS, opts Options) func(name string, args m
 func registryCaller(t *testing.T, f *fakeABS) (r *registry, call func(name string, args map[string]any) (map[string]any, error)) {
 	t.Helper()
 
-	client := f.client(t)
 	srv := mcp.NewServer(&mcp.Implementation{Name: "t", Version: "0"}, nil)
-	r = &registry{client: client, opts: Options{EnableDelete: true}}
+	r = &registry{gen: f.gen(t), opts: Options{EnableDelete: true}}
 	queueTools(r)
 	registerEvery(t, r, srv)
 

@@ -45,6 +45,7 @@ func (r LibraryGetUserPlaylistsForLibraryResponse) Record() (LibraryGetUserPlayl
 type LibraryGetUserPlaylistsForLibraryOptions struct {
 	Limit *int
 	Page  *int
+	Sort  string
 }
 
 // ToHeaders returns the header parameters the options set.
@@ -61,6 +62,9 @@ func (o LibraryGetUserPlaylistsForLibraryOptions) ToQuery() *client.QueryParams 
 	}
 	if o.Page != nil {
 		out.Append("page", strconv.Itoa(*o.Page))
+	}
+	if o.Sort != "" {
+		out.Append("sort", o.Sort)
 	}
 	return &out
 }
@@ -114,7 +118,7 @@ func (c Client) LibraryGetUserPlaylistsForLibrary(ctx context.Context, id Librar
 // LibraryGetUserPlaylistsForLibraryCompleteResult is every result LibraryGetUserPlaylistsForLibraryComplete loaded.
 type LibraryGetUserPlaylistsForLibraryCompleteResult struct {
 	LatestHttpResponse *http.Response
-	Items              []LibraryGetUserPlaylistsForLibraryAnswerResults
+	Items              []Playlist
 }
 
 // LibraryGetUserPlaylistsForLibraryComplete calls LibraryGetUserPlaylistsForLibrary page by page, from the
@@ -173,10 +177,10 @@ func (c Client) LibraryGetUserPlaylistsForLibraryComplete(ctx context.Context, i
 //		}
 //	}
 //
-// An error is the last pair handed out, with a zero LibraryGetUserPlaylistsForLibraryAnswerResults. The pages are asked for as LibraryGetUserPlaylistsForLibraryComplete asks for them.
-func (c Client) LibraryGetUserPlaylistsForLibraryEach(ctx context.Context, id LibraryID, options ...LibraryGetUserPlaylistsForLibraryOptions) iter.Seq2[LibraryGetUserPlaylistsForLibraryAnswerResults, error] {
-	return func(yield func(LibraryGetUserPlaylistsForLibraryAnswerResults, error) bool) {
-		var zero LibraryGetUserPlaylistsForLibraryAnswerResults
+// An error is the last pair handed out, with a zero Playlist. The pages are asked for as LibraryGetUserPlaylistsForLibraryComplete asks for them.
+func (c Client) LibraryGetUserPlaylistsForLibraryEach(ctx context.Context, id LibraryID, options ...LibraryGetUserPlaylistsForLibraryOptions) iter.Seq2[Playlist, error] {
+	return func(yield func(Playlist, error) bool) {
+		var zero Playlist
 		if len(options) > 1 {
 			yield(zero, fmt.Errorf("LibraryGetUserPlaylistsForLibraryEach takes one options struct at most, not %d", len(options)))
 			return

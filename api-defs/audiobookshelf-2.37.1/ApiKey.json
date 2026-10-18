@@ -42,7 +42,7 @@
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -107,137 +107,7 @@
           "JsonName": "apiKey",
           "Type": {
             "Type": "Reference",
-            "ReferenceName": "ApiKeyCreateAnswerApiKey"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "ApiKeyCreateAnswerApiKey",
-      "Fields": [
-        {
-          "Name": "ApiKey",
-          "JsonName": "apiKey",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "CreatedAt",
-          "JsonName": "createdAt",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "CreatedByUserId",
-          "JsonName": "createdByUserId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "UserID"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Description",
-          "JsonName": "description",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "ExpiresAt",
-          "JsonName": "expiresAt",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "IsActive",
-          "JsonName": "isActive",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "LastUsedAt",
-          "JsonName": "lastUsedAt",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Name",
-          "JsonName": "name",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Permissions",
-          "JsonName": "permissions",
-          "Type": {
-            "Type": "Any"
-          }
-        },
-        {
-          "Name": "UpdatedAt",
-          "JsonName": "updatedAt",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "User",
-          "JsonName": "user",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "ApiKeyCreateAnswerApiKeyUser"
-          }
-        },
-        {
-          "Name": "UserId",
-          "JsonName": "userId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "UserID"
-          },
-          "Nullable": true
-        }
-      ]
-    },
-    {
-      "Name": "ApiKeyCreateAnswerApiKeyUser",
-      "Fields": [
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Type",
-          "JsonName": "type",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Username",
-          "JsonName": "username",
-          "Type": {
-            "Type": "String"
+            "ReferenceName": "ApiKeyRecord"
           }
         }
       ]
@@ -296,6 +166,13 @@
       "Name": "ApiKeyRecord",
       "SchemaName": "ApiKeyRecord",
       "Fields": [
+        {
+          "Name": "ApiKey",
+          "JsonName": "apiKey",
+          "Type": {
+            "Type": "String"
+          }
+        },
         {
           "Name": "CreatedAt",
           "JsonName": "createdAt",

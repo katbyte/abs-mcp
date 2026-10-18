@@ -20,7 +20,7 @@
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -116,6 +116,14 @@
         {
           "Name": "height",
           "Field": "Height",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "raw",
+          "Field": "Raw",
           "In": "Query",
           "Type": {
             "Type": "String"
@@ -335,14 +343,16 @@
           "JsonName": "asin",
           "Type": {
             "Type": "String"
-          }
+          },
+          "KeepsNull": true
         },
         {
           "Name": "Description",
           "JsonName": "description",
           "Type": {
             "Type": "String"
-          }
+          },
+          "KeepsNull": true
         },
         {
           "Name": "Name",

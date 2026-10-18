@@ -1,0 +1,15 @@
+{
+  "operation": "PodcastBulkCreatePodcastsFromOpmlFeedUrls",
+  "method": "POST",
+  "path": "/api/podcasts/opml/create",
+  "sent": [
+    {
+      "autoDownloadEpisodes": false,
+      "feeds": [
+        "https://feed.podbean.com/wtyppod/feed.xml"
+      ],
+      "folderId": "e61edc3d-fe5f-4b60-99e3-66a986b9fc70",
+      "libraryId": "ab26efd8-a4b4-4ee3-91d5-e595e105feef"
+    }
+  ]
+}

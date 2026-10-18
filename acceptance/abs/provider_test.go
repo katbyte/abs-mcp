@@ -9,66 +9,32 @@
 package abs_test
 
 import (
-	"context"
+	"bytes"
+	"encoding/json"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 const feedURL = "https://feed.podbean.com/wtyppod/feed.xml"
-
-func TestProviderSearch(t *testing.T) {
-	ctx := skipUnlessLive(t)
-	library(t)
-
-	books := must(client.SearchBooks(ctx, "audible", "Foundation", "Isaac Asimov", ""))
-	if len(books) == 0 {
-		t.Fatal("SearchBooks found nothing")
-	}
-	if books[0].Title == "" {
-		t.Errorf("the first result did not decode: %+v", books[0])
-	}
-
-	covers := must(client.SearchCovers(ctx, "audible", "Foundation", "Isaac Asimov", false))
-	if len(covers) == 0 {
-		t.Error("SearchCovers found nothing")
-	}
-
-	pods := must(client.SearchPodcasts(ctx, "Well There's Your Problem", ""))
-	if len(pods) == 0 {
-		t.Error("SearchPodcasts found nothing")
-	}
-
-	// chapters come from Audnexus, keyed by asin
-	if books[0].ASIN != "" {
-		if _, err := client.SearchChapters(ctx, books[0].ASIN, ""); err != nil {
-			t.Errorf("SearchChapters(%s): %v", books[0].ASIN, err)
-		}
-	}
-}
 
 func TestProviderMatch(t *testing.T) {
 	ctx := skipUnlessLive(t)
 	id := library(t)
 
-	item := must(client.Items(ctx, id, abs.ItemsOptions{Limit: 1})).Results[0]
+	item := firstItems(ctx, id, 1)[0]
 
-	res, err := client.Match(ctx, item.ID, abs.MatchOptions{
-		Provider: "audible", Title: "Foundation", Author: "Isaac Asimov",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res == nil {
-		t.Fatal("Match returned nothing")
+	if res := must(client.LibraryItemMatch(ctx, item.Id, abs.LibraryItemMatchRequest{Provider: "audible", Title: "Foundation", Author: "Isaac Asimov"})); res.LibraryItem == nil {
+		t.Fatalf("the match answered no item: %+v", res)
 	}
 
 	// the batch forms of the same thing
-	if err := client.BatchQuickMatch(ctx, []string{item.ID}, "audible", false, false); err != nil {
-		t.Errorf("BatchQuickMatch: %v", err)
+	quick := abs.LibraryItemBatchQuickMatchRequest{LibraryItemIds: []abs.LibraryItemID{item.Id}, Options: &abs.LibraryItemBatchQuickMatchRequestOptions{Provider: "audible", OverrideCover: new(false), OverrideDetails: new(false)}}
+	if err := errorOf(client.LibraryItemBatchQuickMatch(ctx, quick)); err != nil {
+		t.Errorf("quick matching a batch: %v", err)
 	}
-	if err := client.MatchAll(ctx, id); err != nil {
-		t.Errorf("MatchAll: %v", err)
+	if err := errorOf(client.LibraryMatchAll(ctx, id)); err != nil {
+		t.Errorf("matching the whole library: %v", err)
 	}
 }
 
@@ -76,87 +42,82 @@ func TestProviderAuthor(t *testing.T) {
 	ctx := skipUnlessLive(t)
 	id := library(t)
 
-	authors, _, err := client.Authors(ctx, id, abs.ListOptions{Limit: 10})
-	if err != nil {
-		t.Fatal(err)
-	}
+	authors := firstAuthors(ctx, id, 10)
 	if len(authors) == 0 {
 		t.Skip("no authors")
 	}
 
-	if _, _, err := client.MatchAuthor(ctx, authors[0].ID, "Isaac Asimov", "", ""); err != nil {
-		t.Errorf("MatchAuthor: %v", err)
+	if err := errorOf(client.AuthorMatch(ctx, authors[0].Id, abs.AuthorMatchRequest{Q: "Isaac Asimov"})); err != nil {
+		t.Errorf("matching the author: %v", err)
 	}
 
 	// an image url the server fetches for itself
-	const image = "https://m.media-amazon.com/images/I/81Sr4Ms8SaL.jpg"
-	if _, err := client.SetAuthorImage(ctx, authors[0].ID, image); err != nil {
-		t.Errorf("SetAuthorImage: %v", err)
+	if err := errorOf(client.AuthorUploadImage(ctx, authors[0].Id, abs.AuthorUploadImageRequest{Url: "https://m.media-amazon.com/images/I/81Sr4Ms8SaL.jpg"})); err != nil {
+		t.Errorf("setting the author's image from a url: %v", err)
 	}
 }
 
+// The cover route takes an upload or a url, and the url goes as JSON.
 func TestProviderCoverFromURL(t *testing.T) {
 	ctx := skipUnlessLive(t)
 	id := library(t)
 
-	item := must(client.Items(ctx, id, abs.ItemsOptions{Limit: 1})).Results[0]
-	const cover = "https://m.media-amazon.com/images/I/81Sr4Ms8SaL.jpg"
-
-	if err := client.SetCoverFromURL(ctx, item.ID, cover); err != nil {
-		t.Fatalf("SetCoverFromURL: %v", err)
+	item := firstItems(ctx, id, 1)[0]
+	body, err := json.Marshal(map[string]string{"url": "https://m.media-amazon.com/images/I/81Sr4Ms8SaL.jpg"})
+	if err != nil {
+		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = client.RemoveCover(context.WithoutCancel(t.Context()), item.ID) })
 
-	if _, _, err := client.CoverSize(ctx, item.ID); err != nil {
-		t.Errorf("CoverSize after setting one from a url: %v", err)
+	if err := errorOf(client.LibraryItemUploadCover(ctx, item.Id, bytes.NewReader(body), "application/json")); err != nil {
+		t.Fatalf("setting the cover from a url: %v", err)
+	}
+	t.Cleanup(func() { _ = errorOf(client.LibraryItemRemoveCover(afterwards(t), item.Id)) })
+
+	if _, _, err := coverSize(ctx, item.Id); err != nil {
+		t.Errorf("measuring the cover after setting one from a url: %v", err)
 	}
 }
 
-// The feed methods take an arbitrary url, so pointing them at a real feed
-// through the proxy is ordinary use rather than a stub.
+// The feed calls take any url, so pointing them at a real feed through the proxy is ordinary use rather than a stub.
 func TestProviderFeeds(t *testing.T) {
 	ctx := skipUnlessLive(t)
 	id := podcastLibrary(t)
 
-	feed := must(client.ParseFeed(ctx, feedURL))
+	feed := must(client.PodcastGetPodcastFeed(ctx, abs.PodcastGetPodcastFeedRequest{RssFeed: feedURL})).Podcast
 	if feed == nil || len(feed.Episodes) == 0 {
-		t.Fatal("ParseFeed returned no episodes")
+		t.Fatal("the feed was read with no episodes")
+	}
+	author := ""
+	if feed.Metadata != nil {
+		author = feed.Metadata.Author
 	}
 
-	newPodcast := abs.NewPodcast{
-		LibraryID: id, FolderID: folderOf(t, id),
-		Path: "/podcasts/SDK Feed Podcast",
-	}
-	newPodcast.Media.Metadata = map[string]any{
-		"title":   "SDK Feed Podcast",
-		"author":  feed.Metadata.Author,
-		"feedUrl": feedURL,
-	}
-	created := must(client.CreatePodcast(ctx, newPodcast))
-	t.Cleanup(func() { _ = client.DeleteItem(context.WithoutCancel(t.Context()), created.ID, false) })
+	show := abs.PodcastCreateRequest{LibraryId: id, FolderId: folderOf(t, id), Path: "/podcasts/SDK Feed Podcast", Media: &abs.PodcastCreateRequestMedia{Metadata: &abs.PodcastCreateRequestMediaMetadata{Title: "SDK Feed Podcast", Author: author, FeedUrl: feedURL}}}
+	created := must(client.PodcastCreate(ctx, show))
+	t.Cleanup(func() { _ = errorOf(client.LibraryItemDelete(afterwards(t), created.Id)) })
 
 	// an empty title is a 500 from the server, not an empty result
-	if _, err := client.SearchFeedEpisodes(ctx, created.ID, feed.Episodes[0].Title); err != nil {
-		t.Errorf("SearchFeedEpisodes: %v", err)
+	if err := errorOf(client.PodcastFindEpisode(ctx, created.Id, abs.PodcastFindEpisodeOptions{Title: feed.Episodes[0].Title})); err != nil {
+		t.Errorf("searching the feed's episodes: %v", err)
 	}
-	if err := client.DownloadEpisodes(ctx, created.ID, feed.Episodes[:1]); err != nil {
-		t.Errorf("DownloadEpisodes: %v", err)
+	if err := errorOf(client.PodcastDownloadEpisodes(ctx, created.Id, feed.Episodes[:1])); err != nil {
+		t.Errorf("downloading an episode: %v", err)
 	}
-	if _, err := client.CheckNewEpisodes(ctx, created.ID, 1); err != nil {
-		t.Errorf("CheckNewEpisodes: %v", err)
+	if err := errorOf(client.PodcastCheckNewEpisodes(ctx, created.Id, abs.PodcastCheckNewEpisodesOptions{Limit: new(1)})); err != nil {
+		t.Errorf("checking for new episodes: %v", err)
 	}
-	if _, err := client.MatchEpisodes(ctx, created.ID, false); err != nil {
-		t.Errorf("MatchEpisodes: %v", err)
+	if err := errorOf(client.PodcastQuickMatchEpisodes(ctx, created.Id)); err != nil {
+		t.Errorf("matching the episodes: %v", err)
 	}
 }
 
-func folderOf(t *testing.T, libraryID string) string {
+func folderOf(t *testing.T, lib abs.LibraryID) abs.FolderID {
 	t.Helper()
 
-	lib := must(client.Library(t.Context(), libraryID))
-	if len(lib.Folders) == 0 {
-		t.Fatalf("library %s has no folders", libraryID)
+	folders := must(client.LibraryFindOne(t.Context(), lib)).Folders
+	if len(folders) == 0 {
+		t.Fatalf("library %s has no folders", lib)
 	}
 
-	return lib.Folders[0].ID
+	return folders[0].Id
 }

@@ -36,7 +36,8 @@ func TestInferAll(t *testing.T) {
 		`[{"a": 1}, {"b": "x"}]`:     "object{a:integer,b:string}",
 		`[[1], []]`:                  "array[integer]",
 		`[[]]`:                       "array[]",
-		`[{"2026-10-14": 1}]`:        "object*",
+		`[{"2026-10-14": 1}]`:        "map[integer]",
+		`[{"1": 1}, {"2": 2.5}]`:     "map[number]",
 		`[{"a": null}, {"a": true}]`: "object{a:boolean?}",
 	}
 	for in, want := range cases {
@@ -58,6 +59,8 @@ func describe(s *schema) string {
 
 	out := s.Type
 	switch {
+	case s.Type == "object" && s.Values != nil:
+		out = "map[" + describe(s.Values) + "]"
 	case s.Type == "object" && s.AdditionalProperties && len(s.Properties) == 0:
 		out += "*"
 	case s.Type == "object":
@@ -85,13 +88,14 @@ func TestAnswerFillMerge(t *testing.T) {
 		"count":    {Type: "integer"},
 		"name":     {Type: "string"},
 		"duration": {Type: "number"},
+		"offset":   {Type: "number", whole: true},
 		"settings": {Type: "object", AdditionalProperties: true},
 		"book":     {Ref: "#/components/schemas/Book"},
 		"label":    {Type: "string"},
 		"shelf":    {OneOf: []*schema{{Ref: "#/components/schemas/Book"}}},
 	}}
 	a := newAnswerFill()
-	a.merge(to, inferAll([]any{decoded(t, `{"untyped": {"n": 1}, "count": 2.5, "name": null, "duration": 3, "settings": {"theme": "dark"}, "book": {"title": "T", "isbn": "1"}, "label": 7, "added": true, "shelf": {"title": "S", "entities": []}}`)}), components, "answer", place{})
+	a.merge(to, inferAll([]any{decoded(t, `{"untyped": {"n": 1}, "count": 2.5, "name": null, "duration": 3, "offset": 1.5, "settings": {"theme": "dark"}, "book": {"title": "T", "isbn": "1"}, "label": 7, "added": true, "shelf": {"title": "S", "entities": []}}`)}), components, "answer", place{})
 
 	if got := describe(to.Properties["untyped"]); got != "object{n:number}" || !to.Properties["untyped"].Properties["n"].whole {
 		t.Errorf("an untyped value: %s, want filled, its whole number a number seen whole", got)
@@ -104,6 +108,9 @@ func TestAnswerFillMerge(t *testing.T) {
 	}
 	if to.Properties["duration"].Type != "number" || to.Properties["duration"].whole {
 		t.Errorf("a number sent whole: %+v, want it left a number", to.Properties["duration"])
+	}
+	if to.Properties["offset"].whole {
+		t.Error("a number seen whole elsewhere, sent with a fraction: want it no longer seen whole")
 	}
 	if components["Book"].Properties["isbn"] == nil {
 		t.Error("a field a shared record lacks: want it added")
@@ -136,6 +143,69 @@ func TestAnswerFillMerge(t *testing.T) {
 		if !strings.Contains(report.String(), line) {
 			t.Errorf("report has no %q:\n%s", line, report.String())
 		}
+	}
+}
+
+// A map's keys are data whatever they look like: an answer keyed by day names fills what every key holds rather than adding a field a day, and a
+// map the source writes as {} is filled from an answer keyed by days.
+func TestAnswerFillIntoAMap(t *testing.T) {
+	t.Parallel()
+
+	to := &schema{Type: "object", Properties: map[string]*schema{
+		"dayOfWeek": {Type: "object", Values: &schema{Type: "integer"}},
+		"days":      {Type: "object"},
+	}}
+	a := newAnswerFill()
+	a.merge(to, inferAll([]any{decoded(t, `{"dayOfWeek": {"Thursday": 1.5}, "days": {"2026-10-14": {"t": 1}}}`)}), nil, "answer", place{})
+
+	if got := describe(to.Properties["dayOfWeek"]); got != "map[number]" {
+		t.Errorf("a map keyed by names: %s, want map[number], what the key held, and no field for the day", got)
+	}
+	if got := describe(to.Properties["days"]); got != "map[object{t:number}]" {
+		t.Errorf("a map the source left empty: %s, want map[object{t:number}]", got)
+	}
+}
+
+// A map's values are written as the document's additionalProperties and read back the same; a record that may hold more fields stays true.
+func TestSchemaMapJSON(t *testing.T) {
+	t.Parallel()
+
+	for _, in := range []*schema{
+		{Type: "object", Values: &schema{Type: "number"}},
+		{Type: "object", AdditionalProperties: true},
+		{Type: "object", Properties: map[string]*schema{"days": {Type: "object", Values: &schema{Ref: "#/components/schemas/Day"}}}},
+	} {
+		b, err := json.Marshal(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out schema
+		if err := json.Unmarshal(b, &out); err != nil {
+			t.Fatalf("%s: %v", b, err)
+		}
+		if fingerprint(&out) != fingerprint(in) || out.AdditionalProperties != in.AdditionalProperties {
+			t.Errorf("%s read back as %s", b, describe(&out))
+		}
+	}
+
+	b, _ := json.Marshal(&schema{Type: "object", Values: &schema{Type: "number"}})
+	if string(b) != `{"type":"object","additionalProperties":{"type":"number"}}` {
+		t.Errorf("a map of numbers: %s", b)
+	}
+}
+
+// A shared record answered again, with a field null that came with a value before, is filled again: the null is a shape of its own.
+func TestAnswerFillSeesANullInASharedRecord(t *testing.T) {
+	t.Parallel()
+
+	components := map[string]*schema{"Series": {Type: "object", Properties: map[string]*schema{"sequence": {Type: "string"}}}}
+	to := &schema{Ref: "#/components/schemas/Series"}
+	a := newAnswerFill()
+	a.merge(to, inferAll([]any{decoded(t, `{"sequence": "1"}`)}), components, "first", place{})
+	a.merge(to, inferAll([]any{decoded(t, `{"sequence": "1"}`), decoded(t, `{"sequence": null}`)}), components, "second", place{})
+
+	if !components["Series"].Properties["sequence"].Nullable {
+		t.Error("a field a later answer sent null: want it nullable")
 	}
 }
 
@@ -208,6 +278,27 @@ func TestByhandSettlesAWholeNumber(t *testing.T) {
 	b.merge(plain, &schema{Type: "integer"}, nil, "duration")
 	if plain.Type != "number" {
 		t.Errorf("a number the source says: %s, want it left a number", plain.Type)
+	}
+}
+
+// The hand-written client adds the fields it sends to a record a stated place made where the scan saw nothing, as it would to an untyped one,
+// and adds none to a record the source wrote.
+func TestByhandFillsAnUnseenRecord(t *testing.T) {
+	t.Parallel()
+
+	from := &schema{Type: "object", Properties: map[string]*schema{"title": {Type: "string"}, "feedUrl": {Type: "string"}}}
+	unseen := &schema{Type: "object", unseen: true, Properties: map[string]*schema{"title": {}}}
+	written := &schema{Type: "object", Properties: map[string]*schema{"title": {}}}
+
+	b := &byhand{visitedRef: map[string]bool{}}
+	b.merge(unseen, from, nil, "metadata")
+	b.merge(written, from, nil, "metadata")
+
+	if unseen.Properties["title"].Type != "string" || unseen.Properties["feedUrl"] == nil {
+		t.Errorf("the unseen record: %s, want its field typed and the field it lacked added", describe(unseen))
+	}
+	if written.Properties["title"].Type != "string" || written.Properties["feedUrl"] != nil {
+		t.Errorf("the source's record: %s, want its field typed and nothing added", describe(written))
 	}
 }
 

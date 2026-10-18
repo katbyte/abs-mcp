@@ -8,7 +8,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/go-kt/pointer"
 )
 
 // Incomplete copies: a copy of a book with some of its files missing is not
@@ -57,7 +58,7 @@ type dupIncomplete struct {
 // folder is gone or holds nothing playable has only stale files to show, and
 // is audit_issues' to report, so a pair with one is passed over. The items
 // are fetched whole a batch at a time, and only the ones in such a pair.
-func (d *dupCollector) incomplete(ctx context.Context, client *abs.Client) ([]dupIncomplete, error) {
+func (d *dupCollector) incomplete(ctx context.Context, gen *api.Client) ([]dupIncomplete, error) {
 	pairs := slices.DeleteFunc(slices.Clone(d.apart), func(p dupPair) bool {
 		a, b := &d.items[p.i], &d.items[p.j]
 		return a.Missing || a.Invalid || b.Missing || b.Invalid || d.excluded[p.i] || d.excluded[p.j]
@@ -66,23 +67,23 @@ func (d *dupCollector) incomplete(ctx context.Context, client *abs.Client) ([]du
 	for _, p := range pairs {
 		need[d.items[p.i].ID], need[d.items[p.j].ID] = true, true
 	}
-	ids := make([]string, 0, len(need))
+	ids := make([]api.LibraryItemID, 0, len(need))
 	for id := range need {
-		ids = append(ids, id)
+		ids = append(ids, api.LibraryItemID(id))
 	}
 	slices.Sort(ids)
 	// each book fetched once however often settle reads it
 	if d.tracks == nil {
-		d.tracks = map[string][]abs.AudioFile{}
+		d.tracks = map[string][]api.AudioFile{}
 	}
-	ids = slices.DeleteFunc(ids, func(id string) bool { _, ok := d.tracks[id]; return ok })
+	ids = slices.DeleteFunc(ids, func(id api.LibraryItemID) bool { _, ok := d.tracks[string(id)]; return ok })
 	for chunk := range slices.Chunk(ids, embedBatchSize) {
-		items, err := client.ItemsBatch(ctx, chunk)
+		items, err := itemsBatch(ctx, gen, chunk)
 		if err != nil {
 			return nil, err
 		}
 		for k := range items {
-			d.tracks[items[k].ID] = playedTracks(&items[k])
+			d.tracks[string(items[k].Id)] = playedTracks(&items[k])
 		}
 	}
 	tracks := d.tracks
@@ -123,14 +124,14 @@ func (d *dupCollector) incomplete(ctx context.Context, client *abs.Client) ([]du
 
 // playedTracks is an item's audio files in play order, the excluded ones left
 // out.
-func playedTracks(it *abs.Item) []abs.AudioFile {
-	var out []abs.AudioFile
+func playedTracks(it *api.LibraryItemExpanded) []api.AudioFile {
+	var out []api.AudioFile
 	for _, f := range it.Media.AudioFiles {
 		if !f.Exclude {
 			out = append(out, f)
 		}
 	}
-	slices.SortStableFunc(out, func(a, b abs.AudioFile) int { return cmp.Compare(a.Index, b.Index) })
+	slices.SortStableFunc(out, func(a, b api.AudioFile) int { return cmp.Compare(a.Index, b.Index) })
 	return out
 }
 
@@ -142,7 +143,7 @@ func playedTracks(it *abs.Item) []abs.AudioFile {
 // then how many were held and the long copy's tracks left over, in play
 // order. Taking the first match along is as good as any: if the tracks fit
 // in order at all, they fit that way.
-func heldTracks(short, long []abs.AudioFile) (held int, missing []string, ok bool) {
+func heldTracks(short, long []api.AudioFile) (held int, missing []string, ok bool) {
 	if len(short) == 0 || len(short) >= len(long) {
 		return 0, nil, false
 	}
@@ -178,7 +179,7 @@ func heldTracks(short, long []abs.AudioFile) (held int, missing []string, ok boo
 	}
 	for j, l := range long {
 		if !used[j] {
-			missing = append(missing, l.Metadata.Filename)
+			missing = append(missing, pointer.From(l.Metadata).Filename)
 		}
 	}
 	return held, missing, true
@@ -186,11 +187,12 @@ func heldTracks(short, long []abs.AudioFile) (held int, missing []string, ok boo
 
 // sameFile reports whether two tracks share a file name or a size to the
 // byte: what one track alone needs beside its length to be the same file.
-func sameFile(a, b *abs.AudioFile) bool {
-	if a.Metadata.Filename != "" && a.Metadata.Filename == b.Metadata.Filename {
+func sameFile(a, b *api.AudioFile) bool {
+	am, bm := pointer.From(a.Metadata), pointer.From(b.Metadata)
+	if am.Filename != "" && am.Filename == bm.Filename {
 		return true
 	}
-	return a.Metadata.Size > 0 && a.Metadata.Size == b.Metadata.Size
+	return am.Size > 0 && am.Size == bm.Size
 }
 
 // settle groups the copies, reads the pairs far apart for incomplete ones,
@@ -199,12 +201,12 @@ func sameFile(a, b *abs.AudioFile) bool {
 // pair to read. With each copy read against its group's fullest copy, the
 // first round finds every one seen so far; the rounds after are a net for
 // a shape not yet seen.
-func (d *dupCollector) settle(ctx context.Context, client *abs.Client) ([]dupGroup, []dupIncomplete, error) {
+func (d *dupCollector) settle(ctx context.Context, gen *api.Client) ([]dupGroup, []dupIncomplete, error) {
 	groups := d.groups()
 	found := []dupIncomplete{}
 	reported := map[string]bool{}
 	for range incompleteRounds {
-		rows, err := d.incomplete(ctx, client)
+		rows, err := d.incomplete(ctx, gen)
 		if err != nil {
 			return nil, nil, err
 		}

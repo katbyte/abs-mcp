@@ -14,34 +14,34 @@ import (
 
 // MeGetMediaProgressResponse is the result of MeGetMediaProgress.
 //
-// Answer is the MeGetMediaProgressAnswer answered, nil when the server answered none (a 204), which
+// Answer is the MediaProgress answered, nil when the server answered none (a 204), which
 // Answered tells. The same record is embedded, so res.Answer.Name may be read as
 // res.Name; when nothing was answered the embedded record is a zero one, so that
 // read is empty rather than a panic. Only the method sets the two; a response built
 // by hand sets both or neither.
 type MeGetMediaProgressResponse struct {
 	HttpResponse *http.Response
-	Answer       *MeGetMediaProgressAnswer
-	*MeGetMediaProgressAnswer
+	Answer       *MediaProgress
+	*MediaProgress
 }
 
 // Answered reports whether the server answered with a body that was decoded:
 // false for a 204, or a call that failed before one came.
 func (r MeGetMediaProgressResponse) Answered() bool { return r.Answer != nil }
 
-// Record is the MeGetMediaProgressAnswer answered, as a value to change and write back, or an
+// Record is the MediaProgress answered, as a value to change and write back, or an
 // error when the server answered none.
-func (r MeGetMediaProgressResponse) Record() (MeGetMediaProgressAnswer, error) {
+func (r MeGetMediaProgressResponse) Record() (MediaProgress, error) {
 	if r.Answer == nil {
-		return MeGetMediaProgressAnswer{}, errors.New("MeGetMediaProgress answered no MeGetMediaProgressAnswer")
+		return MediaProgress{}, errors.New("MeGetMediaProgress answered no MediaProgress")
 	}
 
 	return *r.Answer, nil
 }
 
 // MeGetMediaProgress calls GET /api/me/progress/{id}/{episodeId}.
-func (c Client) MeGetMediaProgress(ctx context.Context, id UserID, episodeId EpisodeID) (result MeGetMediaProgressResponse, err error) {
-	result.MeGetMediaProgressAnswer = &MeGetMediaProgressAnswer{}
+func (c Client) MeGetMediaProgress(ctx context.Context, id LibraryItemID, episodeId EpisodeID) (result MeGetMediaProgressResponse, err error) {
+	result.MediaProgress = &MediaProgress{}
 	opts := client.RequestOptions{
 		ExpectedStatusCodes: []int{
 			http.StatusOK,
@@ -65,12 +65,12 @@ func (c Client) MeGetMediaProgress(ctx context.Context, id UserID, episodeId Epi
 		return
 	}
 
-	var answer MeGetMediaProgressAnswer
+	var answer MediaProgress
 	result.Answer = &answer
 	if err = resp.Unmarshal(result.Answer); err != nil {
 		return
 	}
-	result.MeGetMediaProgressAnswer = result.Answer
+	result.MediaProgress = result.Answer
 
 	return
 }

@@ -39,16 +39,46 @@ func (r LibraryStatsResponse) Record() (LibraryStatsAnswer, error) {
 	return *r.Answer, nil
 }
 
+// LibraryStatsOptions holds the query and header parameters of LibraryStats.
+type LibraryStatsOptions struct {
+	Sort string
+}
+
+// ToHeaders returns the header parameters the options set.
+func (o LibraryStatsOptions) ToHeaders() *client.Headers {
+	out := client.Headers{}
+	return &out
+}
+
+// ToQuery returns the query parameters the options set.
+func (o LibraryStatsOptions) ToQuery() *client.QueryParams {
+	out := client.QueryParams{}
+	if o.Sort != "" {
+		out.Append("sort", o.Sort)
+	}
+	return &out
+}
+
 // LibraryStats calls GET /api/libraries/{id}/stats.
-func (c Client) LibraryStats(ctx context.Context, id LibraryID) (result LibraryStatsResponse, err error) {
+func (c Client) LibraryStats(ctx context.Context, id LibraryID, options ...LibraryStatsOptions) (result LibraryStatsResponse, err error) {
+	if len(options) > 1 {
+		err = fmt.Errorf("LibraryStats takes one options struct at most, not %d", len(options))
+		return
+	}
+	var option LibraryStatsOptions
+	if len(options) == 1 {
+		option = options[0]
+	}
+
 	result.LibraryStatsAnswer = &LibraryStatsAnswer{}
 	opts := client.RequestOptions{
 		ExpectedStatusCodes: []int{
 			http.StatusOK,
 		},
-		HTTPMethod: http.MethodGet,
-		Operation:  "LibraryStats",
-		Path:       fmt.Sprintf("/api/libraries/%s/stats", url.PathEscape(string(id))),
+		HTTPMethod:    http.MethodGet,
+		Operation:     "LibraryStats",
+		OptionsObject: option,
+		Path:          fmt.Sprintf("/api/libraries/%s/stats", url.PathEscape(string(id))),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)

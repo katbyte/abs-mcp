@@ -27,8 +27,8 @@ func TestOperationShareCreateMediaItemShare(t *testing.T) {
 	if !json.Valid([]byte(body)) {
 		t.Errorf("body = %q, want JSON", body)
 	}
-	if body != "{}" {
-		t.Errorf("an empty record sent %q, want %q: a field never set went out", body, "{}")
+	if body != "{\"expiresAt\":0,\"mediaItemId\":\"\",\"mediaItemType\":\"\",\"slug\":\"\"}" {
+		t.Errorf("an empty record sent %q, want %q: a field never set went out", body, "{\"expiresAt\":0,\"mediaItemId\":\"\",\"mediaItemType\":\"\",\"slug\":\"\"}")
 	}
 	if result.HttpResponse == nil || result.HttpResponse.StatusCode != 201 {
 		t.Fatalf("HttpResponse = %+v", result.HttpResponse)

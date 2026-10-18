@@ -1,0 +1,17 @@
+{
+  "operation": "LibraryItemBatchQuickMatch",
+  "method": "POST",
+  "path": "/api/items/batch/quickmatch",
+  "sent": [
+    {
+      "libraryItemIds": [
+        "83763d0f-b096-4efc-8ede-8600b77ed65f"
+      ],
+      "options": {
+        "overrideCover": false,
+        "overrideDetails": false,
+        "provider": "audible"
+      }
+    }
+  ]
+}

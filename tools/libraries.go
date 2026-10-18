@@ -1,17 +1,19 @@
 package tools
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"maps"
+	"net/http"
 	"regexp"
 	"slices"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/go-kt/httpc"
 	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
+	"github.com/katbyte/go-kt/pointer"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -103,6 +105,12 @@ func window[T any](offset, limit int, fetch func(page int) ([]T, int, error)) (r
 // filterLists are the lists library_filters answers with.
 var filterLists = []string{"genres", "tags", "narrators", "languages", "publishers", "published_decades", "authors", "series"}
 
+// nameRef is a record an answer names, by its id and its name.
+type nameRef struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
 // pageIn is how a listing held whole is paged: the same limit and offset the
 // listings the server pages take.
 type pageIn struct {
@@ -119,7 +127,7 @@ func pageOf[T any](all []T, limit, offset int) (page []T, next int) {
 }
 
 func registerLibraryTools(r *registry) {
-	client := r.client
+	gen := r.gen
 
 	type listOut struct {
 		Libraries []libraryRow `json:"libraries"`
@@ -128,7 +136,7 @@ func registerLibraryTools(r *registry) {
 		Name:        "library_list",
 		Description: "List the libraries visible to the API key with their type (book or podcast), folders and default metadata provider.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, listOut, error) {
-		libs, err := client.Libraries(ctx)
+		libs, err := libraries(ctx, gen)
 		if err != nil {
 			return nil, listOut{}, err
 		}
@@ -183,24 +191,25 @@ func registerLibraryTools(r *registry) {
 		Name:        "library_get",
 		Description: "One library in depth: counts of items, authors, series, genres, tags and narrators, total duration and size, issue count, the scan/match settings, and its top authors and genres with the longest and largest items.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, getOut, error) {
-		lib, err := resolveLibrary(ctx, client, in.Library)
+		lib, err := resolveLibrary(ctx, gen, in.Library)
 		if err != nil {
 			return nil, getOut{}, err
 		}
-		restricted, err := restrictedKey(ctx, client)
+		restricted, err := restrictedKey(ctx, gen)
 		if err != nil {
 			return nil, getOut{}, err
 		}
 		settings := func(out *getOut) {
-			out.Settings.SkipMatchingWithASIN = lib.Settings.SkipMatchingMediaWithASIN
-			out.Settings.SkipMatchingWithISBN = lib.Settings.SkipMatchingMediaWithISBN
-			out.Settings.AudiobooksOnly = lib.Settings.AudiobooksOnly
-			out.Settings.MetadataPrecedence = lib.Settings.MetadataPrecedence
-			out.Settings.PodcastSearchRegion = lib.Settings.PodcastSearchRegion
+			set := pointer.From(lib.Settings)
+			out.Settings.SkipMatchingWithASIN = set.SkipMatchingMediaWithAsin
+			out.Settings.SkipMatchingWithISBN = set.SkipMatchingMediaWithIsbn
+			out.Settings.AudiobooksOnly = set.AudiobooksOnly
+			out.Settings.MetadataPrecedence = set.MetadataPrecedence
+			out.Settings.PodcastSearchRegion = set.PodcastSearchRegion
 		}
 		if restricted {
 			// the stats and filter data count books this key may not see
-			v, verr := sweepVisible(ctx, client, lib)
+			v, verr := sweepVisible(ctx, gen, lib)
 			if verr != nil {
 				return nil, getOut{}, verr
 			}
@@ -223,7 +232,7 @@ func registerLibraryTools(r *registry) {
 				row := countRow{Name: name, Count: v.AuthorBooks[name]}
 				for _, a := range v.Authors {
 					if a.Name == name {
-						row.ID = a.ID
+						row.ID = string(a.Id)
 					}
 				}
 				out.TopAuthors = append(out.TopAuthors, row)
@@ -232,17 +241,18 @@ func registerLibraryTools(r *registry) {
 				out.TopGenres = append(out.TopGenres, countRow{Name: name, Count: v.Genres[name]})
 			}
 			for i := range v.Longest {
-				out.Longest = append(out.Longest, statRow{ID: v.Longest[i].ID, Title: v.Longest[i].Title(), Duration: wholeSec(v.Longest[i].Media.Duration)})
+				out.Longest = append(out.Longest, statRow{ID: string(v.Longest[i].Id), Title: v.Longest[i].Title(), Duration: wholeSec(v.Longest[i].Media.Duration)})
 			}
 			for i := range v.Largest {
-				out.Largest = append(out.Largest, statRow{ID: v.Largest[i].ID, Title: v.Largest[i].Title(), Size: v.Largest[i].Size})
+				out.Largest = append(out.Largest, statRow{ID: string(v.Largest[i].Id), Title: v.Largest[i].Title(), Size: v.Largest[i].SizeBytes()})
 			}
 			return nil, out, nil
 		}
-		_, fd, err := client.LibraryWithFilterData(ctx, lib.ID)
+		withData, err := record(gen.LibraryFindOne(ctx, lib.Id, api.LibraryFindOneOptions{Include: "filterdata"}))
 		if err != nil {
 			return nil, getOut{}, err
 		}
+		fd := pointer.From(withData.Filterdata)
 
 		out := getOut{
 			libraryRow: libraryRowOf(lib),
@@ -252,29 +262,29 @@ func registerLibraryTools(r *registry) {
 			Tags:       len(fd.Tags),
 			Narrators:  len(fd.Narrators),
 			Languages:  fd.Languages,
-			Issues:     fd.NumIssues,
+			Issues:     withData.Issues,
 		}
 		settings(&out)
 
-		st, err := client.LibraryStats(ctx, lib.ID)
+		st, err := record(gen.LibraryStats(ctx, lib.Id))
 		if err != nil {
 			return nil, getOut{}, fmt.Errorf("reading the library's stats: %w", err)
 		}
-		out.Items = st.TotalItems
+		out.Items = int(st.TotalItems)
 		out.Duration = wholeSec(st.TotalDuration)
-		out.Size = st.TotalSize
-		out.AudioFiles = st.NumAudioTracks
+		out.Size = int64(st.TotalSize)
+		out.AudioFiles = int(st.NumAudioTracks)
 		for _, a := range st.AuthorsWithCount {
-			out.TopAuthors = append(out.TopAuthors, countRow{Name: a.Name, ID: a.ID, Count: a.Count})
+			out.TopAuthors = append(out.TopAuthors, countRow{Name: a.Name, ID: a.Id, Count: a.Count})
 		}
 		for _, g := range st.GenresWithCount {
 			out.TopGenres = append(out.TopGenres, countRow{Name: g.Genre, Count: g.Count})
 		}
 		for _, it := range st.LongestItems {
-			out.Longest = append(out.Longest, statRow{ID: it.ID, Title: it.Title, Duration: wholeSec(it.Duration)})
+			out.Longest = append(out.Longest, statRow{ID: it.Id, Title: it.Title, Duration: wholeSec(it.Duration)})
 		}
 		for _, it := range st.LargestItems {
-			out.Largest = append(out.Largest, statRow{ID: it.ID, Title: it.Title, Size: it.Size})
+			out.Largest = append(out.Largest, statRow{ID: it.Id, Title: it.Title, Size: int64(it.Size)})
 		}
 
 		return nil, out, nil
@@ -305,31 +315,37 @@ func registerLibraryTools(r *registry) {
 		if strings.TrimSpace(in.Query) == "" {
 			return nil, searchOut{}, errors.New("query is required")
 		}
-		libs, err := resolveLibraries(ctx, client, in.Library)
+		libs, err := resolveLibraries(ctx, gen, in.Library)
 		if err != nil {
 			return nil, searchOut{}, err
 		}
 
-		restricted, err := restrictedKey(ctx, client)
+		restricted, err := restrictedKey(ctx, gen)
 		if err != nil {
 			return nil, searchOut{}, err
 		}
 
 		out := searchOut{Items: []itemSummary{}}
 		for i := range libs {
-			res, err := client.Search(ctx, libs[i].ID, in.Query, min(mcpregistry.LimitOr(in.Limit, 10), maxLimit))
+			res, err := record(gen.LibrarySearch(ctx, libs[i].Id, api.LibrarySearchOptions{Q: in.Query, Limit: new(min(mcpregistry.LimitOr(in.Limit, 10), maxLimit))}))
 			if err != nil {
 				return nil, searchOut{}, err
 			}
-			matches := res.Items()
+			// a library holds books or podcasts, and the server answers under one
+			matches := res.Book
+			if len(matches) == 0 {
+				matches = res.Podcast
+			}
 			for j := range matches {
-				out.Items = append(out.Items, summarize(&matches[j].LibraryItem))
+				if it := matches[j].LibraryItem; it != nil {
+					out.Items = append(out.Items, summarizeWhole(it))
+				}
 			}
 			// the server filters the items to what the key may see but not the
 			// name groups, which are matched over the whole library
 			var v *visibleLibrary
 			if restricted && len(res.Authors)+len(res.Series)+len(res.Narrators)+len(res.Tags)+len(res.Genres) > 0 {
-				if v, err = sweepVisible(ctx, client, &libs[i]); err != nil {
+				if v, err = sweepVisible(ctx, gen, &libs[i]); err != nil {
 					return nil, searchOut{}, err
 				}
 			}
@@ -346,28 +362,31 @@ func registerLibraryTools(r *registry) {
 				return counts[name], counts[name] > 0
 			}
 			for _, a := range res.Authors {
-				if v == nil || hasRef(v.Authors, a.ID) {
+				if v == nil || slices.ContainsFunc(v.Authors, func(seen api.AuthorMinimal) bool { return seen.Id == a.Id }) {
 					n, _ := visibleCount(authorBooks, a.Name, a.NumBooks)
-					out.Authors = append(out.Authors, nameCount{Name: a.Name, ID: a.ID, Count: n})
+					out.Authors = append(out.Authors, nameCount{Name: a.Name, ID: string(a.Id), Count: n})
 				}
 			}
 			for _, s := range res.Series {
-				if v == nil || hasRef(v.Series, s.Series.ID) {
-					out.Series = append(out.Series, nameCount{Name: s.Series.Name, ID: s.Series.ID, Count: len(s.Books)})
+				if s.Series == nil {
+					continue
+				}
+				if v == nil || slices.ContainsFunc(v.Series, func(seen api.SeriesMinimal) bool { return seen.Id == s.Series.Id }) {
+					out.Series = append(out.Series, nameCount{Name: s.Series.Name, ID: string(s.Series.Id), Count: len(s.Books)})
 				}
 			}
 			for _, n := range res.Narrators {
-				if count, ok := visibleCount(narrators, n.Name, n.N()); ok {
+				if count, ok := visibleCount(narrators, n.Name, n.NumBooks); ok {
 					out.Narrators = append(out.Narrators, nameCount{Name: n.Name, Count: count})
 				}
 			}
 			for _, t := range res.Tags {
-				if count, ok := visibleCount(tags, t.Name, t.N()); ok {
+				if count, ok := visibleCount(tags, t.Name, t.NumItems); ok {
 					out.Tags = append(out.Tags, nameCount{Name: t.Name, Count: count})
 				}
 			}
 			for _, g := range res.Genres {
-				if count, ok := visibleCount(genres, g.Name, g.N()); ok {
+				if count, ok := visibleCount(genres, g.Name, g.NumItems); ok {
 					out.Genres = append(out.Genres, nameCount{Name: g.Name, Count: count})
 				}
 			}
@@ -405,7 +424,7 @@ func registerLibraryTools(r *registry) {
 		Name:        "library_items",
 		Description: "Browse or count a library by structured filter, sorted and paged - 'every Sanderson book, longest first', 'what is in progress'. Takes no text query: use library_search to find something by name. Filter groups: " + filterGroups + ". Authors and series accept a name or an id from library_filters.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in itemsIn) (*mcp.CallToolResult, itemsOut, error) {
-		lib, err := resolveLibrary(ctx, client, in.Library)
+		lib, err := resolveLibrary(ctx, gen, in.Library)
 		if err != nil {
 			return nil, itemsOut{}, err
 		}
@@ -414,14 +433,14 @@ func registerLibraryTools(r *registry) {
 			return nil, itemsOut{}, fmt.Errorf("unknown sort %q; choose one of: %s", in.Sort, strings.Join(sortNames(lib.IsPodcast()), ", "))
 		}
 
-		filter, err := buildFilter(ctx, client, lib, in.Filter)
+		filter, err := buildFilter(ctx, gen, lib, in.Filter)
 		if err != nil {
 			return nil, itemsOut{}, err
 		}
 
 		limit, offset := pageArgs(in.Limit, in.Offset, defaultLimit)
-		items, total, err := window(offset, limit, func(page int) ([]abs.Item, int, error) {
-			res, ierr := client.Items(ctx, lib.ID, abs.ItemsOptions{Limit: limit, Page: page, Sort: sort, Desc: in.Desc, Filter: filter, Minified: true})
+		items, total, err := window(offset, limit, func(page int) ([]api.LibraryItemMinified, int, error) {
+			res, ierr := record(gen.LibraryGetLibraryItems(ctx, lib.Id, api.LibraryGetLibraryItemsOptions{Limit: new(limit), Page: new(page), Sort: sort, Desc: descFlag(in.Desc), Filter: filter, Minified: "1"}))
 			if ierr != nil {
 				return nil, 0, ierr
 			}
@@ -430,13 +449,20 @@ func registerLibraryTools(r *registry) {
 		if err != nil {
 			return nil, itemsOut{}, err
 		}
+		summaries := summarizeAll(items)
 		if strings.HasPrefix(filter, "series.") { // the listing collapses each book's series to the one filtered on
-			if err := fullSeriesLists(ctx, client, items); err != nil {
+			full, err := fullSeriesLists(ctx, gen, items)
+			if err != nil {
 				return nil, itemsOut{}, err
+			}
+			for i := range items {
+				if lines := full[items[i].Id]; len(lines) > 0 {
+					summaries[i].Series = lines
+				}
 			}
 		}
 
-		return nil, itemsOut{Total: total, Offset: offset, NextOffset: mcpregistry.NextOffset(offset, len(items), total), Items: summarizeAll(items)}, nil
+		return nil, itemsOut{Total: total, Offset: offset, NextOffset: mcpregistry.NextOffset(offset, len(items), total), Items: summaries}, nil
 	})
 
 	type recentIn struct {
@@ -450,21 +476,21 @@ func registerLibraryTools(r *registry) {
 		Name:        "library_recent",
 		Description: "Recently added books and podcasts across every library at once, newest first - 'what turned up lately'. This is the only item listing that spans libraries; for one library with the full filters, sorts and paging use library_items with sort=added and desc=true.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in recentIn) (*mcp.CallToolResult, recentOut, error) {
-		libs, err := resolveLibraries(ctx, client, in.Library)
+		libs, err := resolveLibraries(ctx, gen, in.Library)
 		if err != nil {
 			return nil, recentOut{}, err
 		}
 		limit := min(mcpregistry.LimitOr(in.Limit, defaultLimit), maxLimit)
 
-		var all []abs.Item
+		var all []api.LibraryItemMinified
 		for i := range libs {
-			res, err := client.Items(ctx, libs[i].ID, abs.ItemsOptions{Limit: limit, Sort: "addedAt", Desc: true, Minified: true})
+			res, err := record(gen.LibraryGetLibraryItems(ctx, libs[i].Id, api.LibraryGetLibraryItemsOptions{Limit: new(limit), Page: new(0), Sort: "addedAt", Desc: "1", Minified: "1"}))
 			if err != nil {
 				return nil, recentOut{}, err
 			}
 			all = append(all, res.Results...)
 		}
-		slices.SortStableFunc(all, func(a, b abs.Item) int { return cmp.Compare(b.AddedAt, a.AddedAt) })
+		slices.SortStableFunc(all, func(a, b api.LibraryItemMinified) int { return b.AddedAt.Compare(a.AddedAt.Time) })
 		if len(all) > limit {
 			all = all[:limit]
 		}
@@ -484,14 +510,14 @@ func registerLibraryTools(r *registry) {
 		NextOffset int            `json:"next_offset,omitempty" jsonschema:"pass back as offset for more of every list that has more; absent once none has"`
 		// a list with nothing in it, or not asked for, is left out: totals
 		// says which, a list asked for being there with its count
-		Genres           []string      `json:"genres,omitempty"`
-		Tags             []string      `json:"tags,omitempty"`
-		Narrators        []string      `json:"narrators,omitempty"`
-		Languages        []string      `json:"languages,omitempty"`
-		Publishers       []string      `json:"publishers,omitempty"`
-		PublishedDecades []string      `json:"published_decades,omitempty"`
-		Authors          []abs.NameRef `json:"authors,omitempty"           jsonschema:"pass the id as authors:<id> to library_items"`
-		Series           []abs.NameRef `json:"series,omitempty"            jsonschema:"pass the id as series:<id> to library_items"`
+		Genres           []string  `json:"genres,omitempty"`
+		Tags             []string  `json:"tags,omitempty"`
+		Narrators        []string  `json:"narrators,omitempty"`
+		Languages        []string  `json:"languages,omitempty"`
+		Publishers       []string  `json:"publishers,omitempty"`
+		PublishedDecades []string  `json:"published_decades,omitempty"`
+		Authors          []nameRef `json:"authors,omitempty"           jsonschema:"pass the id as authors:<id> to library_items"`
+		Series           []nameRef `json:"series,omitempty"            jsonschema:"pass the id as series:<id> to library_items"`
 	}
 	add(r, readTool, &mcp.Tool{
 		Name: "library_filters",
@@ -518,14 +544,14 @@ func registerLibraryTools(r *registry) {
 				page, next := pageOf(*list, limit, offset)
 				*list, out.NextOffset = append([]string{}, page...), max(out.NextOffset, next)
 			}
-			refs := func(name string, list *[]abs.NameRef) {
+			refs := func(name string, list *[]nameRef) {
 				if !wanted(name) {
 					*list = nil
 					return
 				}
 				out.Totals[name] = len(*list)
 				page, next := pageOf(*list, limit, offset)
-				*list, out.NextOffset = append([]abs.NameRef{}, page...), max(out.NextOffset, next)
+				*list, out.NextOffset = append([]nameRef{}, page...), max(out.NextOffset, next)
 			}
 			names("genres", &out.Genres)
 			names("tags", &out.Tags)
@@ -537,28 +563,35 @@ func registerLibraryTools(r *registry) {
 			refs("series", &out.Series)
 			return out
 		}
-		lib, err := resolveLibrary(ctx, client, in.Library)
+		lib, err := resolveLibrary(ctx, gen, in.Library)
 		if err != nil {
 			return nil, filtersOut{}, err
 		}
-		restricted, err := restrictedKey(ctx, client)
+		restricted, err := restrictedKey(ctx, gen)
 		if err != nil {
 			return nil, filtersOut{}, err
 		}
 		if restricted {
 			// the filter data lists the whole library's vocabulary, including
 			// what this key may not see
-			v, verr := sweepVisible(ctx, client, lib)
+			v, verr := sweepVisible(ctx, gen, lib)
 			if verr != nil {
 				return nil, filtersOut{}, verr
 			}
-			return nil, paged(filtersOut{
+			out := filtersOut{
 				Genres: keysOf(v.Genres), Tags: keysOf(v.Tags), Narrators: keysOf(v.Narrators),
 				Languages: keysOf(v.Languages), Publishers: keysOf(v.Publishers), PublishedDecades: keysOf(v.Decades),
-				Authors: v.Authors, Series: v.Series,
-			}), nil
+				Authors: make([]nameRef, 0, len(v.Authors)), Series: make([]nameRef, 0, len(v.Series)),
+			}
+			for _, a := range v.Authors {
+				out.Authors = append(out.Authors, nameRef{ID: string(a.Id), Name: a.Name})
+			}
+			for _, s := range v.Series {
+				out.Series = append(out.Series, nameRef{ID: string(s.Id), Name: s.Name})
+			}
+			return nil, paged(out), nil
 		}
-		fd, err := client.FilterData(ctx, lib.ID)
+		fd, err := record(gen.LibraryGetLibraryFilterData(ctx, lib.Id))
 		if err != nil {
 			return nil, filtersOut{}, err
 		}
@@ -569,26 +602,32 @@ func registerLibraryTools(r *registry) {
 			Languages:        fd.Languages,
 			Publishers:       fd.Publishers,
 			PublishedDecades: fd.PublishedDecades,
-			Authors:          fd.Authors,
-			Series:           fd.Series,
+			Authors:          make([]nameRef, 0, len(fd.Authors)),
+			Series:           make([]nameRef, 0, len(fd.Series)),
+		}
+		for _, a := range fd.Authors {
+			out.Authors = append(out.Authors, nameRef{ID: a.Id, Name: a.Name})
+		}
+		for _, s := range fd.Series {
+			out.Series = append(out.Series, nameRef{ID: s.Id, Name: s.Name})
 		}
 		// the filter data is cached for half an hour and a rename does not
 		// reach it, so the names library_items resolves are read live
 		if !lib.IsPodcast() {
-			authors, err := allAuthors(ctx, client, lib.ID, abs.ListOptions{Sort: "name"})
+			authors, err := allAuthors(ctx, gen, lib.Id, api.LibraryGetAuthorsOptions{Sort: "name"})
 			if err != nil {
 				return nil, filtersOut{}, err
 			}
-			series, err := allSeries(ctx, client, lib.ID)
+			series, err := allSeries(ctx, gen, lib.Id)
 			if err != nil {
 				return nil, filtersOut{}, err
 			}
-			out.Authors, out.Series = make([]abs.NameRef, 0, len(authors)), make([]abs.NameRef, 0, len(series))
+			out.Authors, out.Series = make([]nameRef, 0, len(authors)), make([]nameRef, 0, len(series))
 			for i := range authors {
-				out.Authors = append(out.Authors, abs.NameRef{ID: authors[i].ID, Name: authors[i].Name})
+				out.Authors = append(out.Authors, nameRef{ID: string(authors[i].Id), Name: authors[i].Name})
 			}
 			for i := range series {
-				out.Series = append(out.Series, abs.NameRef{ID: series[i].ID, Name: series[i].Name})
+				out.Series = append(out.Series, nameRef{ID: string(series[i].Id), Name: series[i].Name})
 			}
 		}
 
@@ -628,15 +667,15 @@ func registerLibraryTools(r *registry) {
 		if mediaType != "book" && mediaType != "podcast" {
 			return nil, createOut{}, fmt.Errorf("media_type %q must be book or podcast", in.MediaType)
 		}
-		provider, perr := checkProvider(ctx, client, in.Provider, mediaType)
+		provider, perr := checkProvider(ctx, gen, in.Provider, mediaType)
 		if perr != nil {
 			return nil, createOut{}, perr
 		}
 
-		folders := make([]abs.Folder, 0, len(in.Folders))
+		folders := make([]api.LibraryFolder, 0, len(in.Folders))
 		for _, f := range in.Folders {
 			if f = strings.TrimSpace(f); f != "" {
-				folders = append(folders, abs.Folder{FullPath: f})
+				folders = append(folders, api.LibraryFolder{FullPath: f})
 			}
 		}
 		if len(folders) == 0 {
@@ -648,7 +687,7 @@ func registerLibraryTools(r *registry) {
 			if !strings.HasPrefix(f.FullPath, "/") && !windowsPath.MatchString(f.FullPath) {
 				return nil, createOut{}, fmt.Errorf("folder %q must be an absolute path on the server", f.FullPath)
 			}
-			exists, err := client.ServerPathExists(ctx, f.FullPath)
+			exists, err := serverPathExists(ctx, gen, f.FullPath)
 			if err != nil {
 				return nil, createOut{}, err
 			}
@@ -656,24 +695,24 @@ func registerLibraryTools(r *registry) {
 				return nil, createOut{}, fmt.Errorf("no folder %q on the server: Audiobookshelf would create it empty; check the path as the server sees it (inside its container, if it runs in one)", f.FullPath)
 			}
 		}
-		libs, err := client.Libraries(ctx)
+		libs, err := libraries(ctx, gen)
 		if err != nil {
 			return nil, createOut{}, err
 		}
 		for i := range libs {
 			if strings.EqualFold(strings.TrimSpace(libs[i].Name), name) {
-				return nil, createOut{}, fmt.Errorf("a library named %q already exists (%s): two libraries with one name cannot be told apart by name", libs[i].Name, libs[i].ID)
+				return nil, createOut{}, fmt.Errorf("a library named %q already exists (%s): two libraries with one name cannot be told apart by name", libs[i].Name, libs[i].Id)
 			}
 		}
 
-		lib, err := client.CreateLibrary(ctx, abs.LibraryCreate{
+		lib, err := record(gen.LibraryCreate(ctx, api.LibraryCreateRequest{
 			Name: name, Folders: folders, MediaType: mediaType, Provider: provider, Icon: in.Icon,
-		})
+		}))
 		if err != nil {
 			return nil, createOut{}, err
 		}
 
-		return nil, createOut{Library: libraryRowOf(lib)}, nil
+		return nil, createOut{Library: libraryRowOf(&lib)}, nil
 	})
 
 	type libEditIn struct {
@@ -689,7 +728,7 @@ func registerLibraryTools(r *registry) {
 		Name:        "library_edit",
 		Description: "Rename a library, or change its default metadata provider or icon. Folders and scan settings are not touched. Admin only. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in libEditIn) (*mcp.CallToolResult, libEditOut, error) {
-		lib, err := resolveLibrary(ctx, client, in.Library)
+		lib, err := resolveLibrary(ctx, gen, in.Library)
 		if err != nil {
 			return nil, libEditOut{}, err
 		}
@@ -698,43 +737,47 @@ func registerLibraryTools(r *registry) {
 		if in.Name != "" && name == "" {
 			return nil, libEditOut{}, errors.New("name cannot be blank")
 		}
-		provider, err := checkProvider(ctx, client, in.Provider, lib.MediaType)
+		provider, err := checkProvider(ctx, gen, in.Provider, lib.MediaType)
 		if err != nil {
 			return nil, libEditOut{}, err
 		}
-		upd := abs.LibraryUpdate{Name: strPtr(name), Provider: strPtr(provider), Icon: strPtr(in.Icon)}
-		if upd.Name == nil && upd.Provider == nil && upd.Icon == nil {
+		upd := api.LibraryUpdateRequest{Name: name, Provider: provider, Icon: in.Icon}
+		if upd.Name == "" && upd.Provider == "" && upd.Icon == "" {
 			return nil, libEditOut{}, errors.New("nothing to change: pass name, provider or icon")
 		}
-		if upd.Name != nil {
-			libs, lerr := client.Libraries(ctx)
+		if upd.Name != "" {
+			libs, lerr := libraries(ctx, gen)
 			if lerr != nil {
 				return nil, libEditOut{}, lerr
 			}
 			for i := range libs {
-				if libs[i].ID != lib.ID && strings.EqualFold(strings.TrimSpace(libs[i].Name), name) {
-					return nil, libEditOut{}, fmt.Errorf("a library named %q already exists (%s): two libraries with one name cannot be told apart by name", libs[i].Name, libs[i].ID)
+				if libs[i].Id != lib.Id && strings.EqualFold(strings.TrimSpace(libs[i].Name), name) {
+					return nil, libEditOut{}, fmt.Errorf("a library named %q already exists (%s): two libraries with one name cannot be told apart by name", libs[i].Name, libs[i].Id)
 				}
 			}
 		}
 
-		updated, err := client.UpdateLibrary(ctx, lib.ID, upd)
+		updated, err := record(gen.LibraryUpdate(ctx, lib.Id, upd))
 		if err != nil {
 			return nil, libEditOut{}, err
 		}
 
-		return nil, libEditOut{Library: libraryRowOf(updated)}, nil
+		return nil, libEditOut{Library: libraryRowOf(&updated)}, nil
 	})
 
 	add(r, writeTool, &mcp.Tool{
 		Name:        "library_scan",
 		Description: "Scan a library's folders so new, changed and removed files are picked up. Admin only. Changes server state; runs in the background.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in scanIn) (*mcp.CallToolResult, scanOut, error) {
-		lib, err := resolveLibrary(ctx, client, in.Library)
+		lib, err := resolveLibrary(ctx, gen, in.Library)
 		if err != nil {
 			return nil, scanOut{}, err
 		}
-		if err := client.ScanLibrary(ctx, lib.ID, in.Force); err != nil {
+		var force api.LibraryScanOptions
+		if in.Force {
+			force.Force = "1"
+		}
+		if _, err := gen.LibraryScan(ctx, lib.Id, force); err != nil {
 			return nil, scanOut{}, err
 		}
 
@@ -762,27 +805,27 @@ func registerLibraryTools(r *registry) {
 		Description: "Delete the library records of every item whose folder is missing or has no playable media. Without confirm=true it only says how many there are and which, and changes nothing: " +
 			"a share that was not mounted during a scan marks every book on it missing, and deleting those records loses everyone's listening progress on them. Files on disk are untouched. Admin only.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in removeIssuesIn) (*mcp.CallToolResult, removeIssuesOut, error) {
-		lib, err := resolveLibrary(ctx, client, in.Library)
+		lib, err := resolveLibrary(ctx, gen, in.Library)
 		if err != nil {
 			return nil, removeIssuesOut{}, err
 		}
-		before, err := client.Items(ctx, lib.ID, abs.ItemsOptions{Limit: previewCap, Sort: "media.metadata.title", Filter: "issues", Minified: true})
+		before, err := record(gen.LibraryGetLibraryItems(ctx, lib.Id, api.LibraryGetLibraryItemsOptions{Limit: new(previewCap), Page: new(0), Sort: "media.metadata.title", Filter: "issues", Minified: "1"}))
 		if err != nil {
 			return nil, removeIssuesOut{}, err
 		}
 		out := removeIssuesOut{Found: before.Total, Items: make([]issueRow, 0, len(before.Results)), Remaining: before.Total}
 		for i := range before.Results {
 			it := &before.Results[i]
-			out.Items = append(out.Items, issueRow{ID: it.ID, Title: it.Title(), Path: it.RelPath, FullPath: it.Path})
+			out.Items = append(out.Items, issueRow{ID: string(it.Id), Title: it.Title(), Path: it.RelPath, FullPath: it.Path})
 		}
 		if !in.Confirm || before.Total == 0 {
 			return nil, out, nil
 		}
-		if err := client.RemoveIssues(ctx, lib.ID); err != nil {
+		if _, err := gen.LibraryRemoveLibraryItemsWithIssues(ctx, lib.Id); err != nil {
 			return nil, removeIssuesOut{}, err
 		}
 		// the count is read back rather than assumed from before
-		after, err := client.Items(ctx, lib.ID, abs.ItemsOptions{Limit: 1, Filter: "issues", Minified: true})
+		after, err := record(gen.LibraryGetLibraryItems(ctx, lib.Id, api.LibraryGetLibraryItemsOptions{Limit: new(1), Page: new(0), Filter: "issues", Minified: "1"}))
 		if err != nil {
 			return nil, removeIssuesOut{}, fmt.Errorf("the records were deleted, but reading the library back failed: %w", err)
 		}
@@ -797,18 +840,19 @@ func registerLibraryTools(r *registry) {
 // it for the media type, custom ones included, and returns it as the server
 // spells it. The server stores any name it is given (it checks custom- ones
 // alone), so a mistyped provider would stick.
-func checkProvider(ctx context.Context, client *abs.Client, provider, mediaType string) (string, error) {
+func checkProvider(ctx context.Context, gen *api.Client, provider, mediaType string) (string, error) {
 	provider = strings.TrimSpace(provider)
 	if provider == "" {
 		return "", nil
 	}
-	book, podcast, err := client.Providers(ctx)
+	got, err := record(gen.SearchGetAllProviders(ctx))
 	if err != nil {
 		return "", err
 	}
-	have := book
+	providers := pointer.From(got.Providers)
+	have := providerValues(providers.Books)
 	if mediaType == "podcast" {
-		have = podcast
+		have = providerValues(providers.Podcasts)
 	}
 	for _, p := range have {
 		if strings.EqualFold(p, provider) {
@@ -874,9 +918,19 @@ func sortNames(podcast bool) []string {
 // absolute.
 var windowsPath = regexp.MustCompile(`^[A-Za-z]:[\\/]`)
 
+// serverPathExists is whether a folder is there on the Audiobookshelf server, as the server sees it: it answers 400 for one that is not.
+func serverPathExists(ctx context.Context, gen *api.Client, path string) (bool, error) {
+	_, err := gen.FileSystemGetPaths(ctx, api.FileSystemGetPathsOptions{Path: path, Level: new(0)})
+	if httpc.StatusCode(err) == http.StatusBadRequest {
+		return false, nil
+	}
+
+	return err == nil, err
+}
+
 // buildFilter turns "group:value" into the server's encoded filter, resolving
 // author and series names to ids when needed.
-func buildFilter(ctx context.Context, client *abs.Client, lib *abs.Library, filter string) (string, error) {
+func buildFilter(ctx context.Context, gen *api.Client, lib *api.Library, filter string) (string, error) {
 	filter = strings.TrimSpace(filter)
 	if filter == "" {
 		return "", nil
@@ -909,32 +963,32 @@ func buildFilter(ctx context.Context, client *abs.Client, lib *abs.Library, filt
 		if i < 0 {
 			return "", fmt.Errorf("%s:%s is not a filter the server knows; choose one of: %s", group, value, strings.Join(known, ", "))
 		}
-		return abs.EncodeFilter(group, known[i]), nil
+		return api.ListFilter(group, known[i]), nil
 	}
 	if group == "series" && strings.EqualFold(value, "no-series") {
-		return abs.EncodeFilter(group, "no-series"), nil
+		return api.ListFilter(group, "no-series"), nil
 	}
 
 	// authors and series filter by id; accept names too, looked up on the
 	// live routes rather than the cached filter data, which keeps a renamed
 	// series or author under its old name for half an hour
 	if (group == "authors" || group == "series") && !looksLikeID(value) {
-		var refs []abs.NameRef
+		var refs []nameRef
 		if group == "series" {
-			series, err := allSeries(ctx, client, lib.ID)
+			series, err := allSeries(ctx, gen, lib.Id)
 			if err != nil {
 				return "", err
 			}
 			for i := range series {
-				refs = append(refs, abs.NameRef{ID: series[i].ID, Name: series[i].Name})
+				refs = append(refs, nameRef{ID: string(series[i].Id), Name: series[i].Name})
 			}
 		} else {
-			authors, err := allAuthors(ctx, client, lib.ID, abs.ListOptions{})
+			authors, err := allAuthors(ctx, gen, lib.Id, api.LibraryGetAuthorsOptions{})
 			if err != nil {
 				return "", err
 			}
 			for i := range authors {
-				refs = append(refs, abs.NameRef{ID: authors[i].ID, Name: authors[i].Name})
+				refs = append(refs, nameRef{ID: string(authors[i].Id), Name: authors[i].Name})
 			}
 		}
 		// two records can share a name ("jim dale" beside "Jim Dale"), and
@@ -959,5 +1013,5 @@ func buildFilter(ctx context.Context, client *abs.Client, lib *abs.Library, filt
 		}
 	}
 
-	return abs.EncodeFilter(group, value), nil
+	return api.ListFilter(group, value), nil
 }

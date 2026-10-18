@@ -1,0 +1,15 @@
+{
+  "operation": "SessionSync",
+  "method": "POST",
+  "path": "/api/session/{id}/sync",
+  "sent": [
+    {
+      "currentTime": 0.5,
+      "timeListened": 0.5
+    },
+    {
+      "currentTime": 40,
+      "timeListened": 10
+    }
+  ]
+}

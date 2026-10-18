@@ -4,7 +4,7 @@ package abs
 
 // AuthorUpdateRequest is an object the document declares inline.
 type AuthorUpdateRequest struct {
-	Asin        string `json:"asin,omitempty"`
-	Description string `json:"description,omitempty"`
-	Name        string `json:"name,omitempty"`
+	Asin        *string `json:"asin,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Name        string  `json:"name,omitempty"`
 }

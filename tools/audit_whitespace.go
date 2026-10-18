@@ -10,7 +10,8 @@ import (
 
 	"github.com/katbyte/go-kt/whitespace"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/go-kt/pointer"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -149,15 +150,15 @@ type whitespaceSweep struct {
 	rows          []whitespaceRow
 	shared        map[string]int             // a name or folder already reported -> its row
 	entries       map[string]map[string]bool // a folder, keyed by its library folder -> the names in it
-	pending       []string                   // books whose files are still to read
-	libs          []string                   // book libraries seen since the last resolve, for their names
-	seenLib       map[string]bool
+	pending       []api.LibraryItemID        // books whose files are still to read
+	libs          []api.LibraryID            // book libraries seen since the last resolve, for their names
+	seenLib       map[api.LibraryID]bool
 	narrators     map[string]int  // a narrator already reported -> its first row, across libraries
 	bookDirs      map[string]bool // folders inside books already checked
 	// the series the listing names on each book, by library: a library
 	// that hides one-book series leaves them out of its series list, and
 	// the books are how they are found
-	bookSeries map[string][]bookSeries
+	bookSeries map[api.LibraryID][]bookSeries
 	// single-file books by the folder they sit in, and the name each is put
 	// right to: two put right to one name would overwrite each other
 	fileBecomes map[string]map[string]int
@@ -168,15 +169,11 @@ type whitespaceSweep struct {
 
 // seriesTextSpaced reports whether an item's series, as the listing gives
 // them, show any space out of place.
-func seriesTextSpaced(it *abs.Item) bool {
-	m := &it.Media.Metadata
+func seriesTextSpaced(it *api.LibraryItemMinified) bool {
+	m := it.Media.Metadata
 	text := m.SeriesName
-	if len(m.Series) > 0 {
-		parts := make([]string, 0, len(m.Series))
-		for _, ref := range m.Series {
-			parts = append(parts, ref.Name)
-		}
-		text = strings.Join(parts, ", ")
+	if m.Series != nil {
+		text = m.Series.Name
 	}
 	// a space before the comma that joins two names is one at the end of a
 	// name; an odd one there is a problem of the text's already
@@ -185,7 +182,7 @@ func seriesTextSpaced(it *abs.Item) bool {
 
 // bookSeries is a book and the series names the listing gives it.
 type bookSeries struct {
-	id    string
+	id    api.LibraryItemID
 	names []string
 }
 
@@ -233,10 +230,10 @@ func (w *whitespaceSweep) check(row whitespaceRow, name, key string) {
 // add reads one item from a listing: its title and subtitle, a podcast's
 // author and its folders; a book is held to read its files, and its library
 // to read its names.
-func (w *whitespaceSweep) add(it *abs.Item) {
+func (w *whitespaceSweep) add(it *api.LibraryItemMinified) {
 	w.scanned++
-	m := &it.Media.Metadata
-	item := whitespaceRow{ID: it.ID, Title: it.Title(), Path: it.RelPath}
+	m := it.Media.Metadata
+	item := whitespaceRow{ID: string(it.Id), Title: it.Title(), Path: it.RelPath}
 	for _, field := range [][2]string{{"title", m.Title}, {"subtitle", m.Subtitle}} {
 		row := item
 		row.Where, row.Fix = field[0], whitespaceFixes[field[0]]
@@ -246,14 +243,14 @@ func (w *whitespaceSweep) add(it *abs.Item) {
 		// a podcast's author is text on the item, with no record behind it
 		row := item
 		row.Where, row.Fix = "author", whitespaceFixes["podcast_author"]
-		w.check(row, m.Author, "podcast|"+it.LibraryID+"|"+m.Author)
+		w.check(row, m.Author, "podcast|"+string(it.LibraryId)+"|"+m.Author)
 	} else {
-		if !w.seenLib[it.LibraryID] {
+		if !w.seenLib[it.LibraryId] {
 			if w.seenLib == nil {
-				w.seenLib = map[string]bool{}
+				w.seenLib = map[api.LibraryID]bool{}
 			}
-			w.seenLib[it.LibraryID] = true
-			w.libs = append(w.libs, it.LibraryID)
+			w.seenLib[it.LibraryId] = true
+			w.libs = append(w.libs, it.LibraryId)
 		}
 		// only a book whose series, as the listing joins them, show a space
 		// out of place can be in a hidden series with one: a double space,
@@ -265,9 +262,9 @@ func (w *whitespaceSweep) add(it *abs.Item) {
 				names = append(names, ref.Name)
 			}
 			if w.bookSeries == nil {
-				w.bookSeries = map[string][]bookSeries{}
+				w.bookSeries = map[api.LibraryID][]bookSeries{}
 			}
-			w.bookSeries[it.LibraryID] = append(w.bookSeries[it.LibraryID], bookSeries{it.ID, names})
+			w.bookSeries[it.LibraryId] = append(w.bookSeries[it.LibraryId], bookSeries{it.Id, names})
 		}
 	}
 	// a record whose folder is gone names nothing on disk
@@ -275,9 +272,9 @@ func (w *whitespaceSweep) add(it *abs.Item) {
 		return
 	}
 	segments := strings.Split(strings.Trim(it.RelPath, "/"), "/")
-	if it.IsFile {
+	if pointer.From(it.IsFile) {
 		// the last is the book's one file, beside the folders
-		parent, name := it.FolderID+"|"+strings.Join(segments[:len(segments)-1], "/"), segments[len(segments)-1]
+		parent, name := string(it.FolderId)+"|"+strings.Join(segments[:len(segments)-1], "/"), segments[len(segments)-1]
 		w.entryIn(parent, name)
 		if fixed := diskFixed(name, true); fixed != "" && fixed != name {
 			if w.fileBecomes == nil {
@@ -291,8 +288,8 @@ func (w *whitespaceSweep) add(it *abs.Item) {
 		segments = segments[:len(segments)-1]
 	}
 	for i, folder := range segments {
-		parent := it.FolderID + "|" + strings.Join(segments[:i], "/")
-		entry := it.FolderID + "|" + strings.Join(segments[:i+1], "/")
+		parent := string(it.FolderId) + "|" + strings.Join(segments[:i], "/")
+		entry := string(it.FolderId) + "|" + strings.Join(segments[:i+1], "/")
 		w.entryIn(parent, folder)
 		row := item
 		row.Where, row.Fix, row.parent, row.entry, row.name = "folder", whitespaceFixes["folder"], parent, entry, folder
@@ -300,35 +297,35 @@ func (w *whitespaceSweep) add(it *abs.Item) {
 		w.check(row, folder, entry)
 	}
 	if !w.namesOnly && !it.IsPodcast() {
-		w.pending = append(w.pending, it.ID)
+		w.pending = append(w.pending, it.Id)
 	}
 }
 
 // resolve reads the names of the libraries seen since the last call from
 // their own lists, then fetches the held books whole, a batch at a time,
 // and reads their file names: one row per book per problem.
-func (w *whitespaceSweep) resolve(ctx context.Context, client *abs.Client) error {
+func (w *whitespaceSweep) resolve(ctx context.Context, gen *api.Client) error {
 	// the books first: fetched whole for their files, they carry their
 	// series as the record has them, which the names then need no second
 	// fetch for
-	fetched := map[string][]abs.SeriesRef{}
+	fetched := map[api.LibraryItemID][]api.SeriesMinimal{}
 	pending := w.pending
 	w.pending = nil
 	for chunk := range slices.Chunk(pending, embedBatchSize) {
-		items, err := client.ItemsBatch(ctx, chunk)
+		items, err := itemsBatch(ctx, gen, chunk)
 		if err != nil {
 			return err
 		}
 		for j := range items {
 			w.read++
 			w.files(&items[j])
-			fetched[items[j].ID] = items[j].Media.Metadata.Series
+			fetched[items[j].Id] = items[j].Media.Metadata.Series
 		}
 	}
 	libs := w.libs
 	w.libs = nil
 	for _, lib := range libs {
-		if err := w.names(ctx, client, lib, fetched); err != nil {
+		if err := w.names(ctx, gen, lib, fetched); err != nil {
 			return err
 		}
 	}
@@ -340,26 +337,26 @@ func (w *whitespaceSweep) resolve(ctx context.Context, client *abs.Client) error
 // comma a name holds ("Chronicles of Amber, The", "Jane Doe, Ph.D.") from the
 // one between two names. An author or series is its record, reported with
 // its id; a narrator is only a name, and is reported once across libraries.
-func (w *whitespaceSweep) names(ctx context.Context, client *abs.Client, libraryID string, fetched map[string][]abs.SeriesRef) error {
-	authors, err := allAuthors(ctx, client, libraryID, abs.ListOptions{})
+func (w *whitespaceSweep) names(ctx context.Context, gen *api.Client, libraryID api.LibraryID, fetched map[api.LibraryItemID][]api.SeriesMinimal) error {
+	authors, err := allAuthors(ctx, gen, libraryID, api.LibraryGetAuthorsOptions{})
 	if err != nil {
 		return fmt.Errorf("reading the authors: %w", err)
 	}
 	for _, a := range authors {
-		w.check(whitespaceRow{Where: "author", Value: a.Name, Record: a.ID, Items: a.NumBooks, Fix: whitespaceFixes["author"]}, a.Name, "")
+		w.check(whitespaceRow{Where: "author", Value: a.Name, Record: string(a.Id), Items: a.NumBooks, Fix: whitespaceFixes["author"]}, a.Name, "")
 	}
-	series, err := allSeries(ctx, client, libraryID)
+	series, err := allSeries(ctx, gen, libraryID)
 	if err != nil {
 		return fmt.Errorf("reading the series: %w", err)
 	}
-	listed := map[string]bool{}  // by series id
-	inListed := map[string]int{} // book id -> how many listed series hold it
+	listed := map[api.SeriesID]bool{}       // by series id
+	inListed := map[api.LibraryItemID]int{} // book id -> how many listed series hold it
 	for _, s := range series {
-		listed[s.ID] = true
+		listed[s.Id] = true
 		for i := range s.Books {
-			inListed[s.Books[i].ID]++
+			inListed[s.Books[i].Id]++
 		}
-		w.check(whitespaceRow{Where: "series", Value: s.Name, Record: s.ID, Items: len(s.Books), Fix: whitespaceFixes["series"]}, s.Name, "")
+		w.check(whitespaceRow{Where: "series", Value: s.Name, Record: string(s.Id), Items: len(s.Books), Fix: whitespaceFixes["series"]}, s.Name, "")
 	}
 	// a series the list left out - every one-book series, in a library that
 	// hides them - is read from its books: a book the listing gives more
@@ -367,15 +364,15 @@ func (w *whitespaceSweep) names(ctx context.Context, client *abs.Client, library
 	// the record has it. By the book, not the name: the listing trims its
 	// names, so a hidden "Mistborn " beside a listed "Mistborn" reads as it,
 	// and its joined names cannot be trusted with a comma
-	var unlisted []string
+	var unlisted []api.LibraryItemID
 	for _, b := range w.bookSeries[libraryID] {
 		if len(b.names) > inListed[b.id] {
 			unlisted = append(unlisted, b.id)
 		}
 	}
 	delete(w.bookSeries, libraryID)
-	refsOf := map[string][]abs.SeriesRef{}
-	var toFetch []string
+	refsOf := map[api.LibraryItemID][]api.SeriesMinimal{}
+	var toFetch []api.LibraryItemID
 	for _, id := range unlisted {
 		if refs, ok := fetched[id]; ok {
 			refsOf[id] = refs
@@ -384,27 +381,27 @@ func (w *whitespaceSweep) names(ctx context.Context, client *abs.Client, library
 		}
 	}
 	for chunk := range slices.Chunk(toFetch, embedBatchSize) {
-		items, ferr := client.ItemsBatch(ctx, chunk)
+		items, ferr := itemsBatch(ctx, gen, chunk)
 		if ferr != nil {
 			return fmt.Errorf("reading the series of books the series list leaves out: %w", ferr)
 		}
 		for j := range items {
-			refsOf[items[j].ID] = items[j].Media.Metadata.Series
+			refsOf[items[j].Id] = items[j].Media.Metadata.Series
 		}
 	}
 	for _, id := range unlisted {
 		for _, ref := range refsOf[id] {
-			if ref.ID == "" || listed[ref.ID] {
+			if ref.Id == "" || listed[ref.Id] {
 				continue
 			}
-			w.check(whitespaceRow{Where: "series", Value: ref.Name, Record: ref.ID, Fix: whitespaceFixes["series"]}, ref.Name, "series|"+ref.ID)
+			w.check(whitespaceRow{Where: "series", Value: ref.Name, Record: string(ref.Id), Fix: whitespaceFixes["series"]}, ref.Name, "series|"+string(ref.Id))
 		}
 	}
-	narrators, err := client.Narrators(ctx, libraryID)
+	got, err := record(gen.LibraryGetNarrators(ctx, libraryID))
 	if err != nil {
 		return fmt.Errorf("reading the narrators: %w", err)
 	}
-	for _, n := range narrators {
+	for _, n := range got.Narrators {
 		if len(whitespaceProblems(n.Name, false)) == 0 {
 			continue
 		}
@@ -430,21 +427,24 @@ func (w *whitespaceSweep) names(ctx context.Context, client *abs.Client, library
 // checked as a folder, and a file's suggestion is taken when another file
 // or folder beside it already has that name or another file there would be
 // put right to it too.
-func (w *whitespaceSweep) files(it *abs.Item) {
+func (w *whitespaceSweep) files(it *api.LibraryItemExpanded) {
 	var rels []string
 	for _, f := range it.LibraryFiles {
-		rels = append(rels, cmp.Or(f.Metadata.RelPath, f.Metadata.Filename))
+		meta := pointer.From(f.Metadata)
+		rels = append(rels, cmp.Or(meta.RelPath, meta.Filename))
 	}
 	if len(rels) == 0 {
 		for _, f := range it.Media.AudioFiles {
-			rels = append(rels, cmp.Or(f.Metadata.RelPath, f.Metadata.Filename))
+			meta := pointer.From(f.Metadata)
+			rels = append(rels, cmp.Or(meta.RelPath, meta.Filename))
 		}
 	}
 	slices.Sort(rels)
 	rels = slices.Compact(rels) // a path listed twice is one file
 	// a single-file book's one file is the item itself, beside the folders
 	base := it.RelPath
-	if it.IsFile {
+	isFile, folder := pointer.From(it.IsFile), string(it.FolderId)
+	if isFile {
 		base = path.Dir(it.RelPath)
 		if base == "." {
 			base = ""
@@ -463,8 +463,8 @@ func (w *whitespaceSweep) files(it *abs.Item) {
 	// what already sits beside a name, the book's own folder or, for a
 	// single-file book, the library folder it is in
 	beside := func(dir, name string) bool {
-		if it.IsFile && dir == "." {
-			return w.entries[it.FolderID+"|"+base][name]
+		if isFile && dir == "." {
+			return w.entries[folder+"|"+base][name]
 		}
 		return inDir[dir][name]
 	}
@@ -473,7 +473,7 @@ func (w *whitespaceSweep) files(it *abs.Item) {
 		for d := dir; d != "." && d != "/"; d = path.Dir(d) {
 			put(path.Dir(d), path.Base(d))
 			// a folder inside the book, a disc's: checked as a folder, once
-			entry := it.FolderID + "|" + path.Join(base, d)
+			entry := folder + "|" + path.Join(base, d)
 			if w.bookDirs[entry] {
 				continue
 			}
@@ -481,10 +481,10 @@ func (w *whitespaceSweep) files(it *abs.Item) {
 				w.bookDirs = map[string]bool{}
 			}
 			w.bookDirs[entry] = true
-			parent := it.FolderID + "|" + path.Join(base, path.Dir(d))
+			parent := folder + "|" + path.Join(base, path.Dir(d))
 			w.entryIn(parent, path.Base(d))
 			row := whitespaceRow{
-				Where: "folder", ID: it.ID, Title: it.Title(), Path: path.Join(base, d), Fix: whitespaceFixes["folder"],
+				Where: "folder", ID: string(it.Id), Title: it.Title(), Path: path.Join(base, d), Fix: whitespaceFixes["folder"],
 				parent: parent, entry: entry, name: path.Base(d),
 			}
 			w.check(row, path.Base(d), entry)
@@ -529,7 +529,7 @@ func (w *whitespaceSweep) files(it *abs.Item) {
 			taken = fmt.Sprintf("%s → %s: a file or folder of that name is already there", shown(rel), fixed)
 		case len(becomes[dir][fixed]) > 1:
 			taken = fmt.Sprintf("%s → %s: another file there is put right to that name too", shown(rel), fixed)
-		case it.IsFile && dir == "." && w.fileBecomes[it.FolderID+"|"+base][fixed] > 1:
+		case isFile && dir == "." && w.fileBecomes[folder+"|"+base][fixed] > 1:
 			taken = fmt.Sprintf("%s → %s: another book beside it is put right to that name too", shown(rel), fixed)
 		}
 		for _, problem := range problems {
@@ -537,7 +537,7 @@ func (w *whitespaceSweep) files(it *abs.Item) {
 			if row == nil {
 				row = &whitespaceRow{
 					Where: "file", Problem: problem, Text: shown(rel), Suggest: fixed,
-					ID: it.ID, Title: it.Title(), Path: it.RelPath, Fix: whitespaceFixes["file"],
+					ID: string(it.Id), Title: it.Title(), Path: it.RelPath, Fix: whitespaceFixes["file"],
 				}
 				if fixed == "" {
 					row.Fix += byHand
@@ -568,16 +568,14 @@ func (w *whitespaceSweep) files(it *abs.Item) {
 
 // library sweeps one library's listing, then reads its names and its books'
 // files.
-func (w *whitespaceSweep) library(ctx context.Context, client *abs.Client, lib *abs.Library) error {
-	if err := client.ItemsAll(ctx, lib.ID, abs.ItemsOptions{}, func(items []abs.Item) bool {
-		for j := range items {
-			w.add(&items[j])
-		}
+func (w *whitespaceSweep) library(ctx context.Context, gen *api.Client, lib *api.Library) error {
+	if err := eachItem(ctx, gen, lib.Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+		w.add(it)
 		return true
 	}); err != nil {
 		return err
 	}
-	return w.resolve(ctx, client)
+	return w.resolve(ctx, gen)
 }
 
 // takenFolders marks each folder row whose suggestion is taken: another
@@ -662,7 +660,7 @@ func (w *whitespaceSweep) report(limit int) whitespaceOut {
 }
 
 func registerWhitespaceAudit(r *registry) {
-	client := r.client
+	gen := r.gen
 
 	add(r, readTool, &mcp.Tool{
 		Name: "audit_whitespace",
@@ -674,13 +672,13 @@ func registerWhitespaceAudit(r *registry) {
 			"Fix titles and subtitles with item_edit, a podcast's author with item_edit podcast_author, an author with author_edit and a series with series_edit, each by its record_id, and a narrator with metadata_rename from= the value as stored; folders and files are renamed on disk, and no tool here does that. " +
 			"The listing carries no file names, so every book is fetched, fifty to a request.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in auditIn) (*mcp.CallToolResult, whitespaceOut, error) {
-		libs, err := resolveLibraries(ctx, client, in.Library)
+		libs, err := resolveLibraries(ctx, gen, in.Library)
 		if err != nil {
 			return nil, whitespaceOut{}, err
 		}
 		var sweep whitespaceSweep
 		for i := range libs {
-			if err := sweep.library(ctx, client, &libs[i]); err != nil {
+			if err := sweep.library(ctx, gen, &libs[i]); err != nil {
 				return nil, whitespaceOut{}, err
 			}
 		}

@@ -4,10 +4,10 @@ package abs
 
 // LibraryCreateRequest is an object the document declares inline.
 type LibraryCreateRequest struct {
-	Folders   []LibraryCreateRequestFolders `json:"folders,omitzero"`
-	Icon      string                        `json:"icon,omitempty"`
-	MediaType string                        `json:"mediaType,omitempty"`
-	Name      string                        `json:"name,omitempty"`
-	Provider  string                        `json:"provider,omitempty"`
-	Settings  any                           `json:"settings,omitempty"`
+	Folders   []LibraryFolder `json:"folders,omitzero"`
+	Icon      string          `json:"icon,omitempty"`
+	MediaType string          `json:"mediaType,omitempty"`
+	Name      string          `json:"name,omitempty"`
+	Provider  string          `json:"provider,omitempty"`
+	Settings  any             `json:"settings,omitempty"`
 }

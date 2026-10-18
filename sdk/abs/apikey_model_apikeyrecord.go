@@ -4,6 +4,7 @@ package abs
 
 // ApiKeyRecord is the "ApiKeyRecord" schema.
 type ApiKeyRecord struct {
+	ApiKey          string                     `json:"apiKey,omitempty"`
 	CreatedAt       string                     `json:"createdAt,omitempty"`
 	CreatedByUser   *ApiKeyRecordCreatedByUser `json:"createdByUser,omitempty"`
 	CreatedByUserId UserID                     `json:"createdByUserId,omitempty"`

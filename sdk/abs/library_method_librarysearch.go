@@ -44,6 +44,7 @@ func (r LibrarySearchResponse) Record() (LibrarySearchAnswer, error) {
 type LibrarySearchOptions struct {
 	Limit *int
 	Q     string
+	Sort  string
 }
 
 // ToHeaders returns the header parameters the options set.
@@ -60,6 +61,9 @@ func (o LibrarySearchOptions) ToQuery() *client.QueryParams {
 	}
 	if o.Q != "" {
 		out.Append("q", o.Q)
+	}
+	if o.Sort != "" {
+		out.Append("sort", o.Sort)
 	}
 	return &out
 }

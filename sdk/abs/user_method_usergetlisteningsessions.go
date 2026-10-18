@@ -114,7 +114,7 @@ func (c Client) UserGetListeningSessions(ctx context.Context, id UserID, options
 // UserGetListeningSessionsCompleteResult is every result UserGetListeningSessionsComplete loaded.
 type UserGetListeningSessionsCompleteResult struct {
 	LatestHttpResponse *http.Response
-	Items              []UserGetListeningSessionsAnswerSessions
+	Items              []PlaybackSessionForClient
 }
 
 // UserGetListeningSessionsComplete calls UserGetListeningSessions page by page, from the
@@ -173,10 +173,10 @@ func (c Client) UserGetListeningSessionsComplete(ctx context.Context, id UserID,
 //		}
 //	}
 //
-// An error is the last pair handed out, with a zero UserGetListeningSessionsAnswerSessions. The pages are asked for as UserGetListeningSessionsComplete asks for them.
-func (c Client) UserGetListeningSessionsEach(ctx context.Context, id UserID, options ...UserGetListeningSessionsOptions) iter.Seq2[UserGetListeningSessionsAnswerSessions, error] {
-	return func(yield func(UserGetListeningSessionsAnswerSessions, error) bool) {
-		var zero UserGetListeningSessionsAnswerSessions
+// An error is the last pair handed out, with a zero PlaybackSessionForClient. The pages are asked for as UserGetListeningSessionsComplete asks for them.
+func (c Client) UserGetListeningSessionsEach(ctx context.Context, id UserID, options ...UserGetListeningSessionsOptions) iter.Seq2[PlaybackSessionForClient, error] {
+	return func(yield func(PlaybackSessionForClient, error) bool) {
+		var zero PlaybackSessionForClient
 		if len(options) > 1 {
 			yield(zero, fmt.Errorf("UserGetListeningSessionsEach takes one options struct at most, not %d", len(options)))
 			return

@@ -3,7 +3,7 @@ package tools
 import (
 	"testing"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 func TestParseKeep(t *testing.T) {
@@ -24,9 +24,9 @@ func TestParseKeep(t *testing.T) {
 func TestKeptUpdate(t *testing.T) {
 	t.Parallel()
 
-	before := &abs.Item{ID: "i1", Media: abs.Media{Tags: []string{"lgbtq"}, Metadata: abs.Metadata{
+	before := &api.LibraryItemExpanded{Id: "i1", Media: &api.LibraryItemExpandedMedia{Tags: []string{"lgbtq"}, Metadata: &api.LibraryItemExpandedMediaMetadata{
 		Title:  "Mrs. S .mp3",
-		Series: abs.SeriesRefs{{ID: "s1", Name: "Nemesis", Sequence: "2"}},
+		Series: []api.SeriesMinimal{{Id: "s1", Name: "Nemesis", Sequence: "2"}},
 	}}}
 	upd := keptUpdate(before, []string{"series", "title", "genres", "tags"})
 	md := upd.Metadata

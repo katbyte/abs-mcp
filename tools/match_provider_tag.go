@@ -7,10 +7,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/katbyte/go-kt/lock"
 	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/go-kt/pointer"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -56,14 +56,14 @@ func (p providerConfig) prefix() string {
 
 // providersFor returns the providers a call should ask, in order: the ones
 // it named, else the configured default, else the library's own.
-func (p providerConfig) providersFor(named []string, lib *abs.Library) []string {
+func (p providerConfig) providersFor(named []string, libraryProvider string) []string {
 	if len(named) > 0 {
 		return named
 	}
 	if len(p.providers) > 0 {
 		return slices.Clone(p.providers)
 	}
-	return []string{lib.Provider}
+	return []string{libraryProvider}
 }
 
 // checkProviders refuses a store the server does not have, among the ones a
@@ -72,7 +72,7 @@ func (p providerConfig) providersFor(named []string, lib *abs.Library) []string 
 // region gets the blame. lookup is for a caller that looks an asin up, which
 // only an Audible store can. The library's own provider, the last fallback,
 // is the server's own setting and is not checked.
-func (p providerConfig) checkProviders(ctx context.Context, client *abs.Client, named []string, lookup bool) error {
+func (p providerConfig) checkProviders(ctx context.Context, gen *api.Client, named []string, lookup bool) error {
 	names := named
 	if len(names) == 0 {
 		names = p.providers
@@ -80,10 +80,11 @@ func (p providerConfig) checkProviders(ctx context.Context, client *abs.Client, 
 	if len(names) == 0 {
 		return nil
 	}
-	known, _, err := client.Providers(ctx)
+	got, err := record(gen.SearchGetAllProviders(ctx))
 	if err != nil {
 		return fmt.Errorf("reading the server's providers to check %s against: %w", strings.Join(names, ", "), err)
 	}
+	known := providerValues(pointer.From(got.Providers).Books)
 	for _, name := range names {
 		switch {
 		case !slices.Contains(known, name):
@@ -99,7 +100,7 @@ func (p providerConfig) checkProviders(ctx context.Context, client *abs.Client, 
 // with no providers named and none configured, a lookup asks the library's
 // own provider, and only an Audible store can look an asin up. A new library
 // is on google unless someone changed it.
-func (p providerConfig) lookupRefusal(named []string, lib *abs.Library) error {
+func (p providerConfig) lookupRefusal(named []string, lib *api.Library) error {
 	if len(named) > 0 || len(p.providers) > 0 || lib.IsPodcast() || isAudible(lib.Provider) {
 		return nil
 	}
@@ -145,13 +146,13 @@ func audibleStores(known []string) string {
 // providerTagging reports whether the tag is in use.
 func (p providerConfig) providerTagging() bool { return p.prefix() != providerTagOff }
 
-// providerTag returns the provider recorded on the item, "none", or "".
-func (p providerConfig) providerTag(it *abs.Item) string {
+// providerTag is the provider an item's tags record, "none", or "".
+func (p providerConfig) providerTag(tags []string) string {
 	if !p.providerTagging() {
 		return ""
 	}
 	prefix := p.prefix()
-	for _, t := range it.Media.Tags {
+	for _, t := range tags {
 		if strings.HasPrefix(strings.ToLower(t), strings.ToLower(prefix)) {
 			return strings.TrimSpace(t[len(prefix):])
 		}
@@ -159,26 +160,10 @@ func (p providerConfig) providerTag(it *abs.Item) string {
 	return ""
 }
 
-// markedUnmatchable reports whether the collector has said there is nothing
-// to match this book to.
-func (p providerConfig) markedUnmatchable(it *abs.Item) bool {
-	return strings.EqualFold(p.providerTag(it), providerNone)
-}
-
-// auditCheck is the named audit check as this server runs it: the unmatched
-// one leaves out the books the provider tag marks as having nothing to match,
-// which only the configured prefix can recognise.
-func (p providerConfig) auditCheck(name string) auditCheck {
-	check := auditChecksByName[name]
-	if name != "unmatched" {
-		return check
-	}
-	return func(it *abs.Item) (string, bool) {
-		if p.markedUnmatchable(it) {
-			return "", false
-		}
-		return check(it)
-	}
+// markedUnmatchable reports whether the collector has said, in a book's
+// tags, that there is nothing to match it to.
+func (p providerConfig) markedUnmatchable(tags []string) bool {
+	return strings.EqualFold(p.providerTag(tags), providerNone)
 }
 
 // withProviderTag returns tags with the provider tag set to provider and any
@@ -204,7 +189,7 @@ func (p providerConfig) withProviderTag(tags []string, provider string) []string
 // list that already holds it, and no other store, is left in the order the
 // collector has it: withProviderTag puts the tag last, and a list compared in
 // order was written back only to move it there.
-func (p providerConfig) tagProvider(ctx context.Context, client *abs.Client, itemID string, tags []string, provider string) error {
+func (p providerConfig) tagProvider(ctx context.Context, gen *api.Client, itemID api.LibraryItemID, tags []string, provider string) error {
 	want := p.withProviderTag(tags, provider)
 	have, next := slices.Clone(tags), slices.Clone(want)
 	slices.Sort(have)
@@ -212,14 +197,14 @@ func (p providerConfig) tagProvider(ctx context.Context, client *abs.Client, ite
 	if slices.Equal(have, next) {
 		return nil
 	}
-	_, err := client.UpdateMedia(ctx, itemID, abs.MediaUpdate{Tags: want})
+	_, err := gen.LibraryItemUpdateMedia(ctx, itemID, api.MediaUpdate{Tags: want})
 	return err
 }
 
-// providerOrder puts the item's recorded provider first: the store that had
-// the book last time is the one to ask first.
-func (p providerConfig) providerOrder(it *abs.Item, providers []string) []string {
-	recorded := p.providerTag(it)
+// providerOrder puts the provider a book's tags record first: the store that
+// had the book last time is the one to ask first.
+func (p providerConfig) providerOrder(tags, providers []string) []string {
+	recorded := p.providerTag(tags)
 	if recorded == "" || strings.EqualFold(recorded, providerNone) {
 		return providers
 	}
@@ -235,20 +220,20 @@ func (p providerConfig) providerOrder(it *abs.Item, providers []string) []string
 // tagOne records a store on one book, from its tags as they are once held
 // rather than as a listing had them. The hold is let go however the call
 // ends: one left behind by a panic would stall every later edit of the book.
-func (r *registry) tagOne(ctx context.Context, itemID, provider string) error {
-	release := r.locks.By(lock.ID[abs.Item](itemID))
+func (r *registry) tagOne(ctx context.Context, itemID api.LibraryItemID, provider string) error {
+	release := r.locks.By(itemLocks(itemID)...)
 	defer release()
-	fresh, err := r.client.Item(ctx, itemID)
+	fresh, err := getItem(ctx, r.gen, itemID)
 	if err != nil {
 		return err
 	}
-	return r.providerConfig().tagProvider(ctx, r.client, itemID, fresh.Media.Tags, provider)
+	return r.providerConfig().tagProvider(ctx, r.gen, itemID, fresh.Media.Tags, provider)
 }
 
 // registerMatchTagTool adds item_match_tag, the backfill: books matched
 // before the tag existed carry an asin and no record of where it came from.
 func registerMatchTagTool(r *registry) {
-	client := r.client
+	gen := r.gen
 	prov := r.providerConfig()
 
 	type tagIn struct {
@@ -285,29 +270,29 @@ func registerMatchTagTool(r *registry) {
 		if !prov.providerTagging() {
 			return nil, tagOut{}, errors.New("the provider tag is off (--provider-tag off); nothing to write")
 		}
-		lib, err := resolveLibrary(ctx, client, in.Library)
+		lib, err := resolveLibrary(ctx, gen, in.Library)
 		if err != nil {
 			return nil, tagOut{}, err
 		}
 		if lib.IsPodcast() {
 			return nil, tagOut{}, errors.New("a podcast library has no matched books")
 		}
-		if err := prov.checkProviders(ctx, client, in.Providers, true); err != nil {
+		if err := prov.checkProviders(ctx, gen, in.Providers, true); err != nil {
 			return nil, tagOut{}, err
 		}
 		if err := prov.lookupRefusal(in.Providers, lib); err != nil {
 			return nil, tagOut{}, err
 		}
-		providers := prov.providersFor(in.Providers, lib)
+		providers := prov.providersFor(in.Providers, lib.Provider)
 		limit, offset := min(mcpregistry.LimitOr(in.Limit, 50), 100), max(in.Offset, 0)
 		var filter string
 		if f := strings.TrimSpace(in.Filter); f != "" {
-			if filter, err = buildFilter(ctx, client, lib, f); err != nil {
+			if filter, err = buildFilter(ctx, gen, lib, f); err != nil {
 				return nil, tagOut{}, err
 			}
 		}
-		var items []abs.Item
-		more, err := matchedWindow(ctx, client, lib.ID, bookWindow{Filter: filter, Matched: hasASINOrISBN, Offset: offset, Limit: limit}, func(it *abs.Item) error {
+		var items []api.LibraryItemMinified
+		more, err := matchedWindow(ctx, gen, lib.Id, bookWindow{Filter: filter, Matched: hasASINOrISBN, Offset: offset, Limit: limit}, func(it *api.LibraryItemMinified) error {
 			items = append(items, *it)
 			return nil
 		})
@@ -318,17 +303,17 @@ func registerMatchTagTool(r *registry) {
 		out := tagOut{Rows: []tagRow{}}
 		for i := range items {
 			it := &items[i]
-			asin, isbn := strings.TrimSpace(it.Media.Metadata.ASIN), strings.TrimSpace(it.Media.Metadata.ISBN)
+			asin, isbn := strings.TrimSpace(it.Media.Metadata.Asin), strings.TrimSpace(it.Media.Metadata.Isbn)
 			out.Checked++
-			if prov.providerTag(it) != "" && !in.Overwrite {
+			if prov.providerTag(it.Media.Tags) != "" && !in.Overwrite {
 				out.Already++
 				continue
 			}
-			row := tagRow{ID: it.ID, Title: it.Title(), ASIN: asin, ISBN: isbn}
+			row := tagRow{ID: string(it.Id), Title: it.Title(), ASIN: asin, ISBN: isbn}
 			// the first store with a record; a search that fails says nothing
 			// about the store, so the book is not looked for at the next one
 			for _, provider := range providers {
-				_, err := providerRecord(ctx, client, it, provider, asin, isbn)
+				_, err := providerRecord(ctx, gen, it.Id, provider, asin, isbn)
 				if err == nil {
 					row.Provider = provider
 					break
@@ -344,7 +329,7 @@ func registerMatchTagTool(r *registry) {
 			case row.Provider == "":
 				out.NotFound++
 			default:
-				if err := r.tagOne(ctx, it.ID, row.Provider); err != nil {
+				if err := r.tagOne(ctx, it.Id, row.Provider); err != nil {
 					row.Error = err.Error()
 					out.Failed++
 				} else {

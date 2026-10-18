@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -103,77 +103,74 @@ type coverLocalScope struct {
 // the ones missing, not square within tolerance, or narrower than minPixels,
 // and with Banner the ones wearing the "Only from Audible" ribbon, which
 // costs a fetch of the server's 400-pixel copy of every cover.
-func sweepCoverLocal(ctx context.Context, client *abs.Client, libraryID string, scope coverLocalScope, out *coversOut) error {
+func sweepCoverLocal(ctx context.Context, gen *api.Client, libraryID api.LibraryID, scope coverLocalScope, out *coversOut) error {
 	tolerance, minPixels, limit := scope.Tolerance, scope.MinPixels, scope.Limit
-	if err := client.ItemsAll(ctx, libraryID, abs.ItemsOptions{Minified: true}, func(items []abs.Item) bool {
-		for j := range items {
-			it := &items[j]
-			if it.IsPodcast() {
-				continue
+	if err := eachItem(ctx, gen, libraryID, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+		if it.IsPodcast() {
+			return true
+		}
+		out.Scanned++
+		row := coverRow{ID: string(it.Id), Title: it.Title()}
+		if !it.HasCover() { // the listing already says so: no request needed
+			row.Problem, row.Why = "missing", "no cover"
+			out.Counts.Missing++
+			out.add(row, limit)
+			return true
+		}
+		w, h, err := coverSize(ctx, gen, it.Id)
+		switch {
+		case errors.Is(err, errNoCover):
+			// the listing names a cover whose file is gone
+			row.Problem, row.Why = "missing", "the cover file is gone"
+			out.Counts.Missing++
+			out.add(row, limit)
+			return true
+		case err != nil:
+			if ctx.Err() != nil {
+				return false // stopped: the sweep answers the context's error
 			}
-			out.Scanned++
-			row := coverRow{ID: it.ID, Title: it.Title()}
-			if !it.HasCover() { // the listing already says so: no request needed
-				row.Problem, row.Why = "missing", "no cover"
-				out.Counts.Missing++
-				out.add(row, limit)
-				continue
+			// one cover that cannot be read is that book's to report, as
+			// the store window does: the sweep goes on, and says why
+			out.skip(it, err, limit)
+			return true
+		}
+		out.Checked++
+		row.Width, row.Height = w, h
+		if h > 0 {
+			row.Ratio = fmt.Sprintf("%.2f", float64(w)/float64(h))
+		}
+		switch {
+		case h == 0 || w == 0:
+			row.Problem, row.Why = "ratio", "cover has no dimensions"
+			out.Counts.Ratio++
+		case math.Abs(float64(w)/float64(h)-1) > tolerance:
+			row.Problem, row.Why = "ratio", fmt.Sprintf("not square (%dx%d)", w, h)
+			out.Counts.Ratio++
+		case w < minPixels:
+			row.Problem, row.Why = "small", fmt.Sprintf("only %dpx wide", w)
+			out.Counts.Small++
+		}
+		if row.Problem != "" {
+			out.add(row, limit)
+		}
+		if !scope.Banner {
+			return true
+		}
+		img, err := libraryCoverImage(ctx, gen, it.Id)
+		if err != nil {
+			if ctx.Err() != nil {
+				return false
 			}
-			w, h, err := client.CoverSize(ctx, it.ID)
-			switch {
-			case errors.Is(err, abs.ErrNoCover):
-				// the listing names a cover whose file is gone
-				row.Problem, row.Why = "missing", "the cover file is gone"
-				out.Counts.Missing++
-				out.add(row, limit)
-				continue
-			case err != nil:
-				if ctx.Err() != nil {
-					return false // stopped: the sweep answers the context's error
-				}
-				// one cover that cannot be read is that book's to report, as
-				// the store window does: the sweep goes on, and says why
-				out.skip(it, err, limit)
-				continue
+			out.skip(it, fmt.Errorf("looking for the ribbon: %w", err), limit)
+			return true
+		}
+		if region, found := findAudibleBanner(img); found {
+			banner := coverRow{
+				ID: string(it.Id), Title: it.Title(), Width: w, Height: h, Ratio: row.Ratio, Problem: "banner",
+				Why: fmt.Sprintf("an 'Only from Audible' ribbon across the bottom-right corner (%.0f%% yellow along the band)", region.Inside*100),
 			}
-			out.Checked++
-			row.Width, row.Height = w, h
-			if h > 0 {
-				row.Ratio = fmt.Sprintf("%.2f", float64(w)/float64(h))
-			}
-			switch {
-			case h == 0 || w == 0:
-				row.Problem, row.Why = "ratio", "cover has no dimensions"
-				out.Counts.Ratio++
-			case math.Abs(float64(w)/float64(h)-1) > tolerance:
-				row.Problem, row.Why = "ratio", fmt.Sprintf("not square (%dx%d)", w, h)
-				out.Counts.Ratio++
-			case w < minPixels:
-				row.Problem, row.Why = "small", fmt.Sprintf("only %dpx wide", w)
-				out.Counts.Small++
-			}
-			if row.Problem != "" {
-				out.add(row, limit)
-			}
-			if !scope.Banner {
-				continue
-			}
-			img, err := libraryCoverImage(ctx, client, it.ID)
-			if err != nil {
-				if ctx.Err() != nil {
-					return false
-				}
-				out.skip(it, fmt.Errorf("looking for the ribbon: %w", err), limit)
-				continue
-			}
-			if region, found := findAudibleBanner(img); found {
-				banner := coverRow{
-					ID: it.ID, Title: it.Title(), Width: w, Height: h, Ratio: row.Ratio, Problem: "banner",
-					Why: fmt.Sprintf("an 'Only from Audible' ribbon across the bottom-right corner (%.0f%% yellow along the band)", region.Inside*100),
-				}
-				out.Counts.Banner++
-				out.add(banner, limit)
-			}
+			out.Counts.Banner++
+			out.add(banner, limit)
 		}
 		return true
 	}); err != nil {
@@ -191,10 +188,10 @@ func (o *coversOut) add(row coverRow, limit int) {
 
 // skip counts a cover that could not be judged and lists it with why, apart
 // from the findings' count.
-func (o *coversOut) skip(it *abs.Item, err error, limit int) {
+func (o *coversOut) skip(it *api.LibraryItemMinified, err error, limit int) {
 	o.Skipped++
 	if len(o.Findings) < limit {
-		o.Findings = append(o.Findings, coverRow{ID: it.ID, Title: it.Title(), Problem: "skipped", Why: err.Error()})
+		o.Findings = append(o.Findings, coverRow{ID: string(it.Id), Title: it.Title(), Problem: "skipped", Why: err.Error()})
 	}
 }
 
@@ -211,14 +208,14 @@ type storeCover struct {
 // storeCoverFor looks a matched book's asin up at the stores in order and
 // measures and hashes the cover the first hit carries. nil when no store
 // has the asin or the record has no cover.
-func storeCoverFor(ctx context.Context, client *abs.Client, it *abs.Item, providers []string) (*storeCover, error) {
-	asin := strings.TrimSpace(it.Media.Metadata.ASIN)
+func storeCoverFor(ctx context.Context, gen *api.Client, it *api.LibraryItemMinified, providers []string) (*storeCover, error) {
+	asin := strings.TrimSpace(it.Media.Metadata.Asin)
 	for _, provider := range providers {
-		results, err := client.SearchBooks(ctx, provider, asin, "", it.ID)
+		results, err := searchBooks(ctx, gen, provider, asin, "", it.Id)
 		if err != nil {
 			return nil, err
 		}
-		idx := slices.IndexFunc(results, func(r abs.BookSearchResult) bool { return strings.EqualFold(r.ASIN, asin) })
+		idx := slices.IndexFunc(results, func(r api.SearchFindBooksAnswer) bool { return strings.EqualFold(r.Asin, asin) })
 		if idx < 0 {
 			continue
 		}
@@ -249,11 +246,12 @@ func storeCoverFor(ctx context.Context, client *abs.Client, it *abs.Item, provid
 // libraryCoverImage is the cover as the server serves it, resized to 400
 // wide as JPEG, which is small and is a format Go can read whatever the file
 // on disk is.
-func libraryCoverImage(ctx context.Context, client *abs.Client, itemID string) (image.Image, error) {
-	body, err := client.Cover(ctx, itemID, 400, 0, "jpeg")
+func libraryCoverImage(ctx context.Context, gen *api.Client, itemID api.LibraryItemID) (image.Image, error) {
+	got, err := gen.LibraryItemGetCover(ctx, itemID, api.LibraryItemGetCoverOptions{Width: "400", Format: "jpeg"})
 	if err != nil {
 		return nil, err
 	}
+	body, _ := got.Reader()
 	defer func() { _ = body.Close() }()
 	read := &bodyRead{r: body}
 	img, _, err := image.Decode(io.LimitReader(read, coverFetchMax))
@@ -261,9 +259,45 @@ func libraryCoverImage(ctx context.Context, client *abs.Client, itemID string) (
 	case read.err != nil:
 		return nil, fmt.Errorf("reading the cover: %w", read.err)
 	case err != nil:
-		return nil, fmt.Errorf("%w: %w", abs.ErrCoverUnreadable, err)
+		return nil, fmt.Errorf("%w: %w", errCoverUnreadable, err)
 	}
 	return img, nil
+}
+
+// errNoCover is a book with no cover file: none named, or the one named gone from disk.
+var errNoCover = errors.New("item has no cover")
+
+// errCoverUnreadable is a cover the server sent whole that cannot be decoded: a format Go does not read (webp, avif), or a damaged file. The
+// file's problem, not the server's.
+var errCoverUnreadable = errors.New("the cover image cannot be decoded")
+
+// coverSize is the size of the cover file on disk, from its first bytes: the server's own answer is a copy cut to 400 wide, the wrong thing to
+// measure, so this asks for the file itself. errNoCover when the book has none, errCoverUnreadable for a picture Go cannot read.
+func coverSize(ctx context.Context, gen *api.Client, itemID api.LibraryItemID) (width, height int, err error) {
+	got, err := gen.LibraryItemGetCover(ctx, itemID, api.LibraryItemGetCoverOptions{Raw: "1"})
+	if err != nil {
+		if api.IsNotFound(err) {
+			return 0, 0, errNoCover
+		}
+		return 0, 0, err
+	}
+	body, _ := got.Reader()
+	defer func() { _ = body.Close() }()
+
+	read := &bodyRead{r: body}
+	r := bufio.NewReader(read)
+	if _, err := r.Peek(1); errors.Is(err, io.EOF) {
+		return 0, 0, errNoCover // an empty body: nothing to measure
+	}
+	cfg, _, err := image.DecodeConfig(r)
+	switch {
+	case read.err != nil:
+		return 0, 0, fmt.Errorf("reading cover for %s: %w", itemID, read.err)
+	case err != nil:
+		return 0, 0, fmt.Errorf("decoding cover for %s: %w: %w", itemID, errCoverUnreadable, err)
+	}
+
+	return cfg.Width, cfg.Height, nil
 }
 
 // bodyRead is a reader that keeps the error a read of it failed with, other
@@ -282,8 +316,8 @@ func (b *bodyRead) Read(p []byte) (int, error) {
 }
 
 // libraryCoverHash hashes the cover as the server serves it.
-func libraryCoverHash(ctx context.Context, client *abs.Client, itemID string) (coverHash, error) {
-	img, err := libraryCoverImage(ctx, client, itemID)
+func libraryCoverHash(ctx context.Context, gen *api.Client, itemID api.LibraryItemID) (coverHash, error) {
+	img, err := libraryCoverImage(ctx, gen, itemID)
 	if err != nil {
 		return coverHash{}, err
 	}
@@ -346,14 +380,14 @@ type coverStoreScope struct {
 // store: a bigger copy of the same picture is an upgrade, and so is any
 // cover where the book has none; another picture is reported as differing,
 // with both images to look at. Says whether more lie past the window.
-func sweepCoverStore(ctx context.Context, client *abs.Client, prov providerConfig, lib *abs.Library, scope coverStoreScope, out *coversOut) (bool, error) {
+func sweepCoverStore(ctx context.Context, gen *api.Client, prov providerConfig, lib *api.Library, scope coverStoreScope, out *coversOut) (bool, error) {
 	if lib.IsPodcast() {
 		return false, nil
 	}
-	providers := prov.providersFor(scope.Providers, lib)
-	return matchedWindow(ctx, client, lib.ID, bookWindow{Matched: hasASIN, Offset: scope.Offset, Limit: scope.Limit}, func(it *abs.Item) error {
+	providers := prov.providersFor(scope.Providers, lib.Provider)
+	return matchedWindow(ctx, gen, lib.Id, bookWindow{Matched: hasASIN, Offset: scope.Offset, Limit: scope.Limit}, func(it *api.LibraryItemMinified) error {
 		out.Store++
-		row, err := compareWithStore(ctx, client, it, prov.providerOrder(it, providers), scope.Factor, scope.Tolerance)
+		row, err := compareWithStore(ctx, gen, it, prov.providerOrder(it.Media.Tags, providers), scope.Factor, scope.Tolerance)
 		if err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
@@ -361,7 +395,7 @@ func sweepCoverStore(ctx context.Context, client *abs.Client, prov providerConfi
 			// one book's store or cover failing is that book's problem: a
 			// window that stopped at it could never be got past
 			out.Skipped++
-			out.Findings = append(out.Findings, coverRow{ID: it.ID, Title: it.Title(), Problem: "skipped", Why: err.Error()})
+			out.Findings = append(out.Findings, coverRow{ID: string(it.Id), Title: it.Title(), Problem: "skipped", Why: err.Error()})
 			return nil
 		}
 		if row == nil {
@@ -384,23 +418,23 @@ func sweepCoverStore(ctx context.Context, client *abs.Client, prov providerConfi
 
 // compareWithStore is one book against its store's cover: nil when they
 // agree and the store's is not worth having, or when no store has the asin.
-func compareWithStore(ctx context.Context, client *abs.Client, it *abs.Item, providers []string, factor, tolerance float64) (*coverRow, error) {
-	sc, err := storeCoverFor(ctx, client, it, providers)
+func compareWithStore(ctx context.Context, gen *api.Client, it *api.LibraryItemMinified, providers []string, factor, tolerance float64) (*coverRow, error) {
+	sc, err := storeCoverFor(ctx, gen, it, providers)
 	if err != nil || sc == nil {
 		return nil, err
 	}
-	row := coverRow{ID: it.ID, Title: it.Title(), StoreW: sc.Width, StoreURL: sc.URL, FoundIn: sc.FoundIn}
+	row := coverRow{ID: string(it.Id), Title: it.Title(), StoreW: sc.Width, StoreURL: sc.URL, FoundIn: sc.FoundIn}
 	if !it.HasCover() {
 		row.Problem, row.Why = "upgrade", fmt.Sprintf("no cover; %s has one %dpx wide", sc.FoundIn, sc.Width)
 		return &row, nil
 	}
-	w, h, err := client.CoverSize(ctx, it.ID)
+	w, h, err := coverSize(ctx, gen, it.Id)
 	switch {
-	case errors.Is(err, abs.ErrNoCover):
+	case errors.Is(err, errNoCover):
 		// the listing names a cover and the file is gone: as good as none
 		row.Problem, row.Why = "upgrade", fmt.Sprintf("the cover file is gone; %s has one %dpx wide", sc.FoundIn, sc.Width)
 		return &row, nil
-	case errors.Is(err, abs.ErrCoverUnreadable):
+	case errors.Is(err, errCoverUnreadable):
 		w, h = 0, 0 // unreadable on disk (webp): the size is unknown, the picture can still be compared
 	case err != nil:
 		return nil, fmt.Errorf("the cover's size: %w", err)
@@ -416,16 +450,16 @@ func compareWithStore(ctx context.Context, client *abs.Client, it *abs.Item, pro
 		row.Why = fmt.Sprintf("not square (%dx%d); %s has square art %dpx wide", w, h, sc.FoundIn, sc.Width)
 		return &row, nil
 	}
-	have, err := libraryCoverHash(ctx, client, it.ID)
+	have, err := libraryCoverHash(ctx, gen, it.Id)
 	if err != nil {
 		return nil, fmt.Errorf("cover of %s: %w", it.Title(), err)
 	}
 	p, d := have.distance(sc.Hash)
 	if !have.samePicture(sc.Hash) {
 		row.Problem = "differs"
-		row.Why = fmt.Sprintf("%s shows a different picture for asin %s", sc.FoundIn, strings.TrimSpace(it.Media.Metadata.ASIN))
+		row.Why = fmt.Sprintf("%s shows a different picture for asin %s", sc.FoundIn, strings.TrimSpace(it.Media.Metadata.Asin))
 		row.Distance = fmt.Sprintf("phash %d, dhash %d", p, d)
-		row.CoverURL = client.BaseURL() + "/api/items/" + it.ID + "/cover"
+		row.CoverURL = gen.Client.BaseURL + "/api/items/" + string(it.Id) + "/cover"
 		return &row, nil
 	}
 	if w > 0 && float64(sc.Width) >= float64(w)*factor {
@@ -438,7 +472,7 @@ func compareWithStore(ctx context.Context, client *abs.Client, it *abs.Item, pro
 }
 
 func registerCoverAudit(r *registry) {
-	client := r.client
+	gen := r.gen
 	prov := r.providerConfig()
 
 	type coversIn struct {
@@ -475,7 +509,7 @@ func registerCoverAudit(r *registry) {
 			factor = defaultUpgradeFactor
 		}
 
-		libs, err := resolveLibraries(ctx, client, in.Library)
+		libs, err := resolveLibraries(ctx, gen, in.Library)
 		if err != nil {
 			return nil, coversOut{}, err
 		}
@@ -489,7 +523,7 @@ func registerCoverAudit(r *registry) {
 		// asin up, is refused before the library-wide sweep, not after
 		// reading every cover in it
 		if in.Store {
-			if err := prov.checkProviders(ctx, client, in.Providers, true); err != nil {
+			if err := prov.checkProviders(ctx, gen, in.Providers, true); err != nil {
 				return nil, coversOut{}, err
 			}
 			if err := prov.lookupRefusal(in.Providers, &libs[0]); err != nil {
@@ -505,14 +539,14 @@ func registerCoverAudit(r *registry) {
 		if !in.Store || offset == 0 {
 			local := coverLocalScope{Tolerance: tolerance, MinPixels: minPixels, Banner: in.Banner, Limit: limit}
 			for i := range libs {
-				if err := sweepCoverLocal(ctx, client, libs[i].ID, local, &out); err != nil {
+				if err := sweepCoverLocal(ctx, gen, libs[i].Id, local, &out); err != nil {
 					return nil, coversOut{}, err
 				}
 			}
 		}
 		if in.Store {
 			scope := coverStoreScope{Providers: in.Providers, Factor: factor, Tolerance: tolerance, Limit: min(limit, coverPageMax), Offset: offset}
-			more, err := sweepCoverStore(ctx, client, prov, &libs[0], scope, &out)
+			more, err := sweepCoverStore(ctx, gen, prov, &libs[0], scope, &out)
 			if err != nil {
 				return nil, coversOut{}, err
 			}
@@ -570,13 +604,13 @@ func registerCoverAudit(r *registry) {
 		if tolerance <= 0 {
 			tolerance = defaultCoverTolerance
 		}
-		if err := prov.checkProviders(ctx, client, in.Providers, true); err != nil {
+		if err := prov.checkProviders(ctx, gen, in.Providers, true); err != nil {
 			return nil, upgradeOut{}, err
 		}
 		// a named library is refused before any book; without one each book's
 		// own is, when it is looked up
 		if in.Library != "" {
-			lib, err := resolveLibrary(ctx, client, in.Library)
+			lib, err := resolveLibrary(ctx, gen, in.Library)
 			if err != nil {
 				return nil, upgradeOut{}, err
 			}
@@ -585,23 +619,24 @@ func registerCoverAudit(r *registry) {
 			}
 		}
 		upgrade := func(ref string, row *upgradeRow) error {
-			it, err := resolveItemToChange(ctx, client, in.Library, ref)
+			whole, err := resolveItemToChange(ctx, gen, in.Library, ref)
 			if err != nil {
 				return err
 			}
-			row.ID, row.Title = it.ID, it.Title()
-			if it.IsPodcast() || strings.TrimSpace(it.Media.Metadata.ASIN) == "" {
+			it := new(whole.Minified())
+			row.ID, row.Title = string(it.Id), it.Title()
+			if it.IsPodcast() || strings.TrimSpace(it.Media.Metadata.Asin) == "" {
 				row.Action = "no_asin"
 				return nil
 			}
-			lib, err := client.Library(ctx, it.LibraryID)
+			lib, err := resolveLibrary(ctx, gen, string(it.LibraryId))
 			if err != nil {
 				return err
 			}
 			if err := prov.lookupRefusal(in.Providers, lib); err != nil {
 				return err
 			}
-			sc, err := storeCoverFor(ctx, client, it, prov.providerOrder(it, prov.providersFor(in.Providers, lib)))
+			sc, err := storeCoverFor(ctx, gen, it, prov.providerOrder(it.Media.Tags, prov.providersFor(in.Providers, lib.Provider)))
 			if err != nil {
 				return err
 			}
@@ -610,22 +645,22 @@ func registerCoverAudit(r *registry) {
 				return nil
 			}
 			row.StoreW, row.StoreURL, row.FoundIn = sc.Width, sc.URL, sc.FoundIn
-			w, h, err := 0, 0, abs.ErrNoCover
+			w, h, err := 0, 0, errNoCover
 			if it.HasCover() {
-				w, h, err = client.CoverSize(ctx, it.ID)
+				w, h, err = coverSize(ctx, gen, it.Id)
 				switch {
 				case err == nil:
 					row.Width = w
 				// a size unknown only for a format Go cannot read (webp): the
 				// picture is still compared. Anything else leaves the size
 				// unknown for the wrong reason, and a write must not follow
-				case !errors.Is(err, abs.ErrNoCover) && !errors.Is(err, abs.ErrCoverUnreadable):
+				case !errors.Is(err, errNoCover) && !errors.Is(err, errCoverUnreadable):
 					return fmt.Errorf("the size of %s's cover: %w", it.Title(), err)
 				}
 			}
 			// a cover the listing names whose file is gone is no cover at all
-			if !errors.Is(err, abs.ErrNoCover) {
-				have, err := libraryCoverImage(ctx, client, it.ID)
+			if !errors.Is(err, errNoCover) {
+				have, err := libraryCoverImage(ctx, gen, it.Id)
 				if err != nil {
 					return fmt.Errorf("cover of %s: %w", it.Title(), err)
 				}
@@ -655,7 +690,7 @@ func registerCoverAudit(r *registry) {
 				row.Action = "would_upgrade"
 				return nil
 			}
-			if err := client.SetCoverFromURL(ctx, it.ID, sc.URL); err != nil {
+			if err := coverFromURL(ctx, gen, it.Id, sc.URL); err != nil {
 				return fmt.Errorf("setting cover of %s: %w", it.Title(), err)
 			}
 			row.Action = "upgraded"

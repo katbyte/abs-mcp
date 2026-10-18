@@ -27,7 +27,7 @@ func TestOperationSessionGetOpenSession(t *testing.T) {
 	if result.Answer == nil || !result.Answered() {
 		t.Error("the answer was not decoded")
 	}
-	if result.SessionGetOpenSessionAnswer != result.Answer {
+	if result.PlaybackSessionForClient != result.Answer {
 		t.Error("the embedded answer is not the answer")
 	}
 	if record, err := result.Record(); err != nil || !reflect.DeepEqual(record, *result.Answer) {

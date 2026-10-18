@@ -136,29 +136,41 @@ Needs no server: it reports what would be registered, not what a server accepts.
 			cmd.SilenceUsage = true
 			out := cmd.OutOrStdout()
 
-			client, err := GetFlags().NewClient()
+			gen, err := GetFlags().NewClient()
 			if err != nil {
 				return err
 			}
 
-			status, err := client.Status(cmd.Context())
+			status, err := gen.ServerGetStatus(cmd.Context())
+			if err != nil {
+				return err
+			}
+			about, err := status.Record()
 			if err != nil {
 				return err
 			}
 
-			me, err := client.Me(cmd.Context())
+			got, err := gen.MeGetCurrentUser(cmd.Context())
+			if err != nil {
+				return err
+			}
+			me, err := got.Record()
 			if err != nil {
 				return err
 			}
 
-			libs, err := client.Libraries(cmd.Context())
+			found, err := gen.LibraryFindAll(cmd.Context())
+			if err != nil {
+				return err
+			}
+			libs, err := found.Record()
 			if err != nil {
 				return err
 			}
 
-			_, _ = fmt.Fprintf(out, "audiobookshelf %s at %s — user %s (%s)\n", status.ServerVersion, client.BaseURL(), me.Username, me.Type)
-			for _, l := range libs {
-				_, _ = fmt.Fprintf(out, "  library %q (%s) id %s\n", l.Name, l.MediaType, l.ID)
+			_, _ = fmt.Fprintf(out, "audiobookshelf %s at %s — user %s (%s)\n", about.ServerVersion, gen.Client.BaseURL, me.Username, me.Type)
+			for _, l := range libs.Libraries {
+				_, _ = fmt.Fprintf(out, "  library %q (%s) id %s\n", l.Name, l.MediaType, l.Id)
 			}
 			return nil
 		},

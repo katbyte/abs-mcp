@@ -607,8 +607,9 @@ func TestListeningTimesInSeconds(t *testing.T) {
 	today := time.Now().UTC().Format("2006-01-02")
 	f.json("GET /api/me/listening-stats", `{"totalTime":7200.4,"today":600.4,"days":{"`+today+`":600.4},`+
 		`"items":{"`+bookB1+`":{"id":"`+bookB1+`","timeListening":7200.4,"mediaMetadata":{"title":"First"}}}}`)
-	f.json("GET /api/me/stats/year/2025", `{"totalListeningTime":7200.4,"topAuthors":[{"name":"A","time":3600.4}],"topNarrators":[{"name":"N","time":1800.4}],`+
-		`"topGenres":[{"genre":"G","time":900.4}],"booksFinished":[{"id":"`+bookB1+`","title":"First","duration":3600.6}]}`)
+	// the year in review comes in whole seconds, rounded by the server
+	f.json("GET /api/me/stats/year/2025", `{"totalListeningTime":7200,"topAuthors":[{"name":"A","time":3600}],"mostListenedNarrator":{"name":"N","time":1800},`+
+		`"topGenres":[{"genre":"G","time":900}],"numBooksFinished":1}`)
 	now := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	f.mux.HandleFunc("GET /api/me/listening-sessions", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"total":2,"sessions":[{"id":"s1","userId":"` + meID + `","libraryItemId":"` + bookB1 + `","displayTitle":"First",` +
@@ -631,8 +632,8 @@ func TestListeningTimesInSeconds(t *testing.T) {
 			"total_listened_s": 7200, "today_s": 600, "last_7_days_s": 600, "last_30_days_s": 600, "top_items.0.time_s": 7200,
 		}, []string{"total_listened", "today", "top_items.0.time"}},
 		{"user_stats", map[string]any{"year": 2025}, map[string]float64{
-			"total_listened_s": 7200, "top_authors.0.time_s": 3600, "top_narrators.0.time_s": 1800, "top_genres.0.time_s": 900, "finished.0.time_s": 3601,
-		}, []string{"total_listened", "top_authors.0.time", "finished.0.time"}},
+			"total_listened_s": 7200, "top_authors.0.time_s": 3600, "top_genres.0.time_s": 900, "books_finished": 1,
+		}, []string{"total_listened", "top_authors.0.time"}},
 		{"user_history", nil, map[string]float64{
 			"sessions.0.listened_s": 300, "sessions.0.position_s": 1800, "sessions.1.listened_s": 0, "sessions.1.position_s": 0,
 		}, []string{"sessions.0.listened", "sessions.0.position"}},
@@ -697,7 +698,7 @@ func TestUserStatsForTheWholeServer(t *testing.T) {
 	t.Parallel()
 
 	f := newFakeABS(t)
-	f.json("GET /api/stats/year/2025", `{"numListeningSessions":40,"totalListeningTime":7200.4,"numBooksAdded":3,"totalBooksAddedSize":1048576,"totalBooksAddedDuration":36000.2,`+
+	f.json("GET /api/stats/year/2025", `{"numListeningSessions":40,"totalListeningTime":7200.4,"numBooksAdded":3,"totalBooksAddedSize":1048576,"totalBooksAddedDuration":36000,`+
 		`"numAuthorsAdded":2,"numBooks":120,"totalBooksSize":987654321,"totalBooksDuration":3600000,"topAuthors":[{"name":"Frank Herbert","time":3600}],`+
 		`"topNarrators":[{"name":"Scott Brick","time":1800}],"topGenres":[{"genre":"Science Fiction","time":7200}],"booksAddedWithCovers":["x"]}`)
 	call := toolCaller(t, f)

@@ -42,6 +42,7 @@ func (r LibraryGetSeriesForLibraryResponse) Record() (Series, error) {
 // LibraryGetSeriesForLibraryOptions holds the query and header parameters of LibraryGetSeriesForLibrary.
 type LibraryGetSeriesForLibraryOptions struct {
 	Include string
+	Sort    string
 }
 
 // ToHeaders returns the header parameters the options set.
@@ -55,6 +56,9 @@ func (o LibraryGetSeriesForLibraryOptions) ToQuery() *client.QueryParams {
 	out := client.QueryParams{}
 	if o.Include != "" {
 		out.Append("include", o.Include)
+	}
+	if o.Sort != "" {
+		out.Append("sort", o.Sort)
 	}
 	return &out
 }

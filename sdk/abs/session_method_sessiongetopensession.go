@@ -14,26 +14,26 @@ import (
 
 // SessionGetOpenSessionResponse is the result of SessionGetOpenSession.
 //
-// Answer is the SessionGetOpenSessionAnswer answered, nil when the server answered none (a 204), which
+// Answer is the PlaybackSessionForClient answered, nil when the server answered none (a 204), which
 // Answered tells. The same record is embedded, so res.Answer.Name may be read as
 // res.Name; when nothing was answered the embedded record is a zero one, so that
 // read is empty rather than a panic. Only the method sets the two; a response built
 // by hand sets both or neither.
 type SessionGetOpenSessionResponse struct {
 	HttpResponse *http.Response
-	Answer       *SessionGetOpenSessionAnswer
-	*SessionGetOpenSessionAnswer
+	Answer       *PlaybackSessionForClient
+	*PlaybackSessionForClient
 }
 
 // Answered reports whether the server answered with a body that was decoded:
 // false for a 204, or a call that failed before one came.
 func (r SessionGetOpenSessionResponse) Answered() bool { return r.Answer != nil }
 
-// Record is the SessionGetOpenSessionAnswer answered, as a value to change and write back, or an
+// Record is the PlaybackSessionForClient answered, as a value to change and write back, or an
 // error when the server answered none.
-func (r SessionGetOpenSessionResponse) Record() (SessionGetOpenSessionAnswer, error) {
+func (r SessionGetOpenSessionResponse) Record() (PlaybackSessionForClient, error) {
 	if r.Answer == nil {
-		return SessionGetOpenSessionAnswer{}, errors.New("SessionGetOpenSession answered no SessionGetOpenSessionAnswer")
+		return PlaybackSessionForClient{}, errors.New("SessionGetOpenSession answered no PlaybackSessionForClient")
 	}
 
 	return *r.Answer, nil
@@ -41,7 +41,7 @@ func (r SessionGetOpenSessionResponse) Record() (SessionGetOpenSessionAnswer, er
 
 // SessionGetOpenSession calls GET /api/session/{id}.
 func (c Client) SessionGetOpenSession(ctx context.Context, id string) (result SessionGetOpenSessionResponse, err error) {
-	result.SessionGetOpenSessionAnswer = &SessionGetOpenSessionAnswer{}
+	result.PlaybackSessionForClient = &PlaybackSessionForClient{}
 	opts := client.RequestOptions{
 		ExpectedStatusCodes: []int{
 			http.StatusOK,
@@ -65,12 +65,12 @@ func (c Client) SessionGetOpenSession(ctx context.Context, id string) (result Se
 		return
 	}
 
-	var answer SessionGetOpenSessionAnswer
+	var answer PlaybackSessionForClient
 	result.Answer = &answer
 	if err = resp.Unmarshal(result.Answer); err != nil {
 		return
 	}
-	result.SessionGetOpenSessionAnswer = result.Answer
+	result.PlaybackSessionForClient = result.Answer
 
 	return
 }

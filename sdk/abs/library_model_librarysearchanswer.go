@@ -5,11 +5,11 @@ package abs
 // LibrarySearchAnswer is an object the document declares inline.
 type LibrarySearchAnswer struct {
 	Authors   []Author                       `json:"authors,omitzero"`
-	Book      []LibrarySearchAnswerBook      `json:"book,omitzero"`
+	Book      []LibrarySearchMatch           `json:"book,omitzero"`
 	Episodes  []LibrarySearchAnswerEpisodes  `json:"episodes,omitzero"`
 	Genres    []LibrarySearchAnswerGenres    `json:"genres,omitzero"`
 	Narrators []LibrarySearchAnswerNarrators `json:"narrators,omitzero"`
-	Podcast   []LibrarySearchAnswerPodcast   `json:"podcast,omitzero"`
+	Podcast   []LibrarySearchMatch           `json:"podcast,omitzero"`
 	Series    []LibrarySearchAnswerSeries    `json:"series,omitzero"`
 	Tags      []LibrarySearchAnswerTags      `json:"tags,omitzero"`
 }

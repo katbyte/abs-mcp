@@ -4,7 +4,6 @@ package abs
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/katbyte/pandorest/client"
@@ -12,35 +11,20 @@ import (
 
 // MeUpdatePasswordResponse is the result of MeUpdatePassword.
 //
-// Answer is the MeUpdatePasswordAnswer answered, nil when the server answered none (a 204), which
-// Answered tells. The same record is embedded, so res.Answer.Name may be read as
-// res.Name; when nothing was answered the embedded record is a zero one, so that
-// read is empty rather than a panic. Only the method sets the two; a response built
-// by hand sets both or neither.
+// The operation answers text (text/plain), which Answer holds as it was sent.
 type MeUpdatePasswordResponse struct {
 	HttpResponse *http.Response
-	Answer       *MeUpdatePasswordAnswer
-	*MeUpdatePasswordAnswer
+	Answer       *string
 }
 
 // Answered reports whether the server answered with a body that was decoded:
 // false for a 204, or a call that failed before one came.
 func (r MeUpdatePasswordResponse) Answered() bool { return r.Answer != nil }
 
-// Record is the MeUpdatePasswordAnswer answered, as a value to change and write back, or an
-// error when the server answered none.
-func (r MeUpdatePasswordResponse) Record() (MeUpdatePasswordAnswer, error) {
-	if r.Answer == nil {
-		return MeUpdatePasswordAnswer{}, errors.New("MeUpdatePassword answered no MeUpdatePasswordAnswer")
-	}
-
-	return *r.Answer, nil
-}
-
 // MeUpdatePassword calls PATCH /api/me/password.
 func (c Client) MeUpdatePassword(ctx context.Context, input MeUpdatePasswordRequest) (result MeUpdatePasswordResponse, err error) {
-	result.MeUpdatePasswordAnswer = &MeUpdatePasswordAnswer{}
 	opts := client.RequestOptions{
+		Accept:      "text/plain",
 		ContentType: "application/json",
 		ExpectedStatusCodes: []int{
 			http.StatusOK,
@@ -68,12 +52,11 @@ func (c Client) MeUpdatePassword(ctx context.Context, input MeUpdatePasswordRequ
 		return
 	}
 
-	var answer MeUpdatePasswordAnswer
+	var answer string
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
+	if err = resp.Text(result.Answer); err != nil {
 		return
 	}
-	result.MeUpdatePasswordAnswer = result.Answer
 
 	return
 }

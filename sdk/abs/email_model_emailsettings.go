@@ -4,14 +4,14 @@ package abs
 
 // EmailSettings is the "EmailSettings" schema.
 type EmailSettings struct {
-	EreaderDevices     []EmailSettingsEreaderDevices `json:"ereaderDevices,omitzero"`
-	FromAddress        string                        `json:"fromAddress,omitempty"`
-	Host               string                        `json:"host,omitempty"`
-	Id                 string                        `json:"id,omitempty"`
-	Pass               any                           `json:"pass,omitempty"`
-	Port               float64                       `json:"port,omitempty"`
-	RejectUnauthorized bool                          `json:"rejectUnauthorized"`
-	Secure             bool                          `json:"secure"`
-	TestAddress        string                        `json:"testAddress,omitempty"`
-	User               string                        `json:"user,omitempty"`
+	EreaderDevices     []EreaderDevice `json:"ereaderDevices,omitzero"`
+	FromAddress        string          `json:"fromAddress,omitempty"`
+	Host               string          `json:"host,omitempty"`
+	Id                 string          `json:"id,omitempty"`
+	Pass               any             `json:"pass,omitempty"`
+	Port               float64         `json:"port,omitempty"`
+	RejectUnauthorized bool            `json:"rejectUnauthorized"`
+	Secure             bool            `json:"secure"`
+	TestAddress        string          `json:"testAddress,omitempty"`
+	User               string          `json:"user,omitempty"`
 }

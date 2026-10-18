@@ -78,16 +78,47 @@ func (r LibraryItemGetLibraryFileResponse) Bytes(max int64) ([]byte, error) {
 	return client.ReadAtMost(r.HttpResponse.Body, max)
 }
 
+// LibraryItemGetLibraryFileOptions holds the query and header parameters of LibraryItemGetLibraryFile.
+type LibraryItemGetLibraryFileOptions struct {
+	Range string
+}
+
+// ToHeaders returns the header parameters the options set.
+func (o LibraryItemGetLibraryFileOptions) ToHeaders() *client.Headers {
+	out := client.Headers{}
+	if o.Range != "" {
+		out.Append("Range", o.Range)
+	}
+	return &out
+}
+
+// ToQuery returns the query parameters the options set.
+func (o LibraryItemGetLibraryFileOptions) ToQuery() *client.QueryParams {
+	out := client.QueryParams{}
+	return &out
+}
+
 // LibraryItemGetLibraryFile calls GET /api/items/{id}/file/{fileid}.
-func (c Client) LibraryItemGetLibraryFile(ctx context.Context, id LibraryItemID, fileid string) (result LibraryItemGetLibraryFileResponse, err error) {
+func (c Client) LibraryItemGetLibraryFile(ctx context.Context, id LibraryItemID, fileid string, options ...LibraryItemGetLibraryFileOptions) (result LibraryItemGetLibraryFileResponse, err error) {
+	if len(options) > 1 {
+		err = fmt.Errorf("LibraryItemGetLibraryFile takes one options struct at most, not %d", len(options))
+		return
+	}
+	var option LibraryItemGetLibraryFileOptions
+	if len(options) == 1 {
+		option = options[0]
+	}
+
 	opts := client.RequestOptions{
 		Accept: "application/octet-stream",
 		ExpectedStatusCodes: []int{
 			http.StatusOK,
 			http.StatusNoContent,
+			http.StatusPartialContent,
 		},
 		HTTPMethod:     http.MethodGet,
 		Operation:      "LibraryItemGetLibraryFile",
+		OptionsObject:  option,
 		Path:           fmt.Sprintf("/api/items/%s/file/%s", url.PathEscape(string(id)), url.PathEscape(fileid)),
 		StreamResponse: true,
 	}

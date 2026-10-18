@@ -13,14 +13,14 @@
           "Type": "List",
           "NestedItem": {
             "Type": "Reference",
-            "ReferenceName": "MeBatchUpdateMediaProgressRequest"
+            "ReferenceName": "ProgressUpdatePayload"
           }
         }
       },
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -38,7 +38,7 @@
           "Argument": "id",
           "Type": {
             "Type": "ID",
-            "ReferenceName": "UserID"
+            "ReferenceName": "LibraryItemID"
           }
         }
       ],
@@ -53,7 +53,7 @@
         "ContentType": "application/json",
         "Type": {
           "Type": "Reference",
-          "ReferenceName": "MeCreateBookmarkAnswer"
+          "ReferenceName": "AudioBookmark"
         }
       },
       "ExpectedStatusCodes": [
@@ -83,10 +83,17 @@
           }
         }
       ],
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "ProgressUpdatePayload"
+        }
+      },
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -108,10 +115,17 @@
           }
         }
       ],
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "ProgressUpdatePayload"
+        }
+      },
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -128,15 +142,14 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "ID",
-            "ReferenceName": "UserID"
+            "Type": "String"
           }
         }
       ],
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -418,7 +431,7 @@
         "ContentType": "application/json",
         "Type": {
           "Type": "Reference",
-          "ReferenceName": "MeGetListeningStatsAnswer"
+          "ReferenceName": "ListeningStats"
         }
       },
       "ExpectedStatusCodes": [
@@ -436,7 +449,7 @@
           "Argument": "id",
           "Type": {
             "Type": "ID",
-            "ReferenceName": "UserID"
+            "ReferenceName": "LibraryItemID"
           }
         },
         {
@@ -452,7 +465,7 @@
         "ContentType": "application/json",
         "Type": {
           "Type": "Reference",
-          "ReferenceName": "MeGetMediaProgressAnswer"
+          "ReferenceName": "MediaProgress"
         }
       },
       "ExpectedStatusCodes": [
@@ -470,7 +483,7 @@
           "Argument": "id",
           "Type": {
             "Type": "ID",
-            "ReferenceName": "UserID"
+            "ReferenceName": "LibraryItemID"
           }
         }
       ],
@@ -478,7 +491,7 @@
         "ContentType": "application/json",
         "Type": {
           "Type": "Reference",
-          "ReferenceName": "MeGetMediaProgress2Answer"
+          "ReferenceName": "MediaProgress"
         }
       },
       "ExpectedStatusCodes": [
@@ -567,7 +580,7 @@
           "Argument": "id",
           "Type": {
             "Type": "ID",
-            "ReferenceName": "UserID"
+            "ReferenceName": "SeriesID"
           }
         }
       ],
@@ -593,7 +606,7 @@
           "Argument": "id",
           "Type": {
             "Type": "ID",
-            "ReferenceName": "UserID"
+            "ReferenceName": "LibraryItemID"
           }
         },
         {
@@ -607,7 +620,7 @@
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -624,8 +637,7 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "ID",
-            "ReferenceName": "UserID"
+            "Type": "String"
           }
         }
       ],
@@ -650,15 +662,14 @@
           "Name": "id",
           "Argument": "id",
           "Type": {
-            "Type": "ID",
-            "ReferenceName": "UserID"
+            "Type": "String"
           }
         }
       ],
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -676,7 +687,7 @@
           "Argument": "id",
           "Type": {
             "Type": "ID",
-            "ReferenceName": "UserID"
+            "ReferenceName": "SeriesID"
           }
         }
       ],
@@ -702,7 +713,7 @@
           "Argument": "id",
           "Type": {
             "Type": "ID",
-            "ReferenceName": "UserID"
+            "ReferenceName": "LibraryItemID"
           }
         }
       ],
@@ -717,7 +728,7 @@
         "ContentType": "application/json",
         "Type": {
           "Type": "Reference",
-          "ReferenceName": "MeUpdateBookmarkAnswer"
+          "ReferenceName": "AudioBookmark"
         }
       },
       "ExpectedStatusCodes": [
@@ -737,10 +748,9 @@
         }
       },
       "Response": {
-        "ContentType": "application/json",
+        "ContentType": "text/plain",
         "Type": {
-          "Type": "Reference",
-          "ReferenceName": "MeUpdatePasswordAnswer"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -773,133 +783,6 @@
   ],
   "Models": [
     {
-      "Name": "MeBatchUpdateMediaProgressRequest",
-      "Fields": [
-        {
-          "Name": "CurrentTime",
-          "JsonName": "currentTime",
-          "Type": {
-            "Type": "Double"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Duration",
-          "JsonName": "duration",
-          "Type": {
-            "Type": "Double"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "EbookLocation",
-          "JsonName": "ebookLocation",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "EbookProgress",
-          "JsonName": "ebookProgress",
-          "Type": {
-            "Type": "Double"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "EpisodeId",
-          "JsonName": "episodeId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "EpisodeID"
-          }
-        },
-        {
-          "Name": "FinishedAt",
-          "JsonName": "finishedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "HideFromContinueListening",
-          "JsonName": "hideFromContinueListening",
-          "Type": {
-            "Type": "Boolean"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "IsFinished",
-          "JsonName": "isFinished",
-          "Type": {
-            "Type": "Boolean"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "LastUpdate",
-          "JsonName": "lastUpdate",
-          "Type": {
-            "Type": "UnixMillis"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "LibraryItemId",
-          "JsonName": "libraryItemId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "LibraryItemID"
-          }
-        },
-        {
-          "Name": "Progress",
-          "JsonName": "progress",
-          "Type": {
-            "Type": "Double"
-          },
-          "Nullable": true
-        }
-      ]
-    },
-    {
-      "Name": "MeCreateBookmarkAnswer",
-      "Fields": [
-        {
-          "Name": "CreatedAt",
-          "JsonName": "createdAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "LibraryItemId",
-          "JsonName": "libraryItemId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "LibraryItemID"
-          }
-        },
-        {
-          "Name": "Time",
-          "JsonName": "time",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "Title",
-          "JsonName": "title",
-          "Type": {
-            "Type": "String"
-          }
-        }
-      ]
-    },
-    {
       "Name": "MeCreateBookmarkRequest",
       "Fields": [
         {
@@ -907,14 +790,16 @@
           "JsonName": "time",
           "Type": {
             "Type": "Double"
-          }
+          },
+          "Required": true
         },
         {
           "Name": "Title",
           "JsonName": "title",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Required": true
         }
       ]
     },
@@ -928,42 +813,8 @@
             "Type": "List",
             "NestedItem": {
               "Type": "Reference",
-              "ReferenceName": "MeGetAllBookmarksAnswerBookmarks"
+              "ReferenceName": "AudioBookmark"
             }
-          }
-        }
-      ]
-    },
-    {
-      "Name": "MeGetAllBookmarksAnswerBookmarks",
-      "Fields": [
-        {
-          "Name": "CreatedAt",
-          "JsonName": "createdAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "LibraryItemId",
-          "JsonName": "libraryItemId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "LibraryItemID"
-          }
-        },
-        {
-          "Name": "Time",
-          "JsonName": "time",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "Title",
-          "JsonName": "title",
-          "Type": {
-            "Type": "String"
           }
         }
       ]
@@ -978,505 +829,9 @@
             "Type": "List",
             "NestedItem": {
               "Type": "Reference",
-              "ReferenceName": "MeGetAllLibraryItemsInProgressAnswerLibraryItems"
+              "ReferenceName": "LibraryItemMinified"
             }
           }
-        }
-      ]
-    },
-    {
-      "Name": "MeGetAllLibraryItemsInProgressAnswerLibraryItems",
-      "Fields": [
-        {
-          "Name": "AddedAt",
-          "JsonName": "addedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "BirthtimeMs",
-          "JsonName": "birthtimeMs",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "CtimeMs",
-          "JsonName": "ctimeMs",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "FolderId",
-          "JsonName": "folderId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "FolderID"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Ino",
-          "JsonName": "ino",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "IsFile",
-          "JsonName": "isFile",
-          "Type": {
-            "Type": "Boolean"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "IsInvalid",
-          "JsonName": "isInvalid",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "IsMissing",
-          "JsonName": "isMissing",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "LibraryId",
-          "JsonName": "libraryId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "LibraryID"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Media",
-          "JsonName": "media",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "MeGetAllLibraryItemsInProgressAnswerLibraryItemsMedia"
-          }
-        },
-        {
-          "Name": "MediaType",
-          "JsonName": "mediaType",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "MtimeMs",
-          "JsonName": "mtimeMs",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "NumFiles",
-          "JsonName": "numFiles",
-          "Type": {
-            "Type": "Integer"
-          }
-        },
-        {
-          "Name": "OldLibraryItemId",
-          "JsonName": "oldLibraryItemId",
-          "Type": {
-            "Type": "Any"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Path",
-          "JsonName": "path",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "ProgressLastUpdate",
-          "JsonName": "progressLastUpdate",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "RecentEpisode",
-          "JsonName": "recentEpisode",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "PodcastEpisode"
-          }
-        },
-        {
-          "Name": "RelPath",
-          "JsonName": "relPath",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Size",
-          "JsonName": "size",
-          "Type": {
-            "Type": "Integer"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "UpdatedAt",
-          "JsonName": "updatedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "MeGetAllLibraryItemsInProgressAnswerLibraryItemsMedia",
-      "Fields": [
-        {
-          "Name": "AutoDownloadEpisodes",
-          "JsonName": "autoDownloadEpisodes",
-          "Type": {
-            "Type": "Boolean"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "AutoDownloadSchedule",
-          "JsonName": "autoDownloadSchedule",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "CoverPath",
-          "JsonName": "coverPath",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Duration",
-          "JsonName": "duration",
-          "Type": {
-            "Type": "Double"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "EbookFormat",
-          "JsonName": "ebookFormat",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "LastEpisodeCheck",
-          "JsonName": "lastEpisodeCheck",
-          "Type": {
-            "Type": "UnixMillis"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "MaxEpisodesToKeep",
-          "JsonName": "maxEpisodesToKeep",
-          "Type": {
-            "Type": "Integer"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "MaxNewEpisodesToDownload",
-          "JsonName": "maxNewEpisodesToDownload",
-          "Type": {
-            "Type": "Integer"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Metadata",
-          "JsonName": "metadata",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "MeGetAllLibraryItemsInProgressAnswerLibraryItemsMediaMetadata"
-          }
-        },
-        {
-          "Name": "NumAudioFiles",
-          "JsonName": "numAudioFiles",
-          "Type": {
-            "Type": "Integer"
-          }
-        },
-        {
-          "Name": "NumChapters",
-          "JsonName": "numChapters",
-          "Type": {
-            "Type": "Integer"
-          }
-        },
-        {
-          "Name": "NumEpisodes",
-          "JsonName": "numEpisodes",
-          "Type": {
-            "Type": "Integer"
-          }
-        },
-        {
-          "Name": "NumTracks",
-          "JsonName": "numTracks",
-          "Type": {
-            "Type": "Integer"
-          }
-        },
-        {
-          "Name": "Size",
-          "JsonName": "size",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "Tags",
-          "JsonName": "tags",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "String"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "Name": "MeGetAllLibraryItemsInProgressAnswerLibraryItemsMediaMetadata",
-      "Fields": [
-        {
-          "Name": "Abridged",
-          "JsonName": "abridged",
-          "Type": {
-            "Type": "Boolean"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Asin",
-          "JsonName": "asin",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Author",
-          "JsonName": "author",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "AuthorName",
-          "JsonName": "authorName",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "AuthorNameLF",
-          "JsonName": "authorNameLF",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Description",
-          "JsonName": "description",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Explicit",
-          "JsonName": "explicit",
-          "Type": {
-            "Type": "Boolean"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "FeedUrl",
-          "JsonName": "feedUrl",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Genres",
-          "JsonName": "genres",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "String"
-            }
-          }
-        },
-        {
-          "Name": "ImageUrl",
-          "JsonName": "imageUrl",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Isbn",
-          "JsonName": "isbn",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "ItunesArtistId",
-          "JsonName": "itunesArtistId",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "ItunesId",
-          "JsonName": "itunesId",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "ItunesPageUrl",
-          "JsonName": "itunesPageUrl",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Language",
-          "JsonName": "language",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "NarratorName",
-          "JsonName": "narratorName",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "PublishedDate",
-          "JsonName": "publishedDate",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "PublishedYear",
-          "JsonName": "publishedYear",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Publisher",
-          "JsonName": "publisher",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "ReleaseDate",
-          "JsonName": "releaseDate",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "SeriesName",
-          "JsonName": "seriesName",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Subtitle",
-          "JsonName": "subtitle",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Title",
-          "JsonName": "title",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "TitleIgnorePrefix",
-          "JsonName": "titleIgnorePrefix",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Type",
-          "JsonName": "type",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
         }
       ]
     },
@@ -1490,139 +845,9 @@
             "Type": "List",
             "NestedItem": {
               "Type": "Reference",
-              "ReferenceName": "MeGetAllMediaProgressAnswerMediaProgress"
+              "ReferenceName": "MediaProgress"
             }
           }
-        }
-      ]
-    },
-    {
-      "Name": "MeGetAllMediaProgressAnswerMediaProgress",
-      "Fields": [
-        {
-          "Name": "CurrentTime",
-          "JsonName": "currentTime",
-          "Type": {
-            "Type": "Double"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Duration",
-          "JsonName": "duration",
-          "Type": {
-            "Type": "Double"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "EbookLocation",
-          "JsonName": "ebookLocation",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "EbookProgress",
-          "JsonName": "ebookProgress",
-          "Type": {
-            "Type": "Double"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "EpisodeId",
-          "JsonName": "episodeId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "EpisodeID"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "FinishedAt",
-          "JsonName": "finishedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "HideFromContinueListening",
-          "JsonName": "hideFromContinueListening",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "IsFinished",
-          "JsonName": "isFinished",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "LastUpdate",
-          "JsonName": "lastUpdate",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "LibraryItemId",
-          "JsonName": "libraryItemId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "LibraryItemID"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "MediaItemId",
-          "JsonName": "mediaItemId",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "MediaItemType",
-          "JsonName": "mediaItemType",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Progress",
-          "JsonName": "progress",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "StartedAt",
-          "JsonName": "startedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "UserId",
-          "JsonName": "userId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "UserID"
-          },
-          "Nullable": true
         }
       ]
     },
@@ -1636,42 +861,8 @@
             "Type": "List",
             "NestedItem": {
               "Type": "Reference",
-              "ReferenceName": "MeGetBookmarksForLibraryItemAnswerBookmarks"
+              "ReferenceName": "AudioBookmark"
             }
-          }
-        }
-      ]
-    },
-    {
-      "Name": "MeGetBookmarksForLibraryItemAnswerBookmarks",
-      "Fields": [
-        {
-          "Name": "CreatedAt",
-          "JsonName": "createdAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "LibraryItemId",
-          "JsonName": "libraryItemId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "LibraryItemID"
-          }
-        },
-        {
-          "Name": "Time",
-          "JsonName": "time",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "Title",
-          "JsonName": "title",
-          "Type": {
-            "Type": "String"
           }
         }
       ]
@@ -1805,336 +996,6 @@
           "Type": {
             "Type": "Integer"
           }
-        }
-      ]
-    },
-    {
-      "Name": "MeGetListeningStatsAnswer",
-      "Fields": [
-        {
-          "Name": "DayOfWeek",
-          "JsonName": "dayOfWeek",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "MeGetListeningStatsAnswerDayOfWeek"
-          }
-        },
-        {
-          "Name": "Days",
-          "JsonName": "days",
-          "Type": {
-            "Type": "Dictionary",
-            "NestedItem": {
-              "Type": "Any"
-            }
-          }
-        },
-        {
-          "Name": "Items",
-          "JsonName": "items",
-          "Type": {
-            "Type": "Dictionary",
-            "NestedItem": {
-              "Type": "Any"
-            }
-          }
-        },
-        {
-          "Name": "RecentSessions",
-          "JsonName": "recentSessions",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "Reference",
-              "ReferenceName": "PlaybackSession"
-            }
-          }
-        },
-        {
-          "Name": "Today",
-          "JsonName": "today",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "TotalTime",
-          "JsonName": "totalTime",
-          "Type": {
-            "Type": "Double"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "MeGetListeningStatsAnswerDayOfWeek",
-      "Fields": [
-        {
-          "Name": "Thursday",
-          "JsonName": "Thursday",
-          "Type": {
-            "Type": "Double"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "MeGetMediaProgress2Answer",
-      "Fields": [
-        {
-          "Name": "CurrentTime",
-          "JsonName": "currentTime",
-          "Type": {
-            "Type": "Double"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Duration",
-          "JsonName": "duration",
-          "Type": {
-            "Type": "Double"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "EbookLocation",
-          "JsonName": "ebookLocation",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "EbookProgress",
-          "JsonName": "ebookProgress",
-          "Type": {
-            "Type": "Double"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "EpisodeId",
-          "JsonName": "episodeId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "EpisodeID"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "FinishedAt",
-          "JsonName": "finishedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "HideFromContinueListening",
-          "JsonName": "hideFromContinueListening",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "IsFinished",
-          "JsonName": "isFinished",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "LastUpdate",
-          "JsonName": "lastUpdate",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "LibraryItemId",
-          "JsonName": "libraryItemId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "LibraryItemID"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "MediaItemId",
-          "JsonName": "mediaItemId",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "MediaItemType",
-          "JsonName": "mediaItemType",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Progress",
-          "JsonName": "progress",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "StartedAt",
-          "JsonName": "startedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "UserId",
-          "JsonName": "userId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "UserID"
-          },
-          "Nullable": true
-        }
-      ]
-    },
-    {
-      "Name": "MeGetMediaProgressAnswer",
-      "Fields": [
-        {
-          "Name": "CurrentTime",
-          "JsonName": "currentTime",
-          "Type": {
-            "Type": "Double"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Duration",
-          "JsonName": "duration",
-          "Type": {
-            "Type": "Double"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "EbookLocation",
-          "JsonName": "ebookLocation",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "EbookProgress",
-          "JsonName": "ebookProgress",
-          "Type": {
-            "Type": "Double"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "EpisodeId",
-          "JsonName": "episodeId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "EpisodeID"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "FinishedAt",
-          "JsonName": "finishedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "HideFromContinueListening",
-          "JsonName": "hideFromContinueListening",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "IsFinished",
-          "JsonName": "isFinished",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "LastUpdate",
-          "JsonName": "lastUpdate",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "LibraryItemId",
-          "JsonName": "libraryItemId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "LibraryItemID"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "MediaItemId",
-          "JsonName": "mediaItemId",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "MediaItemType",
-          "JsonName": "mediaItemType",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Progress",
-          "JsonName": "progress",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "StartedAt",
-          "JsonName": "startedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "UserId",
-          "JsonName": "userId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "UserID"
-          },
-          "Nullable": true
         }
       ]
     },
@@ -2531,40 +1392,6 @@
       ]
     },
     {
-      "Name": "MeUpdateBookmarkAnswer",
-      "Fields": [
-        {
-          "Name": "CreatedAt",
-          "JsonName": "createdAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "LibraryItemId",
-          "JsonName": "libraryItemId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "LibraryItemID"
-          }
-        },
-        {
-          "Name": "Time",
-          "JsonName": "time",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "Title",
-          "JsonName": "title",
-          "Type": {
-            "Type": "String"
-          }
-        }
-      ]
-    },
-    {
       "Name": "MeUpdateBookmarkRequest",
       "Fields": [
         {
@@ -2572,55 +1399,16 @@
           "JsonName": "time",
           "Type": {
             "Type": "Double"
-          }
+          },
+          "Required": true
         },
         {
           "Name": "Title",
           "JsonName": "title",
           "Type": {
             "Type": "String"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "MeUpdatePasswordAnswer",
-      "Fields": [
-        {
-          "Name": "Success",
-          "JsonName": "success",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "User",
-          "JsonName": "user",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "MeUpdatePasswordAnswerUser"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "MeUpdatePasswordAnswerUser",
-      "Fields": [
-        {
-          "Name": "AccessToken",
-          "JsonName": "accessToken",
-          "Type": {
-            "Type": "Any"
           },
-          "Nullable": true
-        },
-        {
-          "Name": "RefreshToken",
-          "JsonName": "refreshToken",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
+          "Required": true
         }
       ]
     },
@@ -2653,46 +1441,9 @@
             "Type": "List",
             "NestedItem": {
               "Type": "Reference",
-              "ReferenceName": "MeUpdateUserEReaderDevicesAnswerEreaderDevices"
+              "ReferenceName": "EreaderDevice"
             }
           }
-        }
-      ]
-    },
-    {
-      "Name": "MeUpdateUserEReaderDevicesAnswerEreaderDevices",
-      "Fields": [
-        {
-          "Name": "AvailabilityOption",
-          "JsonName": "availabilityOption",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Email",
-          "JsonName": "email",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Name",
-          "JsonName": "name",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Users",
-          "JsonName": "users",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "String"
-            }
-          },
-          "Nullable": true
         }
       ]
     },
@@ -2706,45 +1457,104 @@
             "Type": "List",
             "NestedItem": {
               "Type": "Reference",
-              "ReferenceName": "MeUpdateUserEReaderDevicesRequestEreaderDevices"
+              "ReferenceName": "EreaderDevice"
             }
           }
         }
       ]
     },
     {
-      "Name": "MeUpdateUserEReaderDevicesRequestEreaderDevices",
+      "Name": "ProgressUpdatePayload",
+      "SchemaName": "ProgressUpdatePayload",
       "Fields": [
         {
-          "Name": "AvailabilityOption",
-          "JsonName": "availabilityOption",
+          "Name": "CurrentTime",
+          "JsonName": "currentTime",
+          "Type": {
+            "Type": "Double"
+          },
+          "Nullable": true,
+          "KeepsNull": true
+        },
+        {
+          "Name": "Duration",
+          "JsonName": "duration",
+          "Type": {
+            "Type": "Double"
+          },
+          "Nullable": true,
+          "KeepsNull": true
+        },
+        {
+          "Name": "EbookLocation",
+          "JsonName": "ebookLocation",
           "Type": {
             "Type": "String"
+          },
+          "Nullable": true,
+          "KeepsNull": true
+        },
+        {
+          "Name": "EbookProgress",
+          "JsonName": "ebookProgress",
+          "Type": {
+            "Type": "Double"
+          },
+          "Nullable": true,
+          "KeepsNull": true
+        },
+        {
+          "Name": "EpisodeId",
+          "JsonName": "episodeId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "EpisodeID"
           }
         },
         {
-          "Name": "Email",
-          "JsonName": "email",
+          "Name": "FinishedAt",
+          "JsonName": "finishedAt",
           "Type": {
-            "Type": "String"
+            "Type": "UnixMillis"
           }
         },
         {
-          "Name": "Name",
-          "JsonName": "name",
+          "Name": "HideFromContinueListening",
+          "JsonName": "hideFromContinueListening",
           "Type": {
-            "Type": "String"
+            "Type": "Boolean"
           }
         },
         {
-          "Name": "Users",
-          "JsonName": "users",
+          "Name": "IsFinished",
+          "JsonName": "isFinished",
           "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "String"
-            }
+            "Type": "Boolean"
           }
+        },
+        {
+          "Name": "LastUpdate",
+          "JsonName": "lastUpdate",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "LibraryItemId",
+          "JsonName": "libraryItemId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryItemID"
+          }
+        },
+        {
+          "Name": "Progress",
+          "JsonName": "progress",
+          "Type": {
+            "Type": "Double"
+          },
+          "Nullable": true,
+          "KeepsNull": true
         }
       ]
     }

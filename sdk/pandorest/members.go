@@ -556,7 +556,7 @@ func globalMethod(e *evaluator, g, name string, args []*jsType) (*jsType, bool) 
 		case "keys":
 			return listOf(str), true
 		case "values":
-			var v *jsType
+			v := first.values
 			for _, p := range first.props {
 				v = merge(v, p.typ)
 			}

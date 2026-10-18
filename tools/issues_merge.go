@@ -10,8 +10,10 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/go-kt/pointer"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -36,11 +38,11 @@ const (
 	// 38-hour book came back three seconds shorter
 	mergeLengthSlack = 30.0
 	// mergeFreshSlack is how long before a record went missing its
-	// replacement may have been made, in milliseconds: the server's file
-	// watcher can add the folder under its new name a moment before it
-	// misses the old one. A record older than that was already in the
-	// library - a second copy of the book, not the folder moved
-	mergeFreshSlack = 10 * 60 * 1000
+	// replacement may have been made: the server's file watcher can add
+	// the folder under its new name a moment before it misses the old one.
+	// A record older than that was already in the library - a second copy
+	// of the book, not the folder moved
+	mergeFreshSlack = 10 * time.Minute
 	// mergeKeyLife is how long a key made to act as another account lasts,
 	// in seconds, if deleting it at the end of the call should fail
 	mergeKeyLife = 900
@@ -122,7 +124,7 @@ type issuesMergeOut struct {
 }
 
 func registerIssuesMerge(r *registry) {
-	client := r.client
+	gen := r.gen
 
 	add(r, deleteTool, &mcp.Tool{
 		Name: "library_issues_merge",
@@ -131,7 +133,7 @@ func registerIssuesMerge(r *registry) {
 			"Without confirm=true nothing changes: it lists each pair with what would be carried and what cannot be (the day added, the day each account started it). Left alone, under unpaired: a record with no match, with several, or whose match was in the library before it went missing (a second copy, not the folder moved), unless into names the one. Left alone, with kept saying why: a pair whose old record has an open RSS feed or share link, or something that could not be carried. " +
 			"Another account's progress, bookmarks and playlists are written as that account, with a key made for the call and deleted after it. Books only. Admin only.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in issuesMergeIn) (*mcp.CallToolResult, issuesMergeOut, error) {
-		libs, err := resolveLibraries(ctx, client, in.Library)
+		libs, err := resolveLibraries(ctx, gen, in.Library)
 		if err != nil {
 			return nil, issuesMergeOut{}, err
 		}
@@ -142,7 +144,7 @@ func registerIssuesMerge(r *registry) {
 		if in.Into != "" && len(in.Items) != 1 {
 			return nil, issuesMergeOut{}, errors.New("into names where one record goes: give that one record in items")
 		}
-		m := issuesMerger{client: client, confirm: in.Confirm, into: strings.TrimSpace(in.Into)}
+		m := issuesMerger{gen: gen, confirm: in.Confirm, into: strings.TrimSpace(in.Into)}
 		defer func() { _ = m.close(ctx) }()
 		out := issuesMergeOut{Pairs: []mergePair{}, Unpaired: []mergeUnpaired{}}
 		if err := m.run(ctx, libs, in.Items, &out); err != nil {
@@ -156,16 +158,16 @@ func registerIssuesMerge(r *registry) {
 
 // issuesMerger is one library_issues_merge call.
 type issuesMerger struct {
-	client  *abs.Client
+	gen     *api.Client
 	confirm bool
 	into    string // the record the caller chose for the one missing record asked for
 
-	me    *abs.User
-	users []abs.User // every account, each with its progress and bookmarks
+	me    *api.UserForBrowser
+	users []api.UserForBrowser // every account, each with its progress and bookmarks
 	feeds map[string]bool
 	// acting holds a client for each account written to, the caller's own
 	// among them; keys are the ones made for the others
-	acting    map[string]*abs.Client
+	acting    map[api.UserID]*api.Client
 	keys      []string
 	unreached []string
 	closed    bool
@@ -181,7 +183,7 @@ func (m *issuesMerger) close(ctx context.Context) []string {
 
 	var left []string
 	for _, id := range m.keys {
-		if err := m.client.DeleteAPIKey(context.WithoutCancel(ctx), id); err != nil {
+		if _, err := m.gen.ApiKeyDelete(context.WithoutCancel(ctx), id); err != nil {
 			left = append(left, id)
 		}
 	}
@@ -189,21 +191,19 @@ func (m *issuesMerger) close(ctx context.Context) []string {
 	return left
 }
 
-func (m *issuesMerger) run(ctx context.Context, libs []abs.Library, only []string, out *issuesMergeOut) error {
-	var missing []abs.Item
-	present := map[int][]abs.Item{} // by how many audio files a record has
-	libOf := map[string]*abs.Library{}
+func (m *issuesMerger) run(ctx context.Context, libs []api.Library, only []string, out *issuesMergeOut) error {
+	var missing []api.LibraryItemMinified
+	present := map[int][]api.LibraryItemMinified{} // by how many audio files a record has
+	libOf := map[api.LibraryID]*api.Library{}
 	for i := range libs {
 		lib := &libs[i]
-		libOf[lib.ID] = lib
-		if err := m.client.ItemsAll(ctx, lib.ID, abs.ItemsOptions{}, func(items []abs.Item) bool {
-			for j := range items {
-				switch it := &items[j]; {
-				case it.IsMissing:
-					missing = append(missing, items[j])
-				case !it.IsInvalid && !it.IsPodcast():
-					present[it.Media.NumAudioFiles] = append(present[it.Media.NumAudioFiles], items[j])
-				}
+		libOf[lib.Id] = lib
+		if err := eachItem(ctx, m.gen, lib.Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+			switch {
+			case it.IsMissing:
+				missing = append(missing, *it)
+			case !it.IsInvalid && !it.IsPodcast():
+				present[it.Media.NumAudioFiles] = append(present[it.Media.NumAudioFiles], *it)
 			}
 			return true
 		}); err != nil {
@@ -219,28 +219,28 @@ func (m *issuesMerger) run(ctx context.Context, libs []abs.Library, only []strin
 		return nil
 	}
 
-	type pair struct{ old, fresh abs.Item }
+	type pair struct{ old, fresh api.LibraryItemExpanded }
 	var pairs []pair
 	for i := range missing {
-		old := &missing[i]
-		if old.IsPodcast() {
-			out.Unpaired = append(out.Unpaired, mergeUnpaired{mergeRecord: mergeRecordOf(old), Why: "a podcast: its progress hangs on its episodes, which this does not carry"})
+		listed := &missing[i]
+		if listed.IsPodcast() {
+			out.Unpaired = append(out.Unpaired, mergeUnpaired{mergeRecord: mergeRecordOf(listed), Why: "a podcast: its progress hangs on its episodes, which this does not carry"})
 			continue
 		}
-		fresh, others, why, err := m.sameAudio(ctx, old, present[old.Media.NumAudioFiles])
+		old, fresh, others, why, err := m.sameAudio(ctx, listed, present[listed.Media.NumAudioFiles])
 		if err != nil {
 			return err
 		}
 		if fresh == nil {
-			row := mergeUnpaired{mergeRecord: mergeRecordOf(old), Why: why}
+			row := mergeUnpaired{mergeRecord: mergeRecordOf(listed), Why: why}
 			for k := range others {
-				row.Candidates = append(row.Candidates, mergeRecordOf(&others[k]))
+				row.Candidates = append(row.Candidates, mergeRecordOf(new(others[k].Minified())))
 			}
 			out.Unpaired = append(out.Unpaired, row)
 			continue
 		}
 		pairs = append(pairs, pair{*old, *fresh})
-		out.Pairs = append(out.Pairs, mergePair{From: mergeRecordOf(old), Into: mergeRecordOf(fresh), Same: why})
+		out.Pairs = append(out.Pairs, mergePair{From: mergeRecordOf(new(old.Minified())), Into: mergeRecordOf(new(fresh.Minified())), Same: why})
 	}
 	if len(pairs) == 0 {
 		return nil
@@ -251,7 +251,7 @@ func (m *issuesMerger) run(ctx context.Context, libs []abs.Library, only []strin
 	}
 	for i := range pairs {
 		row := &out.Pairs[i]
-		lib := libOf[pairs[i].old.LibraryID]
+		lib := libOf[pairs[i].old.LibraryId]
 		plan, err := m.plan(ctx, lib, &pairs[i].old, &pairs[i].fresh)
 		if err != nil {
 			return err
@@ -277,7 +277,7 @@ func (m *issuesMerger) run(ctx context.Context, libs []abs.Library, only []strin
 			row.Kept = "after carrying, the new record still lacks: " + after.carry.left()
 			continue
 		}
-		if err := m.client.DeleteItem(ctx, pairs[i].old.ID, false); err != nil {
+		if _, err := m.gen.LibraryItemDelete(ctx, pairs[i].old.Id); err != nil {
 			row.Kept = "everything was carried across, but deleting the old record failed: " + err.Error()
 			continue
 		}
@@ -291,7 +291,7 @@ func (m *issuesMerger) run(ctx context.Context, libs []abs.Library, only []strin
 	// the count is read back rather than taken from what was deleted
 	left := 0
 	for i := range libs {
-		page, err := m.client.Items(ctx, libs[i].ID, abs.ItemsOptions{Limit: 1, Filter: "issues", Minified: true})
+		page, err := record(m.gen.LibraryGetLibraryItems(ctx, libs[i].Id, api.LibraryGetLibraryItemsOptions{Limit: new(1), Filter: "issues", Minified: "1"}))
 		if err != nil {
 			return fmt.Errorf("%d records were merged, but reading the library back failed: %w", out.Merged, err)
 		}
@@ -304,20 +304,20 @@ func (m *issuesMerger) run(ctx context.Context, libs []abs.Library, only []strin
 
 // mergeOnly narrows the missing records to the ones asked for, each named by
 // its id or its path inside the library.
-func mergeOnly(missing []abs.Item, only []string) ([]abs.Item, error) {
+func mergeOnly(missing []api.LibraryItemMinified, only []string) ([]api.LibraryItemMinified, error) {
 	if len(only) == 0 {
 		return missing, nil
 	}
-	var out []abs.Item
+	var out []api.LibraryItemMinified
 	for _, want := range only {
 		want = strings.TrimSpace(want)
-		i := slices.IndexFunc(missing, func(it abs.Item) bool {
-			return it.ID == want || strings.Trim(it.RelPath, "/") == strings.Trim(want, "/")
+		i := slices.IndexFunc(missing, func(it api.LibraryItemMinified) bool {
+			return string(it.Id) == want || strings.Trim(it.RelPath, "/") == strings.Trim(want, "/")
 		})
 		if i < 0 {
 			return nil, fmt.Errorf("%q is not a record whose folder is missing: give its id or its path inside the library, as audit_issues lists them", want)
 		}
-		if !slices.ContainsFunc(out, func(it abs.Item) bool { return it.ID == missing[i].ID }) {
+		if !slices.ContainsFunc(out, func(it api.LibraryItemMinified) bool { return it.Id == missing[i].Id }) {
 			out = append(out, missing[i])
 		}
 	}
@@ -325,47 +325,48 @@ func mergeOnly(missing []abs.Item, only []string) ([]abs.Item, error) {
 	return out, nil
 }
 
-func mergeRecordOf(it *abs.Item) mergeRecord {
-	return mergeRecord{ID: it.ID, Path: it.RelPath, Title: it.Title(), Added: fmtDate(it.AddedAt)}
+func mergeRecordOf(it *api.LibraryItemMinified) mergeRecord {
+	return mergeRecord{ID: string(it.Id), Path: it.RelPath, Title: it.Title(), Added: fmtDate(it.AddedAt)}
 }
 
-// sameAudio finds the record that took old's place: the one holding its
-// audio files that was made when old went missing, or after. It answers with
-// that record and what was compared, or with no record, why, and the records
-// that hold the same audio without being it - several made since, or copies
-// that were in the library all along. Candidates have as many audio files as
-// old; the listing's lengths narrow them before any is read in full.
-func (m *issuesMerger) sameAudio(ctx context.Context, old *abs.Item, candidates []abs.Item) (fresh *abs.Item, others []abs.Item, why string, err error) {
-	if old.Media.NumAudioFiles == 0 {
-		return nil, nil, "it holds no audio to tell it by", nil
+// sameAudio finds the record that took a missing one's place: the one holding
+// its audio files that was made when it went missing, or after. It answers
+// with both read whole and what was compared, or with no record, why, and the
+// records that hold the same audio without being it - several made since, or
+// copies that were in the library all along. Candidates have as many audio
+// files as the missing one; the listing's lengths narrow them before any is
+// read in full.
+func (m *issuesMerger) sameAudio(ctx context.Context, listed *api.LibraryItemMinified, candidates []api.LibraryItemMinified) (old, fresh *api.LibraryItemExpanded, others []api.LibraryItemExpanded, why string, err error) {
+	if listed.Media.NumAudioFiles == 0 {
+		return nil, nil, nil, "it holds no audio to tell it by", nil
 	}
-	ids := []string{old.ID}
+	ids := []api.LibraryItemID{listed.Id}
 	for i := range candidates {
-		if math.Abs(candidates[i].Media.Duration-old.Media.Duration) <= mergeLengthSlack {
-			ids = append(ids, candidates[i].ID)
+		if math.Abs(candidates[i].Media.Duration-listed.Media.Duration) <= mergeLengthSlack {
+			ids = append(ids, candidates[i].Id)
 		}
 	}
-	var whole []abs.Item
+	var whole []api.LibraryItemExpanded
 	for chunk := range slices.Chunk(ids, embedBatchSize) {
-		items, err := m.client.ItemsBatch(ctx, chunk)
+		items, err := itemsBatch(ctx, m.gen, chunk)
 		if err != nil {
-			return nil, nil, "", err
+			return nil, nil, nil, "", err
 		}
 		whole = append(whole, items...)
 	}
-	at := slices.IndexFunc(whole, func(it abs.Item) bool { return it.ID == old.ID })
+	at := slices.IndexFunc(whole, func(it api.LibraryItemExpanded) bool { return it.Id == listed.Id })
 	if at < 0 {
-		return nil, nil, "", fmt.Errorf("the server did not answer with the missing record %s (%s) when asked for it by id", old.ID, old.RelPath)
+		return nil, nil, nil, "", fmt.Errorf("the server did not answer with the missing record %s (%s) when asked for it by id", listed.Id, listed.RelPath)
 	}
-	*old = whole[at]
+	old = &whole[at]
 
 	// a scan stamps the record it finds missing; the file watcher only
 	// saves it
 	since := old.LastScan
-	if since == 0 {
+	if since.IsZero() {
 		since = old.UpdatedAt
 	}
-	var made, standing []abs.Item
+	var made, standing []api.LibraryItemExpanded
 	how := ""
 	for i := range whole {
 		same, by := sameAudioFiles(old.Media.AudioFiles, whole[i].Media.AudioFiles)
@@ -375,10 +376,10 @@ func (m *issuesMerger) sameAudio(ctx context.Context, old *abs.Item, candidates 
 		how = by
 		switch {
 		case m.into != "":
-			if whole[i].ID == m.into || strings.Trim(whole[i].RelPath, "/") == strings.Trim(m.into, "/") {
+			if string(whole[i].Id) == m.into || strings.Trim(whole[i].RelPath, "/") == strings.Trim(m.into, "/") {
 				made = append(made, whole[i])
 			}
-		case whole[i].AddedAt+mergeFreshSlack >= since:
+		case !whole[i].AddedAt.Add(mergeFreshSlack).Before(since.Time):
 			made = append(made, whole[i])
 		default:
 			standing = append(standing, whole[i])
@@ -387,28 +388,28 @@ func (m *issuesMerger) sameAudio(ctx context.Context, old *abs.Item, candidates 
 
 	switch {
 	case len(made) == 1:
-		return &made[0], nil, how, nil
+		return old, &made[0], nil, how, nil
 	case m.into != "":
-		return nil, nil, fmt.Sprintf("%q does not hold the same audio files, so it is not this book's record", m.into), nil
+		return nil, nil, nil, fmt.Sprintf("%q does not hold the same audio files, so it is not this book's record", m.into), nil
 	case len(made) > 1:
-		return nil, made, fmt.Sprintf("%d records hold the same audio files and were made since it went missing, and nothing says which took its place: name one with into", len(made)), nil
+		return nil, nil, made, fmt.Sprintf("%d records hold the same audio files and were made since it went missing, and nothing says which took its place: name one with into", len(made)), nil
 	case len(standing) > 0:
-		return nil, standing, "the same audio files are in a record that was already in the library before this one went missing: a second copy of the book, not its folder moved. To carry this record's progress and details onto it anyway, name it with into", nil
+		return nil, nil, standing, "the same audio files are in a record that was already in the library before this one went missing: a second copy of the book, not its folder moved. To carry this record's progress and details onto it anyway, name it with into", nil
 	}
 
-	return nil, nil, "no record holds the same audio files: the folder was deleted, or its share was not there when the library was scanned", nil
+	return nil, nil, nil, "no record holds the same audio files: the folder was deleted, or its share was not there when the library was scanned", nil
 }
 
 // sameAudioFiles reports whether two records hold the same audio: as many
 // files, each with one of the same size and the same name. A book that is one
 // file may have been renamed itself, so there the size and the length stand
 // for the name.
-func sameAudioFiles(old, fresh []abs.AudioFile) (same bool, how string) {
+func sameAudioFiles(old, fresh []api.AudioFile) (same bool, how string) {
 	if len(old) == 0 || len(old) != len(fresh) {
 		return false, ""
 	}
-	if len(old) == 1 && old[0].Metadata.Filename != fresh[0].Metadata.Filename {
-		if old[0].Metadata.Size == fresh[0].Metadata.Size && math.Abs(old[0].Duration-fresh[0].Duration) <= 1 {
+	if was, now := pointer.From(old[0].Metadata), pointer.From(fresh[0].Metadata); len(old) == 1 && was.Filename != now.Filename {
+		if was.Size == now.Size && math.Abs(old[0].Duration-fresh[0].Duration) <= 1 {
 			return true, "one audio file of the same size and length, under another name"
 		}
 		return false, ""
@@ -416,14 +417,15 @@ func sameAudioFiles(old, fresh []abs.AudioFile) (same bool, how string) {
 
 	taken := make([]bool, len(fresh))
 	for i := range old {
-		k := slices.IndexFunc(fresh, func(f abs.AudioFile) bool {
-			return f.Metadata.Size == old[i].Metadata.Size && f.Metadata.Filename == old[i].Metadata.Filename
-		})
+		want := pointer.From(old[i].Metadata)
+		match := func(f api.AudioFile) bool {
+			has := pointer.From(f.Metadata)
+			return has.Size == want.Size && has.Filename == want.Filename
+		}
+		k := slices.IndexFunc(fresh, match)
 		// two files of one name and size in a book would each be counted once
 		for k >= 0 && taken[k] {
-			next := slices.IndexFunc(fresh[k+1:], func(f abs.AudioFile) bool {
-				return f.Metadata.Size == old[i].Metadata.Size && f.Metadata.Filename == old[i].Metadata.Filename
-			})
+			next := slices.IndexFunc(fresh[k+1:], match)
 			if next < 0 {
 				k = -1
 				break
@@ -446,32 +448,32 @@ func sameAudioFiles(old, fresh []abs.AudioFile) (same bool, how string) {
 // open feeds. Only an admin can.
 func (m *issuesMerger) readAccounts(ctx context.Context) error {
 	if m.me == nil {
-		me, err := m.client.Me(ctx)
+		me, err := record(m.gen.MeGetCurrentUser(ctx))
 		if err != nil {
 			return err
 		}
-		m.me = me
-		feeds, err := m.client.Feeds(ctx)
+		m.me = &me
+		feeds, err := record(m.gen.RSSFeedGetAll(ctx))
 		if err != nil {
 			return fmt.Errorf("reading the open RSS feeds, which only an admin key can: %w", err)
 		}
 		m.feeds = map[string]bool{}
-		for i := range feeds {
-			m.feeds[feeds[i].EntityID] = true
+		for i := range feeds.Feeds {
+			m.feeds[feeds.Feeds[i].EntityId] = true
 		}
 	}
 
-	list, err := m.client.Users(ctx, false)
+	list, err := record(m.gen.UserFindAll(ctx))
 	if err != nil {
 		return fmt.Errorf("reading the accounts, which only an admin key can: %w", err)
 	}
 	m.users = m.users[:0]
-	for i := range list {
-		u, err := m.client.User(ctx, list[i].ID)
+	for i := range list.Users {
+		u, err := record(m.gen.UserFindOne(ctx, list.Users[i].Id))
 		if err != nil {
-			return fmt.Errorf("reading the account %s: %w", list[i].Username, err)
+			return fmt.Errorf("reading the account %s: %w", list.Users[i].Username, err)
 		}
-		m.users = append(m.users, *u)
+		m.users = append(m.users, u)
 	}
 
 	return nil
@@ -480,48 +482,48 @@ func (m *issuesMerger) readAccounts(ctx context.Context) error {
 // mergePlan is what one pair needs: read from the server, and read again
 // after carrying to see nothing is left.
 type mergePlan struct {
-	old, fresh *abs.Item
+	old, fresh *api.LibraryItemExpanded
 	carry      mergeCarry
 	lost       []string
 	blocked    string
 
-	details     *abs.MediaUpdate
+	details     *api.MediaUpdate
 	progress    []mergeProgress
 	bookmarks   []mergeBookmarks
-	collections []abs.Collection
-	playlists   []abs.Playlist // the caller's own; another account's are read as that account
+	collections []api.Collection
+	playlists   []api.Playlist // the caller's own; another account's are read as that account
 }
 
 type mergeProgress struct {
-	user *abs.User
-	was  abs.MediaProgress
+	user *api.UserForBrowser
+	was  api.MediaProgress
 }
 
 type mergeBookmarks struct {
-	user *abs.User
-	add  []abs.Bookmark
+	user *api.UserForBrowser
+	add  []api.AudioBookmark
 }
 
-func (m *issuesMerger) plan(ctx context.Context, lib *abs.Library, old, stale *abs.Item) (*mergePlan, error) {
-	fresh, err := m.client.Item(ctx, stale.ID)
+func (m *issuesMerger) plan(ctx context.Context, lib *api.Library, old, stale *api.LibraryItemExpanded) (*mergePlan, error) {
+	fresh, err := getItem(ctx, m.gen, stale.Id)
 	if err != nil {
 		return nil, err
 	}
 	p := &mergePlan{old: old, fresh: fresh}
 
-	if m.feeds[old.ID] {
+	if m.feeds[string(old.Id)] {
 		p.blocked = "an RSS feed is open on the old record, and deleting the record would close it: close it, or open one on the new record first (feed_edit)"
 	}
-	share, err := m.client.ItemShare(ctx, old.ID)
+	shared, err := record(m.gen.LibraryItemFindOne(ctx, old.Id, api.LibraryItemFindOneOptions{Expanded: "1", Include: "share"}))
 	if err != nil {
 		return nil, err
 	}
-	if share != nil && p.blocked == "" {
+	if shared.MediaItemShare != nil && p.blocked == "" {
 		p.blocked = "a share link is open on the old record, and deleting the record would end it: end it, or share the new record first (item_share)"
 	}
 
 	p.details, p.carry.Details = mergeDetails(old, fresh)
-	p.carry.Chapters = !slices.EqualFunc(old.Media.Chapters, fresh.Media.Chapters, func(a, b abs.Chapter) bool {
+	p.carry.Chapters = !slices.EqualFunc(old.Media.Chapters, fresh.Media.Chapters, func(a, b api.Chapter) bool {
 		return a.Title == b.Title && a.Start == b.Start && a.End == b.End
 	}) && len(old.Media.Chapters) > 0
 	// a cover inside the old folder went with the folder; one the server
@@ -530,17 +532,17 @@ func (m *issuesMerger) plan(ctx context.Context, lib *abs.Library, old, stale *a
 
 	for i := range m.users {
 		u := &m.users[i]
-		was, has := mergeProgressOn(u, old.ID), mergeProgressOn(u, fresh.ID)
+		was, has := mergeProgressOn(u, old.Id), mergeProgressOn(u, fresh.Id)
 		if was != nil && (has == nil || !sameProgress(was, has)) {
 			p.progress = append(p.progress, mergeProgress{u, *was})
 			p.carry.Progress = append(p.carry.Progress, u.Username)
-			if was.StartedAt > 0 {
+			if !was.StartedAt.IsZero() {
 				p.lost = append(p.lost, fmt.Sprintf("the day %s started it (%s)", u.Username, fmtDate(was.StartedAt)))
 			}
 		}
-		var add []abs.Bookmark
+		var add []api.AudioBookmark
 		for _, b := range u.Bookmarks {
-			if b.LibraryItemID == old.ID && !slices.ContainsFunc(u.Bookmarks, func(o abs.Bookmark) bool { return o.LibraryItemID == fresh.ID && o.Time == b.Time }) {
+			if b.LibraryItemId == old.Id && !slices.ContainsFunc(u.Bookmarks, func(o api.AudioBookmark) bool { return o.LibraryItemId == fresh.Id && o.Time == b.Time }) {
 				add = append(add, b)
 			}
 		}
@@ -550,22 +552,22 @@ func (m *issuesMerger) plan(ctx context.Context, lib *abs.Library, old, stale *a
 		}
 	}
 
-	collections, err := m.client.Collections(ctx, lib.ID)
+	collections, err := libraryCollections(ctx, m.gen, lib.Id)
 	if err != nil {
 		return nil, err
 	}
 	for i := range collections {
-		if holdsBook(collections[i].Books, old.ID) && !holdsBook(collections[i].Books, fresh.ID) {
+		if holdsBook(collections[i].Books, old.Id) && !holdsBook(collections[i].Books, fresh.Id) {
 			p.collections = append(p.collections, collections[i])
 			p.carry.Collections = append(p.carry.Collections, collections[i].Name)
 		}
 	}
-	playlists, err := m.client.Playlists(ctx, lib.ID)
+	playlists, err := libraryPlaylists(ctx, m.gen, lib.Id)
 	if err != nil {
 		return nil, err
 	}
 	for i := range playlists {
-		if holdsEntry(playlists[i].Items, old.ID) && !holdsEntry(playlists[i].Items, fresh.ID) {
+		if holdsEntry(playlists[i].Items, old.Id) && !holdsEntry(playlists[i].Items, fresh.Id) {
 			p.playlists = append(p.playlists, playlists[i])
 			p.carry.Playlists = append(p.carry.Playlists, playlists[i].Name+" ("+m.me.Username+")")
 		}
@@ -578,17 +580,17 @@ func (m *issuesMerger) plan(ctx context.Context, lib *abs.Library, old, stale *a
 	return p, nil
 }
 
-func holdsBook(books []abs.Item, id string) bool {
-	return slices.ContainsFunc(books, func(b abs.Item) bool { return b.ID == id })
+func holdsBook(books []api.LibraryItemExpanded, id api.LibraryItemID) bool {
+	return slices.ContainsFunc(books, func(b api.LibraryItemExpanded) bool { return b.Id == id })
 }
 
-func holdsEntry(entries []abs.PlaylistItem, id string) bool {
-	return slices.ContainsFunc(entries, func(e abs.PlaylistItem) bool { return e.LibraryItemID == id && e.EpisodeID == "" })
+func holdsEntry(entries []api.PlaylistItems, id api.LibraryItemID) bool {
+	return slices.ContainsFunc(entries, func(e api.PlaylistItems) bool { return e.LibraryItemId == id && e.EpisodeId == "" })
 }
 
-func mergeProgressOn(u *abs.User, itemID string) *abs.MediaProgress {
+func mergeProgressOn(u *api.UserForBrowser, itemID api.LibraryItemID) *api.MediaProgress {
 	for i := range u.MediaProgress {
-		if p := &u.MediaProgress[i]; p.LibraryItemID == itemID && p.EpisodeID == "" {
+		if p := &u.MediaProgress[i]; p.LibraryItemId == itemID && p.EpisodeId == "" {
 			return p
 		}
 	}
@@ -600,16 +602,16 @@ func mergeProgressOn(u *abs.User, itemID string) *abs.MediaProgress {
 // another: where the listener is, whether they finished and when, and
 // whether they took it off the continue shelf. A finish with no day recorded
 // has none to keep: the server stamps the day it is carried.
-func sameProgress(was, has *abs.MediaProgress) bool {
-	return math.Abs(was.CurrentTime-has.CurrentTime) < 1 && was.IsFinished == has.IsFinished && (was.FinishedAt == 0 || was.FinishedAt == has.FinishedAt) &&
+func sameProgress(was, has *api.MediaProgress) bool {
+	return math.Abs(was.CurrentTime-has.CurrentTime) < 1 && was.IsFinished == has.IsFinished && (was.FinishedAt.IsZero() || was.FinishedAt.Equal(has.FinishedAt.Time)) &&
 		was.HideFromContinueListening == has.HideFromContinueListening && was.EbookLocation == has.EbookLocation
 }
 
 // mergeDetails is the update that makes fresh say what old says, with the
 // names of what differs, or nil when nothing does.
-func mergeDetails(old, fresh *abs.Item) (update *abs.MediaUpdate, differing []string) {
+func mergeDetails(old, fresh *api.LibraryItemExpanded) (update *api.MediaUpdate, differing []string) {
 	o, f := old.Media.Metadata, fresh.Media.Metadata
-	upd := abs.MetadataUpdate{}
+	upd := api.MediaUpdateMetadata{}
 	var names []string
 	text := func(name, a, b string, dst **string) {
 		if a != b {
@@ -618,26 +620,27 @@ func mergeDetails(old, fresh *abs.Item) (update *abs.MediaUpdate, differing []st
 	}
 	text("title", o.Title, f.Title, &upd.Title)
 	text("subtitle", o.Subtitle, f.Subtitle, &upd.Subtitle)
-	text("year", o.PublishedYear.String(), f.PublishedYear.String(), &upd.PublishedYear)
+	text("year", o.PublishedYear, f.PublishedYear, &upd.PublishedYear)
 	text("published date", o.PublishedDate, f.PublishedDate, &upd.PublishedDate)
 	text("publisher", o.Publisher, f.Publisher, &upd.Publisher)
 	text("description", o.Description, f.Description, &upd.Description)
-	text("isbn", o.ISBN, f.ISBN, &upd.ISBN)
-	text("asin", o.ASIN, f.ASIN, &upd.ASIN)
+	text("isbn", o.Isbn, f.Isbn, &upd.Isbn)
+	text("asin", o.Asin, f.Asin, &upd.Asin)
 	text("language", o.Language, f.Language, &upd.Language)
-	if o.Explicit != f.Explicit {
-		upd.Explicit, names = &o.Explicit, append(names, "explicit")
+	flag := func(name string, a, b *bool, dst **bool) {
+		if was := pointer.From(a); was != pointer.From(b) {
+			*dst, names = &was, append(names, name)
+		}
 	}
-	if o.Abridged != f.Abridged {
-		upd.Abridged, names = &o.Abridged, append(names, "abridged")
-	}
+	flag("explicit", o.Explicit, f.Explicit, &upd.Explicit)
+	flag("abridged", o.Abridged, f.Abridged, &upd.Abridged)
 	if !slices.Equal(o.Narrators, f.Narrators) {
 		upd.Narrators, names = append([]string{}, o.Narrators...), append(names, "narrators")
 	}
 	if !slices.Equal(o.Genres, f.Genres) {
 		upd.Genres, names = append([]string{}, o.Genres...), append(names, "genres")
 	}
-	media := abs.MediaUpdate{}
+	media := api.MediaUpdate{}
 	if len(names) > 0 {
 		media.Metadata = &upd
 	}
@@ -660,7 +663,7 @@ func mergeDetails(old, fresh *abs.Item) (update *abs.MediaUpdate, differing []st
 	return update, names
 }
 
-func authorNames(refs []abs.NameRef) []string {
+func authorNames(refs []api.AuthorMinimal) []string {
 	names := make([]string, 0, len(refs))
 	for _, a := range refs {
 		names = append(names, a.Name)
@@ -679,23 +682,23 @@ func authorNames(refs []abs.NameRef) []string {
 func (m *issuesMerger) carryInOrder(ctx context.Context, p *mergePlan) error {
 	o, f := p.old.Media.Metadata, p.fresh.Media.Metadata
 	if !slices.Equal(authorNames(o.Authors), authorNames(f.Authors)) {
-		authors := make([]abs.NameRef, 0, len(o.Authors))
+		authors := make([]api.AuthorMinimal, 0, len(o.Authors))
 		for i := 0; i == 0 || i < len(o.Authors); i++ {
 			if i < len(o.Authors) {
-				authors = append(authors, abs.NameRef{Name: o.Authors[i].Name})
+				authors = append(authors, api.AuthorMinimal{Name: o.Authors[i].Name})
 			}
-			if _, err := m.client.UpdateMedia(ctx, p.fresh.ID, abs.MediaUpdate{Metadata: &abs.MetadataUpdate{Authors: authors}}); err != nil {
+			if _, err := m.gen.LibraryItemUpdateMedia(ctx, p.fresh.Id, api.MediaUpdate{Metadata: &api.MediaUpdateMetadata{Authors: authors}}); err != nil {
 				return fmt.Errorf("the authors: %w", err)
 			}
 		}
 	}
 	if !slices.Equal(o.SeriesDisplay(), f.SeriesDisplay()) {
-		series := make([]abs.SeriesRef, 0, len(o.Series))
+		series := make([]api.SeriesMinimal, 0, len(o.Series))
 		for i := 0; i == 0 || i < len(o.Series); i++ {
 			if i < len(o.Series) {
-				series = append(series, abs.SeriesRef{Name: o.Series[i].Name, Sequence: o.Series[i].Sequence})
+				series = append(series, api.SeriesMinimal{Name: o.Series[i].Name, Sequence: o.Series[i].Sequence})
 			}
-			if _, err := m.client.UpdateMedia(ctx, p.fresh.ID, abs.MediaUpdate{Metadata: &abs.MetadataUpdate{Series: series}}); err != nil {
+			if _, err := m.gen.LibraryItemUpdateMedia(ctx, p.fresh.Id, api.MediaUpdate{Metadata: &api.MediaUpdateMetadata{Series: series}}); err != nil {
 				return fmt.Errorf("the series: %w", err)
 			}
 		}
@@ -706,9 +709,9 @@ func (m *issuesMerger) carryInOrder(ctx context.Context, p *mergePlan) error {
 
 // carry writes what a plan found onto the new record, the record first and
 // the accounts after.
-func (m *issuesMerger) carry(ctx context.Context, lib *abs.Library, p *mergePlan) error {
+func (m *issuesMerger) carry(ctx context.Context, lib *api.Library, p *mergePlan) error {
 	if p.details != nil {
-		if _, err := m.client.UpdateMedia(ctx, p.fresh.ID, *p.details); err != nil {
+		if _, err := m.gen.LibraryItemUpdateMedia(ctx, p.fresh.Id, *p.details); err != nil {
 			return fmt.Errorf("the details: %w", err)
 		}
 	}
@@ -716,28 +719,28 @@ func (m *issuesMerger) carry(ctx context.Context, lib *abs.Library, p *mergePlan
 		return err
 	}
 	if p.carry.Chapters {
-		if _, err := m.client.SetChapters(ctx, p.fresh.ID, p.old.Media.Chapters); err != nil {
+		if _, err := m.gen.LibraryItemUpdateMediaChapters(ctx, p.fresh.Id, api.LibraryItemUpdateMediaChaptersRequest{Chapters: p.old.Media.Chapters}); err != nil {
 			return fmt.Errorf("the chapters: %w", err)
 		}
 	}
 	if p.carry.Cover {
-		if err := m.carryCover(ctx, p.old.ID, p.fresh.ID); err != nil {
+		if err := m.carryCover(ctx, p.old.Id, p.fresh.Id); err != nil {
 			return fmt.Errorf("the cover: %w", err)
 		}
 	}
 	for i := range p.collections {
 		c := &p.collections[i]
-		if _, err := m.client.AddBookToCollection(ctx, c.ID, p.fresh.ID); err != nil {
+		if _, err := m.gen.CollectionAddBook(ctx, c.Id, api.CollectionAddBookRequest{Id: string(p.fresh.Id)}); err != nil {
 			return fmt.Errorf("the collection %q: %w", c.Name, err)
 		}
 		// where the old record is, not at the end where the server adds it
 		order := make([]string, 0, len(c.Books)+1)
 		for k := range c.Books {
-			if order = append(order, c.Books[k].ID); c.Books[k].ID == p.old.ID {
-				order = append(order, p.fresh.ID)
+			if order = append(order, string(c.Books[k].Id)); c.Books[k].Id == p.old.Id {
+				order = append(order, string(p.fresh.Id))
 			}
 		}
-		if _, err := m.client.OrderCollection(ctx, c.ID, order); err != nil {
+		if _, err := m.gen.CollectionUpdate(ctx, c.Id, api.CollectionUpdateRequest{Books: order}); err != nil {
 			return fmt.Errorf("the book's place in the collection %q: %w", c.Name, err)
 		}
 	}
@@ -747,7 +750,7 @@ func (m *issuesMerger) carry(ctx context.Context, lib *abs.Library, p *mergePlan
 		if err != nil {
 			return err
 		}
-		if err := carryProgress(ctx, as, p.fresh.ID, &pr.was); err != nil {
+		if err := carryProgress(ctx, as, p.fresh.Id, &pr.was); err != nil {
 			return fmt.Errorf("%s's progress: %w", pr.user.Username, err)
 		}
 	}
@@ -757,7 +760,7 @@ func (m *issuesMerger) carry(ctx context.Context, lib *abs.Library, p *mergePlan
 			return err
 		}
 		for _, b := range bm.add {
-			if _, err := as.CreateBookmark(ctx, p.fresh.ID, b.Time, b.Title); err != nil {
+			if _, err := as.MeCreateBookmark(ctx, p.fresh.Id, api.MeCreateBookmarkRequest{Time: b.Time, Title: b.Title}); err != nil {
 				return fmt.Errorf("%s's bookmark at %s: %w", bm.user.Username, fmtDuration(b.Time), err)
 			}
 		}
@@ -772,26 +775,26 @@ func (m *issuesMerger) carry(ctx context.Context, lib *abs.Library, p *mergePlan
 			continue
 		}
 		playlists := p.playlists
-		if u.ID != m.me.ID {
-			if playlists, err = as.Playlists(ctx, lib.ID); err != nil {
+		if u.Id != m.me.Id {
+			if playlists, err = libraryPlaylists(ctx, as, lib.Id); err != nil {
 				return fmt.Errorf("%s's playlists: %w", u.Username, err)
 			}
 		}
 		for k := range playlists {
-			if !holdsEntry(playlists[k].Items, p.old.ID) || holdsEntry(playlists[k].Items, p.fresh.ID) {
+			if !holdsEntry(playlists[k].Items, p.old.Id) || holdsEntry(playlists[k].Items, p.fresh.Id) {
 				continue
 			}
-			if _, err := as.AddItemToPlaylist(ctx, playlists[k].ID, abs.PlaylistEntry{LibraryItemID: p.fresh.ID}); err != nil {
+			if _, err := as.PlaylistAddItem(ctx, playlists[k].Id, api.PlaylistEntry{LibraryItemId: p.fresh.Id}); err != nil {
 				return fmt.Errorf("%s's playlist %q: %w", u.Username, playlists[k].Name, err)
 			}
 			// a playlist is an order to listen in: the book keeps its turn
-			order := make([]abs.PlaylistEntry, 0, len(playlists[k].Items)+1)
+			order := make([]api.PlaylistEntry, 0, len(playlists[k].Items)+1)
 			for _, e := range playlists[k].Items {
-				if order = append(order, abs.PlaylistEntry{LibraryItemID: e.LibraryItemID, EpisodeID: e.EpisodeID}); e.LibraryItemID == p.old.ID && e.EpisodeID == "" {
-					order = append(order, abs.PlaylistEntry{LibraryItemID: p.fresh.ID})
+				if order = append(order, api.PlaylistEntry{LibraryItemId: e.LibraryItemId, EpisodeId: e.EpisodeId}); e.LibraryItemId == p.old.Id && e.EpisodeId == "" {
+					order = append(order, api.PlaylistEntry{LibraryItemId: p.fresh.Id})
 				}
 			}
-			if _, err := as.OrderPlaylist(ctx, playlists[k].ID, order); err != nil {
+			if _, err := as.PlaylistUpdate(ctx, playlists[k].Id, api.PlaylistUpdateRequest{Items: order}); err != nil {
 				return fmt.Errorf("the book's turn in %s's playlist %q: %w", u.Username, playlists[k].Name, err)
 			}
 		}
@@ -805,34 +808,32 @@ func (m *issuesMerger) carry(ctx context.Context, lib *abs.Library, p *mergePlan
 // sent together, the server reads a new position on a finished book as the
 // book begun again. The dates go with the last call, which is what keeps
 // "finished last March" from becoming "finished today".
-func carryProgress(ctx context.Context, as *abs.Client, itemID string, was *abs.MediaProgress) error {
-	where := abs.ProgressUpdate{
+func carryProgress(ctx context.Context, as *api.Client, itemID api.LibraryItemID, was *api.MediaProgress) error {
+	where := api.ProgressUpdatePayload{
 		CurrentTime: &was.CurrentTime, Duration: &was.Duration, Progress: &was.Progress,
 		HideFromContinueListening: &was.HideFromContinueListening,
 	}
 	if was.EbookLocation != "" {
 		where.EbookLocation, where.EbookProgress = &was.EbookLocation, &was.EbookProgress
 	}
-	if err := as.SetProgress(ctx, itemID, "", where); err != nil {
+	if _, err := as.MeCreateUpdateMediaProgress2(ctx, itemID, where); err != nil {
 		return err
 	}
 
 	// the server finishes a book for the listener within ten seconds of its
 	// end, whatever is sent: unfinished there means unfinished here too
-	finished := abs.ProgressUpdate{IsFinished: &was.IsFinished, HideFromContinueListening: &was.HideFromContinueListening}
-	if was.IsFinished && was.FinishedAt > 0 {
-		finished.FinishedAt = &was.FinishedAt
+	finished := api.ProgressUpdatePayload{IsFinished: &was.IsFinished, HideFromContinueListening: &was.HideFromContinueListening, LastUpdate: was.LastUpdate}
+	if was.IsFinished {
+		finished.FinishedAt = was.FinishedAt
 	}
-	if was.LastUpdate > 0 {
-		finished.LastUpdate = &was.LastUpdate
-	}
+	_, err := as.MeCreateUpdateMediaProgress2(ctx, itemID, finished)
 
-	return as.SetProgress(ctx, itemID, "", finished)
+	return err
 }
 
 // carryCover gives the new record the old record's cover when the two
 // pictures differ.
-func (m *issuesMerger) carryCover(ctx context.Context, oldID, freshID string) error {
+func (m *issuesMerger) carryCover(ctx context.Context, oldID, freshID api.LibraryItemID) error {
 	was, err := m.coverOf(ctx, oldID)
 	if err != nil || was == nil {
 		return err
@@ -849,19 +850,20 @@ func (m *issuesMerger) carryCover(ctx context.Context, oldID, freshID string) er
 		ext = ".webp"
 	}
 
-	return m.client.UploadCover(ctx, freshID, "cover"+ext, bytes.NewReader(was))
+	return coverUpload(ctx, m.gen, freshID, "cover"+ext, was)
 }
 
 // coverOf is a record's cover file, or nil when it has none or the file is
 // gone with the folder it was in.
-func (m *issuesMerger) coverOf(ctx context.Context, id string) ([]byte, error) {
-	body, err := m.client.CoverFile(ctx, id)
-	if errors.Is(err, abs.ErrNoCover) {
+func (m *issuesMerger) coverOf(ctx context.Context, id api.LibraryItemID) ([]byte, error) {
+	got, err := m.gen.LibraryItemGetCover(ctx, id, api.LibraryItemGetCoverOptions{Raw: "1"})
+	if api.IsNotFound(err) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	body, _ := got.Reader()
 	defer func() { _ = body.Close() }()
 
 	img, err := io.ReadAll(io.LimitReader(body, mergeCoverCap+1))
@@ -878,39 +880,40 @@ func (m *issuesMerger) coverOf(ctx context.Context, id string) ([]byte, error) {
 // actingAs is a client that writes as an account: the caller's own for the
 // caller, and for anyone else one with a key made for the purpose, deleted
 // when the call ends.
-func (m *issuesMerger) actingAs(ctx context.Context, u *abs.User) (*abs.Client, error) {
-	if u.ID == m.me.ID {
-		return m.client, nil
+func (m *issuesMerger) actingAs(ctx context.Context, u *api.UserForBrowser) (*api.Client, error) {
+	if u.Id == m.me.Id {
+		return m.gen, nil
 	}
 	refused := fmt.Errorf("the server will not let a key act as %s (an account that has never logged in, or is switched off), and only that account can write its progress, bookmarks and playlists", u.Username)
-	if as, ok := m.acting[u.ID]; ok {
+	if as, ok := m.acting[u.Id]; ok {
 		if as == nil {
 			return nil, refused
 		}
 		return as, nil
 	}
 	if m.acting == nil {
-		m.acting = map[string]*abs.Client{}
+		m.acting = map[api.UserID]*api.Client{}
 	}
-	m.acting[u.ID] = nil
+	m.acting[u.Id] = nil
 
-	key, err := m.client.CreateAPIKey(ctx, mergeKeyName, u.ID, mergeKeyLife, true)
+	made, err := record(m.gen.ApiKeyCreate(ctx, api.ApiKeyCreateRequest{Name: mergeKeyName, UserId: u.Id, ExpiresIn: mergeKeyLife, IsActive: new(true)}))
 	if err != nil {
 		return nil, fmt.Errorf("making a key to act as %s, whose progress, bookmarks and playlists only that account can write: %w", u.Username, err)
 	}
-	m.keys = append(m.keys, key.ID)
-	as, err := m.client.As(key.Key)
+	key := pointer.From(made.ApiKey)
+	m.keys = append(m.keys, string(key.Id))
+	as, err := m.gen.As(key.ApiKey)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := as.Me(ctx); err != nil {
-		if !abs.IsForbidden(err) {
+	if _, err := as.MeGetCurrentUser(ctx); err != nil {
+		if !api.IsForbidden(err) {
 			return nil, fmt.Errorf("acting as %s: %w", u.Username, err)
 		}
 		m.unreached = append(m.unreached, u.Username)
 		return nil, refused
 	}
-	m.acting[u.ID] = as
+	m.acting[u.Id] = as
 
 	return as, nil
 }

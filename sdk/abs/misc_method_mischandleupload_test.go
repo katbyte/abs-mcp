@@ -3,8 +3,6 @@
 package abs
 
 import (
-	"bytes"
-	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -15,8 +13,8 @@ import (
 func TestOperationMiscHandleUpload(t *testing.T) {
 	t.Parallel()
 
-	c, s := newOperationServer(t, 200, "text/plain", "file bytes")
-	result, err := c.MiscHandleUpload(t.Context(), MiscHandleUploadRequest{})
+	c, s := newOperationServer(t, 200, "application/json", "some text, as sent\n")
+	result, err := c.MiscHandleUpload(t.Context(), strings.NewReader("raw bytes"), "multipart/form-data")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,54 +23,22 @@ func TestOperationMiscHandleUpload(t *testing.T) {
 	if got := r.Header.Get("Accept"); !strings.HasPrefix(got, "text/plain") {
 		t.Errorf("Accept = %q, want text/plain asked for first", got)
 	}
-	if got := r.Header.Get("Content-Type"); got != "application/json" {
-		t.Errorf("Content-Type = %q, want %q", got, "application/json")
+	if got := r.Header.Get("Content-Type"); got != "multipart/form-data" {
+		t.Errorf("Content-Type = %q, want %q", got, "multipart/form-data")
 	}
-	if !json.Valid([]byte(body)) {
-		t.Errorf("body = %q, want JSON", body)
-	}
-	if body != "{}" {
-		t.Errorf("an empty record sent %q, want %q: a field never set went out", body, "{}")
+	if body != "raw bytes" {
+		t.Errorf("body = %q, want the raw bytes", body)
 	}
 	if result.HttpResponse == nil || result.HttpResponse.StatusCode != 200 {
 		t.Fatalf("HttpResponse = %+v", result.HttpResponse)
 	}
-	if _, contentType := result.Reader(); contentType == "" || result.ContentLength() != 10 || result.Filename() != "answer.bin" {
-		t.Errorf("Reader = %q, length %d, filename %q", contentType, result.ContentLength(), result.Filename())
-	}
-	if data, err := result.Bytes(9); err == nil || string(data) != "" {
-		t.Errorf("Bytes over the size = %q, %v", data, err)
-	}
-	c, _ = newOperationServer(t, 200, "text/plain", "file bytes")
-	result, err = c.MiscHandleUpload(t.Context(), MiscHandleUploadRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if data, err := result.Bytes(10); err != nil || string(data) != "file bytes" {
-		t.Errorf("Bytes = %q, %v", data, err)
-	}
-	c, _ = newOperationServer(t, 200, "text/plain", "file bytes")
-	result, err = c.MiscHandleUpload(t.Context(), MiscHandleUploadRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var streamed bytes.Buffer
-	if _, err := result.WriteTo(&streamed); err != nil || streamed.String() != "file bytes" {
-		t.Errorf("WriteTo = %v, %q", err, streamed.String())
-	}
-	if _, err := result.WriteTo(&streamed); err == nil {
-		t.Error("WriteTo on a spent body succeeded")
-	}
-	if _, err := (MiscHandleUploadResponse{}).WriteTo(&streamed); err == nil {
-		t.Error("WriteTo with no answer succeeded")
-	}
-	if body, contentType := (MiscHandleUploadResponse{}).Reader(); body == nil || contentType != "" || body.Close() != nil {
-		t.Error("Reader with no answer is not safely empty")
+	if result.Answer == nil || *result.Answer != "some text, as sent\n" {
+		t.Errorf("the text was not held as it was sent: %v", result.Answer)
 	}
 
 	// a status the operation does not document is an error, with the response
 	c, _ = newOperationServer(t, 418, "text/plain", "no")
-	result, err = c.MiscHandleUpload(t.Context(), MiscHandleUploadRequest{})
+	result, err = c.MiscHandleUpload(t.Context(), strings.NewReader("raw bytes"), "multipart/form-data")
 	if client.StatusCode(err) != 418 || result.HttpResponse == nil {
 		t.Errorf("an undocumented status = %v, %+v", err, result.HttpResponse)
 	}

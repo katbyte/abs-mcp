@@ -4,12 +4,12 @@ package abs
 
 // UserCreateRequest is an object the document declares inline.
 type UserCreateRequest struct {
-	Email               string                        `json:"email,omitempty"`
-	IsActive            *bool                         `json:"isActive,omitempty"`
-	ItemTagsSelected    []string                      `json:"itemTagsSelected,omitzero"`
-	LibrariesAccessible []string                      `json:"librariesAccessible,omitzero"`
-	Password            string                        `json:"password,omitempty"`
-	Permissions         *UserCreateRequestPermissions `json:"permissions,omitempty"`
-	Type                string                        `json:"type,omitempty"`
-	Username            string                        `json:"username,omitempty"`
+	Email               string           `json:"email,omitempty"`
+	IsActive            *bool            `json:"isActive,omitempty"`
+	ItemTagsSelected    []string         `json:"itemTagsSelected,omitzero"`
+	LibrariesAccessible []string         `json:"librariesAccessible,omitzero"`
+	Password            string           `json:"password,omitempty"`
+	Permissions         *UserPermissions `json:"permissions,omitempty"`
+	Type                string           `json:"type,omitempty"`
+	Username            string           `json:"username,omitempty"`
 }

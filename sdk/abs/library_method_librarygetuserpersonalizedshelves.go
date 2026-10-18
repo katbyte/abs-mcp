@@ -26,6 +26,7 @@ func (r LibraryGetUserPersonalizedShelvesResponse) Answered() bool { return r.An
 type LibraryGetUserPersonalizedShelvesOptions struct {
 	Include string
 	Limit   *int
+	Sort    string
 }
 
 // ToHeaders returns the header parameters the options set.
@@ -42,6 +43,9 @@ func (o LibraryGetUserPersonalizedShelvesOptions) ToQuery() *client.QueryParams 
 	}
 	if o.Limit != nil {
 		out.Append("limit", strconv.Itoa(*o.Limit))
+	}
+	if o.Sort != "" {
+		out.Append("sort", o.Sort)
 	}
 	return &out
 }

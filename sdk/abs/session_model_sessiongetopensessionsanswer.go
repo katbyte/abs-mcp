@@ -4,6 +4,6 @@ package abs
 
 // SessionGetOpenSessionsAnswer is an object the document declares inline.
 type SessionGetOpenSessionsAnswer struct {
-	Sessions      []SessionGetOpenSessionsAnswerSessions      `json:"sessions,omitzero"`
-	ShareSessions []SessionGetOpenSessionsAnswerShareSessions `json:"shareSessions,omitzero"`
+	Sessions      []PlaybackSession `json:"sessions,omitzero"`
+	ShareSessions []PlaybackSession `json:"shareSessions,omitzero"`
 }

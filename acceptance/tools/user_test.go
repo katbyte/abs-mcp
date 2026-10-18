@@ -5,14 +5,14 @@ package tools_test
 import (
 	"context"
 	"maps"
-	"os"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/pointer"
 )
 
 // there is only the root account, which is also the account the API key acts
@@ -250,20 +250,20 @@ func TestUserUnknown(t *testing.T) {
 func TestUserCreateAndEdit(t *testing.T) {
 	const name = "zzyzx-newcomer"
 	admin := adminClient(t)
-	existing, err := admin.Users(ctx, false)
+	existing, err := record(admin.UserFindAll(ctx))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, u := range existing {
+	for _, u := range existing.Users {
 		if u.Username == name { // left by a run that died
-			_ = admin.DeleteUser(ctx, u.ID)
+			_, _ = admin.UserDelete(ctx, u.Id)
 		}
 	}
 
 	out := suite.Call(t, "user_create", map[string]any{"username": name, "libraries": []any{"Fiction"}})
 	id := acctest.Str(out["id"])
 	t.Cleanup(func() {
-		eventually(t, "deleting "+name, func() error { return admin.DeleteUser(context.WithoutCancel(ctx), id) })
+		eventually(t, "deleting "+name, func() error { return errorOf(admin.UserDelete(context.WithoutCancel(ctx), api.UserID(id))) })
 	})
 	password := acctest.Str(out["password"])
 	if len(password) != 16 || !acctest.BoolOf(out["active"]) || out["type"] != "user" || !acctest.IsBool(out["all_libraries"], false) ||
@@ -281,11 +281,11 @@ func TestUserCreateAndEdit(t *testing.T) {
 	if !acctest.BoolOf(out["all_libraries"]) || !acctest.BoolOf(out["can_upload"]) || out["email"] != "newcomer@zzyzx.test" {
 		t.Errorf("user_edit = %v", out)
 	}
-	got, err := admin.User(ctx, id)
+	got, err := record(admin.UserFindOne(ctx, api.UserID(id)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !got.Permissions.AccessAllLibraries || !got.Permissions.Upload {
+	if perms := pointer.From(got.Permissions); !pointer.From(perms.AccessAllLibraries) || !pointer.From(perms.Upload) {
 		t.Errorf("the server holds %+v", got.Permissions)
 	}
 
@@ -309,25 +309,25 @@ func TestUserCreateAndEdit(t *testing.T) {
 // Sessions taken out of an account's history, one of the key's own and one
 // of another account's: previewed, removed, and gone from user_history.
 func TestUserHistoryRemove(t *testing.T) {
-	listener := newUser(t, "zzyzx-forgetful", abs.UserCreate{})
-	lc, err := abs.New(os.Getenv("ABS_SERVER"), listener.Token, recorder.Option())
+	listener := newUser(t, "zzyzx-forgetful", api.UserCreateRequest{})
+	lc, err := connect(listener.Token)
 	if err != nil {
 		t.Fatal(err)
 	}
 	bookID := itemID(t, "Fiction", "Foundation and Empire")
-	play := func(c *abs.Client) string {
+	play := func(c *api.Client) string {
 		t.Helper()
-		s, err := c.Play(ctx, bookID, "", abs.PlayRequest{MediaPlayer: "zzyzx-player", SupportedMimeTypes: []string{"audio/mpeg"}, ForceDirectPlay: true})
+		s, err := record(c.LibraryItemStartPlaybackSession(ctx, api.LibraryItemID(bookID), api.LibraryItemStartPlaybackSessionRequest{MediaPlayer: "zzyzx-player", SupportedMimeTypes: []string{"audio/mpeg"}, ForceDirectPlay: new(true)}))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := c.SyncSession(ctx, s.ID, 0.3, 0.3); err != nil {
+		if _, err := c.SessionSync(ctx, s.Id, api.SessionSyncRequest{CurrentTime: 0.3, TimeListened: 0.3}); err != nil {
 			t.Fatal(err)
 		}
-		if err := c.CloseSession(ctx, s.ID, map[string]any{"currentTime": 0.3, "timeListened": 0.3}); err != nil {
+		if _, err := c.SessionClose(ctx, s.Id, api.SessionCloseRequest{CurrentTime: 0.3, TimeListened: 0.3}); err != nil {
 			t.Fatal(err)
 		}
-		return s.ID
+		return s.Id
 	}
 	theirs, mine := play(lc), play(adminClient(t))
 
@@ -368,12 +368,12 @@ func TestUserHistoryRemove(t *testing.T) {
 func TestUserProgressSetSeries(t *testing.T) {
 	admin := adminClient(t)
 	hidden := func() bool {
-		me, err := admin.Me(ctx)
+		me, err := record(admin.MeGetCurrentUser(ctx))
 		if err != nil {
 			t.Fatal(err)
 		}
 		s := suite.Call(t, "series_get", map[string]any{"series": "Foundation", "library": "Fiction"})
-		return slices.Contains(me.SeriesHidden, acctest.Str(s["id"]))
+		return slices.Contains(me.SeriesHideFromContinueListening, acctest.Str(s["id"]))
 	}
 	t.Cleanup(func() {
 		_, _ = suite.Invoke("user_progress_set", map[string]any{"series": "Foundation", "library": "Fiction", "hide_from_continue": false})
@@ -408,13 +408,13 @@ func TestUserStatsServerYear(t *testing.T) {
 func TestUserCreateTagsAndType(t *testing.T) {
 	const name = "zzyzx-guest"
 	admin := adminClient(t)
-	existing, err := admin.Users(ctx, false)
+	existing, err := record(admin.UserFindAll(ctx))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, u := range existing {
+	for _, u := range existing.Users {
 		if u.Username == name { // left by a run that died
-			_ = admin.DeleteUser(ctx, u.ID)
+			_, _ = admin.UserDelete(ctx, u.Id)
 		}
 	}
 
@@ -434,7 +434,7 @@ func TestUserCreateTagsAndType(t *testing.T) {
 	out := suite.Call(t, "user_create", map[string]any{"username": name, "password": name + "-password", "type": "guest", "tags": []any{"classic"}})
 	id := acctest.Str(out["id"])
 	t.Cleanup(func() {
-		eventually(t, "deleting "+name, func() error { return admin.DeleteUser(context.WithoutCancel(ctx), id) })
+		eventually(t, "deleting "+name, func() error { return errorOf(admin.UserDelete(context.WithoutCancel(ctx), api.UserID(id))) })
 	})
 	if out["type"] != "guest" || !acctest.IsBool(out["all_tags"], false) || !slices.Equal(acctest.Strs(t, out["tags"], "tags"), []string{"classic"}) || out["denied_tags"] != nil || out["password"] != nil {
 		t.Fatalf("user_create = %v, want a guest seeing only classic, its password not repeated", out)
@@ -444,19 +444,19 @@ func TestUserCreateTagsAndType(t *testing.T) {
 	if err := login(name, name+"-password"); err != nil {
 		t.Fatalf("the guest signing in: %v", err)
 	}
-	key, err := admin.CreateAPIKey(ctx, name, id, 0, true)
+	key, err := record(admin.ApiKeyCreate(ctx, api.ApiKeyCreateRequest{Name: name, UserId: api.UserID(id), IsActive: new(true)}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = admin.DeleteAPIKey(context.WithoutCancel(ctx), key.ID) })
-	own, err := abs.New(os.Getenv("ABS_SERVER"), key.Key, recorder.Option())
+	t.Cleanup(func() { _, _ = admin.ApiKeyDelete(context.WithoutCancel(ctx), string(key.ApiKey.Id)) })
+	own, err := connect(key.ApiKey.ApiKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	fiction := libraryID(t, "Fiction")
 	sees := func() []string {
 		t.Helper()
-		page, err := own.Items(ctx, fiction, abs.ItemsOptions{Limit: 50})
+		page, err := record(own.LibraryGetLibraryItems(ctx, api.LibraryID(fiction), api.LibraryGetLibraryItemsOptions{Limit: new(50)}))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -493,7 +493,7 @@ func TestUserCreateTagsAndType(t *testing.T) {
 	if out["type"] != "admin" || acctest.BoolOf(out["can_delete"]) {
 		t.Errorf("user_edit type admin = %v, want an admin that may not delete", out)
 	}
-	if got, err := admin.User(ctx, id); err != nil || got.Type != "admin" || got.Permissions.Delete {
+	if got, err := record(admin.UserFindOne(ctx, api.UserID(id))); err != nil || got.Type != "admin" || pointer.From(pointer.From(got.Permissions).Delete) {
 		t.Errorf("the server holds %+v (%v)", got, err)
 	}
 	if msg := suite.CallErr(t, "user_edit", map[string]any{"user": "root", "type": "user"}); !strings.Contains(msg, "root account") {

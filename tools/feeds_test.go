@@ -3,6 +3,7 @@ package tools
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"testing"
 )
@@ -80,8 +81,8 @@ func TestFeedEditLink(t *testing.T) {
 	f := newFakeABS(t)
 	book := `{"id":"` + itemID + `","libraryId":"` + libID + `","mediaType":"book","media":{"id":"m1","metadata":{"title":"Dune"}}}`
 	f.inTurn("GET /api/items/"+itemID, book, book, strings.TrimSuffix(book, "}")+`,"mediaItemShare":{"id":"sh1","slug":"abcdefghij","expiresAt":null}}`)
-	f.json("POST /api/share/mediaitem", `{"id":"sh1","mediaItemId":"m1","slug":"kept","expiresAt":"2026-10-06T00:00:00.000Z"}`)
-	f.json("DELETE /api/share/mediaitem/sh1", `OK`)
+	f.answer("POST /api/share/mediaitem", reply{http.StatusCreated, `{"id":"sh1","mediaItemId":"m1","slug":"kept","expiresAt":"2026-10-06T00:00:00.000Z"}`})
+	f.answer("DELETE /api/share/mediaitem/sh1", reply{http.StatusNoContent, ""})
 	call := toolCaller(t, f)
 
 	out, err := call("feed_edit", map[string]any{"item": itemID, "link": true, "expires_days": 7, "downloadable": true})

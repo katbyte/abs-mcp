@@ -6,7 +6,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/go-kt/pointer"
 )
 
 // An account can be kept from some of the books in a library it can open:
@@ -20,13 +21,14 @@ import (
 
 // restrictedKey reports whether the API key's user is kept from some books by
 // tag or by the explicit flag.
-func restrictedKey(ctx context.Context, client *abs.Client) (bool, error) {
-	me, err := client.Me(ctx)
+func restrictedKey(ctx context.Context, gen *api.Client) (bool, error) {
+	me, err := record(gen.MeGetCurrentUser(ctx))
 	if err != nil {
 		return false, err
 	}
+	perms := pointer.From(me.Permissions)
 
-	return !me.Permissions.AccessAllTags || !me.Permissions.AccessExplicitContent, nil
+	return !pointer.From(perms.AccessAllTags) || !pointer.From(perms.AccessExplicitContent), nil
 }
 
 // visibleLibrary is a library as one account sees it: counts and vocabulary
@@ -39,15 +41,17 @@ type visibleLibrary struct {
 	// value -> how many visible books carry it
 	Genres, Tags, Narrators, Languages, Publishers, Decades, AuthorBooks map[string]int
 
-	Authors, Series  []abs.NameRef // from the author and series routes, which the server restricts itself
-	Longest, Largest []abs.Item
+	// from the author and series routes, which the server restricts itself
+	Authors          []api.AuthorMinimal
+	Series           []api.SeriesMinimal
+	Longest, Largest []api.LibraryItemMinified
 }
 
 const visibleTop = 10
 
 // sweepVisible reads a library through the item listing, as the API key's
 // user is allowed to see it.
-func sweepVisible(ctx context.Context, client *abs.Client, lib *abs.Library) (*visibleLibrary, error) {
+func sweepVisible(ctx context.Context, gen *api.Client, lib *api.Library) (*visibleLibrary, error) {
 	v := &visibleLibrary{
 		Genres: map[string]int{}, Tags: map[string]int{}, Narrators: map[string]int{},
 		Languages: map[string]int{}, Publishers: map[string]int{}, Decades: map[string]int{}, AuthorBooks: map[string]int{},
@@ -61,60 +65,57 @@ func sweepVisible(ctx context.Context, client *abs.Client, lib *abs.Library) (*v
 			}
 		}
 	}
-	var all []abs.Item
-	err := client.ItemsAll(ctx, lib.ID, abs.ItemsOptions{Minified: true}, func(items []abs.Item) bool {
-		for i := range items {
-			it := &items[i]
-			v.Items++
-			v.AudioFiles += it.Media.NumAudioFiles
-			v.Duration += it.Media.Duration
-			v.Size += it.Size
-			if it.IsMissing || it.IsInvalid {
-				v.Issues++
-			}
-			count(v.Genres, valuesOf("genres", it))
-			count(v.Tags, valuesOf("tags", it))
-			count(v.Narrators, valuesOf("narrators", it))
-			count(v.Languages, valuesOf("languages", it))
-			count(v.Publishers, valuesOf("publishers", it))
-			count(v.AuthorBooks, valuesOf("authors", it))
-			if y := strings.TrimSpace(it.Media.Metadata.PublishedYear.String()); len(y) == 4 {
-				count(v.Decades, []string{y[:3] + "0"})
-			}
-			all = append(all, *it)
+	var all []api.LibraryItemMinified
+	err := eachItem(ctx, gen, lib.Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+		v.Items++
+		v.AudioFiles += it.Media.NumAudioFiles
+		v.Duration += it.Media.Duration
+		v.Size += int64(it.Size)
+		if it.IsMissing || it.IsInvalid {
+			v.Issues++
 		}
+		count(v.Genres, valuesOf("genres", it))
+		count(v.Tags, valuesOf("tags", it))
+		count(v.Narrators, valuesOf("narrators", it))
+		count(v.Languages, valuesOf("languages", it))
+		count(v.Publishers, valuesOf("publishers", it))
+		count(v.AuthorBooks, valuesOf("authors", it))
+		if y := strings.TrimSpace(it.Media.Metadata.PublishedYear); len(y) == 4 {
+			count(v.Decades, []string{y[:3] + "0"})
+		}
+		all = append(all, *it)
 		return true
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	v.Longest = topItems(all, func(a, b abs.Item) int { return cmp.Compare(b.Media.Duration, a.Media.Duration) })
-	v.Largest = topItems(all, func(a, b abs.Item) int { return cmp.Compare(b.Size, a.Size) })
+	v.Longest = topItems(all, func(a, b api.LibraryItemMinified) int { return cmp.Compare(b.Media.Duration, a.Media.Duration) })
+	v.Largest = topItems(all, func(a, b api.LibraryItemMinified) int { return cmp.Compare(b.Size, a.Size) })
 
 	if lib.IsPodcast() {
 		return v, nil
 	}
-	authors, err := allAuthors(ctx, client, lib.ID, abs.ListOptions{Sort: "name"})
+	authors, err := allAuthors(ctx, gen, lib.Id, api.LibraryGetAuthorsOptions{Sort: "name"})
 	if err != nil {
 		return nil, err
 	}
 	for i := range authors {
-		v.Authors = append(v.Authors, abs.NameRef{ID: authors[i].ID, Name: authors[i].Name})
+		v.Authors = append(v.Authors, api.AuthorMinimal{Id: authors[i].Id, Name: authors[i].Name})
 	}
-	series, err := allSeries(ctx, client, lib.ID)
+	series, err := allSeries(ctx, gen, lib.Id)
 	if err != nil {
 		return nil, err
 	}
 	for i := range series {
-		v.Series = append(v.Series, abs.NameRef{ID: series[i].ID, Name: series[i].Name})
+		v.Series = append(v.Series, api.SeriesMinimal{Id: series[i].Id, Name: series[i].Name})
 	}
 
 	return v, nil
 }
 
 // topItems is the first visibleTop items by an order.
-func topItems(items []abs.Item, order func(a, b abs.Item) int) []abs.Item {
+func topItems[T any](items []T, order func(a, b T) int) []T {
 	sorted := slices.Clone(items)
 	slices.SortStableFunc(sorted, order)
 	return sorted[:min(len(sorted), visibleTop)]
@@ -135,9 +136,4 @@ func keysOf(m map[string]int) []string {
 	}
 	slices.Sort(out)
 	return out
-}
-
-// hasRef reports whether a list of refs holds an id.
-func hasRef(refs []abs.NameRef, id string) bool {
-	return slices.ContainsFunc(refs, func(r abs.NameRef) bool { return r.ID == id })
 }

@@ -7,7 +7,7 @@ type MiscGetTasksAnswerTasksDataAudioFiles struct {
 	CachePath string  `json:"cachePath,omitempty"`
 	Duration  float64 `json:"duration,omitempty"`
 	Filename  string  `json:"filename,omitempty"`
-	Index     float64 `json:"index,omitempty"`
+	Index     int     `json:"index,omitempty"`
 	Ino       string  `json:"ino,omitempty"`
 	Path      string  `json:"path,omitempty"`
 }

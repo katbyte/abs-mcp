@@ -3,10 +3,11 @@
 package abs_test
 
 import (
-	"context"
+	"slices"
 	"testing"
+	"time"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // --- progress and bookmarks ---------------------------------------------
@@ -15,48 +16,41 @@ func TestProgressAndBookmarks(t *testing.T) {
 	ctx := skipUnlessLive(t)
 	id := library(t)
 
-	item := must(client.Items(ctx, id, abs.ItemsOptions{Limit: 1})).Results[0]
+	item := firstItems(ctx, id, 1)[0]
 
-	half, at, duration := 0.5, 0.5, 1.0
-	if err := client.SetProgress(ctx, item.ID, "", abs.ProgressUpdate{
-		Progress: &half, CurrentTime: &at, Duration: &duration,
-	}); err != nil {
+	if err := errorOf(client.MeCreateUpdateMediaProgress2(ctx, item.Id, abs.ProgressUpdatePayload{Progress: new(0.5), CurrentTime: new(0.5), Duration: new(1.0)})); err != nil {
 		t.Fatal(err)
 	}
-	p := must(client.Progress(ctx, item.ID, ""))
-	if p == nil {
-		t.Fatal("no progress after setting it")
-	}
+	p := must(client.MeGetMediaProgress2(ctx, item.Id))
 	if p.Progress < 0.4 || p.Progress > 0.6 {
 		t.Errorf("progress = %v, want ~0.5", p.Progress)
 	}
 
-	inProgress := must(client.ItemsInProgress(ctx, 10))
-	if len(inProgress) == 0 {
-		t.Error("ItemsInProgress is empty after setting progress")
+	inProgress := func(it abs.LibraryItemMinified) bool { return it.Id == item.Id }
+	if !slices.ContainsFunc(must(client.MeGetAllLibraryItemsInProgress(ctx, abs.MeGetAllLibraryItemsInProgressOptions{Limit: new(10)})).LibraryItems, inProgress) {
+		t.Error("the items in progress do not hold the one just set")
 	}
 
-	// HideFromContinueListening had no caller before this suite
-	if err := client.HideFromContinueListening(ctx, p.ID); err != nil {
-		t.Errorf("HideFromContinueListening: %v", err)
+	if err := errorOf(client.MeRemoveItemFromContinueListening(ctx, p.Id)); err != nil {
+		t.Errorf("taking the book off the shelf where listening continues: %v", err)
 	}
 
 	// bookmarks come back wrapped in an object, unlike the other /api/me routes
-	if _, err := client.CreateBookmark(ctx, item.ID, 0.25, "SDK bookmark"); err != nil {
+	if err := errorOf(client.MeCreateBookmark(ctx, item.Id, abs.MeCreateBookmarkRequest{Time: 0.25, Title: "SDK bookmark"})); err != nil {
 		t.Fatal(err)
 	}
-	bookmarks := must(client.Bookmarks(ctx))
+	bookmarks := must(client.MeGetAllBookmarks(ctx)).Bookmarks
 	if len(bookmarks) == 0 {
-		t.Fatal("Bookmarks returned nothing after creating one")
+		t.Fatal("no bookmarks listed after making one")
 	}
 	if bookmarks[0].Title == "" {
 		t.Errorf("bookmark did not decode: %+v", bookmarks[0])
 	}
-	if err := client.DeleteBookmark(ctx, item.ID, 0.25); err != nil {
+	if err := errorOf(client.MeRemoveBookmark(ctx, item.Id, "0.25")); err != nil {
 		t.Error(err)
 	}
 
-	if err := client.RemoveProgress(ctx, p.ID); err != nil {
+	if err := errorOf(client.MeRemoveMediaProgress(ctx, p.Id)); err != nil {
 		t.Error(err)
 	}
 }
@@ -69,23 +63,18 @@ func TestProgressKeepsTheDatesItIsGiven(t *testing.T) {
 	ctx := skipUnlessLive(t)
 	id := library(t)
 
-	item := must(client.Items(ctx, id, abs.ItemsOptions{Limit: 1})).Results[0]
-	finished, listened := int64(1700000000000), int64(1700000500000)
-	at, duration, done := 0.5, 1.0, true
-	if err := client.SetProgress(ctx, item.ID, "", abs.ProgressUpdate{CurrentTime: &at, Duration: &duration}); err != nil {
+	item := firstItems(ctx, id, 1)[0]
+	finished, listened := abs.UnixMilli{Time: time.UnixMilli(1700000000000)}, abs.UnixMilli{Time: time.UnixMilli(1700000500000)}
+	if err := errorOf(client.MeCreateUpdateMediaProgress2(ctx, item.Id, abs.ProgressUpdatePayload{CurrentTime: new(0.5), Duration: new(1.0)})); err != nil {
 		t.Fatal(err)
 	}
-	if err := client.SetProgress(ctx, item.ID, "", abs.ProgressUpdate{IsFinished: &done, FinishedAt: &finished, LastUpdate: &listened}); err != nil {
+	if err := errorOf(client.MeCreateUpdateMediaProgress2(ctx, item.Id, abs.ProgressUpdatePayload{IsFinished: new(true), FinishedAt: finished, LastUpdate: listened})); err != nil {
 		t.Fatal(err)
 	}
-	p := must(client.Progress(ctx, item.ID, ""))
-	if p == nil {
-		t.Fatal("no progress after setting it")
-	}
-	t.Cleanup(func() { _ = client.RemoveProgress(context.WithoutCancel(t.Context()), p.ID) })
-	if !p.IsFinished || p.FinishedAt != finished || p.LastUpdate != listened || p.CurrentTime != at {
-		t.Errorf("progress = finished %v at %d, last update %d, position %v; want finished at %d, last update %d, position %v",
-			p.IsFinished, p.FinishedAt, p.LastUpdate, p.CurrentTime, finished, listened, at)
+	p := must(client.MeGetMediaProgress2(ctx, item.Id))
+	t.Cleanup(func() { _ = errorOf(client.MeRemoveMediaProgress(afterwards(t), p.Id)) })
+	if !p.IsFinished || !p.FinishedAt.Equal(finished.Time) || !p.LastUpdate.Equal(listened.Time) || p.CurrentTime != 0.5 {
+		t.Errorf("progress = finished %v at %v, last update %v, position %v; want finished at %v, last update %v, position 0.5", p.IsFinished, p.FinishedAt, p.LastUpdate, p.CurrentTime, finished, listened)
 	}
 }
 
@@ -93,32 +82,28 @@ func TestBookmarkUpdateAndGenreRename(t *testing.T) {
 	ctx := skipUnlessLive(t)
 	id := library(t)
 
-	item := must(client.Items(ctx, id, abs.ItemsOptions{Limit: 1})).Results[0]
-	if _, err := client.CreateBookmark(ctx, item.ID, 0.4, "first"); err != nil {
+	item := firstItems(ctx, id, 1)[0]
+	if err := errorOf(client.MeCreateBookmark(ctx, item.Id, abs.MeCreateBookmarkRequest{Time: 0.4, Title: "first"})); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = client.DeleteBookmark(context.WithoutCancel(t.Context()), item.ID, 0.4) })
+	t.Cleanup(func() { _ = errorOf(client.MeRemoveBookmark(afterwards(t), item.Id, "0.4")) })
 
-	renamed, err := client.UpdateBookmark(ctx, item.ID, 0.4, "second")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if renamed.Title != "second" {
+	if renamed := must(client.MeUpdateBookmark(ctx, item.Id, abs.MeUpdateBookmarkRequest{Time: 0.4, Title: "second"})); renamed.Title != "second" {
 		t.Errorf("bookmark title = %q", renamed.Title)
 	}
 
-	genres := must(client.Genres(ctx))
+	genres := must(client.MiscGetAllGenres(ctx)).Genres
 	if len(genres) == 0 {
 		t.Skip("no genres set")
 	}
-	n, err := client.RenameGenre(ctx, genres[0], "SDK Genre Renamed")
+	renamed, err := record(client.MiscRenameGenre(ctx, abs.MiscRenameGenreRequest{Genre: genres[0], NewGenre: "SDK Genre Renamed"}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n == 0 {
-		t.Error("RenameGenre reported no items updated")
+	if renamed.NumItemsUpdated == 0 {
+		t.Error("the genre rename reported no items updated")
 	}
-	if _, err := client.RenameGenre(ctx, "SDK Genre Renamed", genres[0]); err != nil {
+	if err := errorOf(client.MiscRenameGenre(ctx, abs.MiscRenameGenreRequest{Genre: "SDK Genre Renamed", NewGenre: genres[0]})); err != nil {
 		t.Error(err)
 	}
 }
@@ -128,47 +113,39 @@ func TestProgressAndBookmarkExtras(t *testing.T) {
 	ctx := skipUnlessLive(t)
 	id := library(t)
 
-	items := must(client.Items(ctx, id, abs.ItemsOptions{Limit: 2})).Results
+	items := firstItems(ctx, id, 2)
 
 	// several items in one call, rather than one call per book
-	finished := true
-	if err := client.BatchSetProgress(ctx, []abs.BatchProgressUpdate{
-		{LibraryItemID: items[0].ID, IsFinished: &finished},
-		{LibraryItemID: items[1].ID, IsFinished: &finished},
-	}); err != nil {
+	batch := []abs.ProgressUpdatePayload{{LibraryItemId: items[0].Id, IsFinished: new(true)}, {LibraryItemId: items[1].Id, IsFinished: new(true)}}
+	if err := errorOf(client.MeBatchUpdateMediaProgress(ctx, batch)); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
 		for _, it := range items {
-			if p, err := client.Progress(context.WithoutCancel(t.Context()), it.ID, ""); err == nil && p != nil {
-				_ = client.RemoveProgress(context.WithoutCancel(t.Context()), p.ID)
+			if p, err := record(client.MeGetMediaProgress2(afterwards(t), it.Id)); err == nil {
+				_ = errorOf(client.MeRemoveMediaProgress(afterwards(t), p.Id))
 			}
 		}
 	})
 
-	all := must(client.AllProgress(ctx))
-	if len(all) < 2 {
-		t.Errorf("AllProgress returned %d records, want at least the two just set", len(all))
+	if all := must(client.MeGetAllMediaProgress(ctx)).MediaProgress; len(all) < 2 {
+		t.Errorf("%d progress records, want at least the two just set", len(all))
 	}
 
-	if _, err := client.CreateBookmark(ctx, items[0].ID, 0.3, "extras"); err != nil {
+	if err := errorOf(client.MeCreateBookmark(ctx, items[0].Id, abs.MeCreateBookmarkRequest{Time: 0.3, Title: "extras"})); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = client.DeleteBookmark(context.WithoutCancel(t.Context()), items[0].ID, 0.3) })
-	if bs := must(client.ItemBookmarks(ctx, items[0].ID)); len(bs) == 0 {
-		t.Error("ItemBookmarks returned nothing for an item with one")
+	t.Cleanup(func() { _ = errorOf(client.MeRemoveBookmark(afterwards(t), items[0].Id, "0.3")) })
+	if bs := must(client.MeGetBookmarksForLibraryItem(ctx, items[0].Id)).Bookmarks; len(bs) == 0 {
+		t.Error("an item with a bookmark lists none")
 	}
 
-	series, _, err := client.SeriesList(ctx, id, abs.ListOptions{Limit: 1})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(series) > 0 {
-		if err := client.HideSeriesFromContinueListening(ctx, series[0].ID); err != nil {
-			t.Errorf("HideSeriesFromContinueListening: %v", err)
+	if series := must(client.LibraryGetAllSeriesForLibrary(ctx, id, abs.LibraryGetAllSeriesForLibraryOptions{Limit: new(1)})).Results; len(series) > 0 {
+		if err := errorOf(client.MeRemoveSeriesFromContinueListening(ctx, series[0].Id)); err != nil {
+			t.Errorf("taking the series off the shelf where listening continues: %v", err)
 		}
-		if err := client.UnhideSeriesFromContinueListening(ctx, series[0].ID); err != nil {
-			t.Errorf("UnhideSeriesFromContinueListening: %v", err)
+		if err := errorOf(client.MeReaddSeriesFromContinueListening(ctx, series[0].Id)); err != nil {
+			t.Errorf("putting the series back on the shelf: %v", err)
 		}
 	}
 }

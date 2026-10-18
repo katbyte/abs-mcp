@@ -128,7 +128,7 @@ func TestUntypedIDs(t *testing.T) {
 	t.Parallel()
 
 	got := untypedIDs("libraryId", "userId")
-	if want := []string{"ApiKeyUpdateRequest .userId", "SessionGetOpenSessionsAnswerShareSessions .userId", "SessionSyncLocalRequest .libraryId", "SessionSyncLocalRequest .userId"}; !slices.Equal(got, want) {
+	if want := []string{"ApiKeyUpdateRequest .userId", "PlaylistUpdateRequest .libraryId", "PlaylistUpdateRequest .userId", "SessionSyncLocalRequest .libraryId", "SessionSyncLocalRequest .userId"}; !slices.Equal(got, want) {
 		t.Errorf("untypedIDs(libraryId, userId) = %q, want %q", got, want)
 	}
 

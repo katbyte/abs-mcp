@@ -4,18 +4,18 @@ package abs
 
 // Author is the "Author" schema.
 type Author struct {
-	AddedAt      UnixMilli            `json:"addedAt,omitzero"`
-	Asin         string               `json:"asin,omitempty"`
-	Description  string               `json:"description,omitempty"`
-	Id           AuthorID             `json:"id,omitempty"`
-	ImagePath    string               `json:"imagePath,omitempty"`
-	LastFirst    string               `json:"lastFirst,omitempty"`
-	LibraryId    LibraryID            `json:"libraryId,omitempty"`
-	LibraryItems []AuthorLibraryItems `json:"libraryItems,omitzero"`
-	Name         string               `json:"name,omitempty"`
-	NumBooks     int                  `json:"numBooks,omitempty"`
-	Series       []any                `json:"series,omitzero"`
-	UpdatedAt    UnixMilli            `json:"updatedAt,omitzero"`
+	AddedAt      UnixMilli             `json:"addedAt,omitzero"`
+	Asin         string                `json:"asin,omitempty"`
+	Description  string                `json:"description,omitempty"`
+	Id           AuthorID              `json:"id,omitempty"`
+	ImagePath    string                `json:"imagePath,omitempty"`
+	LastFirst    string                `json:"lastFirst,omitempty"`
+	LibraryId    LibraryID             `json:"libraryId,omitempty"`
+	LibraryItems []LibraryItemMinified `json:"libraryItems,omitzero"`
+	Name         string                `json:"name,omitempty"`
+	NumBooks     int                   `json:"numBooks,omitempty"`
+	Series       []AuthorSeries        `json:"series,omitzero"`
+	UpdatedAt    UnixMilli             `json:"updatedAt,omitzero"`
 }
 
 // GetName is the record's Name, for code that handles records of several types alike.

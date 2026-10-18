@@ -15,26 +15,26 @@ import (
 
 // ShareGetMediaItemShareBySlugResponse is the result of ShareGetMediaItemShareBySlug.
 //
-// Answer is the ShareGetMediaItemShareBySlugAnswer answered, nil when the server answered none (a 204), which
+// Answer is the MediaItemShareForClient answered, nil when the server answered none (a 204), which
 // Answered tells. The same record is embedded, so res.Answer.Name may be read as
 // res.Name; when nothing was answered the embedded record is a zero one, so that
 // read is empty rather than a panic. Only the method sets the two; a response built
 // by hand sets both or neither.
 type ShareGetMediaItemShareBySlugResponse struct {
 	HttpResponse *http.Response
-	Answer       *ShareGetMediaItemShareBySlugAnswer
-	*ShareGetMediaItemShareBySlugAnswer
+	Answer       *MediaItemShareForClient
+	*MediaItemShareForClient
 }
 
 // Answered reports whether the server answered with a body that was decoded:
 // false for a 204, or a call that failed before one came.
 func (r ShareGetMediaItemShareBySlugResponse) Answered() bool { return r.Answer != nil }
 
-// Record is the ShareGetMediaItemShareBySlugAnswer answered, as a value to change and write back, or an
+// Record is the MediaItemShareForClient answered, as a value to change and write back, or an
 // error when the server answered none.
-func (r ShareGetMediaItemShareBySlugResponse) Record() (ShareGetMediaItemShareBySlugAnswer, error) {
+func (r ShareGetMediaItemShareBySlugResponse) Record() (MediaItemShareForClient, error) {
 	if r.Answer == nil {
-		return ShareGetMediaItemShareBySlugAnswer{}, errors.New("ShareGetMediaItemShareBySlug answered no ShareGetMediaItemShareBySlugAnswer")
+		return MediaItemShareForClient{}, errors.New("ShareGetMediaItemShareBySlug answered no MediaItemShareForClient")
 	}
 
 	return *r.Answer, nil
@@ -71,7 +71,7 @@ func (c Client) ShareGetMediaItemShareBySlug(ctx context.Context, slug string, o
 		option = options[0]
 	}
 
-	result.ShareGetMediaItemShareBySlugAnswer = &ShareGetMediaItemShareBySlugAnswer{}
+	result.MediaItemShareForClient = &MediaItemShareForClient{}
 	opts := client.RequestOptions{
 		ExpectedStatusCodes: []int{
 			http.StatusOK,
@@ -96,12 +96,12 @@ func (c Client) ShareGetMediaItemShareBySlug(ctx context.Context, slug string, o
 		return
 	}
 
-	var answer ShareGetMediaItemShareBySlugAnswer
+	var answer MediaItemShareForClient
 	result.Answer = &answer
 	if err = resp.Unmarshal(result.Answer); err != nil {
 		return
 	}
-	result.ShareGetMediaItemShareBySlugAnswer = result.Answer
+	result.MediaItemShareForClient = result.Answer
 
 	return
 }

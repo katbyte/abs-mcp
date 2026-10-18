@@ -3,15 +3,17 @@ package tools
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
+	"github.com/katbyte/go-kt/pointer"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -39,17 +41,21 @@ type userRef struct {
 // is admin only. The caller's own account named by its username or id is
 // still the caller's own, read through the caller's own routes: a year in
 // review is kept only there, and a non-admin key may not look itself up.
-func resolveUser(ctx context.Context, client *abs.Client, nameOrID string) (*abs.User, bool, error) {
+func resolveUser(ctx context.Context, gen *api.Client, nameOrID string) (*api.UserForBrowser, bool, error) {
 	nameOrID = strings.TrimSpace(nameOrID)
-	me, meErr := client.Me(ctx)
+	mine, meErr := record(gen.MeGetCurrentUser(ctx))
+	me := &mine
 	// "me" and the like mean the caller, as the argument says, whatever
 	// the accounts are named
 	if nameOrID == "" || slices.Contains(selfTokens, strings.ToLower(nameOrID)) {
-		return me, true, meErr
+		if meErr != nil {
+			return nil, true, meErr
+		}
+		return me, true, nil
 	}
 	// a key whose own account cannot be read can still look others up; if
 	// that fails as well, both are said
-	isMe := func(id string) bool { return meErr == nil && id == me.ID }
+	isMe := func(id api.UserID) bool { return meErr == nil && id == me.Id }
 	withMe := func(err error) error {
 		if err != nil && meErr != nil {
 			return fmt.Errorf("%w; reading the key's own account failed too: %w", err, meErr)
@@ -57,31 +63,30 @@ func resolveUser(ctx context.Context, client *abs.Client, nameOrID string) (*abs
 		return err
 	}
 	if looksLikeID(nameOrID) {
-		if isMe(nameOrID) {
+		if isMe(api.UserID(nameOrID)) {
 			return me, true, nil
 		}
-		other, err := client.User(ctx, nameOrID)
-		return other, false, withMe(err)
+		return otherUser(ctx, gen, api.UserID(nameOrID), withMe)
 	}
 
-	users, lookupErr := client.Users(ctx, false)
+	all, lookupErr := record(gen.UserFindAll(ctx))
+	users := all.Users
 	switch {
 	case lookupErr == nil:
 		names := make([]string, 0, len(users))
 		for i := range users {
 			if strings.EqualFold(users[i].Username, nameOrID) {
-				if isMe(users[i].ID) {
+				if isMe(users[i].Id) {
 					return me, true, nil
 				}
-				other, err := client.User(ctx, users[i].ID)
-				return other, false, withMe(err)
+				return otherUser(ctx, gen, users[i].Id, withMe)
 			}
 			names = append(names, users[i].Username)
 		}
 		lookupErr = fmt.Errorf("no user named %q (have: %s)", nameOrID, strings.Join(names, ", "))
 	// a key that may not list the accounts, answered as refused or as a
 	// route that is not there: it can still name its own
-	case abs.IsForbidden(lookupErr) || abs.IsNotFound(lookupErr):
+	case api.IsForbidden(lookupErr) || api.IsNotFound(lookupErr):
 	default:
 		return nil, false, withMe(fmt.Errorf("looking up the user %q: %w", nameOrID, lookupErr))
 	}
@@ -92,6 +97,16 @@ func resolveUser(ctx context.Context, client *abs.Client, nameOrID string) (*abs
 	}
 
 	return nil, false, withMe(lookupErr)
+}
+
+// otherUser is another account, read by its id, with what went wrong reading the key's own account said beside a failure.
+func otherUser(ctx context.Context, gen *api.Client, id api.UserID, withMe func(error) error) (*api.UserForBrowser, bool, error) {
+	u, err := record(gen.UserFindOne(ctx, id))
+	if err != nil {
+		return nil, false, withMe(err)
+	}
+
+	return &u, false, nil
 }
 
 type userRow struct {
@@ -136,35 +151,36 @@ type userDetail struct {
 // permission by the permission alone, not by the account's type, and
 // only while the account is active: an admin without delete may not
 // delete
-func describeUser(u *abs.User, self bool) userDetail {
-	row := userRow{ID: u.ID, Username: u.Username, Type: u.Type, Active: u.IsActive, LastSeen: fmtTime(u.LastSeen)}
+func describeUser(u *api.UserForBrowser, self bool) userDetail {
+	active, perms := pointer.From(u.IsActive), pointer.From(u.Permissions)
+	row := userRow{ID: string(u.Id), Username: u.Username, Type: u.Type, Active: active, LastSeen: fmtTime(u.LastSeen)}
 	out := userDetail{
 		userRow:      row,
 		Self:         self,
 		Email:        u.Email,
-		CanUpdate:    u.IsActive && u.Permissions.Update,
-		CanDelete:    u.IsActive && u.Permissions.Delete,
-		CanDownload:  u.IsActive && u.Permissions.Download,
-		CanUpload:    u.IsActive && u.Permissions.Upload,
-		AllLibraries: u.Permissions.AccessAllLibraries,
-		AllTags:      u.Permissions.AccessAllTags,
-		Explicit:     u.Permissions.AccessExplicitContent,
+		CanUpdate:    active && pointer.From(perms.Update),
+		CanDelete:    active && pointer.From(perms.Delete),
+		CanDownload:  active && pointer.From(perms.Download),
+		CanUpload:    active && pointer.From(perms.Upload),
+		AllLibraries: pointer.From(perms.AccessAllLibraries),
+		AllTags:      pointer.From(perms.AccessAllTags),
+		Explicit:     pointer.From(perms.AccessExplicitContent),
 		Bookmarks:    len(u.Bookmarks),
 		Created:      fmtDate(u.CreatedAt),
 		Recent:       []progressRow{},
 	}
-	if !u.Permissions.AccessAllLibraries {
+	if !out.AllLibraries {
 		out.Libraries = u.LibrariesAccessible
 	}
-	if !u.Permissions.AccessAllTags {
-		if u.Permissions.SelectedTagsNotAccessible {
+	if !out.AllTags {
+		if pointer.From(perms.SelectedTagsNotAccessible) {
 			out.DeniedTags = u.ItemTagsSelected
 		} else {
 			out.Tags = u.ItemTagsSelected
 		}
 	}
 	progress := slices.Clone(u.MediaProgress)
-	slices.SortFunc(progress, func(a, b abs.MediaProgress) int { return cmp.Compare(b.LastUpdate, a.LastUpdate) })
+	slices.SortFunc(progress, func(a, b api.MediaProgress) int { return b.LastUpdate.Compare(a.LastUpdate.Time) })
 	for _, p := range progress {
 		switch {
 		case p.IsFinished:
@@ -173,14 +189,14 @@ func describeUser(u *abs.User, self bool) userDetail {
 			out.InProgress++
 		}
 		if len(out.Recent) < 10 {
-			out.Recent = append(out.Recent, progressRow{ItemID: p.LibraryItemID, EpisodeID: p.EpisodeID, Percent: percent(p.Progress), Finished: p.IsFinished, Updated: fmtTime(p.LastUpdate)})
+			out.Recent = append(out.Recent, progressRow{ItemID: string(p.LibraryItemId), EpisodeID: string(p.EpisodeId), Percent: percent(p.Progress), Finished: p.IsFinished, Updated: fmtTime(p.LastUpdate)})
 		}
 	}
 	return out
 }
 
 func registerUserTools(r *registry) {
-	client := r.client
+	gen := r.gen
 
 	type listOut struct {
 		Total      int       `json:"total"`
@@ -192,16 +208,17 @@ func registerUserTools(r *registry) {
 		Name:        "user_list",
 		Description: "List the server's user accounts with type, last seen, and what they last listened to. Admin only; every other user tool defaults to the API key's own account and needs no admin rights.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in pageIn) (*mcp.CallToolResult, listOut, error) {
-		users, err := client.Users(ctx, true)
+		all, err := record(gen.UserFindAll(ctx, api.UserFindAllOptions{Include: "latestSession"}))
 		if err != nil {
 			return nil, listOut{}, err
 		}
+		users := all.Users
 		limit, offset := pageArgs(in.Limit, in.Offset, 50)
 		page, next := pageOf(users, limit, offset)
 		out := listOut{Total: len(users), Offset: offset, NextOffset: next, Users: []userRow{}}
 		for i := range page {
 			u := &page[i]
-			row := userRow{ID: u.ID, Username: u.Username, Type: u.Type, Active: u.IsActive, LastSeen: fmtTime(u.LastSeen)}
+			row := userRow{ID: string(u.Id), Username: u.Username, Type: u.Type, Active: pointer.From(u.IsActive), LastSeen: fmtTime(u.LastSeen)}
 			if u.LatestSession != nil {
 				row.Listening = u.LatestSession.DisplayTitle
 			}
@@ -215,7 +232,7 @@ func registerUserTools(r *registry) {
 		Name:        "user_get",
 		Description: "An account's details, permissions, and a summary of its listening progress. Omit user for the account the API key acts as - the usual case, and the only one available without admin rights. Call this first when unsure what the key can do.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in userRef) (*mcp.CallToolResult, userDetail, error) {
-		u, self, err := resolveUser(ctx, client, in.User)
+		u, self, err := resolveUser(ctx, gen, in.User)
 		if err != nil {
 			return nil, userDetail{}, err
 		}
@@ -237,14 +254,13 @@ func registerUserTools(r *registry) {
 		Name:        "user_in_progress",
 		Description: "What a user is currently listening to (the continue-listening shelf), most recent first, with position and percent. Omit user for the account the API key acts as - 'what am I listening to'.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in inProgressIn) (*mcp.CallToolResult, inProgressOut, error) {
-		u, self, err := resolveUser(ctx, client, in.User)
+		u, self, err := resolveUser(ctx, gen, in.User)
 		if err != nil {
 			return nil, inProgressOut{}, err
 		}
 		limit := mcpregistry.LimitOr(in.Limit, defaultLimit)
 
-		var items []abs.Item
-		var progressFor map[string]*abs.MediaProgress
+		out := inProgressOut{Items: []inProgressRow{}}
 		if self {
 			// the server has a shelf endpoint for the caller, already ordered
 			// and carrying the episode that is in progress - but not the
@@ -257,89 +273,89 @@ func registerUserTools(r *registry) {
 					hidden++
 				}
 			}
-			if items, err = client.ItemsInProgress(ctx, limit+hidden); err != nil {
-				return nil, inProgressOut{}, err
+			shelf, serr := record(gen.MeGetAllLibraryItemsInProgress(ctx, api.MeGetAllLibraryItemsInProgressOptions{Limit: new(limit + hidden)}))
+			if serr != nil {
+				return nil, inProgressOut{}, serr
 			}
-			progressFor = map[string]*abs.MediaProgress{}
-			shown := items[:0]
-			for i := range items {
-				want := ""
-				if items[i].RecentEpisode != nil {
-					want = items[i].RecentEpisode.ID
+			for i := range shelf.LibraryItems {
+				it := &shelf.LibraryItems[i]
+				var want api.EpisodeID
+				if it.RecentEpisode != nil {
+					want = it.RecentEpisode.Id
 				}
-				var mine *abs.MediaProgress
+				var mine *api.MediaProgress
 				for j := range u.MediaProgress {
-					if p := &u.MediaProgress[j]; p.LibraryItemID == items[i].ID && p.EpisodeID == want {
+					if p := &u.MediaProgress[j]; p.LibraryItemId == it.Id && p.EpisodeId == want {
 						mine = p
 					}
 				}
 				if mine != nil && mine.HideFromContinueListening {
 					continue
 				}
-				if mine != nil {
-					progressFor[items[i].ID] = mine
+				if len(out.Items) == limit {
+					break
 				}
-				shown = append(shown, items[i])
+
+				row := inProgressRow{itemSummary: summarize(it)}
+				row.Progress = progressOf(mine)
+				if it.RecentEpisode != nil {
+					ep := summarizeEpisode(it.RecentEpisode, it.Title(), false, mine)
+					row.Episode, row.Progress = &ep, nil
+				}
+				out.Items = append(out.Items, row)
 			}
-			items = shown[:min(len(shown), limit)]
-		} else {
-			// for anyone else the shelf has to be rebuilt from their progress
-			// records, which name items by id only
-			started := make([]abs.MediaProgress, 0, len(u.MediaProgress))
-			for _, p := range u.MediaProgress {
-				if p.IsFinished || p.HideFromContinueListening {
-					continue
-				}
-				if p.CurrentTime > 0 || p.EbookProgress > 0 {
-					started = append(started, p)
-				}
+
+			return nil, out, nil
+		}
+		// for anyone else the shelf has to be rebuilt from their progress
+		// records, which name items by id only
+		started := make([]api.MediaProgress, 0, len(u.MediaProgress))
+		for _, p := range u.MediaProgress {
+			if p.IsFinished || p.HideFromContinueListening {
+				continue
 			}
-			slices.SortFunc(started, func(a, b abs.MediaProgress) int { return cmp.Compare(b.LastUpdate, a.LastUpdate) })
-			if len(started) > limit {
-				started = started[:limit]
-			}
-			ids := make([]string, 0, len(started))
-			progressFor = make(map[string]*abs.MediaProgress, len(started))
-			for i := range started {
-				p := &started[i]
-				if _, seen := progressFor[p.LibraryItemID]; !seen {
-					ids = append(ids, p.LibraryItemID)
-				}
-				progressFor[p.LibraryItemID] = p
-			}
-			if len(ids) > 0 {
-				if items, err = client.ItemsBatch(ctx, ids); err != nil {
-					return nil, inProgressOut{}, err
-				}
-				// ItemsBatch answers in its own order; restore theirs
-				rank := map[string]int{}
-				for i, id := range ids {
-					rank[id] = i
-				}
-				slices.SortFunc(items, func(a, b abs.Item) int { return cmp.Compare(rank[a.ID], rank[b.ID]) })
+			if p.CurrentTime > 0 || p.EbookProgress > 0 {
+				started = append(started, p)
 			}
 		}
+		slices.SortFunc(started, func(a, b api.MediaProgress) int { return b.LastUpdate.Compare(a.LastUpdate.Time) })
+		if len(started) > limit {
+			started = started[:limit]
+		}
+		ids := make([]api.LibraryItemID, 0, len(started))
+		progressFor := make(map[api.LibraryItemID]*api.MediaProgress, len(started))
+		for i := range started {
+			p := &started[i]
+			if _, seen := progressFor[p.LibraryItemId]; !seen {
+				ids = append(ids, p.LibraryItemId)
+			}
+			progressFor[p.LibraryItemId] = p
+		}
+		if len(ids) == 0 {
+			return nil, out, nil
+		}
 
-		out := inProgressOut{Items: []inProgressRow{}}
+		items, err := itemsBatch(ctx, gen, ids)
+		if err != nil {
+			return nil, inProgressOut{}, err
+		}
+		// the batch answers in its own order; restore theirs
+		rank := map[api.LibraryItemID]int{}
+		for i, id := range ids {
+			rank[id] = i
+		}
+		slices.SortFunc(items, func(a, b api.LibraryItemExpanded) int { return cmp.Compare(rank[a.Id], rank[b.Id]) })
+
 		for i := range items {
 			it := &items[i]
-			row := inProgressRow{itemSummary: summarize(it)}
-			if p, ok := progressFor[it.ID]; ok {
-				row.Progress = progressOf(p)
-			}
-			switch {
-			case it.RecentEpisode != nil:
-				ep := summarizeEpisode(it.RecentEpisode, it.Title(), false)
-				ep.Progress = row.Progress
-				row.Episode = &ep
-				row.Progress = nil
-			case progressFor[it.ID] != nil && progressFor[it.ID].EpisodeID != "":
+			p := progressFor[it.Id]
+			row := inProgressRow{itemSummary: summarizeWhole(it)}
+			row.Progress = progressOf(p)
+			if p != nil && p.EpisodeId != "" {
 				for j := range it.Media.Episodes {
-					if it.Media.Episodes[j].ID == progressFor[it.ID].EpisodeID {
-						ep := summarizeEpisode(&it.Media.Episodes[j], it.Title(), false)
-						ep.Progress = row.Progress
-						row.Episode = &ep
-						row.Progress = nil
+					if it.Media.Episodes[j].Id == p.EpisodeId {
+						ep := summarizeEpisode(&it.Media.Episodes[j], it.Title(), false, p)
+						row.Episode, row.Progress = &ep, nil
 					}
 				}
 			}
@@ -364,20 +380,20 @@ func registerUserTools(r *registry) {
 		Name:        "user_progress_get",
 		Description: "A user's listening progress on one book or podcast episode: percent, position, finished flag. Omit user for the account the API key acts as.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in progressGetIn) (*mcp.CallToolResult, progressGetOut, error) {
-		u, self, err := resolveUser(ctx, client, in.User)
+		u, self, err := resolveUser(ctx, gen, in.User)
 		if err != nil {
 			return nil, progressGetOut{}, err
 		}
-		it, err := resolveItem(ctx, client, in.Library, in.Item)
+		it, err := resolveItem(ctx, gen, in.Library, in.Item)
 		if err != nil {
 			return nil, progressGetOut{}, err
 		}
 		out := progressGetOut{User: u.Username, Item: it.Title(), Duration: wholeSec(it.Media.Duration)}
 		if in.Episode != "" {
-			for _, e := range it.Media.Episodes {
-				if e.ID == in.Episode {
+			for i := range it.Media.Episodes {
+				if e := &it.Media.Episodes[i]; string(e.Id) == in.Episode {
 					out.Episode = e.Title
-					out.Duration = wholeSec(e.DurationSeconds())
+					out.Duration = wholeSec(episodeLength(e))
 				}
 			}
 			if out.Episode == "" {
@@ -386,7 +402,7 @@ func registerUserTools(r *registry) {
 		}
 
 		if self {
-			p, err := client.Progress(ctx, it.ID, in.Episode)
+			p, err := ownProgress(ctx, gen, it.Id, in.Episode)
 			if err != nil {
 				return nil, progressGetOut{}, err
 			}
@@ -395,7 +411,7 @@ func registerUserTools(r *registry) {
 			return nil, out, nil
 		}
 		for i := range u.MediaProgress {
-			if p := &u.MediaProgress[i]; p.LibraryItemID == it.ID && p.EpisodeID == in.Episode {
+			if p := &u.MediaProgress[i]; p.LibraryItemId == it.Id && string(p.EpisodeId) == in.Episode {
 				out.Progress = progressOf(p)
 				break
 			}
@@ -434,23 +450,23 @@ func registerUserTools(r *registry) {
 			return progressSetOut{}, errors.New("a series has no progress of its own: set finished, position_s or percent on a book")
 		}
 
-		s, err := resolveSeries(ctx, client, in.Library, in.Series)
+		s, err := resolveSeries(ctx, gen, in.Library, in.Series)
 		if err != nil {
 			return progressSetOut{}, err
 		}
 		if *in.Hide {
-			err = client.HideSeriesFromContinueListening(ctx, s.ID)
+			_, err = gen.MeRemoveSeriesFromContinueListening(ctx, s.Id)
 		} else {
-			err = client.UnhideSeriesFromContinueListening(ctx, s.ID)
+			_, err = gen.MeReaddSeriesFromContinueListening(ctx, s.Id)
 		}
 		if err != nil {
 			return progressSetOut{}, err
 		}
-		me, err := client.Me(ctx)
+		me, err := record(gen.MeGetCurrentUser(ctx))
 		if err != nil {
 			return progressSetOut{}, fmt.Errorf("the series was sent, but reading the account back failed: %w", err)
 		}
-		hidden := slices.Contains(me.SeriesHidden, s.ID)
+		hidden := slices.Contains(me.SeriesHideFromContinueListening, string(s.Id))
 		if hidden != *in.Hide {
 			return progressSetOut{}, fmt.Errorf("the server was asked to change %q on the Continue Series shelf, but the account still has it %s", s.Name, map[bool]string{true: "hidden", false: "shown"}[hidden])
 		}
@@ -459,11 +475,11 @@ func registerUserTools(r *registry) {
 	// removeProgress deletes the account's progress on a book or episode, and
 	// reads it back: the server has answered a removal it did not make
 	removeProgress := func(ctx context.Context, in progressSetIn) (progressSetOut, error) {
-		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
+		it, err := resolveItemToChange(ctx, gen, in.Library, in.Item)
 		if err != nil {
 			return progressSetOut{}, err
 		}
-		p, err := client.Progress(ctx, it.ID, in.Episode)
+		p, err := ownProgress(ctx, gen, it.Id, in.Episode)
 		if err != nil {
 			return progressSetOut{}, err
 		}
@@ -471,10 +487,10 @@ func registerUserTools(r *registry) {
 		if p == nil {
 			return out, nil
 		}
-		if err := client.RemoveProgress(ctx, p.ID); err != nil {
+		if _, err := gen.MeRemoveMediaProgress(ctx, p.Id); err != nil {
 			return progressSetOut{}, err
 		}
-		left, err := client.Progress(ctx, it.ID, in.Episode)
+		left, err := ownProgress(ctx, gen, it.Id, in.Episode)
 		if err != nil {
 			return progressSetOut{}, fmt.Errorf("the server accepted the removal of %q's progress, but reading it back to check failed: %w", it.Title(), err)
 		}
@@ -505,7 +521,7 @@ func registerUserTools(r *registry) {
 		case in.Position != nil && *in.Position < 0:
 			return nil, progressSetOut{}, fmt.Errorf("position_s %v is before the start", *in.Position)
 		}
-		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
+		it, err := resolveItemToChange(ctx, gen, in.Library, in.Item)
 		if err != nil {
 			return nil, progressSetOut{}, err
 		}
@@ -518,9 +534,9 @@ func registerUserTools(r *registry) {
 		duration := it.Media.Duration
 		if in.Episode != "" {
 			found := false
-			for _, e := range it.Media.Episodes {
-				if e.ID == in.Episode {
-					duration, found = e.DurationSeconds(), true
+			for i := range it.Media.Episodes {
+				if e := &it.Media.Episodes[i]; string(e.Id) == in.Episode {
+					duration, found = episodeLength(e), true
 				}
 			}
 			if !found {
@@ -531,7 +547,7 @@ func registerUserTools(r *registry) {
 			return nil, progressSetOut{}, fmt.Errorf("%q has no length to take a percent of: pass position_s", it.Title())
 		}
 
-		upd := abs.ProgressUpdate{IsFinished: in.Finished, HideFromContinueListening: in.Hide}
+		upd := api.ProgressUpdatePayload{IsFinished: in.Finished, HideFromContinueListening: in.Hide}
 		switch {
 		case in.Position != nil:
 			upd.CurrentTime = in.Position
@@ -550,11 +566,16 @@ func registerUserTools(r *registry) {
 		if upd.CurrentTime == nil && upd.IsFinished == nil && upd.HideFromContinueListening == nil {
 			return nil, progressSetOut{}, errors.New("nothing to change: pass finished, position_s, percent or hide_from_continue")
 		}
-		if err := client.SetProgress(ctx, it.ID, in.Episode, upd); err != nil {
+		if in.Episode == "" {
+			_, err = gen.MeCreateUpdateMediaProgress2(ctx, it.Id, upd)
+		} else {
+			_, err = gen.MeCreateUpdateMediaProgress(ctx, it.Id, api.EpisodeID(in.Episode), upd)
+		}
+		if err != nil {
 			return nil, progressSetOut{}, err
 		}
 
-		p, err := client.Progress(ctx, it.ID, in.Episode)
+		p, err := ownProgress(ctx, gen, it.Id, in.Episode)
 		if err != nil {
 			return nil, progressSetOut{}, err
 		}
@@ -585,44 +606,44 @@ func registerUserTools(r *registry) {
 		Name:        "user_bookmarks",
 		Description: "A user's bookmarks (named positions in books), optionally for one item. Omit user for the account the API key acts as.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in bookmarksIn) (*mcp.CallToolResult, bookmarksOut, error) {
-		u, self, err := resolveUser(ctx, client, in.User)
+		u, self, err := resolveUser(ctx, gen, in.User)
 		if err != nil {
 			return nil, bookmarksOut{}, err
 		}
 		bms := u.Bookmarks
 		if self {
-			if bms, err = client.Bookmarks(ctx); err != nil {
+			if bms, err = ownBookmarks(ctx, gen); err != nil {
 				return nil, bookmarksOut{}, err
 			}
 		}
-		only := ""
+		var only api.LibraryItemID
 		if in.Item != "" {
-			it, err := resolveItem(ctx, client, in.Library, in.Item)
+			it, err := resolveItem(ctx, gen, in.Library, in.Item)
 			if err != nil {
 				return nil, bookmarksOut{}, err
 			}
-			only = it.ID
+			only = it.Id
 		}
 
-		titles := map[string]string{}
-		var ids []string
+		titles := map[api.LibraryItemID]string{}
+		var ids []api.LibraryItemID
 		for _, b := range bms {
-			if only != "" && b.LibraryItemID != only {
+			if only != "" && b.LibraryItemId != only {
 				continue
 			}
-			if _, seen := titles[b.LibraryItemID]; !seen {
-				titles[b.LibraryItemID] = ""
-				ids = append(ids, b.LibraryItemID)
+			if _, seen := titles[b.LibraryItemId]; !seen {
+				titles[b.LibraryItemId] = ""
+				ids = append(ids, b.LibraryItemId)
 			}
 		}
-		deleted := map[string]bool{}
+		deleted := map[api.LibraryItemID]bool{}
 		if len(ids) > 0 {
-			items, err := client.ItemsBatch(ctx, ids)
+			items, err := itemsBatch(ctx, gen, ids)
 			if err != nil {
 				return nil, bookmarksOut{}, fmt.Errorf("reading the bookmarked items: %w", err)
 			}
 			for i := range items {
-				titles[items[i].ID] = items[i].Title()
+				titles[items[i].Id] = items[i].Title()
 			}
 			// the batch leaves out what is gone without a word; asked one
 			// at a time, a deleted item is a 404
@@ -630,9 +651,9 @@ func registerUserTools(r *registry) {
 				if titles[id] != "" {
 					continue
 				}
-				_, gerr := client.Item(ctx, id)
+				_, gerr := getItem(ctx, gen, id)
 				switch {
-				case abs.IsNotFound(gerr):
+				case api.IsNotFound(gerr):
 					deleted[id] = true
 				case gerr != nil:
 					return nil, bookmarksOut{}, fmt.Errorf("reading bookmarked item %s, which the batch left out: %w", id, gerr)
@@ -642,13 +663,13 @@ func registerUserTools(r *registry) {
 
 		out := bookmarksOut{User: u.Username, Bookmarks: []bookmarkRow{}}
 		for _, b := range bms {
-			if only != "" && b.LibraryItemID != only {
+			if only != "" && b.LibraryItemId != only {
 				continue
 			}
 			out.Bookmarks = append(out.Bookmarks, bookmarkRow{
-				ItemID:  b.LibraryItemID,
-				Item:    titles[b.LibraryItemID],
-				Deleted: deleted[b.LibraryItemID],
+				ItemID:  string(b.LibraryItemId),
+				Item:    titles[b.LibraryItemId],
+				Deleted: deleted[b.LibraryItemId],
 				Title:   b.Title,
 				Time:    b.Time,
 				Created: fmtTime(b.CreatedAt),
@@ -696,13 +717,13 @@ func registerUserTools(r *registry) {
 			}
 		}
 
-		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
-		if err != nil && abs.IsNotFound(err) && len(in.Remove) > 0 && looksLikeID(in.Item) {
-			me, merr := client.Me(ctx)
+		it, err := resolveItemToChange(ctx, gen, in.Library, in.Item)
+		if err != nil && api.IsNotFound(err) && len(in.Remove) > 0 && looksLikeID(in.Item) {
+			me, merr := record(gen.MeGetCurrentUser(ctx))
 			if merr != nil {
 				return nil, bookmarkEditOut{}, fmt.Errorf("%w; reading the account's bookmarks to say whether one is left on it also failed: %w", err, merr)
 			}
-			if slices.ContainsFunc(me.Bookmarks, func(b abs.Bookmark) bool { return b.LibraryItemID == strings.TrimSpace(in.Item) }) {
+			if slices.ContainsFunc(me.Bookmarks, func(b api.AudioBookmark) bool { return string(b.LibraryItemId) == strings.TrimSpace(in.Item) }) {
 				return nil, bookmarkEditOut{}, fmt.Errorf("the item %s has been deleted, and Audiobookshelf will not remove a bookmark on an item it no longer has: the bookmark stays in the account", in.Item)
 			}
 		}
@@ -713,20 +734,20 @@ func registerUserTools(r *registry) {
 		// saved whole by every add and removal
 		defer r.locks.ByString(bookmarksLock)()
 
-		rowOf := func(b *abs.Bookmark) bookmarkRow {
+		rowOf := func(b *api.AudioBookmark) bookmarkRow {
 			return bookmarkRow{
-				ItemID: it.ID, Item: it.Title(), Title: b.Title,
+				ItemID: string(it.Id), Item: it.Title(), Title: b.Title,
 				Time: b.Time, Created: fmtTime(b.CreatedAt),
 			}
 		}
 		// the ones already at those positions, which a removal takes and an
 		// add renames: every removal is checked before anything is sent
-		bms, err := client.Bookmarks(ctx)
+		bms, err := ownBookmarks(ctx, gen)
 		if err != nil {
 			return nil, bookmarkEditOut{}, err
 		}
 		for _, at := range in.Remove {
-			if bookmarkAt(bms, it.ID, at) == nil {
+			if bookmarkAt(bms, it.Id, at) == nil {
 				return nil, bookmarkEditOut{}, fmt.Errorf("no bookmark at %v seconds in %q: user_bookmarks lists them; nothing was changed", at, it.Title())
 			}
 		}
@@ -740,43 +761,46 @@ func registerUserTools(r *registry) {
 			return err
 		}
 		for _, at := range slices.Compact(slices.Sorted(slices.Values(in.Remove))) {
-			held := bookmarkAt(bms, it.ID, at)
-			if err := client.DeleteBookmark(ctx, it.ID, at); err != nil {
+			held := bookmarkAt(bms, it.Id, at)
+			if _, err := gen.MeRemoveBookmark(ctx, it.Id, strconv.FormatFloat(at, 'f', -1, 64)); err != nil {
 				return nil, bookmarkEditOut{}, failed(err)
 			}
 			out.Removed = append(out.Removed, rowOf(held))
 		}
 		if len(out.Removed) > 0 {
 			// read back rather than trusted
-			after, rerr := client.Bookmarks(ctx)
+			after, rerr := ownBookmarks(ctx, gen)
 			if rerr != nil {
 				return nil, bookmarkEditOut{}, failed(fmt.Errorf("reading the bookmarks back after the removal failed: %w", rerr))
 			}
 			for _, gone := range out.Removed {
-				if bookmarkAt(after, it.ID, gone.Time) != nil {
+				if bookmarkAt(after, it.Id, gone.Time) != nil {
 					return nil, bookmarkEditOut{}, fmt.Errorf("the server accepted the removal but %q is still there", gone.Title)
 				}
 			}
 		}
 		for _, a := range in.Add {
-			held := bookmarkAt(bms, it.ID, a.Seconds)
+			held := bookmarkAt(bms, it.Id, a.Seconds)
 			renamed := held != nil
-			var b *abs.Bookmark
+			rename := func() (api.AudioBookmark, error) {
+				return record(gen.MeUpdateBookmark(ctx, it.Id, api.MeUpdateBookmarkRequest{Time: a.Seconds, Title: a.Title}))
+			}
+			var b api.AudioBookmark
 			if renamed {
-				b, err = client.UpdateBookmark(ctx, it.ID, a.Seconds, a.Title)
-			} else if b, err = client.CreateBookmark(ctx, it.ID, a.Seconds, a.Title); err != nil {
+				b, err = rename()
+			} else if b, err = record(gen.MeCreateBookmark(ctx, it.Id, api.MeCreateBookmarkRequest{Time: a.Seconds, Title: a.Title})); err != nil {
 				// made meanwhile by another client: renamed rather than
 				// duplicated. When that fails too, both say what went wrong
 				renamed = true
 				addErr := err
-				if b, err = client.UpdateBookmark(ctx, it.ID, a.Seconds, a.Title); err != nil {
+				if b, err = rename(); err != nil {
 					err = fmt.Errorf("adding the bookmark failed: %w; renaming one made meanwhile at that time failed too: %w", addErr, err)
 				}
 			}
 			if err != nil {
 				return nil, bookmarkEditOut{}, failed(err)
 			}
-			row := rowOf(b)
+			row := rowOf(&b)
 			if renamed {
 				if held != nil {
 					row.WasTitled = held.Title
@@ -807,36 +831,36 @@ func registerUserTools(r *registry) {
 		Name:        "user_history",
 		Description: "A user's listening sessions, newest first, default last 60 days: what was played, for how long, on which device. Omit user for the account the API key acts as. For what is playing right now across everyone, use server_sessions.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in historyIn) (*mcp.CallToolResult, historyOut, error) {
-		u, self, err := resolveUser(ctx, client, in.User)
+		u, self, err := resolveUser(ctx, gen, in.User)
 		if err != nil {
 			return nil, historyOut{}, err
 		}
 		limit := mcpregistry.LimitOr(in.Limit, defaultLimit)
 
-		onlyItem := ""
+		var onlyItem api.LibraryItemID
 		if in.Item != "" {
-			it, rerr := resolveItem(ctx, client, in.Library, in.Item)
+			it, rerr := resolveItem(ctx, gen, in.Library, in.Item)
 			if rerr != nil {
 				return nil, historyOut{}, rerr
 			}
-			onlyItem = it.ID
+			onlyItem = it.Id
 		}
 
 		cutoff := time.Now().AddDate(0, 0, -mcpregistry.LimitOr(in.Days, 60))
-		var sessions []abs.Session
+		var sessions []api.PlaybackSession
 		var total int
 		searched := true
 		switch {
 		case self && onlyItem != "":
-			sessions, total, err = client.ItemListeningSessions(ctx, onlyItem, "", limit, 0)
+			var got api.MeGetItemListeningSessions2Answer
+			got, err = record(gen.MeGetItemListeningSessions2(ctx, onlyItem, api.MeGetItemListeningSessions2Options{ItemsPerPage: &limit, Page: new(0)}))
+			sessions, total = got.Sessions, got.Total
 			onlyItem = "" // the endpoint has already filtered
-		case self:
-			sessions, total, err = client.ListeningSessions(ctx, limit, 0)
 		case onlyItem != "":
-			sessions, total, searched, err = itemSessionsOf(ctx, client, u.ID, onlyItem, limit, cutoff)
+			sessions, total, searched, err = itemSessionsOf(ctx, gen, u.Id, onlyItem, limit, cutoff)
 			onlyItem = "" // filtered as it was paged
 		default:
-			sessions, total, err = client.UserSessions(ctx, u.ID, limit, 0)
+			sessions, total, err = sessionPage(ctx, gen, u.Id, self, limit, 0)
 		}
 		if err != nil {
 			return nil, historyOut{}, err
@@ -847,10 +871,10 @@ func registerUserTools(r *registry) {
 			out.Note = fmt.Sprintf("only their newest %d sessions were searched for the item, and total_sessions counts those", historyPages*historyPageSize)
 		}
 		for i := range sessions {
-			if abs.Millis(sessions[i].UpdatedAt).Before(cutoff) {
+			if sessions[i].UpdatedAt.Before(cutoff) {
 				continue
 			}
-			if onlyItem != "" && sessions[i].LibraryItemID != onlyItem {
+			if onlyItem != "" && sessions[i].LibraryItemId != onlyItem {
 				continue
 			}
 			row := summarizeSession(&sessions[i])
@@ -879,13 +903,13 @@ func registerUserTools(r *registry) {
 		if len(in.Sessions) == 0 {
 			return nil, historyRemoveOut{}, errors.New("sessions is required: the ids user_history lists")
 		}
-		u, self, err := resolveUser(ctx, client, in.User)
+		u, self, err := resolveUser(ctx, gen, in.User)
 		if err != nil {
 			return nil, historyRemoveOut{}, err
 		}
 		// the server reads a stored session by no id, and deletes any id it
 		// is given whosever it is: each is found in this account's own history
-		found, err := sessionsOf(ctx, client, u.ID, self, in.Sessions)
+		found, err := sessionsOf(ctx, gen, u.Id, self, in.Sessions)
 		if err != nil {
 			return nil, historyRemoveOut{}, err
 		}
@@ -911,14 +935,14 @@ func registerUserTools(r *registry) {
 		}
 
 		for i, row := range rows {
-			if err := client.DeleteSession(ctx, row.ID); err != nil {
+			if _, err := gen.SessionDelete(ctx, row.ID); err != nil {
 				if i == 0 {
 					return nil, historyRemoveOut{}, err
 				}
 				return nil, historyRemoveOut{}, fmt.Errorf("%d of the %d sessions were removed, then removing %s failed: %w", i, len(rows), row.ID, err)
 			}
 		}
-		left, err := sessionsOf(ctx, client, u.ID, self, in.Sessions)
+		left, err := sessionsOf(ctx, gen, u.Id, self, in.Sessions)
 		if err != nil {
 			return nil, historyRemoveOut{}, fmt.Errorf("the sessions were removed, but reading the history back failed: %w", err)
 		}
@@ -983,34 +1007,34 @@ func registerUserTools(r *registry) {
 			case in.User != "":
 				return nil, statsOut{}, errors.New("server covers every account; omit user")
 			}
-			ys, err := client.ServerYearStats(ctx, in.Year)
+			ys, err := record(gen.StatsGetAdminStatsForYear(ctx, strconv.Itoa(in.Year)))
 			if err != nil {
 				return nil, statsOut{}, err
 			}
 			out := statsOut{
 				User:         "every account",
-				Total:        wholeSec(ys.ListeningTime),
-				Sessions:     ys.ListeningSessions,
-				BooksAdded:   ys.BooksAdded,
-				AddedSize:    ys.BooksAddedSize,
-				AddedLength:  wholeSec(ys.BooksAddedDuration),
-				AuthorsAdded: ys.AuthorsAdded,
-				Books:        ys.Books,
-				Size:         ys.BooksSize,
-				Length:       wholeSec(ys.BooksDuration),
+				Total:        wholeSec(ys.TotalListeningTime),
+				Sessions:     ys.NumListeningSessions,
+				BooksAdded:   ys.NumBooksAdded,
+				AddedSize:    int64(ys.TotalBooksAddedSize),
+				AddedLength:  ys.TotalBooksAddedDuration,
+				AuthorsAdded: ys.NumAuthorsAdded,
+				Books:        int(ys.NumBooks),
+				Size:         int64(ys.TotalBooksSize),
+				Length:       wholeSec(ys.TotalBooksDuration),
 			}
 			for _, a := range ys.TopAuthors {
-				out.TopAuthors = append(out.TopAuthors, nameTime{Name: a.Name, Time: wholeSec(a.Time)})
+				out.TopAuthors = append(out.TopAuthors, nameTime{Name: a.Name, Time: a.Time})
 			}
 			for _, n := range ys.TopNarrators {
-				out.TopNarrators = append(out.TopNarrators, nameTime{Name: n.Name, Time: wholeSec(n.Time)})
+				out.TopNarrators = append(out.TopNarrators, nameTime{Name: n.Name, Time: n.Time})
 			}
 			for _, g := range ys.TopGenres {
-				out.TopGenres = append(out.TopGenres, nameTime{Name: g.Genre, Time: wholeSec(g.Time)})
+				out.TopGenres = append(out.TopGenres, nameTime{Name: g.Genre, Time: g.Time})
 			}
 			return nil, out, nil
 		}
-		u, self, err := resolveUser(ctx, client, in.User)
+		u, self, err := resolveUser(ctx, gen, in.User)
 		if err != nil {
 			return nil, statsOut{}, err
 		}
@@ -1019,38 +1043,34 @@ func registerUserTools(r *registry) {
 			if !self {
 				return nil, statsOut{}, fmt.Errorf("a year in review is only available for the account the API key acts as, not %s: omit user, or omit year for their all-time totals", u.Username)
 			}
-			ys, yerr := client.YearStats(ctx, in.Year)
+			ys, yerr := record(gen.MeGetStatsForYear(ctx, strconv.Itoa(in.Year)))
 			if yerr != nil {
 				return nil, statsOut{}, yerr
 			}
 			out := statsOut{
 				User:          u.Username,
-				Total:         wholeSec(ys.TotalListeningTime),
+				Total:         ys.TotalListeningTime,
 				Sessions:      ys.TotalListeningSessions,
 				BooksListened: ys.NumBooksListened,
 				BooksFinished: ys.NumBooksFinished,
 			}
 			for _, a := range ys.TopAuthors {
-				out.TopAuthors = append(out.TopAuthors, nameTime{Name: a.Name, Time: wholeSec(a.Time)})
-			}
-			for _, n := range ys.TopNarrators {
-				out.TopNarrators = append(out.TopNarrators, nameTime{Name: n.Name, Time: wholeSec(n.Time)})
+				out.TopAuthors = append(out.TopAuthors, nameTime{Name: a.Name, Time: a.Time})
 			}
 			for _, g := range ys.TopGenres {
-				out.TopGenres = append(out.TopGenres, nameTime{Name: g.Genre, Time: wholeSec(g.Time)})
-			}
-			for _, b := range ys.BooksFinished {
-				out.Finished = append(out.Finished, itemTime{ID: b.ID, Title: b.Title, Time: wholeSec(b.Duration)})
+				out.TopGenres = append(out.TopGenres, nameTime{Name: g.Genre, Time: g.Time})
 			}
 			return nil, out, nil
 		}
 
-		st, err := client.ListeningStats(ctx)
-		if !self {
-			st, err = client.UserListeningStats(ctx, u.ID)
+		var st api.ListeningStats
+		if self {
+			st, err = record(gen.MeGetListeningStats(ctx))
+		} else {
+			st, err = record(gen.UserGetListeningStats(ctx, u.Id))
 		}
 		if err != nil {
-			return nil, statsOut{}, err
+			return nil, statsOut{}, fmt.Errorf("reading the listening stats: %w", err)
 		}
 		out := statsOut{User: u.Username, Total: wholeSec(st.TotalTime), Today: wholeSec(st.Today), Items: len(st.Items)}
 		var week, month float64
@@ -1069,32 +1089,12 @@ func registerUserTools(r *registry) {
 		}
 		out.Last7Days, out.Last30Days = wholeSec(week), wholeSec(month)
 
-		items := make([]abs.ListeningStatItem, 0, len(st.Items))
-		for _, it := range st.Items {
-			items = append(items, it)
-		}
-		slices.SortFunc(items, func(a, b abs.ListeningStatItem) int { return cmp.Compare(b.TimeListening, a.TimeListening) })
-		for i, it := range items {
-			if i >= 10 {
-				break
-			}
-			var meta struct {
-				Title      string `json:"title"`
-				AuthorName string `json:"authorName"`
-				Author     string `json:"author"`
-			}
+		items := slices.Collect(maps.Values(st.Items))
+		slices.SortFunc(items, func(a, b api.ListeningStatsItem) int { return cmp.Compare(b.TimeListening, a.TimeListening) })
+		for _, it := range items[:min(len(items), 10)] {
 			// an item the server sends no metadata for has no title to give
-			if len(it.MediaMetadata) == 0 {
-				it.MediaMetadata = json.RawMessage("null")
-			}
-			if err := json.Unmarshal(it.MediaMetadata, &meta); err != nil {
-				return nil, statsOut{}, fmt.Errorf("reading the title of item %s from the server's listening stats: %w", it.ID, err)
-			}
-			author := meta.AuthorName
-			if author == "" {
-				author = meta.Author
-			}
-			out.TopItems = append(out.TopItems, itemTime{ID: it.ID, Title: meta.Title, Author: author, Time: wholeSec(it.TimeListening)})
+			meta := pointer.From(it.MediaMetadata)
+			out.TopItems = append(out.TopItems, itemTime{ID: string(it.Id), Title: meta.Title, Author: meta.AuthorDisplay(), Time: wholeSec(it.TimeListening)})
 		}
 
 		return nil, out, nil
@@ -1103,38 +1103,80 @@ func registerUserTools(r *registry) {
 
 // bookmarkAt is the bookmark at a position in an item, or nil. The server
 // knows a bookmark by the two, and compares the time exactly.
-func bookmarkAt(bms []abs.Bookmark, itemID string, seconds float64) *abs.Bookmark {
+func bookmarkAt(bms []api.AudioBookmark, itemID api.LibraryItemID, seconds float64) *api.AudioBookmark {
 	for i := range bms {
-		if bms[i].LibraryItemID == itemID && bms[i].Time == seconds {
+		if bms[i].LibraryItemId == itemID && bms[i].Time == seconds {
 			return &bms[i]
 		}
 	}
 	return nil
 }
 
+// ownBookmarks are the API key user's bookmarks, in every item.
+func ownBookmarks(ctx context.Context, gen *api.Client) ([]api.AudioBookmark, error) {
+	all, err := record(gen.MeGetAllBookmarks(ctx))
+	if err != nil {
+		return nil, err
+	}
+
+	return all.Bookmarks, nil
+}
+
+// ownProgress is the API key user's progress in a book, or in an episode when one is named; nil when they have never started it.
+func ownProgress(ctx context.Context, gen *api.Client, item api.LibraryItemID, episode string) (*api.MediaProgress, error) {
+	var p api.MediaProgress
+	var err error
+	if episode == "" {
+		p, err = record(gen.MeGetMediaProgress2(ctx, item))
+	} else {
+		p, err = record(gen.MeGetMediaProgress(ctx, item, api.EpisodeID(episode)))
+	}
+	if api.IsNotFound(err) {
+		return nil, nil //nolint:nilnil // no progress record is a normal state
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &p, nil
+}
+
+// sessionPage is one page of an account's listening sessions, newest first, and how many it has in all: the API key's own through its own
+// route, which another's cannot be read by.
+func sessionPage(ctx context.Context, gen *api.Client, userID api.UserID, self bool, perPage, page int) ([]api.PlaybackSession, int, error) {
+	if self {
+		got, err := record(gen.MeGetListeningSessions(ctx, api.MeGetListeningSessionsOptions{ItemsPerPage: &perPage, Page: &page}))
+		return got.Sessions, got.Total, err
+	}
+
+	got, err := record(gen.UserGetListeningSessions(ctx, userID, api.UserGetListeningSessionsOptions{ItemsPerPage: &perPage, Page: &page}))
+	if err != nil {
+		return nil, 0, err
+	}
+	sessions := make([]api.PlaybackSession, 0, len(got.Sessions))
+	for _, s := range got.Sessions {
+		sessions = append(sessions, s.Session())
+	}
+
+	return sessions, got.Total, nil
+}
+
 // sessionsOf finds sessions by id in one account's history, reading it a
 // page at a time, newest first, until each is found or the history ends.
-func sessionsOf(ctx context.Context, client *abs.Client, userID string, self bool, ids []string) (map[string]abs.Session, error) {
+func sessionsOf(ctx context.Context, gen *api.Client, userID api.UserID, self bool, ids []string) (map[string]api.PlaybackSession, error) {
 	want := map[string]bool{}
 	for _, id := range ids {
 		want[id] = true
 	}
-	found := map[string]abs.Session{}
+	found := map[string]api.PlaybackSession{}
 	for page := 0; len(found) < len(want); page++ {
-		var sessions []abs.Session
-		var total int
-		var err error
-		if self {
-			sessions, total, err = client.ListeningSessions(ctx, historyPageSize, page)
-		} else {
-			sessions, total, err = client.UserSessions(ctx, userID, historyPageSize, page)
-		}
+		sessions, total, err := sessionPage(ctx, gen, userID, self, historyPageSize, page)
 		if err != nil {
 			return nil, err
 		}
 		for _, s := range sessions {
-			if want[s.ID] {
-				found[s.ID] = s
+			if want[s.Id] {
+				found[s.Id] = s
 			}
 		}
 		if len(sessions) == 0 || (page+1)*historyPageSize >= total {
@@ -1158,19 +1200,19 @@ const (
 // read, which searched says was not the case. Those past the limit or the
 // cutoff are only counted: the listener's own route counts every session on
 // the item, and the two have to agree.
-func itemSessionsOf(ctx context.Context, client *abs.Client, userID, itemID string, limit int, cutoff time.Time) (found []abs.Session, count int, searched bool, err error) {
+func itemSessionsOf(ctx context.Context, gen *api.Client, userID api.UserID, itemID api.LibraryItemID, limit int, cutoff time.Time) (found []api.PlaybackSession, count int, searched bool, err error) {
 	for page := range historyPages {
-		sessions, total, err := client.UserSessions(ctx, userID, historyPageSize, page)
+		sessions, total, err := sessionPage(ctx, gen, userID, false, historyPageSize, page)
 		if err != nil {
 			return nil, 0, false, err
 		}
 		for i := range sessions {
-			if sessions[i].LibraryItemID != itemID {
+			if sessions[i].LibraryItemId != itemID {
 				continue
 			}
 			count++
 			// newest first, so once one is past the cutoff the rest are too
-			if len(found) < limit && !abs.Millis(sessions[i].UpdatedAt).Before(cutoff) {
+			if len(found) < limit && !sessions[i].UpdatedAt.Before(cutoff) {
 				found = append(found, sessions[i])
 			}
 		}

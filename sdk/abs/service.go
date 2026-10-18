@@ -28,11 +28,26 @@ var service = client.Service{
 
 // note says what is known of a failure on an Audiobookshelf.
 func note(f client.Failure) string {
-	if f.StatusCode == http.StatusUnauthorized && f.Credentialed {
+	switch {
+	case f.StatusCode == http.StatusUnauthorized && f.Credentialed:
 		return "API key rejected: check it under Settings → Users → API Keys, where it may have expired or been made inactive"
+	case f.StatusCode == http.StatusForbidden:
+		return "the API key's user lacks permission for this: most write operations need an admin account, and an account limited to some libraries or tags cannot open the rest"
 	}
 
 	return ""
+}
+
+// IsNotFound reports whether err is Audiobookshelf answering that what was asked for is not there.
+func IsNotFound(err error) bool {
+	return client.StatusCode(err) == http.StatusNotFound
+}
+
+// IsForbidden reports whether err is Audiobookshelf refusing the key: a 401, or the 403 a route for admins answers any other key.
+func IsForbidden(err error) bool {
+	code := client.StatusCode(err)
+
+	return code == http.StatusForbidden || code == http.StatusUnauthorized
 }
 
 // maxMessage is the longest plain-text body read as what the server said, rather than as a page or a dump.

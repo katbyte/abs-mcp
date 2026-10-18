@@ -18,6 +18,7 @@ func TestOperationLibraryGetUserPlaylistsForLibrary(t *testing.T) {
 	result, err := c.LibraryGetUserPlaylistsForLibrary(t.Context(), LibraryID("v-id"), LibraryGetUserPlaylistsForLibraryOptions{
 		Limit: new(7),
 		Page:  new(7),
+		Sort:  "v-Sort",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -27,6 +28,7 @@ func TestOperationLibraryGetUserPlaylistsForLibrary(t *testing.T) {
 	expectRequest(t, r, http.MethodGet, "/api/libraries/v-id/playlists")
 	expectQuery(t, r, "limit", "7")
 	expectQuery(t, r, "page", "7")
+	expectQuery(t, r, "sort", "v-Sort")
 	if result.HttpResponse == nil || result.HttpResponse.StatusCode != 200 {
 		t.Fatalf("HttpResponse = %+v", result.HttpResponse)
 	}
@@ -45,6 +47,7 @@ func TestOperationLibraryGetUserPlaylistsForLibrary(t *testing.T) {
 	result, err = c.LibraryGetUserPlaylistsForLibrary(t.Context(), LibraryID("v-id"), LibraryGetUserPlaylistsForLibraryOptions{
 		Limit: new(7),
 		Page:  new(7),
+		Sort:  "v-Sort",
 	})
 	if err == nil || client.StatusCode(err) != 0 || result.HttpResponse == nil {
 		t.Errorf("an answer that does not decode = %v", err)
@@ -55,6 +58,7 @@ func TestOperationLibraryGetUserPlaylistsForLibrary(t *testing.T) {
 	result, err = c.LibraryGetUserPlaylistsForLibrary(t.Context(), LibraryID("v-id"), LibraryGetUserPlaylistsForLibraryOptions{
 		Limit: new(7),
 		Page:  new(7),
+		Sort:  "v-Sort",
 	})
 	if client.StatusCode(err) != 418 || result.HttpResponse == nil {
 		t.Errorf("an undocumented status = %v, %+v", err, result.HttpResponse)
@@ -89,7 +93,7 @@ func TestOperationLibraryGetUserPlaylistsForLibraryComplete(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			c, starts := pagedServer(t, "page", "{}", tc.total, tc.pages)
+			c, starts := pagedServer(t, "page", "results", "total", "{}", tc.total, tc.pages)
 			result, err := c.LibraryGetUserPlaylistsForLibraryComplete(t.Context(), LibraryID("v-id"), tc.options)
 			if err != nil {
 				t.Fatal(err)
@@ -104,7 +108,7 @@ func TestOperationLibraryGetUserPlaylistsForLibraryComplete(t *testing.T) {
 func TestOperationLibraryGetUserPlaylistsForLibraryEach(t *testing.T) {
 	t.Parallel()
 
-	c, starts := pagedServer(t, "page", "{}", 0, 2)
+	c, starts := pagedServer(t, "page", "results", "total", "{}", 0, 2)
 	n := 0
 	for _, err := range c.LibraryGetUserPlaylistsForLibraryEach(t.Context(), LibraryID("v-id"), LibraryGetUserPlaylistsForLibraryOptions{Limit: new(1)}) {
 		if err != nil {
@@ -117,7 +121,7 @@ func TestOperationLibraryGetUserPlaylistsForLibraryEach(t *testing.T) {
 	}
 
 	// stopping after the first result asks for no page more
-	c, starts = pagedServer(t, "page", "{}", 0, 2)
+	c, starts = pagedServer(t, "page", "results", "total", "{}", 0, 2)
 	for range c.LibraryGetUserPlaylistsForLibraryEach(t.Context(), LibraryID("v-id"), LibraryGetUserPlaylistsForLibraryOptions{Limit: new(1)}) {
 		break
 	}

@@ -590,7 +590,7 @@ func (b *byhand) merge(to, from *schema, components map[string]*schema, where st
 		for _, n := range slices.Sorted(maps.Keys(to.Properties)) {
 			b.merge(to.Properties[n], from.Properties[n], components, where+"."+n)
 		}
-		if to.AdditionalProperties || to.sampled {
+		if to.AdditionalProperties || to.sampled || to.unseen {
 			for _, n := range slices.Sorted(maps.Keys(from.Properties)) {
 				if _, ok := to.Properties[n]; !ok {
 					to.Properties[n] = clone(from.Properties[n])
@@ -619,6 +619,7 @@ func clone(s *schema) *schema {
 
 	out := *s
 	out.Items = clone(s.Items)
+	out.Values = clone(s.Values)
 	out.Enum = slices.Clone(s.Enum)
 	out.OneOf = nil
 	for _, o := range s.OneOf {
@@ -634,7 +635,8 @@ func clone(s *schema) *schema {
 	return &out
 }
 
-// fingerprint tells two schemas apart, so a record is filled once from each shape the client reads it as.
+// fingerprint tells two schemas apart, so a record is filled once from each shape the client reads it as, or the server answers it in: a
+// field sent null in one answer is another shape from the same field sent with a value in another.
 func fingerprint(s *schema) string {
 	if s == nil {
 		return ""
@@ -642,11 +644,17 @@ func fingerprint(s *schema) string {
 
 	var sb strings.Builder
 	sb.WriteString(s.Type + s.Ref)
+	if s.Nullable {
+		sb.WriteString("?")
+	}
 	for _, n := range slices.Sorted(maps.Keys(s.Properties)) {
 		sb.WriteString("," + n + ":" + fingerprint(s.Properties[n]))
 	}
 	if s.Items != nil {
 		sb.WriteString("[" + fingerprint(s.Items) + "]")
+	}
+	if s.Values != nil {
+		sb.WriteString("{" + fingerprint(s.Values) + "}")
 	}
 
 	return sb.String()

@@ -127,7 +127,7 @@
         "ContentType": "application/json",
         "Type": {
           "Type": "Reference",
-          "ReferenceName": "ShareGetMediaItemShareBySlugAnswer"
+          "ReferenceName": "MediaItemShareForClient"
         }
       },
       "ExpectedStatusCodes": [
@@ -187,73 +187,6 @@
   ],
   "Models": [
     {
-      "Name": "MediaItemShareForClient",
-      "SchemaName": "MediaItemShareForClient",
-      "Fields": [
-        {
-          "Name": "CreatedAt",
-          "JsonName": "createdAt",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "ExpiresAt",
-          "JsonName": "expiresAt",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "IsDownloadable",
-          "JsonName": "isDownloadable",
-          "Type": {
-            "Type": "Boolean"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "MediaItemId",
-          "JsonName": "mediaItemId",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "MediaItemType",
-          "JsonName": "mediaItemType",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Slug",
-          "JsonName": "slug",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "UpdatedAt",
-          "JsonName": "updatedAt",
-          "Type": {
-            "Type": "String"
-          }
-        }
-      ]
-    },
-    {
       "Name": "ShareCreateMediaItemShareRequest",
       "Fields": [
         {
@@ -261,7 +194,8 @@
           "JsonName": "expiresAt",
           "Type": {
             "Type": "Integer"
-          }
+          },
+          "Required": true
         },
         {
           "Name": "IsDownloadable",
@@ -275,7 +209,8 @@
           "JsonName": "mediaItemId",
           "Type": {
             "Type": "String"
-          }
+          },
+          "Required": true
         },
         {
           "Name": "MediaItemType",
@@ -283,83 +218,16 @@
           "Type": {
             "Type": "Reference",
             "ReferenceName": "MediaItemType"
-          }
+          },
+          "Required": true
         },
         {
           "Name": "Slug",
           "JsonName": "slug",
           "Type": {
             "Type": "String"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "ShareGetMediaItemShareBySlugAnswer",
-      "Fields": [
-        {
-          "Name": "CreatedAt",
-          "JsonName": "createdAt",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "ExpiresAt",
-          "JsonName": "expiresAt",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "IsDownloadable",
-          "JsonName": "isDownloadable",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "MediaItemId",
-          "JsonName": "mediaItemId",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "MediaItemType",
-          "JsonName": "mediaItemType",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "PlaybackSession",
-          "JsonName": "playbackSession",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "PlaybackSessionForClient"
-          }
-        },
-        {
-          "Name": "Slug",
-          "JsonName": "slug",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "UpdatedAt",
-          "JsonName": "updatedAt",
-          "Type": {
-            "Type": "String"
-          }
+          },
+          "Required": true
         }
       ]
     },

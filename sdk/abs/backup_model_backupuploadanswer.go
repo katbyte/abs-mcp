@@ -4,5 +4,5 @@ package abs
 
 // BackupUploadAnswer is an object the document declares inline.
 type BackupUploadAnswer struct {
-	Backups []any `json:"backups,omitzero"`
+	Backups []Backup `json:"backups,omitzero"`
 }

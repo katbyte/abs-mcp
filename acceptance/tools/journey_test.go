@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/abs-mcp/tools"
 	"github.com/katbyte/go-kt/mcp/acctest"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -80,13 +80,13 @@ func adminGet(t *testing.T, path string) any {
 
 // adminClient is the SDK on the suite's admin key, for the setup a journey
 // needs that no tool offers: users, playback sessions, deleting a library.
-func adminClient(t *testing.T) *abs.Client {
+func adminClient(t *testing.T) *api.Client {
 	t.Helper()
 
 	if !suite.Ready {
 		t.Skip(suite.NotReady)
 	}
-	c, err := abs.New(os.Getenv("ABS_SERVER"), os.Getenv("ABS_TOKEN"), recorder.Option())
+	c, err := connect(os.Getenv("ABS_TOKEN"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func (u *userSession) callErr(t *testing.T, name string, args map[string]any) st
 
 // newUser creates a non-admin account, activates it with a login, gives it an
 // API key and an MCP server of its own, and removes all of it afterwards.
-func newUser(t *testing.T, username string, create abs.UserCreate) *userSession {
+func newUser(t *testing.T, username string, create api.UserCreateRequest) *userSession {
 	t.Helper()
 
 	return newUserWith(t, username, create, tools.Options{})
@@ -198,46 +198,17 @@ func newUser(t *testing.T, username string, create abs.UserCreate) *userSession 
 
 // newUserWith is newUser with the account's MCP server registering the tools
 // opts allows, such as the delete tools.
-func newUserWith(t *testing.T, username string, create abs.UserCreate, opts tools.Options) *userSession {
+func newUserWith(t *testing.T, username string, create api.UserCreateRequest, opts tools.Options) *userSession {
 	t.Helper()
 
 	admin := adminClient(t)
-	existing, err := admin.Users(ctx, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, u := range existing {
-		if u.Username == username { // left by an earlier run that died
-			_ = admin.DeleteUser(ctx, u.ID)
-		}
-	}
-	create.Username, create.Password, create.IsActive = username, username+"-password", new(true)
-	if create.Type == "" {
-		create.Type = "user"
-	}
-	user, err := admin.CreateUser(ctx, create)
-	if err != nil {
-		t.Fatalf("creating %s: %v", username, err)
-	}
-	t.Cleanup(func() {
-		eventually(t, "deleting user "+username, func() error { return admin.DeleteUser(context.WithoutCancel(ctx), user.ID) })
-	})
-	// an API key for an account that has never logged in is refused
-	if err := login(username, username+"-password"); err != nil {
-		t.Fatalf("activating %s: %v", username, err)
-	}
-	key, err := admin.CreateAPIKey(ctx, username, user.ID, 0, true)
-	if err != nil {
-		t.Fatalf("an api key for %s: %v", username, err)
-	}
-	t.Cleanup(func() { _ = admin.DeleteAPIKey(context.WithoutCancel(ctx), key.ID) })
-
-	client, err := abs.New(os.Getenv("ABS_SERVER"), key.Key, recorder.Option())
+	user, key := newAccount(t, admin, username, create)
+	gen, err := connect(key)
 	if err != nil {
 		t.Fatal(err)
 	}
 	srv := mcp.NewServer(&mcp.Implementation{Name: "abs-mcp", Version: "test"}, nil)
-	if _, err := tools.RegisterAll(srv, client, opts); err != nil {
+	if _, err := tools.RegisterAll(srv, gen, opts); err != nil {
 		t.Fatal(err)
 	}
 	connected, err := acctest.Connect(ctx, srv)
@@ -246,7 +217,46 @@ func newUserWith(t *testing.T, username string, create abs.UserCreate, opts tool
 	}
 	t.Cleanup(func() { _ = connected.Session.Close() })
 
-	return &userSession{ID: user.ID, Name: username, Token: key.Key, suite: connected}
+	return &userSession{ID: string(user), Name: username, Token: key, suite: connected}
+}
+
+// newAccount makes an account, one an earlier run that died left by that name taken away first, logs it in once so the server takes a key
+// for it, and gives it a key; both go when the test ends. It answers the account's id and key.
+func newAccount(t *testing.T, admin *api.Client, username string, create api.UserCreateRequest) (user api.UserID, key string) {
+	t.Helper()
+
+	existing, err := record(admin.UserFindAll(ctx))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range existing.Users {
+		if u.Username == username {
+			_, _ = admin.UserDelete(ctx, u.Id)
+		}
+	}
+	create.Username, create.Password, create.IsActive = username, username+"-password", new(true)
+	if create.Type == "" {
+		create.Type = "user"
+	}
+	made, err := record(admin.UserCreate(ctx, create))
+	if err != nil {
+		t.Fatalf("creating %s: %v", username, err)
+	}
+	user = made.User.Id
+	t.Cleanup(func() {
+		eventually(t, "deleting user "+username, func() error { return errorOf(admin.UserDelete(context.WithoutCancel(ctx), user)) })
+	})
+	// an API key for an account that has never logged in is refused
+	if err := login(username, username+"-password"); err != nil {
+		t.Fatalf("activating %s: %v", username, err)
+	}
+	issued, err := record(admin.ApiKeyCreate(ctx, api.ApiKeyCreateRequest{Name: username, UserId: user, IsActive: new(true)}))
+	if err != nil {
+		t.Fatalf("an api key for %s: %v", username, err)
+	}
+	t.Cleanup(func() { _, _ = admin.ApiKeyDelete(context.WithoutCancel(ctx), string(issued.ApiKey.Id)) })
+
+	return user, issued.ApiKey.ApiKey
 }
 
 // --- journey 5: lookups change nothing ------------------------------------
@@ -924,28 +934,32 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 		made := suite.Call(t, "collection_create", map[string]any{"library": "Fiction", "name": "Zzyzx Shared", "items": []any{"Foundation"}})
 		madeID := acctest.Str(made["id"])
 		t.Cleanup(func() {
-			eventually(t, "deleting a collection", func() error { return admin.DeleteCollection(context.WithoutCancel(ctx), madeID) })
+			eventually(t, "deleting a collection", func() error {
+				_, err := admin.CollectionDelete(context.WithoutCancel(ctx), api.CollectionID(madeID))
+				return err
+			})
 		})
 
 		if msg := suite.CallErr(t, "collection_create", map[string]any{"library": "Fiction", "name": "zzyzx shared", "items": []any{"Second Foundation"}}); !strings.Contains(msg, madeID) {
 			t.Errorf("a create under a taken name: %s", msg)
 		}
 		// the server itself makes a second happily; with two, a name is refused
-		twin, err := admin.CreateCollection(ctx, libraryID(t, "Fiction"), "Zzyzx Shared", "", []string{itemID(t, "Fiction", "Second Foundation")})
+		shared, err := record(admin.CollectionCreate(ctx, api.CollectionCreateRequest{LibraryId: api.LibraryID(libraryID(t, "Fiction")), Name: "Zzyzx Shared", Books: []string{itemID(t, "Fiction", "Second Foundation")}}))
 		if err != nil {
 			t.Fatal(err)
 		}
+		twin := string(shared.Id)
 		t.Cleanup(func() {
-			eventually(t, "deleting a collection", func() error { return admin.DeleteCollection(context.WithoutCancel(ctx), twin.ID) })
+			eventually(t, "deleting a collection", func() error { _, err := admin.CollectionDelete(context.WithoutCancel(ctx), shared.Id); return err })
 		})
 		msg := suite.CallErr(t, "collection_get", map[string]any{"collection": "Zzyzx Shared"})
-		if !strings.Contains(msg, madeID) || !strings.Contains(msg, twin.ID) {
+		if !strings.Contains(msg, madeID) || !strings.Contains(msg, twin) {
 			t.Errorf("a name two collections share: %s", msg)
 		}
 		if msg := suite.CallErr(t, "collection_edit", map[string]any{"collection": "Zzyzx Shared", "add_items": []any{"Leviathan Wakes"}}); !strings.Contains(msg, "pass an id") {
 			t.Errorf("an edit by a shared name: %s", msg)
 		}
-		for _, id := range []string{madeID, twin.ID} {
+		for _, id := range []string{madeID, twin} {
 			if got := suite.Call(t, "collection_get", map[string]any{"collection": id}); got["id"] != id {
 				t.Errorf("collection by id %s = %v", id, got["id"])
 			}
@@ -957,7 +971,10 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 		other := acctest.Str(suite.Call(t, "collection_create", map[string]any{"library": "Fiction", "name": "Zzyzx Other Shelf", "items": []any{"Second Foundation"}})["id"])
 		t.Cleanup(func() {
 			for _, id := range []string{made, other} {
-				eventually(t, "deleting a collection", func() error { return admin.DeleteCollection(context.WithoutCancel(ctx), id) })
+				eventually(t, "deleting a collection", func() error {
+					_, err := admin.CollectionDelete(context.WithoutCancel(ctx), api.CollectionID(id))
+					return err
+				})
 			}
 		})
 
@@ -979,24 +996,28 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 		made := suite.Call(t, "playlist_create", map[string]any{"library": "Fiction", "name": "Zzyzx Shared List", "entries": []any{map[string]any{"item": "Foundation"}}})
 		madeID := acctest.Str(made["id"])
 		t.Cleanup(func() {
-			eventually(t, "deleting a playlist", func() error { return admin.DeletePlaylist(context.WithoutCancel(ctx), madeID) })
+			eventually(t, "deleting a playlist", func() error {
+				_, err := admin.PlaylistDelete(context.WithoutCancel(ctx), api.PlaylistID(madeID))
+				return err
+			})
 		})
 
 		if msg := suite.CallErr(t, "playlist_create", map[string]any{"library": "Fiction", "name": "Zzyzx Shared List"}); !strings.Contains(msg, madeID) {
 			t.Errorf("a create under a taken name: %s", msg)
 		}
-		twin, err := admin.CreatePlaylist(ctx, libraryID(t, "Fiction"), "Zzyzx Shared List", "", []abs.PlaylistEntry{{LibraryItemID: itemID(t, "Fiction", "Second Foundation")}})
+		shared, err := record(admin.PlaylistCreate(ctx, api.PlaylistCreateRequest{LibraryId: api.LibraryID(libraryID(t, "Fiction")), Name: "Zzyzx Shared List", Items: []api.PlaylistEntry{{LibraryItemId: api.LibraryItemID(itemID(t, "Fiction", "Second Foundation"))}}}))
 		if err != nil {
 			t.Fatal(err)
 		}
+		twin := string(shared.Id)
 		t.Cleanup(func() {
-			eventually(t, "deleting a playlist", func() error { return admin.DeletePlaylist(context.WithoutCancel(ctx), twin.ID) })
+			eventually(t, "deleting a playlist", func() error { _, err := admin.PlaylistDelete(context.WithoutCancel(ctx), shared.Id); return err })
 		})
 		msg := suite.CallErr(t, "playlist_get", map[string]any{"playlist": "Zzyzx Shared List"})
-		if !strings.Contains(msg, madeID) || !strings.Contains(msg, twin.ID) {
+		if !strings.Contains(msg, madeID) || !strings.Contains(msg, twin) {
 			t.Errorf("a name two playlists share: %s", msg)
 		}
-		if msg := suite.CallErr(t, "playlist_edit", map[string]any{"playlist": twin.ID, "name": "Zzyzx Shared List"}); !strings.Contains(msg, madeID) {
+		if msg := suite.CallErr(t, "playlist_edit", map[string]any{"playlist": twin, "name": "Zzyzx Shared List"}); !strings.Contains(msg, madeID) {
 			t.Errorf("renaming onto a taken name: %s", msg)
 		}
 	})
@@ -1004,18 +1025,19 @@ func TestJourneyResolveByIDAndName(t *testing.T) {
 	t.Run("libraries sharing a name", func(t *testing.T) {
 		// Audiobookshelf takes a second library by an existing name too
 		original := libraryID(t, "Podcasts")
-		twin, err := admin.CreateLibrary(ctx, abs.LibraryCreate{Name: "Podcasts", MediaType: "book", Folders: []abs.Folder{{FullPath: "/scratch"}}})
+		made, err := record(admin.LibraryCreate(ctx, api.LibraryCreateRequest{Name: "Podcasts", MediaType: "book", Folders: []api.LibraryFolder{{FullPath: "/scratch"}}}))
 		if err != nil {
 			t.Fatal(err)
 		}
+		twin := string(made.Id)
 		t.Cleanup(func() {
-			eventually(t, "deleting the twin library", func() error { return admin.DeleteLibrary(context.WithoutCancel(ctx), twin.ID) })
+			eventually(t, "deleting the twin library", func() error { _, err := admin.LibraryDelete(context.WithoutCancel(ctx), made.Id); return err })
 		})
 		msg := suite.CallErr(t, "library_get", map[string]any{"library": "podcasts"})
-		if !strings.Contains(msg, twin.ID) || !strings.Contains(msg, original) {
+		if !strings.Contains(msg, twin) || !strings.Contains(msg, original) {
 			t.Errorf("a name two libraries share: %s", msg)
 		}
-		if got := suite.Call(t, "library_get", map[string]any{"library": twin.ID}); got["id"] != twin.ID {
+		if got := suite.Call(t, "library_get", map[string]any{"library": twin}); got["id"] != twin {
 			t.Errorf("the twin by id = %v", got["id"])
 		}
 		if msg := suite.CallErr(t, "library_create", map[string]any{"name": "Fiction", "folders": []any{"/scratch"}}); !strings.Contains(msg, "already exists") {

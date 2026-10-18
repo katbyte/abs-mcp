@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -44,12 +44,33 @@ type feedRow struct {
 	URL   string `json:"url"`
 }
 
-func feedRowOf(f *abs.Feed, address string) feedRow {
+func feedRowOf(f *api.Feed, address string) feedRow {
 	kind := f.EntityType
 	if kind == "libraryItem" {
 		kind = "item"
 	}
-	return feedRow{ID: f.ID, For: kind, Title: f.Meta.Title, URL: feedURL(address, f.FeedURL)}
+	title := ""
+	if f.Meta != nil {
+		title = f.Meta.Title
+	}
+	return feedRow{ID: string(f.Id), For: kind, Title: title, URL: feedURL(address, feedPath(f))}
+}
+
+// feedPath is the url a feed keeps, which an older server wrote only in the feed's meta.
+func feedPath(f *api.Feed) string {
+	if f.Meta == nil {
+		return f.FeedUrl
+	}
+	return cmp.Or(f.FeedUrl, f.Meta.FeedUrl)
+}
+
+// feeds are the RSS feeds the server is publishing.
+func feeds(ctx context.Context, gen *api.Client) ([]api.Feed, error) {
+	all, err := record(gen.RSSFeedGetAll(ctx))
+	if err != nil {
+		return nil, err
+	}
+	return all.Feeds, nil
 }
 
 // feedURL is a feed's url as a listener reaches it. The server keeps a path,
@@ -63,7 +84,7 @@ func feedURL(address, u string) string {
 }
 
 func registerFeedTools(r *registry) {
-	client := r.client
+	gen := r.gen
 
 	type listOut struct {
 		Total      int       `json:"total"`
@@ -75,15 +96,15 @@ func registerFeedTools(r *registry) {
 		Name:        "feed_list",
 		Description: "The RSS feeds the server is publishing, each with what it is for and its url. Share links to single books are not listed, as the server keeps no list of them: feed_edit on the book says whether it has one. Admin only.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in pageIn) (*mcp.CallToolResult, listOut, error) {
-		feeds, err := client.Feeds(ctx)
+		all, err := feeds(ctx, gen)
 		if err != nil {
 			return nil, listOut{}, err
 		}
 		limit, offset := pageArgs(in.Limit, in.Offset, 50)
-		page, next := pageOf(feeds, limit, offset)
-		out := listOut{Total: len(feeds), Offset: offset, NextOffset: next, Feeds: []feedRow{}}
+		page, next := pageOf(all, limit, offset)
+		out := listOut{Total: len(all), Offset: offset, NextOffset: next, Feeds: []feedRow{}}
 		for i := range page {
-			out.Feeds = append(out.Feeds, feedRowOf(&page[i], client.BaseURL()))
+			out.Feeds = append(out.Feeds, feedRowOf(&page[i], gen.Client.BaseURL))
 		}
 		return nil, out, nil
 	})
@@ -133,10 +154,10 @@ func registerFeedTools(r *registry) {
 		case in.Slug != "" && !feedSlug.MatchString(in.Slug):
 			return nil, editOut{}, fmt.Errorf("slug %q: use lowercase letters, digits and dashes, starting with a letter or digit", in.Slug)
 		}
-		address := strings.TrimRight(cmp.Or(in.Address, client.BaseURL()), "/")
+		address := strings.TrimRight(cmp.Or(in.Address, gen.Client.BaseURL), "/")
 
 		if in.Link {
-			it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
+			it, err := resolveItemToChange(ctx, gen, in.Library, in.Item)
 			if err != nil {
 				return nil, editOut{}, err
 			}
@@ -144,16 +165,17 @@ func registerFeedTools(r *registry) {
 				return nil, editOut{}, fmt.Errorf("%q is a podcast: a link plays one book; open an RSS feed of the podcast instead", it.Title())
 			}
 			out := editOut{For: it.Title()}
-			share, err := client.ItemShare(ctx, it.ID)
+			shared, err := record(gen.LibraryItemFindOne(ctx, it.Id, api.LibraryItemFindOneOptions{Expanded: "1", Include: "share"}))
 			if err != nil {
 				return nil, editOut{}, err
 			}
+			share := shared.MediaItemShare
 			switch {
 			case in.Close && share == nil:
 				out.Already, out.Closed = true, true
 				return nil, out, nil
 			case in.Close:
-				if err := client.UnshareMediaItem(ctx, share.ID); err != nil {
+				if _, err := gen.ShareDeleteMediaItemShare(ctx, share.Id); err != nil {
 					return nil, editOut{}, err
 				}
 				out.Closed = true
@@ -167,11 +189,11 @@ func registerFeedTools(r *registry) {
 				expiresMs = time.Now().Add(time.Duration(in.ExpiresDays) * 24 * time.Hour).UnixMilli()
 			}
 			slug := cmp.Or(in.Slug, randomSlug())
-			share, err = client.ShareMediaItem(ctx, it.Media.ID, "book", slug, expiresMs, in.Downloadable)
+			made, err := record(gen.ShareCreateMediaItemShare(ctx, api.ShareCreateMediaItemShareRequest{MediaItemId: it.Media.Id, MediaItemType: api.MediaItemTypeBook, Slug: slug, ExpiresAt: int(expiresMs), IsDownloadable: &in.Downloadable}))
 			if err != nil {
 				return nil, editOut{}, err
 			}
-			out.Opened, out.URL, out.Expires = true, address+"/share/"+share.Slug, share.ExpiresAt
+			out.Opened, out.URL, out.Expires = true, address+"/share/"+made.Slug, made.ExpiresAt
 			return nil, out, nil
 		}
 
@@ -180,32 +202,32 @@ func registerFeedTools(r *registry) {
 		var kind, id, title string
 		switch {
 		case in.Item != "":
-			it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
+			it, err := resolveItemToChange(ctx, gen, in.Library, in.Item)
 			if err != nil {
 				return nil, editOut{}, err
 			}
-			kind, id, title = "item", it.ID, it.Title()
+			kind, id, title = "item", string(it.Id), it.Title()
 		case in.Series != "":
-			s, err := resolveSeries(ctx, client, in.Library, in.Series)
+			s, err := resolveSeries(ctx, gen, in.Library, in.Series)
 			if err != nil {
 				return nil, editOut{}, err
 			}
-			kind, id, title = "series", s.ID, s.Name
+			kind, id, title = "series", string(s.Id), s.Name
 		default:
-			c, err := resolveCollection(ctx, client, in.Collection)
+			c, err := resolveCollection(ctx, gen, in.Collection)
 			if err != nil {
 				return nil, editOut{}, err
 			}
-			kind, id, title = "collection", c.ID, c.Name
+			kind, id, title = "collection", string(c.Id), c.Name
 		}
 		out := editOut{For: title}
-		feeds, err := client.Feeds(ctx)
+		all, err := feeds(ctx, gen)
 		if err != nil {
 			return nil, editOut{}, err
 		}
-		var open []abs.Feed
-		for _, f := range feeds {
-			if f.EntityID == id {
+		var open []api.Feed
+		for _, f := range all {
+			if f.EntityId == id {
 				open = append(open, f)
 			}
 		}
@@ -216,7 +238,7 @@ func registerFeedTools(r *registry) {
 				return nil, out, nil
 			}
 			for _, f := range open {
-				if err := client.CloseFeed(ctx, f.ID); err != nil {
+				if _, err := gen.RSSFeedCloseRSSFeed(ctx, string(f.Id)); err != nil {
 					return nil, editOut{}, err
 				}
 			}
@@ -224,26 +246,35 @@ func registerFeedTools(r *registry) {
 			return nil, out, nil
 		}
 		if len(open) > 0 {
-			out.Already, out.URL = true, feedURL(address, open[0].FeedURL)
+			out.Already, out.URL = true, feedURL(address, feedPath(&open[0]))
 			return nil, out, nil
 		}
 		slug := cmp.Or(in.Slug, id)
-		if slices.ContainsFunc(feeds, func(f abs.Feed) bool { return f.ID == slug || f.Slug == slug }) {
+		if slices.ContainsFunc(all, func(f api.Feed) bool { return string(f.Id) == slug || f.Slug == slug }) {
 			return nil, editOut{}, fmt.Errorf("another feed already has the slug %q: pass another", slug)
 		}
-		var feed *abs.Feed
+		var feed *api.FeedMinified
 		switch kind {
 		case "item":
-			feed, err = client.OpenItemFeed(ctx, id, slug, address)
+			var got api.RSSFeedOpenRSSFeedForItemAnswer
+			got, err = record(gen.RSSFeedOpenRSSFeedForItem(ctx, api.LibraryItemID(id), api.RSSFeedOpenRSSFeedForItemRequest{Slug: slug, ServerAddress: address}))
+			feed = got.Feed
 		case "series":
-			feed, err = client.OpenSeriesFeed(ctx, id, slug, address)
+			var got api.RSSFeedOpenRSSFeedForSeriesAnswer
+			got, err = record(gen.RSSFeedOpenRSSFeedForSeries(ctx, api.SeriesID(id), api.RSSFeedOpenRSSFeedForSeriesRequest{Slug: slug, ServerAddress: address}))
+			feed = got.Feed
 		default:
-			feed, err = client.OpenCollectionFeed(ctx, id, slug, address)
+			var got api.RSSFeedOpenRSSFeedForCollectionAnswer
+			got, err = record(gen.RSSFeedOpenRSSFeedForCollection(ctx, api.CollectionID(id), api.RSSFeedOpenRSSFeedForCollectionRequest{Slug: slug, ServerAddress: address}))
+			feed = got.Feed
 		}
 		if err != nil {
 			return nil, editOut{}, err
 		}
-		out.Opened, out.URL = true, feedURL(address, feed.FeedURL)
+		if feed == nil {
+			return nil, editOut{}, fmt.Errorf("the server opened a feed of %q but answered without it: feed_list shows its url", title)
+		}
+		out.Opened, out.URL = true, feedURL(address, feed.FeedUrl)
 		return nil, out, nil
 	})
 }

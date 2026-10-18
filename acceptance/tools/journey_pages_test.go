@@ -18,7 +18,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
@@ -621,12 +621,12 @@ func TestJourneyListsHeldWholeArePaged(t *testing.T) {
 	t.Run("user_list", func(t *testing.T) {
 		for i := range 4 {
 			name := fmt.Sprintf("zzyzx-paged-%d", i)
-			u, err := admin.CreateUser(ctx, abs.UserCreate{Username: name, Password: name + "-password", Type: "user", IsActive: new(true)})
+			u, err := record(admin.UserCreate(ctx, api.UserCreateRequest{Username: name, Password: name + "-password", Type: "user", IsActive: new(true)}))
 			if err != nil {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() {
-				eventually(t, "deleting "+name, func() error { return admin.DeleteUser(context.WithoutCancel(ctx), u.ID) })
+				eventually(t, "deleting "+name, func() error { return errorOf(admin.UserDelete(context.WithoutCancel(ctx), u.User.Id)) })
 			})
 		}
 		everyPageOnce(t, "user_list", "users", nil, 1)

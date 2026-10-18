@@ -89,7 +89,7 @@ func TestOperationMeGetItemListeningSessions2Complete(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			c, starts := pagedServer(t, "page", "{}", tc.total, tc.pages)
+			c, starts := pagedServer(t, "page", "sessions", "total", "{}", tc.total, tc.pages)
 			result, err := c.MeGetItemListeningSessions2Complete(t.Context(), LibraryItemID("v-libraryItemId"), tc.options)
 			if err != nil {
 				t.Fatal(err)
@@ -104,7 +104,7 @@ func TestOperationMeGetItemListeningSessions2Complete(t *testing.T) {
 func TestOperationMeGetItemListeningSessions2Each(t *testing.T) {
 	t.Parallel()
 
-	c, starts := pagedServer(t, "page", "{}", 0, 2)
+	c, starts := pagedServer(t, "page", "sessions", "total", "{}", 0, 2)
 	n := 0
 	for _, err := range c.MeGetItemListeningSessions2Each(t.Context(), LibraryItemID("v-libraryItemId"), MeGetItemListeningSessions2Options{ItemsPerPage: new(1)}) {
 		if err != nil {
@@ -117,7 +117,7 @@ func TestOperationMeGetItemListeningSessions2Each(t *testing.T) {
 	}
 
 	// stopping after the first result asks for no page more
-	c, starts = pagedServer(t, "page", "{}", 0, 2)
+	c, starts = pagedServer(t, "page", "sessions", "total", "{}", 0, 2)
 	for range c.MeGetItemListeningSessions2Each(t.Context(), LibraryItemID("v-libraryItemId"), MeGetItemListeningSessions2Options{ItemsPerPage: new(1)}) {
 		break
 	}

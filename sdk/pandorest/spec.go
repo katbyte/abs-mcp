@@ -74,11 +74,58 @@ type schema struct {
 	Enum                 []string           `json:"enum,omitempty"`
 	OneOf                []*schema          `json:"oneOf,omitempty"`
 	Discriminator        *discriminator     `json:"discriminator,omitempty"`
+	// Required are the fields a request must carry, which the generated client always sends
+	Required []string `json:"required,omitempty"`
+	// GoType is a type of the generated package's own the value is held as, for one the server writes in a form the document cannot describe
+	GoType *goType `json:"x-go-type,omitempty"`
+	// Values is what each key of a map keyed by data holds, such as listening time by day, written as the document's additionalProperties
+	Values *schema `json:"-"`
 
 	// whole is set on a number typed from answers that were all whole, which the hand-written client may settle as a whole number
 	whole bool
 	// sampled is set on a record typed from answers, which show only the fields that happened to be sent, so the hand-written client may add more
 	sampled bool
+	// written is set on a whole number the source writes out, such as the 0 of total = 0, which says nothing of what the value takes elsewhere
+	written bool
+	// unseen is set on a record a stated place made where the scan saw nothing of it, which the answers fill as freely as one with no fields
+	unseen bool
+}
+
+// MarshalJSON writes a map's values as its additionalProperties, which otherwise only says a record may hold fields it does not name.
+func (s schema) MarshalJSON() ([]byte, error) {
+	type plain schema
+	if s.Values == nil {
+		return json.Marshal(plain(s))
+	}
+
+	return json.Marshal(struct {
+		plain
+		AdditionalProperties *schema `json:"additionalProperties"`
+	}{plain(s), s.Values})
+}
+
+// UnmarshalJSON reads an additionalProperties that is a schema as a map's values, and one that is true as a record that may hold more fields.
+func (s *schema) UnmarshalJSON(b []byte) error {
+	type plain schema
+	var raw struct {
+		plain
+		AdditionalProperties json.RawMessage `json:"additionalProperties"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	*s = schema(raw.plain)
+
+	switch strings.TrimSpace(string(raw.AdditionalProperties)) {
+	case "", "false":
+		return nil
+	case "true":
+		s.AdditionalProperties = true
+		return nil
+	}
+	s.Values = &schema{}
+
+	return json.Unmarshal(raw.AdditionalProperties, s.Values)
 }
 
 type components struct {
@@ -125,6 +172,10 @@ func spec(args []string, dir string, w io.Writer) error {
 	if err != nil {
 		return err
 	}
+	unfound, err := applyRecordsAt(doc, recordsAt, storedRecords)
+	if err != nil {
+		return err
+	}
 
 	// what a real server answered fills what the source leaves untyped and corrects what it gets wrong, before anything else has a say
 	answerDir := cmp.Or(*answerFlag, answers.Dir(dir, version))
@@ -137,6 +188,8 @@ func spec(args []string, dir string, w io.Writer) error {
 		heard = newAnswerFill()
 		heard.fill(doc, saved)
 	}
+	// a number the answers only showed whole is a whole number where its name says it is one
+	wholes := settleWhole(doc, wholeNumbers)
 
 	// what is still untyped, the hand-written client may type: it is proved against a running server
 	var hand *byhand
@@ -151,6 +204,25 @@ func spec(args []string, dir string, w io.Writer) error {
 	if err := nameEnums(doc, enumNames); err != nil {
 		return err
 	}
+	untyped, err := applyGoTypes(doc, goTypesAt)
+	if err != nil {
+		return err
+	}
+	unrequired, err := applyRequired(doc, requiredFields)
+	if err != nil {
+		return err
+	}
+	unkept, err := applyNullable(doc, keptAsGiven)
+	if err != nil {
+		return err
+	}
+	unzeroed, err := applyNullable(doc, zeroMeant)
+	if err != nil {
+		return err
+	}
+	unqueried := applyQueries(doc, queriesAt)
+	unranged := applyRanges(doc, rangedAt)
+	untexted := applyText(doc, textAt)
 
 	rep := measure(doc, b, routes)
 
@@ -173,6 +245,39 @@ func spec(args []string, dir string, w io.Writer) error {
 	for _, u := range unplaced {
 		_, _ = fmt.Fprintln(w, "  no operation for the union stated for", u)
 	}
+	_, _ = fmt.Fprintf(w, "  records stated        %4d   %d written\n", len(recordsAt), len(recordsAt)-len(unfound))
+	for _, r := range unfound {
+		_, _ = fmt.Fprintln(w, "  no place for the record stated at", r)
+	}
+	_, _ = fmt.Fprintf(w, "  types stated          %4d   %d written\n", len(goTypesAt), len(goTypesAt)-len(untyped))
+	for _, g := range untyped {
+		_, _ = fmt.Fprintln(w, "  no place for the type stated at", g)
+	}
+	_, _ = fmt.Fprintf(w, "  required stated       %4d   %d written\n", len(requiredFields), len(requiredFields)-len(unrequired))
+	for _, r := range unrequired {
+		_, _ = fmt.Fprintln(w, "  no place for the fields required at", r)
+	}
+	_, _ = fmt.Fprintf(w, "  kept as given         %4d   %d written\n", len(keptAsGiven), len(keptAsGiven)-len(unkept))
+	for _, r := range unkept {
+		_, _ = fmt.Fprintln(w, "  no place for the fields kept as given at", r)
+	}
+	_, _ = fmt.Fprintf(w, "  zero meant            %4d   %d written\n", len(zeroMeant), len(zeroMeant)-len(unzeroed))
+	for _, r := range unzeroed {
+		_, _ = fmt.Fprintln(w, "  no place for the numbers whose zero is meant at", r)
+	}
+	_, _ = fmt.Fprintf(w, "  queries stated        %4d   %d written\n", len(queriesAt), len(queriesAt)-len(unqueried))
+	for _, r := range unqueried {
+		_, _ = fmt.Fprintln(w, "  no route for the queries stated at", r)
+	}
+	_, _ = fmt.Fprintf(w, "  ranges stated         %4d   %d written\n", len(rangedAt), len(rangedAt)-len(unranged))
+	for _, r := range unranged {
+		_, _ = fmt.Fprintln(w, "  no route with a file to answer in part at", r)
+	}
+	_, _ = fmt.Fprintf(w, "  text stated           %4d   %d written\n", len(textAt), len(textAt)-len(untexted))
+	for _, r := range untexted {
+		_, _ = fmt.Fprintln(w, "  no route with an answer to state as text at", r)
+	}
+	_, _ = fmt.Fprintf(w, "  whole by name         %4d   numbers the answers showed whole, under %d names\n", wholes, len(wholeNumbers))
 	if heard != nil {
 		heard.write(w, answerDir, *verbose)
 	}
@@ -278,7 +383,7 @@ func (b *builder) operation(r *route, params []string, ans *answer, req *reqInfo
 		op.Parameters = append(op.Parameters, parameter{Name: n, In: "query", Schema: s})
 	}
 
-	if r.verb != "get" && (len(req.body) > 0 || req.bodyWhole || req.bodyList || len(req.files) > 0) {
+	if r.verb != "get" && (len(req.body) > 0 || req.bodyWhole || req.bodyList || len(req.files) > 0 || req.filesWhole) {
 		props := map[string]*schema{}
 		for _, n := range req.body {
 			props[n] = &schema{}
@@ -287,11 +392,11 @@ func (b *builder) operation(r *route, params []string, ans *answer, req *reqInfo
 			}
 		}
 		switch {
-		case len(req.files) > 0:
+		case len(req.files) > 0 || req.filesWhole:
 			for _, n := range req.files {
 				props[n] = &schema{Type: "string", Format: "binary"}
 			}
-			op.RequestBody = &body{Content: map[string]media{"multipart/form-data": {Schema: &schema{Type: "object", Properties: props}}}}
+			op.RequestBody = &body{Content: map[string]media{"multipart/form-data": {Schema: &schema{Type: "object", Properties: props, AdditionalProperties: req.filesWhole}}}}
 		case req.bodyList:
 			op.RequestBody = &body{Content: map[string]media{"application/json": {Schema: &schema{Type: "array", Items: &schema{}}}}}
 		default:
@@ -357,7 +462,7 @@ func (b *builder) schemaOf(t *jsType) *schema {
 	case dateKind:
 		s = &schema{Type: "string", Format: "date-time"}
 	case integerKind:
-		s = &schema{Type: "integer"}
+		s = &schema{Type: "integer", written: t.written}
 	case numberKind:
 		s = &schema{Type: "number"}
 	case booleanKind:
@@ -382,7 +487,7 @@ func (b *builder) schemaOf(t *jsType) *schema {
 }
 
 func (b *builder) objectSchema(t *jsType) *schema {
-	if t.name == "" || strings.Contains(t.name, ".") || t.name == "models" {
+	if !recordName(t.name) {
 		return b.inline(t)
 	}
 
@@ -417,6 +522,9 @@ func (b *builder) inline(t *jsType) *schema {
 	s := &schema{Type: "object", Properties: map[string]*schema{}, AdditionalProperties: t.open}
 	for _, p := range t.props {
 		s.Properties[p.name] = b.schemaOf(p.typ)
+	}
+	if t.values != nil {
+		s.Values = b.schemaOf(t.values)
 	}
 
 	return s
@@ -611,6 +719,11 @@ func (b *builder) count(s *schema, seen map[string]bool) (all, gaps int) {
 	case "object":
 		for _, n := range sortedKeys(s.Properties) {
 			a, g := b.count(s.Properties[n], seen)
+			all += a
+			gaps += g
+		}
+		if s.Values != nil {
+			a, g := b.count(s.Values, seen)
 			all += a
 			gaps += g
 		}

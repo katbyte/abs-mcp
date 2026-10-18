@@ -44,6 +44,7 @@ func (r LibraryGetRecentEpisodesResponse) Record() (LibraryGetRecentEpisodesAnsw
 type LibraryGetRecentEpisodesOptions struct {
 	Limit *int
 	Page  *int
+	Sort  string
 }
 
 // ToHeaders returns the header parameters the options set.
@@ -60,6 +61,9 @@ func (o LibraryGetRecentEpisodesOptions) ToQuery() *client.QueryParams {
 	}
 	if o.Page != nil {
 		out.Append("page", strconv.Itoa(*o.Page))
+	}
+	if o.Sort != "" {
+		out.Append("sort", o.Sort)
 	}
 	return &out
 }

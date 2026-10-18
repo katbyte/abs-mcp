@@ -9,12 +9,12 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"slices"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -198,23 +198,23 @@ func parseQuery(t *testing.T, raw string) url.Values {
 	return q
 }
 
-func sameRefs(a, b []abs.SeriesRef) bool {
-	return slices.EqualFunc(a, b, func(x, y abs.SeriesRef) bool {
-		return x.ID == y.ID && x.Name == y.Name && x.Sequence == y.Sequence
-	})
+// at is a moment as the server writes one, from its milliseconds since 1970.
+func at(ms int64) api.UnixMilli { return api.UnixMilli{Time: time.UnixMilli(ms).UTC()} }
+
+// shortBook is a book as a library's list sends it: an id, a path and a title.
+func shortBook(id, path, title string) *api.LibraryItemMinified {
+	return &api.LibraryItemMinified{Id: api.LibraryItemID(id), MediaType: "book", RelPath: path, Media: &api.LibraryItemMinifiedMedia{Metadata: &api.LibraryItemMinifiedMediaMetadata{Title: title}}}
 }
 
-func numbered(id, path, series, seq string) *abs.Item {
-	it := &abs.Item{ID: id, MediaType: "book", RelPath: path}
-	it.Media.Metadata.Title = path
-	it.Media.Metadata.Series = abs.SeriesRefs{{Name: series, Sequence: seq}}
-	return it
+func numbered(id, path, series, seq string) *api.LibraryItemMinified {
+	meta := &api.LibraryItemMinifiedMediaMetadata{Title: path, Series: &api.SeriesMinimal{Name: series, Sequence: seq}}
+	return &api.LibraryItemMinified{Id: api.LibraryItemID(id), MediaType: "book", RelPath: path, Media: &api.LibraryItemMinifiedMedia{Metadata: meta}}
 }
 
-func newTestClient(t *testing.T) *abs.Client {
+func newTestClient(t *testing.T) *api.Client {
 	t.Helper()
 
-	c, err := abs.New("http://127.0.0.1:1", "test")
+	c, err := api.New("http://127.0.0.1:1", "test")
 	if err != nil {
 		t.Fatal(err)
 	}

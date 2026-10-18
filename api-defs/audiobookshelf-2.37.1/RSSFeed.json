@@ -19,7 +19,7 @@
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -57,6 +57,13 @@
           }
         }
       ],
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "RSSFeedOpenRSSFeedForCollectionRequest"
+        }
+      },
       "Response": {
         "ContentType": "application/json",
         "Type": {
@@ -83,6 +90,13 @@
           }
         }
       ],
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "RSSFeedOpenRSSFeedForItemRequest"
+        }
+      },
       "Response": {
         "ContentType": "application/json",
         "Type": {
@@ -170,6 +184,25 @@
       ]
     },
     {
+      "Name": "RSSFeedOpenRSSFeedForCollectionRequest",
+      "Fields": [
+        {
+          "Name": "ServerAddress",
+          "JsonName": "serverAddress",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Slug",
+          "JsonName": "slug",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
       "Name": "RSSFeedOpenRSSFeedForItemAnswer",
       "Fields": [
         {
@@ -178,6 +211,25 @@
           "Type": {
             "Type": "Reference",
             "ReferenceName": "FeedMinified"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "RSSFeedOpenRSSFeedForItemRequest",
+      "Fields": [
+        {
+          "Name": "ServerAddress",
+          "JsonName": "serverAddress",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Slug",
+          "JsonName": "slug",
+          "Type": {
+            "Type": "String"
           }
         }
       ]

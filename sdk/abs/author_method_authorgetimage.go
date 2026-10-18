@@ -82,6 +82,7 @@ func (r AuthorGetImageResponse) Bytes(max int64) ([]byte, error) {
 type AuthorGetImageOptions struct {
 	Format string
 	Height string
+	Raw    string
 	Width  string
 }
 
@@ -99,6 +100,9 @@ func (o AuthorGetImageOptions) ToQuery() *client.QueryParams {
 	}
 	if o.Height != "" {
 		out.Append("height", o.Height)
+	}
+	if o.Raw != "" {
+		out.Append("raw", o.Raw)
 	}
 	if o.Width != "" {
 		out.Append("width", o.Width)

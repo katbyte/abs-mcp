@@ -39,16 +39,46 @@ func (r LibraryGetEpisodeDownloadQueueResponse) Record() (LibraryGetEpisodeDownl
 	return *r.Answer, nil
 }
 
+// LibraryGetEpisodeDownloadQueueOptions holds the query and header parameters of LibraryGetEpisodeDownloadQueue.
+type LibraryGetEpisodeDownloadQueueOptions struct {
+	Sort string
+}
+
+// ToHeaders returns the header parameters the options set.
+func (o LibraryGetEpisodeDownloadQueueOptions) ToHeaders() *client.Headers {
+	out := client.Headers{}
+	return &out
+}
+
+// ToQuery returns the query parameters the options set.
+func (o LibraryGetEpisodeDownloadQueueOptions) ToQuery() *client.QueryParams {
+	out := client.QueryParams{}
+	if o.Sort != "" {
+		out.Append("sort", o.Sort)
+	}
+	return &out
+}
+
 // LibraryGetEpisodeDownloadQueue calls GET /api/libraries/{id}/episode-downloads.
-func (c Client) LibraryGetEpisodeDownloadQueue(ctx context.Context, id LibraryID) (result LibraryGetEpisodeDownloadQueueResponse, err error) {
+func (c Client) LibraryGetEpisodeDownloadQueue(ctx context.Context, id LibraryID, options ...LibraryGetEpisodeDownloadQueueOptions) (result LibraryGetEpisodeDownloadQueueResponse, err error) {
+	if len(options) > 1 {
+		err = fmt.Errorf("LibraryGetEpisodeDownloadQueue takes one options struct at most, not %d", len(options))
+		return
+	}
+	var option LibraryGetEpisodeDownloadQueueOptions
+	if len(options) == 1 {
+		option = options[0]
+	}
+
 	result.LibraryGetEpisodeDownloadQueueAnswer = &LibraryGetEpisodeDownloadQueueAnswer{}
 	opts := client.RequestOptions{
 		ExpectedStatusCodes: []int{
 			http.StatusOK,
 		},
-		HTTPMethod: http.MethodGet,
-		Operation:  "LibraryGetEpisodeDownloadQueue",
-		Path:       fmt.Sprintf("/api/libraries/%s/episode-downloads", url.PathEscape(string(id))),
+		HTTPMethod:    http.MethodGet,
+		Operation:     "LibraryGetEpisodeDownloadQueue",
+		OptionsObject: option,
+		Path:          fmt.Sprintf("/api/libraries/%s/episode-downloads", url.PathEscape(string(id))),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)

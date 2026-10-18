@@ -4,22 +4,22 @@ package abs
 
 // LibraryFindOneAnswer is an object the document declares inline.
 type LibraryFindOneAnswer struct {
-	CreatedAt        UnixMilli                       `json:"createdAt,omitzero"`
-	DisplayOrder     int                             `json:"displayOrder,omitempty"`
-	Filterdata       *LibraryFindOneAnswerFilterdata `json:"filterdata,omitempty"`
-	Folders          []LibraryFolder                 `json:"folders,omitzero"`
-	Icon             string                          `json:"icon,omitempty"`
-	Id               string                          `json:"id,omitempty"`
-	Issues           int                             `json:"issues,omitempty"`
-	LastScan         UnixMilli                       `json:"lastScan,omitzero"`
-	LastScanVersion  string                          `json:"lastScanVersion,omitempty"`
-	LastUpdate       UnixMilli                       `json:"lastUpdate,omitzero"`
-	Library          *Library                        `json:"library,omitempty"`
-	MediaType        string                          `json:"mediaType,omitempty"`
-	Name             string                          `json:"name,omitempty"`
-	NumUserPlaylists int                             `json:"numUserPlaylists,omitempty"`
-	Provider         string                          `json:"provider,omitempty"`
-	Settings         *LibraryFindOneAnswerSettings   `json:"settings,omitempty"`
+	CreatedAt        UnixMilli                     `json:"createdAt,omitzero"`
+	DisplayOrder     int                           `json:"displayOrder,omitempty"`
+	Filterdata       *LibraryFilterData            `json:"filterdata,omitempty"`
+	Folders          []LibraryFolder               `json:"folders,omitzero"`
+	Icon             string                        `json:"icon,omitempty"`
+	Id               string                        `json:"id,omitempty"`
+	Issues           int                           `json:"issues,omitempty"`
+	LastScan         UnixMilli                     `json:"lastScan,omitzero"`
+	LastScanVersion  string                        `json:"lastScanVersion,omitempty"`
+	LastUpdate       UnixMilli                     `json:"lastUpdate,omitzero"`
+	Library          *Library                      `json:"library,omitempty"`
+	MediaType        string                        `json:"mediaType,omitempty"`
+	Name             string                        `json:"name,omitempty"`
+	NumUserPlaylists int                           `json:"numUserPlaylists,omitempty"`
+	Provider         string                        `json:"provider,omitempty"`
+	Settings         *LibraryFindOneAnswerSettings `json:"settings,omitempty"`
 }
 
 // GetName is the record's Name, for code that handles records of several types alike.

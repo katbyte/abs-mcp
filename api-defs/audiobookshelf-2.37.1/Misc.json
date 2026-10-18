@@ -164,16 +164,15 @@
       "Method": "POST",
       "Path": "/api/upload",
       "Request": {
-        "ContentType": "application/json",
+        "ContentType": "multipart/form-data",
         "Type": {
-          "Type": "Reference",
-          "ReferenceName": "MiscHandleUploadRequest"
+          "Type": "RawFile"
         }
       },
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -310,7 +309,7 @@
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -332,7 +331,7 @@
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -358,7 +357,7 @@
             "Type": "List",
             "NestedItem": {
               "Type": "Reference",
-              "ReferenceName": "MiscAuthorizeAnswerEreaderDevices"
+              "ReferenceName": "EreaderDevice"
             }
           }
         },
@@ -384,43 +383,6 @@
           "Type": {
             "Type": "ID",
             "ReferenceName": "LibraryID"
-          },
-          "Nullable": true
-        }
-      ]
-    },
-    {
-      "Name": "MiscAuthorizeAnswerEreaderDevices",
-      "Fields": [
-        {
-          "Name": "AvailabilityOption",
-          "JsonName": "availabilityOption",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Email",
-          "JsonName": "email",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Name",
-          "JsonName": "name",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Users",
-          "JsonName": "users",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "String"
-            }
           },
           "Nullable": true
         }
@@ -649,51 +611,8 @@
           "Name": "CurrentDailyLogs",
           "JsonName": "currentDailyLogs",
           "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "Reference",
-              "ReferenceName": "MiscGetLoggerDataAnswerCurrentDailyLogs"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "Name": "MiscGetLoggerDataAnswerCurrentDailyLogs",
-      "Fields": [
-        {
-          "Name": "Level",
-          "JsonName": "level",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "LevelName",
-          "JsonName": "levelName",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Message",
-          "JsonName": "message",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Source",
-          "JsonName": "source",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Timestamp",
-          "JsonName": "timestamp",
-          "Type": {
-            "Type": "String"
+            "Type": "Named",
+            "GoType": "ListOrEmpty[MiscGetLoggerDataAnswerCurrentDailyLogs]"
           }
         }
       ]
@@ -1107,7 +1026,7 @@
           "Name": "Index",
           "JsonName": "index",
           "Type": {
-            "Type": "Double"
+            "Type": "Integer"
           }
         },
         {
@@ -1140,7 +1059,7 @@
           "Name": "Id",
           "JsonName": "id",
           "Type": {
-            "Type": "Double"
+            "Type": "Integer"
           }
         },
         {
@@ -2664,46 +2583,6 @@
           "JsonName": "forceEmbedChapters",
           "Type": {
             "Type": "Boolean"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "MiscHandleUploadRequest",
-      "Fields": [
-        {
-          "Name": "Author",
-          "JsonName": "author",
-          "Type": {
-            "Type": "Any"
-          }
-        },
-        {
-          "Name": "Folder",
-          "JsonName": "folder",
-          "Type": {
-            "Type": "Any"
-          }
-        },
-        {
-          "Name": "Library",
-          "JsonName": "library",
-          "Type": {
-            "Type": "Any"
-          }
-        },
-        {
-          "Name": "Series",
-          "JsonName": "series",
-          "Type": {
-            "Type": "Any"
-          }
-        },
-        {
-          "Name": "Title",
-          "JsonName": "title",
-          "Type": {
-            "Type": "Any"
           }
         }
       ]

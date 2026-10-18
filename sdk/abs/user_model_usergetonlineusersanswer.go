@@ -4,6 +4,6 @@ package abs
 
 // UserGetOnlineUsersAnswer is an object the document declares inline.
 type UserGetOnlineUsersAnswer struct {
-	OpenSessions []UserGetOnlineUsersAnswerOpenSessions `json:"openSessions,omitzero"`
-	UsersOnline  []UserGetOnlineUsersAnswerUsersOnline  `json:"usersOnline,omitzero"`
+	OpenSessions []PlaybackSession                     `json:"openSessions,omitzero"`
+	UsersOnline  []UserGetOnlineUsersAnswerUsersOnline `json:"usersOnline,omitzero"`
 }

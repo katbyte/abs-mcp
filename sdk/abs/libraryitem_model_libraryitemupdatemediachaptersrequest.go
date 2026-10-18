@@ -4,5 +4,5 @@ package abs
 
 // LibraryItemUpdateMediaChaptersRequest is an object the document declares inline.
 type LibraryItemUpdateMediaChaptersRequest struct {
-	Chapters []LibraryItemUpdateMediaChaptersRequestChapters `json:"chapters,omitzero"`
+	Chapters []Chapter `json:"chapters,omitzero"`
 }

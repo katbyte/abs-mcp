@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // deleteRoutes is a book in its own folder with two of the key user's
@@ -721,12 +721,12 @@ func TestItemEditAddsAndRemovesSeries(t *testing.T) {
 	f.json("PATCH /api/items/"+itemID+"/media", `{"updated":true}`)
 	call := toolCaller(t, f)
 
-	sentSeries := func() []abs.SeriesRef {
+	sentSeries := func() []api.SeriesMinimal {
 		t.Helper()
 		sent := f.requests("/api/items/" + itemID + "/media")
 		var body struct {
 			Metadata struct {
-				Series []abs.SeriesRef `json:"series"`
+				Series []api.SeriesMinimal `json:"series"`
 			} `json:"metadata"`
 		}
 		if err := json.Unmarshal([]byte(sent[len(sent)-1].Body), &body); err != nil {
@@ -738,14 +738,14 @@ func TestItemEditAddsAndRemovesSeries(t *testing.T) {
 	if _, err := call("item_edit", map[string]any{"item": itemID, "add_series": []any{"Stormlight Archive #2"}}); err != nil {
 		t.Fatal(err)
 	}
-	if want := []abs.SeriesRef{{ID: "s", Name: "The Stormlight Archive", Sequence: "2"}, {ID: "c", Name: "Cosmere"}, {Name: "Stormlight Archive", Sequence: "2"}}; !sameRefs(sentSeries(), want) {
+	if want := []api.SeriesMinimal{{Id: "s", Name: "The Stormlight Archive", Sequence: "2"}, {Id: "c", Name: "Cosmere"}, {Name: "Stormlight Archive", Sequence: "2"}}; !slices.Equal(sentSeries(), want) {
 		t.Errorf("add_series sent %v, want the two it had and the new one", sentSeries())
 	}
 
 	if _, err := call("item_edit", map[string]any{"item": itemID, "add_series": []any{"cosmere #1"}, "remove_series": []any{"The Stormlight Archive"}}); err != nil {
 		t.Fatal(err)
 	}
-	if want := []abs.SeriesRef{{ID: "c", Name: "Cosmere", Sequence: "1"}}; !sameRefs(sentSeries(), want) {
+	if want := []api.SeriesMinimal{{Id: "c", Name: "Cosmere", Sequence: "1"}}; !slices.Equal(sentSeries(), want) {
 		t.Errorf("add a number to one it is in and remove another: sent %v, want %v", sentSeries(), want)
 	}
 
@@ -793,12 +793,12 @@ func TestItemBatchEditAddsSeries(t *testing.T) {
 func TestEditSeriesList(t *testing.T) {
 	t.Parallel()
 
-	have := []abs.SeriesRef{{Name: "Discworld", Sequence: "36"}, {Name: "Discworld: Moist von Lipwig", Sequence: "2"}}
+	have := []api.SeriesMinimal{{Name: "Discworld", Sequence: "36"}, {Name: "Discworld: Moist von Lipwig", Sequence: "2"}}
 	got, err := editSeriesList(have, []string{"Discworld: Industrial Revolution #5", "discworld #36"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := append(slices.Clone(have), abs.SeriesRef{Name: "Discworld: Industrial Revolution", Sequence: "5"}); !sameRefs(got, want) {
+	if want := append(slices.Clone(have), api.SeriesMinimal{Name: "Discworld: Industrial Revolution", Sequence: "5"}); !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
 	if len(have) != 2 {
@@ -915,18 +915,18 @@ func TestItemEditReordersTracks(t *testing.T) {
 	}
 
 	sent := f.requests("/api/items/" + itemID + "/tracks")
-	if len(sent) != 1 || !strings.Contains(sent[0].Body, `[{"ino":"a3","exclude":false},{"ino":"a1","exclude":false},{"ino":"a2","exclude":false}]`) {
+	if len(sent) != 1 || !strings.Contains(sent[0].Body, `[{"exclude":false,"ino":"a3"},{"exclude":false,"ino":"a1"},{"exclude":false,"ino":"a2"}]`) {
 		t.Errorf("tracks sent %v", sent)
 	}
 	chapters := f.requests("/api/items/" + itemID + "/chapters")
 	if len(chapters) != 1 {
 		t.Fatalf("chapters sent %d times", len(chapters))
 	}
-	var body struct{ Chapters []abs.Chapter }
+	var body struct{ Chapters []api.Chapter }
 	if err := json.Unmarshal([]byte(chapters[0].Body), &body); err != nil {
 		t.Fatal(err)
 	}
-	want := []abs.Chapter{{ID: 0, Start: 0, End: 30, Title: "Three"}, {ID: 1, Start: 30, End: 130, Title: "One"}, {ID: 2, Start: 130, End: 180, Title: "Two"}}
+	want := []api.Chapter{{Id: 0, Start: 0, End: 30, Title: "Three"}, {Id: 1, Start: 30, End: 130, Title: "One"}, {Id: 2, Start: 130, End: 180, Title: "Two"}}
 	if !slices.Equal(body.Chapters, want) {
 		t.Errorf("chapters sent %v, want %v", body.Chapters, want)
 	}

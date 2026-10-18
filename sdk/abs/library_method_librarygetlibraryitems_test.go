@@ -113,7 +113,7 @@ func TestOperationLibraryGetLibraryItemsComplete(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			c, starts := pagedServer(t, "page", "{}", tc.total, tc.pages)
+			c, starts := pagedServer(t, "page", "results", "total", "{}", tc.total, tc.pages)
 			result, err := c.LibraryGetLibraryItemsComplete(t.Context(), LibraryID("v-id"), tc.options)
 			if err != nil {
 				t.Fatal(err)
@@ -128,7 +128,7 @@ func TestOperationLibraryGetLibraryItemsComplete(t *testing.T) {
 func TestOperationLibraryGetLibraryItemsEach(t *testing.T) {
 	t.Parallel()
 
-	c, starts := pagedServer(t, "page", "{}", 0, 2)
+	c, starts := pagedServer(t, "page", "results", "total", "{}", 0, 2)
 	n := 0
 	for _, err := range c.LibraryGetLibraryItemsEach(t.Context(), LibraryID("v-id"), LibraryGetLibraryItemsOptions{Limit: new(1)}) {
 		if err != nil {
@@ -141,7 +141,7 @@ func TestOperationLibraryGetLibraryItemsEach(t *testing.T) {
 	}
 
 	// stopping after the first result asks for no page more
-	c, starts = pagedServer(t, "page", "{}", 0, 2)
+	c, starts = pagedServer(t, "page", "results", "total", "{}", 0, 2)
 	for range c.LibraryGetLibraryItemsEach(t.Context(), LibraryID("v-id"), LibraryGetLibraryItemsOptions{Limit: new(1)}) {
 		break
 	}

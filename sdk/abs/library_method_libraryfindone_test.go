@@ -16,6 +16,7 @@ func TestOperationLibraryFindOne(t *testing.T) {
 	c, s := newOperationServer(t, 200, "application/json", "{}")
 	result, err := c.LibraryFindOne(t.Context(), LibraryID("v-id"), LibraryFindOneOptions{
 		Include: "v-Include",
+		Sort:    "v-Sort",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -24,6 +25,7 @@ func TestOperationLibraryFindOne(t *testing.T) {
 	_ = body
 	expectRequest(t, r, http.MethodGet, "/api/libraries/v-id")
 	expectQuery(t, r, "include", "v-Include")
+	expectQuery(t, r, "sort", "v-Sort")
 	if result.HttpResponse == nil || result.HttpResponse.StatusCode != 200 {
 		t.Fatalf("HttpResponse = %+v", result.HttpResponse)
 	}
@@ -41,6 +43,7 @@ func TestOperationLibraryFindOne(t *testing.T) {
 	c, _ = newOperationServer(t, 200, "application/json", "<html>")
 	result, err = c.LibraryFindOne(t.Context(), LibraryID("v-id"), LibraryFindOneOptions{
 		Include: "v-Include",
+		Sort:    "v-Sort",
 	})
 	if err == nil || client.StatusCode(err) != 0 || result.HttpResponse == nil {
 		t.Errorf("an answer that does not decode = %v", err)
@@ -50,6 +53,7 @@ func TestOperationLibraryFindOne(t *testing.T) {
 	c, _ = newOperationServer(t, 418, "text/plain", "no")
 	result, err = c.LibraryFindOne(t.Context(), LibraryID("v-id"), LibraryFindOneOptions{
 		Include: "v-Include",
+		Sort:    "v-Sort",
 	})
 	if client.StatusCode(err) != 418 || result.HttpResponse == nil {
 		t.Errorf("an undocumented status = %v, %+v", err, result.HttpResponse)

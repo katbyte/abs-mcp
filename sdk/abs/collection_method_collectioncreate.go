@@ -38,9 +38,10 @@ func (r CollectionCreateResponse) Record() (Collection, error) {
 }
 
 // CollectionCreate calls POST /api/collections.
-func (c Client) CollectionCreate(ctx context.Context) (result CollectionCreateResponse, err error) {
+func (c Client) CollectionCreate(ctx context.Context, input CollectionCreateRequest) (result CollectionCreateResponse, err error) {
 	result.Collection = &Collection{}
 	opts := client.RequestOptions{
+		ContentType: "application/json",
 		ExpectedStatusCodes: []int{
 			http.StatusOK,
 		},
@@ -51,6 +52,10 @@ func (c Client) CollectionCreate(ctx context.Context) (result CollectionCreateRe
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
+		return
+	}
+
+	if err = req.Marshal(input); err != nil {
 		return
 	}
 

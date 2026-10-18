@@ -12,26 +12,26 @@ import (
 
 // MeGetListeningStatsResponse is the result of MeGetListeningStats.
 //
-// Answer is the MeGetListeningStatsAnswer answered, nil when the server answered none (a 204), which
+// Answer is the ListeningStats answered, nil when the server answered none (a 204), which
 // Answered tells. The same record is embedded, so res.Answer.Name may be read as
 // res.Name; when nothing was answered the embedded record is a zero one, so that
 // read is empty rather than a panic. Only the method sets the two; a response built
 // by hand sets both or neither.
 type MeGetListeningStatsResponse struct {
 	HttpResponse *http.Response
-	Answer       *MeGetListeningStatsAnswer
-	*MeGetListeningStatsAnswer
+	Answer       *ListeningStats
+	*ListeningStats
 }
 
 // Answered reports whether the server answered with a body that was decoded:
 // false for a 204, or a call that failed before one came.
 func (r MeGetListeningStatsResponse) Answered() bool { return r.Answer != nil }
 
-// Record is the MeGetListeningStatsAnswer answered, as a value to change and write back, or an
+// Record is the ListeningStats answered, as a value to change and write back, or an
 // error when the server answered none.
-func (r MeGetListeningStatsResponse) Record() (MeGetListeningStatsAnswer, error) {
+func (r MeGetListeningStatsResponse) Record() (ListeningStats, error) {
 	if r.Answer == nil {
-		return MeGetListeningStatsAnswer{}, errors.New("MeGetListeningStats answered no MeGetListeningStatsAnswer")
+		return ListeningStats{}, errors.New("MeGetListeningStats answered no ListeningStats")
 	}
 
 	return *r.Answer, nil
@@ -39,7 +39,7 @@ func (r MeGetListeningStatsResponse) Record() (MeGetListeningStatsAnswer, error)
 
 // MeGetListeningStats calls GET /api/me/listening-stats.
 func (c Client) MeGetListeningStats(ctx context.Context) (result MeGetListeningStatsResponse, err error) {
-	result.MeGetListeningStatsAnswer = &MeGetListeningStatsAnswer{}
+	result.ListeningStats = &ListeningStats{}
 	opts := client.RequestOptions{
 		ExpectedStatusCodes: []int{
 			http.StatusOK,
@@ -63,12 +63,12 @@ func (c Client) MeGetListeningStats(ctx context.Context) (result MeGetListeningS
 		return
 	}
 
-	var answer MeGetListeningStatsAnswer
+	var answer ListeningStats
 	result.Answer = &answer
 	if err = resp.Unmarshal(result.Answer); err != nil {
 		return
 	}
-	result.MeGetListeningStatsAnswer = result.Answer
+	result.ListeningStats = result.Answer
 
 	return
 }

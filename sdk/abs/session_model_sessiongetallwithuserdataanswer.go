@@ -4,10 +4,10 @@ package abs
 
 // SessionGetAllWithUserDataAnswer is an object the document declares inline.
 type SessionGetAllWithUserDataAnswer struct {
-	ItemsPerPage float64                                   `json:"itemsPerPage,omitempty"`
-	NumPages     int                                       `json:"numPages,omitempty"`
-	Page         float64                                   `json:"page,omitempty"`
-	Sessions     []SessionGetAllWithUserDataAnswerSessions `json:"sessions,omitzero"`
-	Total        int                                       `json:"total,omitempty"`
-	UserId       UserID                                    `json:"userId,omitempty"`
+	ItemsPerPage float64                    `json:"itemsPerPage,omitempty"`
+	NumPages     int                        `json:"numPages,omitempty"`
+	Page         float64                    `json:"page,omitempty"`
+	Sessions     []PlaybackSessionForClient `json:"sessions,omitzero"`
+	Total        int                        `json:"total,omitempty"`
+	UserId       UserID                     `json:"userId,omitempty"`
 }

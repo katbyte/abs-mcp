@@ -38,9 +38,10 @@ func (r PlaylistCreateResponse) Record() (Playlist, error) {
 }
 
 // PlaylistCreate calls POST /api/playlists.
-func (c Client) PlaylistCreate(ctx context.Context) (result PlaylistCreateResponse, err error) {
+func (c Client) PlaylistCreate(ctx context.Context, input PlaylistCreateRequest) (result PlaylistCreateResponse, err error) {
 	result.Playlist = &Playlist{}
 	opts := client.RequestOptions{
+		ContentType: "application/json",
 		ExpectedStatusCodes: []int{
 			http.StatusOK,
 		},
@@ -51,6 +52,10 @@ func (c Client) PlaylistCreate(ctx context.Context) (result PlaylistCreateRespon
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
+		return
+	}
+
+	if err = req.Marshal(input); err != nil {
 		return
 	}
 

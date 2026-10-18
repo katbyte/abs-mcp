@@ -1,0 +1,10 @@
+{
+  "operation": "NotificationUpdate",
+  "method": "PATCH",
+  "path": "/api/notifications",
+  "sent": [
+    {
+      "maxFailedAttempts": 7
+    }
+  ]
+}

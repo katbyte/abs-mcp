@@ -4,7 +4,7 @@ package abs
 
 // SearchGetAllProvidersAnswerProviders is an object the document declares inline.
 type SearchGetAllProvidersAnswerProviders struct {
-	Books       []SearchGetAllProvidersAnswerProvidersBooks       `json:"books,omitzero"`
-	BooksCovers []SearchGetAllProvidersAnswerProvidersBooksCovers `json:"booksCovers,omitzero"`
-	Podcasts    []SearchGetAllProvidersAnswerProvidersPodcasts    `json:"podcasts,omitzero"`
+	Books       []ProviderOption `json:"books,omitzero"`
+	BooksCovers []ProviderOption `json:"booksCovers,omitzero"`
+	Podcasts    []ProviderOption `json:"podcasts,omitzero"`
 }

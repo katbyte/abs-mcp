@@ -17,7 +17,7 @@
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -78,7 +78,7 @@
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -129,14 +129,14 @@
           "Type": "List",
           "NestedItem": {
             "Type": "Reference",
-            "ReferenceName": "PodcastDownloadEpisodesRequest"
+            "ReferenceName": "RssPodcastEpisode"
           }
         }
       },
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -456,171 +456,8 @@
             "Type": "List",
             "NestedItem": {
               "Type": "Reference",
-              "ReferenceName": "PodcastCheckNewEpisodesAnswerEpisodes"
+              "ReferenceName": "RssPodcastEpisode"
             }
-          }
-        }
-      ]
-    },
-    {
-      "Name": "PodcastCheckNewEpisodesAnswerEpisodes",
-      "Fields": [
-        {
-          "Name": "Author",
-          "JsonName": "author",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Chapters",
-          "JsonName": "chapters",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "Any"
-            }
-          }
-        },
-        {
-          "Name": "ChaptersType",
-          "JsonName": "chaptersType",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "ChaptersUrl",
-          "JsonName": "chaptersUrl",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Description",
-          "JsonName": "description",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "DescriptionPlain",
-          "JsonName": "descriptionPlain",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Duration",
-          "JsonName": "duration",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "DurationSeconds",
-          "JsonName": "durationSeconds",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "Enclosure",
-          "JsonName": "enclosure",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "PodcastCheckNewEpisodesAnswerEpisodesEnclosure"
-          }
-        },
-        {
-          "Name": "Episode",
-          "JsonName": "episode",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "EpisodeType",
-          "JsonName": "episodeType",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Explicit",
-          "JsonName": "explicit",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Guid",
-          "JsonName": "guid",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "PubDate",
-          "JsonName": "pubDate",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "PublishedAt",
-          "JsonName": "publishedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "Season",
-          "JsonName": "season",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Subtitle",
-          "JsonName": "subtitle",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Title",
-          "JsonName": "title",
-          "Type": {
-            "Type": "String"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "PodcastCheckNewEpisodesAnswerEpisodesEnclosure",
-      "Fields": [
-        {
-          "Name": "Length",
-          "JsonName": "length",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Type",
-          "JsonName": "type",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Url",
-          "JsonName": "url",
-          "Type": {
-            "Type": "String"
           }
         }
       ]
@@ -767,166 +604,6 @@
       ]
     },
     {
-      "Name": "PodcastDownloadEpisodesRequest",
-      "Fields": [
-        {
-          "Name": "Author",
-          "JsonName": "author",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Chapters",
-          "JsonName": "chapters",
-          "Type": {
-            "Type": "Any"
-          }
-        },
-        {
-          "Name": "ChaptersType",
-          "JsonName": "chaptersType",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "ChaptersUrl",
-          "JsonName": "chaptersUrl",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Description",
-          "JsonName": "description",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "DescriptionPlain",
-          "JsonName": "descriptionPlain",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Duration",
-          "JsonName": "duration",
-          "Type": {
-            "Type": "Any"
-          }
-        },
-        {
-          "Name": "DurationSeconds",
-          "JsonName": "durationSeconds",
-          "Type": {
-            "Type": "Double"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Enclosure",
-          "JsonName": "enclosure",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "PodcastDownloadEpisodesRequestEnclosure"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Episode",
-          "JsonName": "episode",
-          "Type": {
-            "Type": "Any"
-          }
-        },
-        {
-          "Name": "EpisodeType",
-          "JsonName": "episodeType",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Explicit",
-          "JsonName": "explicit",
-          "Type": {
-            "Type": "Any"
-          }
-        },
-        {
-          "Name": "Guid",
-          "JsonName": "guid",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "PubDate",
-          "JsonName": "pubDate",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "PublishedAt",
-          "JsonName": "publishedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "Season",
-          "JsonName": "season",
-          "Type": {
-            "Type": "Any"
-          }
-        },
-        {
-          "Name": "Subtitle",
-          "JsonName": "subtitle",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Title",
-          "JsonName": "title",
-          "Type": {
-            "Type": "String"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "PodcastDownloadEpisodesRequestEnclosure",
-      "Fields": [
-        {
-          "Name": "Length",
-          "JsonName": "length",
-          "Type": {
-            "Type": "Any"
-          }
-        },
-        {
-          "Name": "Type",
-          "JsonName": "type",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Url",
-          "JsonName": "url",
-          "Type": {
-            "Type": "String"
-          }
-        }
-      ]
-    },
-    {
       "Name": "PodcastFindEpisodeAnswer",
       "Fields": [
         {
@@ -950,170 +627,7 @@
           "JsonName": "episode",
           "Type": {
             "Type": "Reference",
-            "ReferenceName": "PodcastFindEpisodeAnswerEpisodesEpisode"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "PodcastFindEpisodeAnswerEpisodesEpisode",
-      "Fields": [
-        {
-          "Name": "Author",
-          "JsonName": "author",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Chapters",
-          "JsonName": "chapters",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "Any"
-            }
-          }
-        },
-        {
-          "Name": "ChaptersType",
-          "JsonName": "chaptersType",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "ChaptersUrl",
-          "JsonName": "chaptersUrl",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Description",
-          "JsonName": "description",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "DescriptionPlain",
-          "JsonName": "descriptionPlain",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Duration",
-          "JsonName": "duration",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "DurationSeconds",
-          "JsonName": "durationSeconds",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "Enclosure",
-          "JsonName": "enclosure",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "PodcastFindEpisodeAnswerEpisodesEpisodeEnclosure"
-          }
-        },
-        {
-          "Name": "Episode",
-          "JsonName": "episode",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "EpisodeType",
-          "JsonName": "episodeType",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Explicit",
-          "JsonName": "explicit",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Guid",
-          "JsonName": "guid",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "PubDate",
-          "JsonName": "pubDate",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "PublishedAt",
-          "JsonName": "publishedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "Season",
-          "JsonName": "season",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Subtitle",
-          "JsonName": "subtitle",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Title",
-          "JsonName": "title",
-          "Type": {
-            "Type": "String"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "PodcastFindEpisodeAnswerEpisodesEpisodeEnclosure",
-      "Fields": [
-        {
-          "Name": "Length",
-          "JsonName": "length",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Type",
-          "JsonName": "type",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Url",
-          "JsonName": "url",
-          "Type": {
-            "Type": "String"
+            "ReferenceName": "RssPodcastEpisode"
           }
         }
       ]
@@ -1128,120 +642,8 @@
             "Type": "List",
             "NestedItem": {
               "Type": "Reference",
-              "ReferenceName": "PodcastGetEpisodeDownloadsAnswerDownloads"
+              "ReferenceName": "PodcastEpisodeDownload"
             }
-          }
-        }
-      ]
-    },
-    {
-      "Name": "PodcastGetEpisodeDownloadsAnswerDownloads",
-      "Fields": [
-        {
-          "Name": "CreatedAt",
-          "JsonName": "createdAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "Episode",
-          "JsonName": "episode",
-          "Type": {
-            "Type": "Any"
-          }
-        },
-        {
-          "Name": "EpisodeDisplayTitle",
-          "JsonName": "episodeDisplayTitle",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "EpisodeType",
-          "JsonName": "episodeType",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Failed",
-          "JsonName": "failed",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "FinishedAt",
-          "JsonName": "finishedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "IsFinished",
-          "JsonName": "isFinished",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "LibraryId",
-          "JsonName": "libraryId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "LibraryID"
-          }
-        },
-        {
-          "Name": "LibraryItemId",
-          "JsonName": "libraryItemId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "LibraryItemID"
-          }
-        },
-        {
-          "Name": "PodcastTitle",
-          "JsonName": "podcastTitle",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "PublishedAt",
-          "JsonName": "publishedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "Season",
-          "JsonName": "season",
-          "Type": {
-            "Type": "Any"
-          }
-        },
-        {
-          "Name": "StartedAt",
-          "JsonName": "startedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "Url",
-          "JsonName": "url",
-          "Type": {
-            "Type": "String"
           }
         }
       ]
@@ -1317,7 +719,7 @@
             "Type": "List",
             "NestedItem": {
               "Type": "Reference",
-              "ReferenceName": "PodcastGetPodcastFeedAnswerPodcastEpisodes"
+              "ReferenceName": "RssPodcastEpisode"
             }
           }
         },
@@ -1334,169 +736,6 @@
           "JsonName": "numEpisodes",
           "Type": {
             "Type": "Integer"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "PodcastGetPodcastFeedAnswerPodcastEpisodes",
-      "Fields": [
-        {
-          "Name": "Author",
-          "JsonName": "author",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Chapters",
-          "JsonName": "chapters",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "Any"
-            }
-          }
-        },
-        {
-          "Name": "ChaptersType",
-          "JsonName": "chaptersType",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "ChaptersUrl",
-          "JsonName": "chaptersUrl",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Description",
-          "JsonName": "description",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "DescriptionPlain",
-          "JsonName": "descriptionPlain",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Duration",
-          "JsonName": "duration",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "DurationSeconds",
-          "JsonName": "durationSeconds",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "Enclosure",
-          "JsonName": "enclosure",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "PodcastGetPodcastFeedAnswerPodcastEpisodesEnclosure"
-          }
-        },
-        {
-          "Name": "Episode",
-          "JsonName": "episode",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "EpisodeType",
-          "JsonName": "episodeType",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Explicit",
-          "JsonName": "explicit",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Guid",
-          "JsonName": "guid",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "PubDate",
-          "JsonName": "pubDate",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "PublishedAt",
-          "JsonName": "publishedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "Season",
-          "JsonName": "season",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Subtitle",
-          "JsonName": "subtitle",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Title",
-          "JsonName": "title",
-          "Type": {
-            "Type": "String"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "PodcastGetPodcastFeedAnswerPodcastEpisodesEnclosure",
-      "Fields": [
-        {
-          "Name": "Length",
-          "JsonName": "length",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Type",
-          "JsonName": "type",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Url",
-          "JsonName": "url",
-          "Type": {
-            "Type": "String"
           }
         }
       ]
@@ -1649,6 +888,144 @@
         {
           "Name": "EpisodeType",
           "JsonName": "episodeType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "PubDate",
+          "JsonName": "pubDate",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "PublishedAt",
+          "JsonName": "publishedAt",
+          "Type": {
+            "Type": "UnixMillis"
+          }
+        },
+        {
+          "Name": "Season",
+          "JsonName": "season",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Subtitle",
+          "JsonName": "subtitle",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "RssPodcastEpisode",
+      "SchemaName": "RssPodcastEpisode",
+      "Fields": [
+        {
+          "Name": "Author",
+          "JsonName": "author",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Chapters",
+          "JsonName": "chapters",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Any"
+            }
+          }
+        },
+        {
+          "Name": "ChaptersType",
+          "JsonName": "chaptersType",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "ChaptersUrl",
+          "JsonName": "chaptersUrl",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Description",
+          "JsonName": "description",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DescriptionPlain",
+          "JsonName": "descriptionPlain",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Duration",
+          "JsonName": "duration",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "DurationSeconds",
+          "JsonName": "durationSeconds",
+          "Type": {
+            "Type": "Double"
+          }
+        },
+        {
+          "Name": "Enclosure",
+          "JsonName": "enclosure",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "PodcastEpisodeEnclosure"
+          }
+        },
+        {
+          "Name": "Episode",
+          "JsonName": "episode",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "EpisodeType",
+          "JsonName": "episodeType",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Explicit",
+          "JsonName": "explicit",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Guid",
+          "JsonName": "guid",
           "Type": {
             "Type": "String"
           }

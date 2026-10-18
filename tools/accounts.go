@@ -8,7 +8,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/go-kt/pointer"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -55,24 +56,20 @@ func newPassword() string {
 }
 
 // permissions is the part of an account change that the server keeps in its
-// permissions object, and what each should read back as.
-func (f accountFields) permissions() map[string]bool {
-	out := map[string]bool{}
-	for key, v := range map[string]*bool{
-		"download": f.CanDownload, "update": f.CanUpdate, "delete": f.CanDelete, "upload": f.CanUpload,
-		"createEreader": f.CanUseEreader, "accessExplicitContent": f.Explicit,
-	} {
-		if v != nil {
-			out[key] = *v
-		}
+// permissions object, and what each should read back as; one not asked for
+// is left out.
+func (f accountFields) permissions() api.UserPermissions {
+	out := api.UserPermissions{
+		Download: f.CanDownload, Update: f.CanUpdate, Delete: f.CanDelete, Upload: f.CanUpload,
+		CreateEreader: f.CanUseEreader, AccessExplicitContent: f.Explicit,
 	}
 	switch {
 	case len(f.Tags) > 0:
-		out["accessAllTags"], out["selectedTagsNotAccessible"] = false, false
+		out.AccessAllTags, out.SelectedTagsNotAccessible = new(false), new(false)
 	case len(f.DeniedTags) > 0:
-		out["accessAllTags"], out["selectedTagsNotAccessible"] = false, true
+		out.AccessAllTags, out.SelectedTagsNotAccessible = new(false), new(true)
 	case f.AllTags:
-		out["accessAllTags"] = true
+		out.AccessAllTags = new(true)
 	}
 	return out
 }
@@ -92,19 +89,19 @@ func (f accountFields) check() error {
 
 // libraryIDs resolves library names or ids to ids; nil with all for every
 // library.
-func libraryIDs(ctx context.Context, client *abs.Client, refs []string) (ids []string, all bool, err error) {
+func libraryIDs(ctx context.Context, gen *api.Client, refs []string) (ids []string, all bool, err error) {
 	switch {
 	case len(refs) == 0:
 		return nil, false, nil
 	case len(refs) == 1 && strings.EqualFold(refs[0], "all"):
 		return nil, true, nil
 	}
-	libs, err := client.Libraries(ctx)
+	libs, err := libraries(ctx, gen)
 	if err != nil {
 		return nil, false, err
 	}
 	for _, ref := range refs {
-		i := slices.IndexFunc(libs, func(l abs.Library) bool { return l.ID == ref || strings.EqualFold(l.Name, ref) })
+		i := slices.IndexFunc(libs, func(l api.Library) bool { return string(l.Id) == ref || strings.EqualFold(l.Name, ref) })
 		if i < 0 {
 			names := make([]string, 0, len(libs))
 			for _, l := range libs {
@@ -112,25 +109,32 @@ func libraryIDs(ctx context.Context, client *abs.Client, refs []string) (ids []s
 			}
 			return nil, false, fmt.Errorf("no library %q (have: %s; or all)", ref, strings.Join(names, ", "))
 		}
-		if !slices.Contains(ids, libs[i].ID) {
-			ids = append(ids, libs[i].ID)
+		if !slices.Contains(ids, string(libs[i].Id)) {
+			ids = append(ids, string(libs[i].Id))
 		}
 	}
 	return ids, false, nil
 }
 
 // heldTo says what of an account change the server did not keep.
-func heldTo(u *abs.User, f accountFields, libs []string, allLibs bool) error {
+func heldTo(u *api.UserForBrowser, f accountFields, libs []string, allLibs bool) error {
 	var off []string
-	have := map[string]bool{
-		"download": u.Permissions.Download, "update": u.Permissions.Update, "delete": u.Permissions.Delete,
-		"upload": u.Permissions.Upload, "createEreader": u.Permissions.CreateEreader,
-		"accessExplicitContent": u.Permissions.AccessExplicitContent, "accessAllTags": u.Permissions.AccessAllTags,
-		"selectedTagsNotAccessible": u.Permissions.SelectedTagsNotAccessible, "accessAllLibraries": u.Permissions.AccessAllLibraries,
-	}
-	for key, want := range f.permissions() {
-		if have[key] != want {
-			off = append(off, fmt.Sprintf("%s is %t", key, have[key]))
+	have, want := pointer.From(u.Permissions), f.permissions()
+	for _, p := range []struct {
+		key        string
+		want, have *bool
+	}{
+		{"download", want.Download, have.Download},
+		{"update", want.Update, have.Update},
+		{"delete", want.Delete, have.Delete},
+		{"upload", want.Upload, have.Upload},
+		{"createEreader", want.CreateEreader, have.CreateEreader},
+		{"accessExplicitContent", want.AccessExplicitContent, have.AccessExplicitContent},
+		{"accessAllTags", want.AccessAllTags, have.AccessAllTags},
+		{"selectedTagsNotAccessible", want.SelectedTagsNotAccessible, have.SelectedTagsNotAccessible},
+	} {
+		if p.want != nil && pointer.From(p.have) != *p.want {
+			off = append(off, fmt.Sprintf("%s is %t", p.key, pointer.From(p.have)))
 		}
 	}
 	if f.Type != "" && u.Type != f.Type {
@@ -139,10 +143,10 @@ func heldTo(u *abs.User, f accountFields, libs []string, allLibs bool) error {
 	if f.Email != "" && u.Email != f.Email {
 		off = append(off, "the email is "+u.Email)
 	}
-	if len(libs) > 0 && (u.Permissions.AccessAllLibraries || !sameMembers(u.LibrariesAccessible, libs)) {
+	if len(libs) > 0 && (pointer.From(have.AccessAllLibraries) || !sameMembers(u.LibrariesAccessible, libs)) {
 		off = append(off, "the libraries it opens are not the ones asked for")
 	}
-	if allLibs && !u.Permissions.AccessAllLibraries {
+	if allLibs && !pointer.From(have.AccessAllLibraries) {
 		off = append(off, "it does not open every library")
 	}
 	if tags := orTags(f.Tags, f.DeniedTags); len(tags) > 0 && !sameMembers(u.ItemTagsSelected, tags) {
@@ -172,7 +176,7 @@ func sameMembers(a, b []string) bool {
 }
 
 func registerAccountTools(r *registry) {
-	client := r.client
+	gen := r.gen
 
 	type createIn struct {
 		Username string `json:"username"`
@@ -194,7 +198,7 @@ func registerAccountTools(r *registry) {
 		if err := in.check(); err != nil {
 			return nil, accountOut{}, err
 		}
-		libs, allLibs, err := libraryIDs(ctx, client, in.Libraries)
+		libs, allLibs, err := libraryIDs(ctx, gen, in.Libraries)
 		if err != nil {
 			return nil, accountOut{}, err
 		}
@@ -205,21 +209,29 @@ func registerAccountTools(r *registry) {
 			password = newPassword()
 			out.Password = password
 		}
-		req := abs.UserCreate{
+		req := api.UserCreateRequest{
 			Username: strings.TrimSpace(in.Username), Password: password, Type: in.Type, Email: in.Email,
-			IsActive: new(true), Permissions: in.permissions(), ItemTagsSelected: orTags(in.Tags, in.DeniedTags),
+			IsActive: new(true), ItemTagsSelected: orTags(in.Tags, in.DeniedTags),
 		}
+		perms := in.permissions()
 		if len(libs) > 0 {
-			req.Permissions["accessAllLibraries"], req.LibrariesAccessible = false, libs
+			perms.AccessAllLibraries, req.LibrariesAccessible = new(false), libs
 		}
-		u, err := client.CreateUser(ctx, req)
+		if perms != (api.UserPermissions{}) {
+			req.Permissions = &perms
+		}
+		made, err := record(gen.UserCreate(ctx, req))
 		if err != nil {
 			return nil, accountOut{}, err
+		}
+		u := made.User
+		if u == nil {
+			return nil, accountOut{}, fmt.Errorf("the server made %s, but answered without the account: user_get shows it", req.Username)
 		}
 		if err := heldTo(u, in.accountFields, libs, allLibs); err != nil {
 			return nil, accountOut{}, fmt.Errorf("%s was made, but %w", u.Username, err)
 		}
-		if !u.IsActive {
+		if !pointer.From(u.IsActive) {
 			return nil, accountOut{}, fmt.Errorf("%s was made, but is not active: user_edit active", u.Username)
 		}
 		out.userDetail = describeUser(u, false)
@@ -243,7 +255,7 @@ func registerAccountTools(r *registry) {
 		if err := in.check(); err != nil {
 			return nil, accountOut{}, err
 		}
-		u, self, err := resolveUser(ctx, client, in.User)
+		u, self, err := resolveUser(ctx, gen, in.User)
 		if err != nil {
 			return nil, accountOut{}, err
 		}
@@ -256,49 +268,58 @@ func registerAccountTools(r *registry) {
 		case self && in.Type != "" && in.Type != u.Type:
 			return nil, accountOut{}, fmt.Errorf("the API key acts as %s: changing its type changes what the key may do; do it in the web app", u.Username)
 		}
-		libs, allLibs, err := libraryIDs(ctx, client, in.Libraries)
+		libs, allLibs, err := libraryIDs(ctx, gen, in.Libraries)
 		if err != nil {
 			return nil, accountOut{}, err
 		}
 
 		out := accountOut{}
-		upd := abs.UserUpdate{Type: strPtr(in.Type), Email: strPtr(in.Email), IsActive: in.Active, Permissions: in.permissions()}
+		upd := api.UserUpdateRequest{Type: in.Type, Email: in.Email, IsActive: in.Active}
 		if name := strings.TrimSpace(in.Username); name != "" && name != u.Username {
-			upd.Username = &name
+			upd.Username = name
 		}
 		switch {
 		case strings.EqualFold(in.Password, "new"):
-			p := newPassword()
-			upd.Password, out.Password = &p, p
+			upd.Password = newPassword()
+			out.Password = upd.Password
 		case in.Password != "":
-			upd.Password = &in.Password
+			upd.Password = in.Password
 		}
 		// the server takes a library list only beside permissions
+		perms := in.permissions()
 		switch {
 		case allLibs:
-			upd.Permissions["accessAllLibraries"] = true
+			perms.AccessAllLibraries = new(true)
 		case len(libs) > 0:
-			upd.Permissions["accessAllLibraries"], upd.LibrariesAccessible = false, libs
+			perms.AccessAllLibraries, upd.LibrariesAccessible = new(false), libs
+		}
+		if perms != (api.UserPermissions{}) {
+			upd.Permissions = &perms
 		}
 		if tags := orTags(in.Tags, in.DeniedTags); len(tags) > 0 {
 			upd.ItemTagsSelected = tags
 		}
-		if upd.Username == nil && upd.Password == nil && upd.Type == nil && upd.Email == nil && upd.IsActive == nil && len(upd.Permissions) == 0 && len(upd.ItemTagsSelected) == 0 {
+		if upd.Username == "" && upd.Password == "" && upd.Type == "" && upd.Email == "" && upd.IsActive == nil && upd.Permissions == nil && len(upd.ItemTagsSelected) == 0 {
 			return nil, accountOut{}, errors.New("nothing to change: pass at least one field")
 		}
 
-		got, err := client.UpdateUser(ctx, u.ID, upd)
+		changed, err := record(gen.UserUpdate(ctx, u.Id, upd))
 		if err != nil {
 			return nil, accountOut{}, err
+		}
+		got := changed.User
+		if got == nil {
+			return nil, accountOut{}, fmt.Errorf("the server changed %s, but answered without the account: user_get shows it", u.Username)
 		}
 		if err := heldTo(got, in.accountFields, libs, allLibs); err != nil {
 			return nil, accountOut{}, fmt.Errorf("%s was changed, but %w", got.Username, err)
 		}
+		active := pointer.From(got.IsActive)
 		switch {
-		case upd.Username != nil && got.Username != *upd.Username:
+		case upd.Username != "" && got.Username != upd.Username:
 			return nil, accountOut{}, fmt.Errorf("the server kept the username %s", got.Username)
-		case in.Active != nil && got.IsActive != *in.Active:
-			return nil, accountOut{}, fmt.Errorf("%s was changed, but is still %s", got.Username, map[bool]string{true: "active", false: "inactive"}[got.IsActive])
+		case in.Active != nil && active != *in.Active:
+			return nil, accountOut{}, fmt.Errorf("%s was changed, but is still %s", got.Username, map[bool]string{true: "active", false: "inactive"}[active])
 		}
 		out.userDetail = describeUser(got, self)
 		return nil, out, nil

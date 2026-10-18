@@ -7,8 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/pointer"
 )
 
 func TestItemGet(t *testing.T) {
@@ -352,14 +353,15 @@ func TestItemGetPodcast(t *testing.T) {
 // has none of: the server's refusal is the answer.
 func TestItemSendEbook(t *testing.T) {
 	admin := adminClient(t)
-	before, err := admin.EmailSettings(ctx)
+	settings, err := record(admin.EmailGetSettings(ctx))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := admin.UpdateEReaderDevices(ctx, append(before.EReaderDevices, abs.EReaderDevice{Name: "Zzyzx Reader", Email: "reader@zzyzx.test", AvailableTo: "adminOrUp"})); err != nil {
+	before := api.EmailUpdateEReaderDevicesRequest{EreaderDevices: pointer.From(settings.Settings).EreaderDevices}
+	if _, err := admin.EmailUpdateEReaderDevices(ctx, api.EmailUpdateEReaderDevicesRequest{EreaderDevices: append(slices.Clone(before.EreaderDevices), api.EreaderDevice{Name: "Zzyzx Reader", Email: "reader@zzyzx.test", AvailabilityOption: "adminOrUp"})}); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _, _ = admin.UpdateEReaderDevices(ctx, before.EReaderDevices) })
+	t.Cleanup(func() { _, _ = admin.EmailUpdateEReaderDevices(ctx, before) })
 
 	out := suite.Call(t, "item_send_ebook", map[string]any{"item": "Foundation", "library": "Fiction"})
 	if !slices.Contains(acctest.Strs(t, out["devices"], "devices"), "Zzyzx Reader") || acctest.BoolOf(out["sent"]) {

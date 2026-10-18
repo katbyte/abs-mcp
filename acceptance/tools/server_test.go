@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/abs-mcp/tools"
 	"github.com/katbyte/go-kt/mcp/acctest"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -103,7 +103,7 @@ func TestServerBackups(t *testing.T) {
 		t.Fatalf("server_backup_create named no backup: %v", after)
 	}
 	t.Cleanup(func() {
-		eventually(t, "deleting the backup", func() error { _, err := adminClient(t).DeleteBackup(ctx, id); return err })
+		eventually(t, "deleting the backup", func() error { _, err := adminClient(t).BackupDelete(ctx, id); return err })
 	})
 	var listed bool
 	for _, b := range acctest.Rows(t, after["backups"], "backups") {
@@ -176,39 +176,40 @@ func TestServerInfoNonAdmin(t *testing.T) {
 		t.Skip(suite.NotReady)
 	}
 
-	admin, err := abs.New(os.Getenv("ABS_SERVER"), os.Getenv("ABS_TOKEN"), recorder.Option())
+	admin, err := connect(os.Getenv("ABS_TOKEN"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	// isActive has to be set explicitly: an account created without it cannot
 	// log in, and so can never activate an API key either
-	user, err := admin.CreateUser(ctx, abs.UserCreate{
+	made, err := record(admin.UserCreate(ctx, api.UserCreateRequest{
 		Username: "plainuser", Password: "plainuser-password", Type: "user", IsActive: new(true),
-	})
+	}))
 	if err != nil {
 		t.Fatalf("creating a non-admin user: %v", err)
 	}
-	t.Cleanup(func() { _ = admin.DeleteUser(ctx, user.ID) })
+	user := made.User.Id
+	t.Cleanup(func() { _, _ = admin.UserDelete(ctx, user) })
 
 	// Audiobookshelf will not honour an API key for an account that has never
 	// logged in: the key is created, and then every authenticated route answers
 	// 401 rather than 403. One login activates it. /login is a root-level route
-	// rather than an /api/ one, so it is outside ApiRouter and sdk/abs-byhand.
+	// rather than an /api/ one, so it is outside ApiRouter and the generated client.
 	if err := login("plainuser", "plainuser-password"); err != nil {
 		t.Fatalf("activating the account with a login: %v", err)
 	}
 
-	key, err := admin.CreateAPIKey(ctx, "acceptance-nonadmin", user.ID, 0, true)
+	key, err := record(admin.ApiKeyCreate(ctx, api.ApiKeyCreateRequest{Name: "acceptance-nonadmin", UserId: user, IsActive: new(true)}))
 	if err != nil {
 		t.Fatalf("creating an api key for them: %v", err)
 	}
-	t.Cleanup(func() { _ = admin.DeleteAPIKey(ctx, key.ID) })
-	if key.Key == "" {
+	t.Cleanup(func() { _, _ = admin.ApiKeyDelete(ctx, string(key.ApiKey.Id)) })
+	if key.ApiKey.ApiKey == "" {
 		t.Fatal("no token on the new api key")
 	}
 
 	// a second server, wired to their key rather than root's
-	plain, err := abs.New(os.Getenv("ABS_SERVER"), key.Key, recorder.Option())
+	plain, err := connect(key.ApiKey.ApiKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +302,7 @@ func TestServerSessionsWithAPlaybackSession(t *testing.T) {
 		t.Skip(suite.NotReady)
 	}
 
-	client, err := abs.New(os.Getenv("ABS_SERVER"), os.Getenv("ABS_TOKEN"), recorder.Option())
+	client, err := connect(os.Getenv("ABS_TOKEN"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,18 +316,18 @@ func TestServerSessionsWithAPlaybackSession(t *testing.T) {
 		t.Fatalf("no id for %s: %v", book, item)
 	}
 
-	session, err := client.Play(ctx, id, "", abs.PlayRequest{
+	session, err := record(client.LibraryItemStartPlaybackSession(ctx, api.LibraryItemID(id), api.LibraryItemStartPlaybackSessionRequest{
 		MediaPlayer:        "acceptance-player",
 		SupportedMimeTypes: []string{"audio/mpeg"},
-		DeviceInfo:         map[string]any{"clientName": "abs-mcp tests", "deviceName": "a test runner"},
-		ForceDirectPlay:    true,
-	})
+		DeviceInfo:         &api.LibraryItemStartPlaybackSessionRequestDeviceInfo{ClientName: "abs-mcp tests", DeviceName: "a test runner"},
+		ForceDirectPlay:    new(true),
+	}))
 	if err != nil {
 		t.Fatalf("opening a playback session: %v", err)
 	}
 	t.Cleanup(func() {
 		// a close that failed left the session playing for the next run
-		if err := client.CloseSession(ctx, session.ID, nil); err != nil {
+		if _, err := client.SessionClose(ctx, session.Id, api.SessionCloseRequest{}); err != nil {
 			t.Errorf("closing the session: %v", err)
 		}
 		suite.Call(t, "user_progress_set", map[string]any{"remove": true, "item": book})
@@ -339,12 +340,12 @@ func TestServerSessionsWithAPlaybackSession(t *testing.T) {
 	}
 	var found map[string]any
 	for _, r := range rows {
-		if r["id"] == session.ID {
+		if r["id"] == session.Id {
 			found = r
 		}
 	}
 	if found == nil {
-		t.Fatalf("the open session %s is not in server_sessions: %v", session.ID, rows)
+		t.Fatalf("the open session %s is not in server_sessions: %v", session.Id, rows)
 	}
 	if found["title"] != book {
 		t.Errorf("title = %v, want %s", found["title"], book)
@@ -365,7 +366,7 @@ func TestServerSessionsWithAPlaybackSession(t *testing.T) {
 	// a session only reaches the history once it has listened time against it.
 	// The fixtures are one second long, so stay inside that: syncing past the
 	// end marks the book finished.
-	if err := client.SyncSession(ctx, session.ID, 0.3, 0.3); err != nil {
+	if _, err := client.SessionSync(ctx, session.Id, api.SessionSyncRequest{CurrentTime: 0.3, TimeListened: 0.3}); err != nil {
 		t.Fatalf("syncing listened time: %v", err)
 	}
 
@@ -376,7 +377,7 @@ func TestServerSessionsWithAPlaybackSession(t *testing.T) {
 	}
 	var inHistory bool
 	for _, r := range rows2(t, history["sessions"]) {
-		if r["id"] == session.ID {
+		if r["id"] == session.Id {
 			inHistory = true
 			if r["title"] != book {
 				t.Errorf("history title = %v, want %s", r["title"], book)
@@ -384,7 +385,7 @@ func TestServerSessionsWithAPlaybackSession(t *testing.T) {
 		}
 	}
 	if !inHistory {
-		t.Errorf("session %s is not in user_history", session.ID)
+		t.Errorf("session %s is not in user_history", session.Id)
 	}
 }
 

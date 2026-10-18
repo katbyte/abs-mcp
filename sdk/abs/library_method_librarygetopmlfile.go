@@ -4,9 +4,7 @@ package abs
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 
@@ -15,80 +13,56 @@ import (
 
 // LibraryGetOPMLFileResponse is the result of LibraryGetOPMLFile.
 //
-// The operation answers text/plain, left unread in HttpResponse.Body. WriteTo copies
-// it out and Bytes reads it whole up to a size, each closing it; Reader hands it over
-// for the caller to read and close. After any of them the body is spent. A failed call
-// has no open body: the base client reads a refusal and closes it.
+// The operation answers text (text/plain), which Answer holds as it was sent.
 type LibraryGetOPMLFileResponse struct {
 	HttpResponse *http.Response
+	Answer       *string
 }
 
-// Reader is the file's body, for the caller to read and close, and the content
-// type the server named it; an empty body and "" when the operation gave no
-// answer, so a deferred Close is always safe. The body stays readable after
-// the result goes out of scope, and has no size or time limit of the client's:
-// the caller's context is the one bound on a slow read.
-func (r LibraryGetOPMLFileResponse) Reader() (io.ReadCloser, string) {
-	if r.HttpResponse == nil || r.HttpResponse.Body == nil {
-		return http.NoBody, ""
-	}
+// Answered reports whether the server answered with a body that was decoded:
+// false for a 204, or a call that failed before one came.
+func (r LibraryGetOPMLFileResponse) Answered() bool { return r.Answer != nil }
 
-	return r.HttpResponse.Body, r.HttpResponse.Header.Get("Content-Type")
+// LibraryGetOPMLFileOptions holds the query and header parameters of LibraryGetOPMLFile.
+type LibraryGetOPMLFileOptions struct {
+	Sort string
 }
 
-// ContentLength is the file's length as the server named it, or -1 when it
-// did not, to refuse one too big before reading any of it.
-func (r LibraryGetOPMLFileResponse) ContentLength() int64 {
-	if r.HttpResponse == nil {
-		return -1
-	}
-
-	return r.HttpResponse.ContentLength
+// ToHeaders returns the header parameters the options set.
+func (o LibraryGetOPMLFileOptions) ToHeaders() *client.Headers {
+	out := client.Headers{}
+	return &out
 }
 
-// Filename is the name the server gave the file (Content-Disposition), or ""
-// when it gave none, for a caller saving it under the server's name.
-func (r LibraryGetOPMLFileResponse) Filename() string {
-	if r.HttpResponse == nil {
-		return ""
+// ToQuery returns the query parameters the options set.
+func (o LibraryGetOPMLFileOptions) ToQuery() *client.QueryParams {
+	out := client.QueryParams{}
+	if o.Sort != "" {
+		out.Append("sort", o.Sort)
 	}
-
-	return client.Filename(r.HttpResponse.Header)
-}
-
-// WriteTo copies the file to w and closes the body whatever happens, which is
-// the one way to take the answer that cannot leave it open. A writer that
-// failed is a client.WriteError, as against the server's side breaking off;
-// it fails when the operation gave no answer, and again once the body is spent.
-func (r LibraryGetOPMLFileResponse) WriteTo(w io.Writer) (int64, error) {
-	if r.HttpResponse == nil || r.HttpResponse.Body == nil {
-		return 0, errors.New("no answer to write")
-	}
-
-	return client.Copy(w, r.HttpResponse.Body)
-}
-
-// Bytes reads the file whole, up to max bytes, and closes the body: a file
-// over max is a client.TooLargeError rather than cut short without a word.
-func (r LibraryGetOPMLFileResponse) Bytes(max int64) ([]byte, error) {
-	if r.HttpResponse == nil || r.HttpResponse.Body == nil {
-		return nil, errors.New("no answer to read")
-	}
-
-	return client.ReadAtMost(r.HttpResponse.Body, max)
+	return &out
 }
 
 // LibraryGetOPMLFile calls GET /api/libraries/{id}/opml.
-func (c Client) LibraryGetOPMLFile(ctx context.Context, id LibraryID) (result LibraryGetOPMLFileResponse, err error) {
+func (c Client) LibraryGetOPMLFile(ctx context.Context, id LibraryID, options ...LibraryGetOPMLFileOptions) (result LibraryGetOPMLFileResponse, err error) {
+	if len(options) > 1 {
+		err = fmt.Errorf("LibraryGetOPMLFile takes one options struct at most, not %d", len(options))
+		return
+	}
+	var option LibraryGetOPMLFileOptions
+	if len(options) == 1 {
+		option = options[0]
+	}
+
 	opts := client.RequestOptions{
 		Accept: "text/plain",
 		ExpectedStatusCodes: []int{
 			http.StatusOK,
 		},
-		HTTPMethod:     http.MethodGet,
-		Operation:      "LibraryGetOPMLFile",
-		Path:           fmt.Sprintf("/api/libraries/%s/opml", url.PathEscape(string(id))),
-		StreamResponse: true,
+		HTTPMethod:    http.MethodGet,
+		Operation:     "LibraryGetOPMLFile",
+		OptionsObject: option,
+		Path:          fmt.Sprintf("/api/libraries/%s/opml", url.PathEscape(string(id))),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
@@ -102,6 +76,12 @@ func (c Client) LibraryGetOPMLFile(ctx context.Context, id LibraryID) (result Li
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
+		return
+	}
+
+	var answer string
+	result.Answer = &answer
+	if err = resp.Text(result.Answer); err != nil {
 		return
 	}
 

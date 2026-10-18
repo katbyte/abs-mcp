@@ -1,0 +1,11 @@
+{
+  "operation": "SessionClose",
+  "method": "POST",
+  "path": "/api/session/{id}/close",
+  "sent": [
+    {
+      "currentTime": 0.3,
+      "timeListened": 0.1
+    }
+  ]
+}

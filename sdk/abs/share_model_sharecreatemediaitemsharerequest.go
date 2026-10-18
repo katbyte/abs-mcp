@@ -4,9 +4,9 @@ package abs
 
 // ShareCreateMediaItemShareRequest is an object the document declares inline.
 type ShareCreateMediaItemShareRequest struct {
-	ExpiresAt      int           `json:"expiresAt,omitempty"`
+	ExpiresAt      int           `json:"expiresAt"`
 	IsDownloadable *bool         `json:"isDownloadable,omitempty"`
-	MediaItemId    string        `json:"mediaItemId,omitempty"`
-	MediaItemType  MediaItemType `json:"mediaItemType,omitempty"`
-	Slug           string        `json:"slug,omitempty"`
+	MediaItemId    string        `json:"mediaItemId"`
+	MediaItemType  MediaItemType `json:"mediaItemType"`
+	Slug           string        `json:"slug"`
 }

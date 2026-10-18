@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // The item listing carries a book's authors and narrators as one string each,
@@ -24,50 +24,78 @@ import (
 
 // joinedNames holds a sweep's books whose joined names need reading.
 type joinedNames struct {
-	held []abs.Item
+	held []api.LibraryItemMinified
+}
+
+// namedBook is a book from a library's list with its authors and narrators read apart where the list joined them; a field read no way, or
+// not joined, is left empty and values splits the joined string at its commas.
+type namedBook struct {
+	*api.LibraryItemMinified
+	authors, narrators []string
+}
+
+// values is a field's values on the book, its authors and narrators as they were read apart.
+func (b namedBook) values(field string) []string {
+	switch {
+	case field == "authors" && len(b.authors) > 0:
+		return b.authors
+	case field == "narrators" && len(b.narrators) > 0:
+		return b.narrators
+	}
+	return valuesOf(field, b.LibraryItemMinified)
+}
+
+// wholeNames is a book fetched whole, which lists its authors and narrators, as namedBook.
+func wholeNames(it *api.LibraryItemExpanded) namedBook {
+	short := it.Minified()
+	b := namedBook{LibraryItemMinified: &short, narrators: it.Media.Metadata.Narrators}
+	for _, a := range it.Media.Metadata.Authors {
+		if a.Name != "" {
+			b.authors = append(b.authors, a.Name)
+		}
+	}
+	return b
 }
 
 // hold keeps an item whose author or narrator string joins several names,
 // for resolve; false when there is nothing to read and the item can be used
 // as it is.
-func (j *joinedNames) hold(it *abs.Item) bool {
-	if it.IsPodcast() || (!joinsNames(it.Media.Metadata.NarratorName, len(it.Media.Metadata.Narrators)) &&
-		!joinsNames(it.Media.Metadata.AuthorName, len(it.Media.Metadata.Authors))) {
+func (j *joinedNames) hold(it *api.LibraryItemMinified) bool {
+	if it.IsPodcast() || (!joinsNames(it.Media.Metadata.NarratorName) && !joinsNames(it.Media.Metadata.AuthorName)) {
 		return false
 	}
 	j.held = append(j.held, *it)
 	return true
 }
 
-// joinsNames is whether a joined string needs reading: several names in it,
-// and no list beside it to read them from instead.
-func joinsNames(joined string, listed int) bool {
-	return listed == 0 && strings.Contains(joined, ", ")
+// joinsNames is whether a joined string needs reading: several names in it.
+func joinsNames(joined string) bool {
+	return strings.Contains(joined, ", ")
 }
 
-// resolve fills in the held items' author and narrator lists, as a fetched
-// item carries them, and hands each to fn: from the library's names where the
-// string reads one way, and from the book itself where it reads more. It
-// reads the library's narrators and authors only when a held item needs them.
-func (j *joinedNames) resolve(ctx context.Context, client *abs.Client, libraryID string, fn func(it *abs.Item)) error {
+// resolve reads the held items' authors and narrators apart and hands each
+// to fn: from the library's names where the string reads one way, and from
+// the book itself, fetched whole, where it reads more. It reads the
+// library's narrators and authors only when a held item needs them.
+func (j *joinedNames) resolve(ctx context.Context, gen *api.Client, libraryID api.LibraryID, fn func(b namedBook)) error {
 	held := j.held
 	j.held = nil
 	var narrators, authors map[string]bool
-	var fetch []string
+	var fetch []api.LibraryItemID
 	for i := range held {
-		m := &held[i].Media.Metadata
-		if joinsNames(m.NarratorName, len(m.Narrators)) && narrators == nil {
-			rows, err := client.Narrators(ctx, libraryID)
+		m := held[i].Media.Metadata
+		if joinsNames(m.NarratorName) && narrators == nil {
+			got, err := record(gen.LibraryGetNarrators(ctx, libraryID))
 			if err != nil {
 				return err
 			}
 			narrators = map[string]bool{}
-			for _, n := range rows {
+			for _, n := range got.Narrators {
 				narrators[n.Name] = true
 			}
 		}
-		if joinsNames(m.AuthorName, len(m.Authors)) && authors == nil {
-			records, err := allAuthors(ctx, client, libraryID, abs.ListOptions{})
+		if joinsNames(m.AuthorName) && authors == nil {
+			records, err := allAuthors(ctx, gen, libraryID, api.LibraryGetAuthorsOptions{})
 			if err != nil {
 				return err
 			}
@@ -77,34 +105,30 @@ func (j *joinedNames) resolve(ctx context.Context, client *abs.Client, libraryID
 			}
 		}
 
-		var readNarrators, readAuthors []string
+		// a string none of whose readings are all names the library holds
+		// (renamed since the lists were read) is left to values to split
+		b := namedBook{LibraryItemMinified: &held[i]}
 		ok := true
-		if joinsNames(m.NarratorName, len(m.Narrators)) {
-			readNarrators, ok = readJoined(m.NarratorName, narrators)
+		if joinsNames(m.NarratorName) {
+			b.narrators, ok = readJoined(m.NarratorName, narrators)
 		}
-		if ok && joinsNames(m.AuthorName, len(m.Authors)) {
-			readAuthors, ok = readJoined(m.AuthorName, authors)
+		if ok && joinsNames(m.AuthorName) {
+			b.authors, ok = readJoined(m.AuthorName, authors)
 		}
 		if !ok {
-			fetch = append(fetch, held[i].ID)
+			fetch = append(fetch, held[i].Id)
 			continue
 		}
-		// a string none of whose readings are all names the library holds
-		// (renamed since the lists were read) is left to valuesOf to split
-		m.Narrators = readNarrators
-		for _, name := range readAuthors {
-			m.Authors = append(m.Authors, abs.NameRef{Name: name})
-		}
-		fn(&held[i])
+		fn(b)
 	}
 
 	for chunk := range slices.Chunk(fetch, embedBatchSize) {
-		items, err := client.ItemsBatch(ctx, chunk)
+		items, err := itemsBatch(ctx, gen, chunk)
 		if err != nil {
 			return err
 		}
 		for k := range items {
-			fn(&items[k])
+			fn(wholeNames(&items[k]))
 		}
 	}
 	return nil

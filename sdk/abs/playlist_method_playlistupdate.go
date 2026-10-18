@@ -40,9 +40,10 @@ func (r PlaylistUpdateResponse) Record() (Playlist, error) {
 }
 
 // PlaylistUpdate calls PATCH /api/playlists/{id}.
-func (c Client) PlaylistUpdate(ctx context.Context, id PlaylistID) (result PlaylistUpdateResponse, err error) {
+func (c Client) PlaylistUpdate(ctx context.Context, id PlaylistID, input PlaylistUpdateRequest) (result PlaylistUpdateResponse, err error) {
 	result.Playlist = &Playlist{}
 	opts := client.RequestOptions{
+		ContentType: "application/json",
 		ExpectedStatusCodes: []int{
 			http.StatusOK,
 		},
@@ -53,6 +54,10 @@ func (c Client) PlaylistUpdate(ctx context.Context, id PlaylistID) (result Playl
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
+		return
+	}
+
+	if err = req.Marshal(input); err != nil {
 		return
 	}
 

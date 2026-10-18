@@ -4,5 +4,5 @@ package abs
 
 // PlaylistAddBatchRequest is an object the document declares inline.
 type PlaylistAddBatchRequest struct {
-	Items []PlaylistAddBatchRequestItems `json:"items,omitzero"`
+	Items []PlaylistEntry `json:"items,omitzero"`
 }

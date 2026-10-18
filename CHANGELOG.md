@@ -10,6 +10,8 @@
 - `library_list`, `server_info`, `server_sessions`, `server_backups` and `server_backup_create` take no arguments and now refuse one, as every other tool refuses an argument it does not take
 - an address in an error loses its sign-in, its query values and what follows a `#`, so a stored key cannot come back in one
 - the API coverage check and the calibration download are Go, not Python: `make apicheck` as before, and `go run ./lib/audiosample/calibration` in place of `scripts/calibration-fetch.py`
+- the tools talk to Audiobookshelf through the generated client in `sdk/abs`; nothing in the server uses `sdk/abs-byhand` any more
+- the Go client live suite tests the generated client: the calls that change something, in the order a caller makes them, with every read left to the read sweep
 
 ### Added
 
@@ -27,6 +29,8 @@
 
 - the Go client live suite removes what its tests make: its clean-up ran after the test had ended, and did nothing
 - the Go client's `UpdateAPIKey` refuses a key's name or expiry, which Audiobookshelf cannot change and quietly ignored, rather than send it
+- a tool that deletes, scans, embeds or sets progress no longer leaves its connection to the server open
+- the generated client can upload a book, and change a password without failing on the server's plain "OK"
 
 ## 0.7.0 (2026-10-09)
 

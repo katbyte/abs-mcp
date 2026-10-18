@@ -39,16 +39,46 @@ func (r LibraryGetNarratorsResponse) Record() (LibraryGetNarratorsAnswer, error)
 	return *r.Answer, nil
 }
 
+// LibraryGetNarratorsOptions holds the query and header parameters of LibraryGetNarrators.
+type LibraryGetNarratorsOptions struct {
+	Sort string
+}
+
+// ToHeaders returns the header parameters the options set.
+func (o LibraryGetNarratorsOptions) ToHeaders() *client.Headers {
+	out := client.Headers{}
+	return &out
+}
+
+// ToQuery returns the query parameters the options set.
+func (o LibraryGetNarratorsOptions) ToQuery() *client.QueryParams {
+	out := client.QueryParams{}
+	if o.Sort != "" {
+		out.Append("sort", o.Sort)
+	}
+	return &out
+}
+
 // LibraryGetNarrators calls GET /api/libraries/{id}/narrators.
-func (c Client) LibraryGetNarrators(ctx context.Context, id LibraryID) (result LibraryGetNarratorsResponse, err error) {
+func (c Client) LibraryGetNarrators(ctx context.Context, id LibraryID, options ...LibraryGetNarratorsOptions) (result LibraryGetNarratorsResponse, err error) {
+	if len(options) > 1 {
+		err = fmt.Errorf("LibraryGetNarrators takes one options struct at most, not %d", len(options))
+		return
+	}
+	var option LibraryGetNarratorsOptions
+	if len(options) == 1 {
+		option = options[0]
+	}
+
 	result.LibraryGetNarratorsAnswer = &LibraryGetNarratorsAnswer{}
 	opts := client.RequestOptions{
 		ExpectedStatusCodes: []int{
 			http.StatusOK,
 		},
-		HTTPMethod: http.MethodGet,
-		Operation:  "LibraryGetNarrators",
-		Path:       fmt.Sprintf("/api/libraries/%s/narrators", url.PathEscape(string(id))),
+		HTTPMethod:    http.MethodGet,
+		Operation:     "LibraryGetNarrators",
+		OptionsObject: option,
+		Path:          fmt.Sprintf("/api/libraries/%s/narrators", url.PathEscape(string(id))),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)

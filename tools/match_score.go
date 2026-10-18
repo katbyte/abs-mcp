@@ -10,7 +10,7 @@ import (
 
 	ktspelling "github.com/katbyte/go-kt/spelling"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // The comparator behind item_match_batch and audit_matched: does a provider's
@@ -209,8 +209,8 @@ var nameTitles = map[string]bool{"dr": true, "mr": true, "mrs": true, "ms": true
 // only a credit line, "Read by Paul Heck". A place that names a production
 // rather than a reader, "(Full Cast)", or a narrator field reading "Graphic
 // Audio LLC.", says so in productionSaid.
-func itemReaders(it *abs.Item) (sources []readerSource, productionSaid string) {
-	m := &it.Media.Metadata
+func itemReaders(it *api.LibraryItemMinified) (sources []readerSource, productionSaid string) {
+	m := it.Media.Metadata
 	author := candidateWords(m.AuthorDisplay())
 
 	field := readerSource{from: "the narrator field"}
@@ -279,7 +279,7 @@ func itemReaders(it *abs.Item) (sources []readerSource, productionSaid string) {
 }
 
 // addCredit adds the readers a credit names; "the author" is the book's.
-func addCredit(src *readerSource, names string, m *abs.Metadata) {
+func addCredit(src *readerSource, names string, m *api.LibraryItemMinifiedMediaMetadata) {
 	for _, name := range readerNames(names) {
 		switch n := norm(name); {
 		case n == "the author" || n == "author" || n == "the authors":
@@ -297,7 +297,7 @@ var squareBrackets = regexp.MustCompile(`\[[^\]]+\]`)
 
 // seriesOf is the series an item is in, by name, whichever shape it came
 // in.
-func seriesOf(m *abs.Metadata) []string {
+func seriesOf(m *api.LibraryItemMinifiedMediaMetadata) []string {
 	var out []string
 	for _, s := range m.SeriesDisplay() {
 		out = append(out, strings.Split(s, " #")[0])
@@ -395,7 +395,7 @@ func sameReader(a, b []string, surnames bool) bool {
 }
 
 // scoreMatch compares a provider hit with the item on disk.
-func scoreMatch(it *abs.Item, c *abs.BookSearchResult, tolerance float64) matchScore {
+func scoreMatch(it *api.LibraryItemMinified, c *api.SearchFindBooksAnswer, tolerance float64) matchScore {
 	if tolerance <= 0 {
 		tolerance = defaultDurationTolerance
 	}
@@ -460,7 +460,7 @@ func scoreMatch(it *abs.Item, c *abs.BookSearchResult, tolerance float64) matchS
 // when the library says the recording is a production with a cast and the
 // candidate is one reader's. "same" when every place that names a reader
 // agrees, "unknown" when none does.
-func judgeReaders(it *abs.Item, c *abs.BookSearchResult, reasons []string) (verdict string, why []string) {
+func judgeReaders(it *api.LibraryItemMinified, c *api.SearchFindBooksAnswer, reasons []string) (verdict string, why []string) {
 	var cand [][]string
 	for _, name := range readerNames(c.Narrator) {
 		if words := readerWords(name); len(words) > 0 {
@@ -487,13 +487,13 @@ func judgeReaders(it *abs.Item, c *abs.BookSearchResult, reasons []string) (verd
 
 // scored is a candidate with its score, for ranking.
 type scored struct {
-	Result abs.BookSearchResult
+	Result api.SearchFindBooksAnswer
 	Score  matchScore
 }
 
 // rankCandidates scores every hit and orders them best first: by confidence,
 // then by how close the duration is.
-func rankCandidates(it *abs.Item, results []abs.BookSearchResult, tolerance float64) []scored {
+func rankCandidates(it *api.LibraryItemMinified, results []api.SearchFindBooksAnswer, tolerance float64) []scored {
 	out := make([]scored, 0, len(results))
 	for i := range results {
 		out = append(out, scored{Result: results[i], Score: scoreMatch(it, &results[i], tolerance)})

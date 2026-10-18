@@ -40,9 +40,10 @@ func (r RSSFeedOpenRSSFeedForItemResponse) Record() (RSSFeedOpenRSSFeedForItemAn
 }
 
 // RSSFeedOpenRSSFeedForItem calls POST /api/feeds/item/{itemId}/open.
-func (c Client) RSSFeedOpenRSSFeedForItem(ctx context.Context, itemId LibraryItemID) (result RSSFeedOpenRSSFeedForItemResponse, err error) {
+func (c Client) RSSFeedOpenRSSFeedForItem(ctx context.Context, itemId LibraryItemID, input RSSFeedOpenRSSFeedForItemRequest) (result RSSFeedOpenRSSFeedForItemResponse, err error) {
 	result.RSSFeedOpenRSSFeedForItemAnswer = &RSSFeedOpenRSSFeedForItemAnswer{}
 	opts := client.RequestOptions{
+		ContentType: "application/json",
 		ExpectedStatusCodes: []int{
 			http.StatusOK,
 		},
@@ -53,6 +54,10 @@ func (c Client) RSSFeedOpenRSSFeedForItem(ctx context.Context, itemId LibraryIte
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
+		return
+	}
+
+	if err = req.Marshal(input); err != nil {
 		return
 	}
 

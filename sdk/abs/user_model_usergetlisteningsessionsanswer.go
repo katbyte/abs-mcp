@@ -4,9 +4,9 @@ package abs
 
 // UserGetListeningSessionsAnswer is an object the document declares inline.
 type UserGetListeningSessionsAnswer struct {
-	ItemsPerPage float64                                  `json:"itemsPerPage,omitempty"`
-	NumPages     int                                      `json:"numPages,omitempty"`
-	Page         float64                                  `json:"page,omitempty"`
-	Sessions     []UserGetListeningSessionsAnswerSessions `json:"sessions,omitzero"`
-	Total        int                                      `json:"total,omitempty"`
+	ItemsPerPage float64                    `json:"itemsPerPage,omitempty"`
+	NumPages     int                        `json:"numPages,omitempty"`
+	Page         float64                    `json:"page,omitempty"`
+	Sessions     []PlaybackSessionForClient `json:"sessions,omitzero"`
+	Total        int                        `json:"total,omitempty"`
 }

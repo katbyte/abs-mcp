@@ -4,16 +4,25 @@ package abs
 
 // SessionSyncLocalRequest is an object the document declares inline.
 type SessionSyncLocalRequest struct {
-	BookId        any `json:"bookId,omitempty"`
-	CurrentTime   any `json:"currentTime,omitempty"`
-	DeviceInfo    any `json:"deviceInfo,omitempty"`
-	DisplayTitle  any `json:"displayTitle,omitempty"`
-	EpisodeId     any `json:"episodeId,omitempty"`
-	Id            any `json:"id,omitempty"`
-	LibraryId     any `json:"libraryId,omitempty"`
-	LibraryItemId any `json:"libraryItemId,omitempty"`
-	ServerVersion any `json:"serverVersion,omitempty"`
-	TimeListening any `json:"timeListening,omitempty"`
-	UpdatedAt     any `json:"updatedAt,omitempty"`
-	UserId        any `json:"userId,omitempty"`
+	BookId        any       `json:"bookId,omitempty"`
+	CurrentTime   float64   `json:"currentTime,omitempty"`
+	Date          string    `json:"date,omitempty"`
+	DayOfWeek     string    `json:"dayOfWeek,omitempty"`
+	DeviceInfo    any       `json:"deviceInfo,omitempty"`
+	DisplayAuthor string    `json:"displayAuthor,omitempty"`
+	DisplayTitle  string    `json:"displayTitle,omitempty"`
+	Duration      float64   `json:"duration,omitempty"`
+	EpisodeId     any       `json:"episodeId,omitempty"`
+	Id            string    `json:"id,omitempty"`
+	LibraryId     string    `json:"libraryId,omitempty"`
+	LibraryItemId string    `json:"libraryItemId,omitempty"`
+	MediaPlayer   string    `json:"mediaPlayer,omitempty"`
+	MediaType     string    `json:"mediaType,omitempty"`
+	PlayMethod    int       `json:"playMethod,omitempty"`
+	ServerVersion any       `json:"serverVersion,omitempty"`
+	StartTime     float64   `json:"startTime,omitempty"`
+	StartedAt     UnixMilli `json:"startedAt,omitzero"`
+	TimeListening float64   `json:"timeListening,omitempty"`
+	UpdatedAt     UnixMilli `json:"updatedAt,omitzero"`
+	UserId        any       `json:"userId,omitempty"`
 }

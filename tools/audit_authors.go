@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -98,11 +98,11 @@ func surname(name string) string {
 
 // authorRecords gathers one library's author records into out: the findings
 // and the name spellings. Podcast libraries have no authors.
-func authorRecords(ctx context.Context, client *abs.Client, lib *abs.Library, out *authorsOut, names spellingCounts) error {
+func authorRecords(ctx context.Context, gen *api.Client, lib *api.Library, out *authorsOut, names spellingCounts) error {
 	if lib.IsPodcast() {
 		return nil
 	}
-	authors, err := allAuthors(ctx, client, lib.ID, abs.ListOptions{Sort: "numBooks", Desc: true})
+	authors, err := allAuthors(ctx, gen, lib.Id, api.LibraryGetAuthorsOptions{Sort: "numBooks", Desc: "1"})
 	if err != nil {
 		return err
 	}
@@ -111,7 +111,7 @@ func authorRecords(ctx context.Context, client *abs.Client, lib *abs.Library, ou
 		out.AuthorsScanned++
 		names.addValue("authors", a.Name, max(a.NumBooks, 1))
 
-		f := authorRecordFinding{ID: a.ID, Name: a.Name, Books: a.NumBooks, ASIN: a.ASIN}
+		f := authorRecordFinding{ID: string(a.Id), Name: a.Name, Books: a.NumBooks, ASIN: a.Asin}
 		if bioNamesSomeoneElse(a.Name, a.Description) {
 			f.Problems = append(f.Problems, "bio_mismatch")
 			f.Description = clip(plain(a.Description), 160)
@@ -121,7 +121,7 @@ func authorRecords(ctx context.Context, client *abs.Client, lib *abs.Library, ou
 			f.Problems = append(f.Problems, "no_books")
 			out.Counts.NoBooks++
 		}
-		if a.ASIN == "" {
+		if a.Asin == "" {
 			f.Problems = append(f.Problems, "unmatched")
 			out.Counts.Unmatched++
 		}
@@ -163,7 +163,7 @@ func sortAuthorRecords(records []authorRecordFinding) {
 }
 
 func registerAuthorAudit(r *registry) {
-	client := r.client
+	gen := r.gen
 
 	type authorsIn struct {
 		Library string `json:"library,omitempty" jsonschema:"library name or id; default every library"`
@@ -175,7 +175,7 @@ func registerAuthorAudit(r *registry) {
 			"Records: authors never matched (no asin: author_match), with no photo (author_match, or author_edit image_url with a photo from elsewhere when Audible has none), with no books (author_delete), or whose biography opens with someone else's name and never mentions theirs, a wrong match to undo with author_edit clear=[asin, description, image]. " +
 			"Names: author records that are one another spelled differently, cut short or a typo apart, merged by author_edit name= onto the one to keep. counts says how many of each; the sections are worst first.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in authorsIn) (*mcp.CallToolResult, authorsOut, error) {
-		libs, err := resolveLibraries(ctx, client, in.Library)
+		libs, err := resolveLibraries(ctx, gen, in.Library)
 		if err != nil {
 			return nil, authorsOut{}, err
 		}
@@ -184,19 +184,16 @@ func registerAuthorAudit(r *registry) {
 		check := auditChecksByName["author_as_title"]
 		for i := range libs {
 			lib := &libs[i]
-			if err := client.ItemsAll(ctx, lib.ID, abs.ItemsOptions{}, func(items []abs.Item) bool {
-				for j := range items {
-					it := &items[j]
-					out.Scanned++
-					if _, suspect := check(it); suspect {
-						out.Items = append(out.Items, authorItemFinding{ID: it.ID, Title: it.Media.Metadata.Title, Author: it.Media.Metadata.AuthorName})
-					}
+			if err := eachItem(ctx, gen, lib.Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+				out.Scanned++
+				if _, suspect := check(it); suspect {
+					out.Items = append(out.Items, authorItemFinding{ID: string(it.Id), Title: it.Media.Metadata.Title, Author: it.Media.Metadata.AuthorName})
 				}
 				return true
 			}); err != nil {
 				return nil, authorsOut{}, err
 			}
-			if err := authorRecords(ctx, client, lib, &out, names); err != nil {
+			if err := authorRecords(ctx, gen, lib, &out, names); err != nil {
 				return nil, authorsOut{}, err
 			}
 		}

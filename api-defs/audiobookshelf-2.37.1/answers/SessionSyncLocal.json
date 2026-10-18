@@ -1,0 +1,27 @@
+{
+  "operation": "SessionSyncLocal",
+  "method": "POST",
+  "path": "/api/session/local",
+  "sent": [
+    {
+      "id": "sdk-local",
+      "libraryItemId": "83763d0f-b096-4efc-8ede-8600b77ed65f"
+    },
+    {
+      "currentTime": 0.4,
+      "date": "2026-07-07",
+      "dayOfWeek": "Tuesday",
+      "displayAuthor": "James S. A. Corey",
+      "displayTitle": "Leviathan Wakes",
+      "duration": 1,
+      "libraryId": "1cac9f2b-e49b-43a3-a4a1-78cd66c03651",
+      "mediaPlayer": "zzyzx-offline",
+      "mediaType": "book",
+      "playMethod": 3,
+      "startTime": 0,
+      "startedAt": 1783450451496,
+      "timeListening": 0.4,
+      "updatedAt": 1783450511496
+    }
+  ]
+}

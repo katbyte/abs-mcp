@@ -15,7 +15,8 @@ import (
 
 	"github.com/katbyte/abs-mcp/lib/audioprobe"
 	"github.com/katbyte/abs-mcp/lib/audiosample"
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/go-kt/pointer"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -122,7 +123,7 @@ type unplayableOut struct {
 }
 
 func registerUnplayableAudit(r *registry) {
-	client := r.client
+	gen := r.gen
 
 	add(r, readTool, &mcp.Tool{
 		Name: "audit_unplayable",
@@ -132,14 +133,14 @@ func registerUnplayableAudit(r *registry) {
 			"With decode it also plays a few seconds at the start, middle and end of every file to find damage partway, which needs ffmpeg and takes far longer. " +
 			"Nothing here is fixed by an edit: a locked file is replaced with an unlocked copy or converted, a cut file fetched again.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in unplayableIn) (*mcp.CallToolResult, unplayableOut, error) {
-		libs, err := resolveLibraries(ctx, client, in.Library)
+		libs, err := resolveLibraries(ctx, gen, in.Library)
 		if err != nil {
 			return nil, unplayableOut{}, err
 		}
 
 		var sampler *audiosample.Sampler
 		if in.Decode {
-			sampler, err = audiosample.New(ctx, client)
+			sampler, err = audiosample.New(ctx, gen)
 			if err != nil {
 				if errors.Is(err, audiosample.ErrNoFFmpeg) {
 					return nil, unplayableOut{}, errors.New("audit_unplayable with decode needs ffmpeg, which is not installed where abs-mcp runs (not on its PATH): install it there, or run without decode")
@@ -151,7 +152,7 @@ func registerUnplayableAudit(r *registry) {
 		out := newUnplayableOut()
 		var rows []unplayableFinding
 		for i := range libs {
-			if err = sweepUnplayable(ctx, client, &libs[i], sampler, &out, &rows); err != nil {
+			if err = sweepUnplayable(ctx, gen, &libs[i], sampler, &out, &rows); err != nil {
 				break
 			}
 		}
@@ -188,26 +189,24 @@ func (o *unplayableOut) finish(rows []unplayableFinding, limit int) {
 }
 
 // skip notes a file whose playability is not known, and why.
-func (o *unplayableOut) skip(it *abs.Item, file, why string) {
+func (o *unplayableOut) skip(it *api.LibraryItemExpanded, file, why string) {
 	o.UncheckedCount++
 	if len(o.Unchecked) < unplayableUncheckedCap {
-		o.Unchecked = append(o.Unchecked, unplayableSkip{ID: it.ID, Title: it.Title(), File: file, Why: why})
+		o.Unchecked = append(o.Unchecked, unplayableSkip{ID: string(it.Id), Title: it.Title(), File: file, Why: why})
 	}
 }
 
 // sweepUnplayable adds a book library's unplayable books to rows. The
 // listing picks the books; their expanded records, fifty at a time, carry
 // the files; and each file that can be locked is read, a few at once.
-func sweepUnplayable(ctx context.Context, client *abs.Client, lib *abs.Library, sampler *audiosample.Sampler, out *unplayableOut, rows *[]unplayableFinding) error {
+func sweepUnplayable(ctx context.Context, gen *api.Client, lib *api.Library, sampler *audiosample.Sampler, out *unplayableOut, rows *[]unplayableFinding) error {
 	if lib.IsPodcast() {
 		return nil
 	}
-	var ids []string
-	if err := client.ItemsAll(ctx, lib.ID, abs.ItemsOptions{}, func(items []abs.Item) bool {
-		for j := range items {
-			if !items[j].IsPodcast() {
-				ids = append(ids, items[j].ID)
-			}
+	var ids []api.LibraryItemID
+	if err := eachItem(ctx, gen, lib.Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+		if !it.IsPodcast() {
+			ids = append(ids, it.Id)
 		}
 		return true
 	}); err != nil {
@@ -215,11 +214,11 @@ func sweepUnplayable(ctx context.Context, client *abs.Client, lib *abs.Library, 
 	}
 
 	for chunk := range slices.Chunk(ids, embedBatchSize) {
-		items, err := client.ItemsBatch(ctx, chunk)
+		items, err := itemsBatch(ctx, gen, chunk)
 		if err != nil {
 			return err
 		}
-		if err := unplayableChunk(ctx, client, items, sampler, out, rows); err != nil {
+		if err := unplayableChunk(ctx, gen, items, sampler, out, rows); err != nil {
 			return err
 		}
 	}
@@ -229,7 +228,7 @@ func sweepUnplayable(ctx context.Context, client *abs.Client, lib *abs.Library, 
 // unplayableFile is one audio file's verdict.
 type unplayableFile struct {
 	item   int
-	file   *abs.AudioFile
+	file   *api.AudioFile
 	report audioprobe.Report
 	read   bool     // the container was read
 	health []string // what went wrong playing it, with decode
@@ -237,7 +236,7 @@ type unplayableFile struct {
 }
 
 // unplayableChunk judges a batch of expanded items.
-func unplayableChunk(ctx context.Context, client *abs.Client, items []abs.Item, sampler *audiosample.Sampler, out *unplayableOut, rows *[]unplayableFinding) error {
+func unplayableChunk(ctx context.Context, gen *api.Client, items []api.LibraryItemExpanded, sampler *audiosample.Sampler, out *unplayableOut, rows *[]unplayableFinding) error {
 	var probes, plays []*unplayableFile
 	byItem := make([][]*unplayableFile, len(items))
 	for i := range items {
@@ -269,7 +268,7 @@ func unplayableChunk(ctx context.Context, client *abs.Client, items []abs.Item, 
 
 	if err := parallel.Each(ctx, len(probes), probeWorkers, func(ctx context.Context, k int) error {
 		f := probes[k]
-		f.report, f.err = audioprobe.Probe(ctx, audioprobe.ItemFile(client, items[f.item].ID, f.file.Ino))
+		f.report, f.err = audioprobe.Probe(ctx, audioprobe.ItemFile(gen, items[f.item].Id, f.file.Ino))
 		f.read = f.err == nil
 		return serverFailure(ctx, items[f.item].Title(), f.err)
 	}); err != nil {
@@ -291,7 +290,7 @@ func unplayableChunk(ctx context.Context, client *abs.Client, items []abs.Item, 
 		}
 		if err := parallel.Each(ctx, len(plays), checkWorkers, func(ctx context.Context, k int) error {
 			f := plays[k]
-			f.health, f.err = playStretches(ctx, sampler, items[f.item].ID, f.file)
+			f.health, f.err = playStretches(ctx, sampler, string(items[f.item].Id), f.file)
 			return serverFailure(ctx, items[f.item].Title(), f.err)
 		}); err != nil {
 			return err
@@ -330,7 +329,7 @@ func serverFailure(ctx context.Context, title string, err error) error {
 
 // needsProbe reports whether a file's container is worth reading: every one
 // that can carry a lock, and any whose codec its name does not fit.
-func needsProbe(af *abs.AudioFile) bool {
+func needsProbe(af *api.AudioFile) bool {
 	ext := fileExt(af)
 	switch extContainer[ext] {
 	// the ones that can be locked, and a name that promises nothing: read
@@ -345,24 +344,29 @@ func needsProbe(af *abs.AudioFile) bool {
 }
 
 // fileExt is a file's extension, lower-case with its dot.
-func fileExt(af *abs.AudioFile) string {
-	if ext := af.Metadata.Ext; ext != "" {
-		return strings.ToLower(ext)
+func fileExt(af *api.AudioFile) string {
+	meta := pointer.From(af.Metadata)
+	if meta.Ext != "" {
+		return strings.ToLower(meta.Ext)
 	}
-	return strings.ToLower(path.Ext(af.Metadata.Filename))
+	return strings.ToLower(path.Ext(meta.Filename))
 }
+
+// fileName is a file's name, or "" when the server gave the file none.
+func fileName(af *api.AudioFile) string { return pointer.From(af.Metadata).Filename }
 
 // lockedOriginalOnly reports a book with no audio but a store's locked
 // download beside it: what is left when the conversion never happened.
-func lockedOriginalOnly(it *abs.Item) (unplayableFinding, bool) {
+func lockedOriginalOnly(it *api.LibraryItemExpanded) (unplayableFinding, bool) {
 	var files, kinds []string
 	for _, lf := range it.LibraryFiles {
-		ext := strings.ToLower(lf.Metadata.Ext)
+		meta := pointer.From(lf.Metadata)
+		ext := strings.ToLower(meta.Ext)
 		if ext == "" {
-			ext = strings.ToLower(path.Ext(lf.Metadata.Filename))
+			ext = strings.ToLower(path.Ext(meta.Filename))
 		}
 		if kind, ok := lockedOriginals[ext]; ok && lf.FileType != "audio" {
-			files = append(files, lf.Metadata.Filename)
+			files = append(files, meta.Filename)
 			if !slices.Contains(kinds, kind) {
 				kinds = append(kinds, kind)
 			}
@@ -377,18 +381,18 @@ func lockedOriginalOnly(it *abs.Item) (unplayableFinding, bool) {
 
 // judgeUnplayable turns an item's file verdicts into findings, one per
 // problem, naming the files.
-func judgeUnplayable(it *abs.Item, files []*unplayableFile, out *unplayableOut) []unplayableFinding {
+func judgeUnplayable(it *api.LibraryItemExpanded, files []*unplayableFile, out *unplayableOut) []unplayableFinding {
 	var locked, unread, cut, damaged, wrongExt []*unplayableFile
 	for _, f := range files {
 		switch {
 		case f.file.Error != "":
 			unread = append(unread, f)
 		case f.err != nil:
-			out.skip(it, f.file.Metadata.Filename, f.err.Error())
+			out.skip(it, fileName(f.file), f.err.Error())
 		// read, and the start of it is no audio container known: the server
 		// took something from it, but what the file holds is unknown
 		case f.read && f.report.Container == "" && extContainer[fileExt(f.file)] != "":
-			out.skip(it, f.file.Metadata.Filename, "its first bytes are no audio format known, though its name says "+fileExt(f.file))
+			out.skip(it, fileName(f.file), "its first bytes are no audio format known, though its name says "+fileExt(f.file))
 		case f.report.Locked != "":
 			locked = append(locked, f)
 		case f.report.Want > 0:
@@ -420,7 +424,7 @@ func judgeUnplayable(it *abs.Item, files []*unplayableFile, out *unplayableOut) 
 	if len(unread) > 0 {
 		why := make([]string, 0, len(unread))
 		for _, f := range unread {
-			why = append(why, fmt.Sprintf("%s: %s", f.file.Metadata.Filename, f.file.Error))
+			why = append(why, fmt.Sprintf("%s: %s", fileName(f.file), f.file.Error))
 		}
 		rows = append(rows, unplayableRow(it, unplayUnread, false, names(unread),
 			fmt.Sprintf("the server could not read %s: %s", countOf(len(unread), total), strings.Join(why, "; "))))
@@ -428,7 +432,7 @@ func judgeUnplayable(it *abs.Item, files []*unplayableFile, out *unplayableOut) 
 	if len(cut) > 0 {
 		what := make([]string, 0, len(cut))
 		for _, f := range cut {
-			what = append(what, fmt.Sprintf("%s has %s of %s (%.0f%%)", f.file.Metadata.Filename, fmtBytes(f.report.Size), fmtBytes(f.report.Want), 100*float64(f.report.Size)/float64(f.report.Want)))
+			what = append(what, fmt.Sprintf("%s has %s of %s (%.0f%%)", fileName(f.file), fmtBytes(f.report.Size), fmtBytes(f.report.Want), 100*float64(f.report.Size)/float64(f.report.Want)))
 		}
 		rows = append(rows, unplayableRow(it, unplayCut, false, names(cut),
 			fmt.Sprintf("%s cut short, a download or copy that broke off, and play stops where the file ends: %s. Fetch it again", filesAre(len(cut), total), strings.Join(what, "; "))))
@@ -436,7 +440,7 @@ func judgeUnplayable(it *abs.Item, files []*unplayableFile, out *unplayableOut) 
 	if len(damaged) > 0 {
 		what := make([]string, 0, len(damaged))
 		for _, f := range damaged {
-			what = append(what, fmt.Sprintf("%s: %s", f.file.Metadata.Filename, strings.Join(f.health, "; ")))
+			what = append(what, fmt.Sprintf("%s: %s", fileName(f.file), strings.Join(f.health, "; ")))
 		}
 		rows = append(rows, unplayableRow(it, unplayDamaged, false, names(damaged),
 			fmt.Sprintf("%s did not play cleanly: %s. Fetch it again, or play it through to hear the damage", countOf(len(damaged), total), strings.Join(what, "; "))))
@@ -445,7 +449,7 @@ func judgeUnplayable(it *abs.Item, files []*unplayableFile, out *unplayableOut) 
 		what := make([]string, 0, len(wrongExt))
 		for _, f := range wrongExt {
 			ext := fileExt(f.file)
-			what = append(what, fmt.Sprintf("%s is named %s but holds %s", f.file.Metadata.Filename, ext, containerName(f.report.Container)))
+			what = append(what, fmt.Sprintf("%s is named %s but holds %s", fileName(f.file), ext, containerName(f.report.Container)))
 		}
 		rows = append(rows, unplayableRow(it, unplayExt, true, names(wrongExt),
 			strings.Join(what, "; ")+". The server plays it, but a player that goes by the name may refuse it: rename it to what it holds, and rescan"))
@@ -453,9 +457,9 @@ func judgeUnplayable(it *abs.Item, files []*unplayableFile, out *unplayableOut) 
 	return rows
 }
 
-func unplayableRow(it *abs.Item, problem string, plays bool, files []string, detail string) unplayableFinding {
+func unplayableRow(it *api.LibraryItemExpanded, problem string, plays bool, files []string, detail string) unplayableFinding {
 	return unplayableFinding{
-		ID: it.ID, Title: it.Title(), Author: it.Media.Metadata.AuthorDisplay(), Path: it.RelPath,
+		ID: string(it.Id), Title: it.Title(), Author: it.Media.Metadata.AuthorDisplay(), Path: it.RelPath,
 		Problem: problem, Plays: plays, Detail: detail, Files: files,
 	}
 }
@@ -463,7 +467,7 @@ func unplayableRow(it *abs.Item, problem string, plays bool, files []string, det
 func names(files []*unplayableFile) []string {
 	out := make([]string, 0, len(files))
 	for _, f := range files {
-		out = append(out, f.file.Metadata.Filename)
+		out = append(out, fileName(f.file))
 	}
 	return out
 }
@@ -565,7 +569,7 @@ const (
 // playStretches plays a file at its start, middle and end and says what
 // went wrong, nothing when it played cleanly. An error is the server or
 // the proxy failing, which leaves the file unknown.
-func playStretches(ctx context.Context, s *audiosample.Sampler, itemID string, af *abs.AudioFile) ([]string, error) {
+func playStretches(ctx context.Context, s *audiosample.Sampler, itemID string, af *api.AudioFile) ([]string, error) {
 	d := af.Duration
 	if d <= 0 {
 		return []string{"the server gives it no length, so there is nothing to play"}, nil

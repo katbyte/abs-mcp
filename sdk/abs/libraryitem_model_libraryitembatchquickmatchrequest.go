@@ -4,6 +4,6 @@ package abs
 
 // LibraryItemBatchQuickMatchRequest is an object the document declares inline.
 type LibraryItemBatchQuickMatchRequest struct {
-	LibraryItemIds []LibraryItemID `json:"libraryItemIds,omitzero"`
-	Options        map[string]any  `json:"options,omitzero"`
+	LibraryItemIds []LibraryItemID                           `json:"libraryItemIds,omitzero"`
+	Options        *LibraryItemBatchQuickMatchRequestOptions `json:"options,omitempty"`
 }

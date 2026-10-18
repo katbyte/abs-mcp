@@ -4,5 +4,5 @@ package abs
 
 // PlaylistRemoveBatchRequest is an object the document declares inline.
 type PlaylistRemoveBatchRequest struct {
-	Items []PlaylistRemoveBatchRequestItems `json:"items,omitzero"`
+	Items []PlaylistEntry `json:"items,omitzero"`
 }

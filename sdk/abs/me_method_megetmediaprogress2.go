@@ -14,34 +14,34 @@ import (
 
 // MeGetMediaProgress2Response is the result of MeGetMediaProgress2.
 //
-// Answer is the MeGetMediaProgress2Answer answered, nil when the server answered none (a 204), which
+// Answer is the MediaProgress answered, nil when the server answered none (a 204), which
 // Answered tells. The same record is embedded, so res.Answer.Name may be read as
 // res.Name; when nothing was answered the embedded record is a zero one, so that
 // read is empty rather than a panic. Only the method sets the two; a response built
 // by hand sets both or neither.
 type MeGetMediaProgress2Response struct {
 	HttpResponse *http.Response
-	Answer       *MeGetMediaProgress2Answer
-	*MeGetMediaProgress2Answer
+	Answer       *MediaProgress
+	*MediaProgress
 }
 
 // Answered reports whether the server answered with a body that was decoded:
 // false for a 204, or a call that failed before one came.
 func (r MeGetMediaProgress2Response) Answered() bool { return r.Answer != nil }
 
-// Record is the MeGetMediaProgress2Answer answered, as a value to change and write back, or an
+// Record is the MediaProgress answered, as a value to change and write back, or an
 // error when the server answered none.
-func (r MeGetMediaProgress2Response) Record() (MeGetMediaProgress2Answer, error) {
+func (r MeGetMediaProgress2Response) Record() (MediaProgress, error) {
 	if r.Answer == nil {
-		return MeGetMediaProgress2Answer{}, errors.New("MeGetMediaProgress2 answered no MeGetMediaProgress2Answer")
+		return MediaProgress{}, errors.New("MeGetMediaProgress2 answered no MediaProgress")
 	}
 
 	return *r.Answer, nil
 }
 
 // MeGetMediaProgress2 calls GET /api/me/progress/{id}.
-func (c Client) MeGetMediaProgress2(ctx context.Context, id UserID) (result MeGetMediaProgress2Response, err error) {
-	result.MeGetMediaProgress2Answer = &MeGetMediaProgress2Answer{}
+func (c Client) MeGetMediaProgress2(ctx context.Context, id LibraryItemID) (result MeGetMediaProgress2Response, err error) {
+	result.MediaProgress = &MediaProgress{}
 	opts := client.RequestOptions{
 		ExpectedStatusCodes: []int{
 			http.StatusOK,
@@ -65,12 +65,12 @@ func (c Client) MeGetMediaProgress2(ctx context.Context, id UserID) (result MeGe
 		return
 	}
 
-	var answer MeGetMediaProgress2Answer
+	var answer MediaProgress
 	result.Answer = &answer
 	if err = resp.Unmarshal(result.Answer); err != nil {
 		return
 	}
-	result.MeGetMediaProgress2Answer = result.Answer
+	result.MediaProgress = result.Answer
 
 	return
 }

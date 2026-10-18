@@ -1,0 +1,12 @@
+{
+  "operation": "SessionBatchDelete",
+  "method": "POST",
+  "path": "/api/sessions/batch/delete",
+  "sent": [
+    {
+      "sessions": [
+        "c8aa330e-b568-4778-b01c-9251e638701f"
+      ]
+    }
+  ]
+}

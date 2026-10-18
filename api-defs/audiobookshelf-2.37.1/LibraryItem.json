@@ -27,7 +27,7 @@
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -72,7 +72,7 @@
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -94,7 +94,7 @@
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -155,7 +155,7 @@
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -187,7 +187,7 @@
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -297,7 +297,7 @@
         "ContentType": "application/json",
         "Type": {
           "Type": "Reference",
-          "ReferenceName": "LibraryItemFindOneAnswer"
+          "ReferenceName": "LibraryItemExpanded"
         }
       },
       "ExpectedStatusCodes": [
@@ -331,6 +331,14 @@
         {
           "Name": "height",
           "Field": "Height",
+          "In": "Query",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "raw",
+          "Field": "Raw",
           "In": "Query",
           "Type": {
             "Type": "String"
@@ -478,6 +486,16 @@
           }
         }
       ],
+      "Options": [
+        {
+          "Name": "Range",
+          "Field": "Range",
+          "In": "Header",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ],
       "Response": {
         "ContentType": "application/octet-stream",
         "Type": {
@@ -486,7 +504,8 @@
       },
       "ExpectedStatusCodes": [
         200,
-        204
+        204,
+        206
       ]
     },
     {
@@ -530,6 +549,13 @@
           }
         }
       ],
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "LibraryItemMatchRequest"
+        }
+      },
       "Response": {
         "ContentType": "application/json",
         "Type": {
@@ -559,7 +585,7 @@
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -724,7 +750,7 @@
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -750,7 +776,7 @@
         "ContentType": "application/json",
         "Type": {
           "Type": "Reference",
-          "ReferenceName": "LibraryItemUpdateMediaRequest"
+          "ReferenceName": "MediaUpdate"
         }
       },
       "Response": {
@@ -930,10 +956,34 @@
           "Name": "Options",
           "JsonName": "options",
           "Type": {
-            "Type": "Dictionary",
-            "NestedItem": {
-              "Type": "Any"
-            }
+            "Type": "Reference",
+            "ReferenceName": "LibraryItemBatchQuickMatchRequestOptions"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "LibraryItemBatchQuickMatchRequestOptions",
+      "Fields": [
+        {
+          "Name": "OverrideCover",
+          "JsonName": "overrideCover",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "OverrideDetails",
+          "JsonName": "overrideDetails",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Provider",
+          "JsonName": "provider",
+          "Type": {
+            "Type": "String"
           }
         }
       ]
@@ -988,2187 +1038,8 @@
           "JsonName": "mediaPayload",
           "Type": {
             "Type": "Reference",
-            "ReferenceName": "LibraryItemBatchUpdateRequestMediaPayload"
+            "ReferenceName": "MediaUpdate"
           }
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemBatchUpdateRequestMediaPayload",
-      "Fields": [
-        {
-          "Name": "AutoDownloadEpisodes",
-          "JsonName": "autoDownloadEpisodes",
-          "Type": {
-            "Type": "Boolean"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "AutoDownloadSchedule",
-          "JsonName": "autoDownloadSchedule",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "MaxEpisodesToKeep",
-          "JsonName": "maxEpisodesToKeep",
-          "Type": {
-            "Type": "Integer"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "MaxNewEpisodesToDownload",
-          "JsonName": "maxNewEpisodesToDownload",
-          "Type": {
-            "Type": "Integer"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Metadata",
-          "JsonName": "metadata",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "LibraryItemBatchUpdateRequestMediaPayloadMetadata"
-          }
-        },
-        {
-          "Name": "Tags",
-          "JsonName": "tags",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "String"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemBatchUpdateRequestMediaPayloadMetadata",
-      "Fields": [
-        {
-          "Name": "Abridged",
-          "JsonName": "abridged",
-          "Type": {
-            "Type": "Boolean"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Asin",
-          "JsonName": "asin",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Author",
-          "JsonName": "author",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Authors",
-          "JsonName": "authors",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "Reference",
-              "ReferenceName": "LibraryItemBatchUpdateRequestMediaPayloadMetadataAuthors"
-            }
-          }
-        },
-        {
-          "Name": "Description",
-          "JsonName": "description",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Explicit",
-          "JsonName": "explicit",
-          "Type": {
-            "Type": "Boolean"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "FeedUrl",
-          "JsonName": "feedUrl",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Genres",
-          "JsonName": "genres",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "String"
-            }
-          }
-        },
-        {
-          "Name": "ImageUrl",
-          "JsonName": "imageUrl",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Isbn",
-          "JsonName": "isbn",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "ItunesId",
-          "JsonName": "itunesId",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Language",
-          "JsonName": "language",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Narrators",
-          "JsonName": "narrators",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "String"
-            }
-          }
-        },
-        {
-          "Name": "PublishedDate",
-          "JsonName": "publishedDate",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "PublishedYear",
-          "JsonName": "publishedYear",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Publisher",
-          "JsonName": "publisher",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "ReleaseDate",
-          "JsonName": "releaseDate",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Series",
-          "JsonName": "series",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "Reference",
-              "ReferenceName": "LibraryItemBatchUpdateRequestMediaPayloadMetadataSeries"
-            }
-          }
-        },
-        {
-          "Name": "Subtitle",
-          "JsonName": "subtitle",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Title",
-          "JsonName": "title",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Type",
-          "JsonName": "type",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemBatchUpdateRequestMediaPayloadMetadataAuthors",
-      "Fields": [
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Name",
-          "JsonName": "name",
-          "Type": {
-            "Type": "String"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemBatchUpdateRequestMediaPayloadMetadataSeries",
-      "Fields": [
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Name",
-          "JsonName": "name",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Sequence",
-          "JsonName": "sequence",
-          "Type": {
-            "Type": "String"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemFindOneAnswer",
-      "Fields": [
-        {
-          "Name": "AddedAt",
-          "JsonName": "addedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "BirthtimeMs",
-          "JsonName": "birthtimeMs",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "CtimeMs",
-          "JsonName": "ctimeMs",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "EpisodeDownloadsQueued",
-          "JsonName": "episodeDownloadsQueued",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "Any"
-            }
-          }
-        },
-        {
-          "Name": "EpisodesDownloading",
-          "JsonName": "episodesDownloading",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "Any"
-            }
-          }
-        },
-        {
-          "Name": "FolderId",
-          "JsonName": "folderId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "FolderID"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Ino",
-          "JsonName": "ino",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "IsFile",
-          "JsonName": "isFile",
-          "Type": {
-            "Type": "Boolean"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "IsInvalid",
-          "JsonName": "isInvalid",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "IsMissing",
-          "JsonName": "isMissing",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "LastScan",
-          "JsonName": "lastScan",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "LibraryFiles",
-          "JsonName": "libraryFiles",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "Reference",
-              "ReferenceName": "LibraryItemFindOneAnswerLibraryFiles"
-            }
-          }
-        },
-        {
-          "Name": "LibraryId",
-          "JsonName": "libraryId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "LibraryID"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Media",
-          "JsonName": "media",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "LibraryItemFindOneAnswerMedia"
-          }
-        },
-        {
-          "Name": "MediaItemShare",
-          "JsonName": "mediaItemShare",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "LibraryItemFindOneAnswerMediaItemShare"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "MediaType",
-          "JsonName": "mediaType",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "MtimeMs",
-          "JsonName": "mtimeMs",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "NumFiles",
-          "JsonName": "numFiles",
-          "Type": {
-            "Type": "Integer"
-          }
-        },
-        {
-          "Name": "OldLibraryItemId",
-          "JsonName": "oldLibraryItemId",
-          "Type": {
-            "Type": "Any"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Path",
-          "JsonName": "path",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "RelPath",
-          "JsonName": "relPath",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "RssFeed",
-          "JsonName": "rssFeed",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "FeedMinified"
-          }
-        },
-        {
-          "Name": "ScanVersion",
-          "JsonName": "scanVersion",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Size",
-          "JsonName": "size",
-          "Type": {
-            "Type": "Integer"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "UpdatedAt",
-          "JsonName": "updatedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "UserMediaProgress",
-          "JsonName": "userMediaProgress",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "LibraryItemFindOneAnswerUserMediaProgress"
-          },
-          "Nullable": true
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemFindOneAnswerLibraryFiles",
-      "Fields": [
-        {
-          "Name": "AddedAt",
-          "JsonName": "addedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "FileType",
-          "JsonName": "fileType",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Ino",
-          "JsonName": "ino",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "IsSupplementary",
-          "JsonName": "isSupplementary",
-          "Type": {
-            "Type": "Boolean"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Metadata",
-          "JsonName": "metadata",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "LibraryItemFindOneAnswerLibraryFilesMetadata"
-          }
-        },
-        {
-          "Name": "UpdatedAt",
-          "JsonName": "updatedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemFindOneAnswerLibraryFilesMetadata",
-      "Fields": [
-        {
-          "Name": "BirthtimeMs",
-          "JsonName": "birthtimeMs",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "CtimeMs",
-          "JsonName": "ctimeMs",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "Ext",
-          "JsonName": "ext",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Filename",
-          "JsonName": "filename",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "MtimeMs",
-          "JsonName": "mtimeMs",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "Path",
-          "JsonName": "path",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "RelPath",
-          "JsonName": "relPath",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Size",
-          "JsonName": "size",
-          "Type": {
-            "Type": "Integer"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemFindOneAnswerMedia",
-      "Fields": [
-        {
-          "Name": "AudioFiles",
-          "JsonName": "audioFiles",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "Reference",
-              "ReferenceName": "LibraryItemFindOneAnswerMediaAudioFiles"
-            }
-          }
-        },
-        {
-          "Name": "AutoDownloadEpisodes",
-          "JsonName": "autoDownloadEpisodes",
-          "Type": {
-            "Type": "Boolean"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "AutoDownloadSchedule",
-          "JsonName": "autoDownloadSchedule",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Chapters",
-          "JsonName": "chapters",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "Reference",
-              "ReferenceName": "LibraryItemFindOneAnswerMediaChapters"
-            }
-          }
-        },
-        {
-          "Name": "CoverPath",
-          "JsonName": "coverPath",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Duration",
-          "JsonName": "duration",
-          "Type": {
-            "Type": "Double"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "EbookFile",
-          "JsonName": "ebookFile",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "LibraryItemFindOneAnswerMediaEbookFile"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "EbookFormat",
-          "JsonName": "ebookFormat",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Episodes",
-          "JsonName": "episodes",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "Reference",
-              "ReferenceName": "PodcastEpisode"
-            }
-          }
-        },
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "LastEpisodeCheck",
-          "JsonName": "lastEpisodeCheck",
-          "Type": {
-            "Type": "UnixMillis"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "LibraryItemId",
-          "JsonName": "libraryItemId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "LibraryItemID"
-          }
-        },
-        {
-          "Name": "MaxEpisodesToKeep",
-          "JsonName": "maxEpisodesToKeep",
-          "Type": {
-            "Type": "Integer"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "MaxNewEpisodesToDownload",
-          "JsonName": "maxNewEpisodesToDownload",
-          "Type": {
-            "Type": "Integer"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Metadata",
-          "JsonName": "metadata",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "LibraryItemFindOneAnswerMediaMetadata"
-          }
-        },
-        {
-          "Name": "NumAudioFiles",
-          "JsonName": "numAudioFiles",
-          "Type": {
-            "Type": "Integer"
-          }
-        },
-        {
-          "Name": "NumChapters",
-          "JsonName": "numChapters",
-          "Type": {
-            "Type": "Integer"
-          }
-        },
-        {
-          "Name": "NumEpisodes",
-          "JsonName": "numEpisodes",
-          "Type": {
-            "Type": "Integer"
-          }
-        },
-        {
-          "Name": "NumTracks",
-          "JsonName": "numTracks",
-          "Type": {
-            "Type": "Integer"
-          }
-        },
-        {
-          "Name": "Size",
-          "JsonName": "size",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "Tags",
-          "JsonName": "tags",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "String"
-            }
-          }
-        },
-        {
-          "Name": "Tracks",
-          "JsonName": "tracks",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "Reference",
-              "ReferenceName": "LibraryItemFindOneAnswerMediaTracks"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemFindOneAnswerMediaAudioFiles",
-      "Fields": [
-        {
-          "Name": "AddedAt",
-          "JsonName": "addedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "BitRate",
-          "JsonName": "bitRate",
-          "Type": {
-            "Type": "Integer"
-          }
-        },
-        {
-          "Name": "ChannelLayout",
-          "JsonName": "channelLayout",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Channels",
-          "JsonName": "channels",
-          "Type": {
-            "Type": "Integer"
-          }
-        },
-        {
-          "Name": "Chapters",
-          "JsonName": "chapters",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "Reference",
-              "ReferenceName": "LibraryItemFindOneAnswerMediaAudioFilesChapters"
-            }
-          }
-        },
-        {
-          "Name": "Codec",
-          "JsonName": "codec",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "DiscNumFromFilename",
-          "JsonName": "discNumFromFilename",
-          "Type": {
-            "Type": "Integer"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "DiscNumFromMeta",
-          "JsonName": "discNumFromMeta",
-          "Type": {
-            "Type": "Integer"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Duration",
-          "JsonName": "duration",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "EmbeddedCoverArt",
-          "JsonName": "embeddedCoverArt",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Error",
-          "JsonName": "error",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Exclude",
-          "JsonName": "exclude",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "Format",
-          "JsonName": "format",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Index",
-          "JsonName": "index",
-          "Type": {
-            "Type": "Integer"
-          }
-        },
-        {
-          "Name": "Ino",
-          "JsonName": "ino",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Language",
-          "JsonName": "language",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "ManuallyVerified",
-          "JsonName": "manuallyVerified",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "MetaTags",
-          "JsonName": "metaTags",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "LibraryItemFindOneAnswerMediaAudioFilesMetaTags"
-          }
-        },
-        {
-          "Name": "Metadata",
-          "JsonName": "metadata",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "LibraryItemFindOneAnswerMediaAudioFilesMetadata"
-          }
-        },
-        {
-          "Name": "MimeType",
-          "JsonName": "mimeType",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "TimeBase",
-          "JsonName": "timeBase",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "TrackNumFromFilename",
-          "JsonName": "trackNumFromFilename",
-          "Type": {
-            "Type": "Integer"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "TrackNumFromMeta",
-          "JsonName": "trackNumFromMeta",
-          "Type": {
-            "Type": "Integer"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "UpdatedAt",
-          "JsonName": "updatedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemFindOneAnswerMediaAudioFilesChapters",
-      "Fields": [
-        {
-          "Name": "End",
-          "JsonName": "end",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "Integer"
-          }
-        },
-        {
-          "Name": "Start",
-          "JsonName": "start",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "Title",
-          "JsonName": "title",
-          "Type": {
-            "Type": "String"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemFindOneAnswerMediaAudioFilesMetaTags",
-      "Fields": [
-        {
-          "Name": "TagAlbum",
-          "JsonName": "tagAlbum",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "TagAlbumArtist",
-          "JsonName": "tagAlbumArtist",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "TagArtist",
-          "JsonName": "tagArtist",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "TagComposer",
-          "JsonName": "tagComposer",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "TagDate",
-          "JsonName": "tagDate",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "TagEncoder",
-          "JsonName": "tagEncoder",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "TagGenre",
-          "JsonName": "tagGenre",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "TagGrouping",
-          "JsonName": "tagGrouping",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "TagPublisher",
-          "JsonName": "tagPublisher",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "TagTitle",
-          "JsonName": "tagTitle",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "TagTrack",
-          "JsonName": "tagTrack",
-          "Type": {
-            "Type": "String"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemFindOneAnswerMediaAudioFilesMetadata",
-      "Fields": [
-        {
-          "Name": "BirthtimeMs",
-          "JsonName": "birthtimeMs",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "CtimeMs",
-          "JsonName": "ctimeMs",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "Ext",
-          "JsonName": "ext",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Filename",
-          "JsonName": "filename",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "MtimeMs",
-          "JsonName": "mtimeMs",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "Path",
-          "JsonName": "path",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "RelPath",
-          "JsonName": "relPath",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Size",
-          "JsonName": "size",
-          "Type": {
-            "Type": "Integer"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemFindOneAnswerMediaChapters",
-      "Fields": [
-        {
-          "Name": "End",
-          "JsonName": "end",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "Integer"
-          }
-        },
-        {
-          "Name": "Start",
-          "JsonName": "start",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "Title",
-          "JsonName": "title",
-          "Type": {
-            "Type": "String"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemFindOneAnswerMediaEbookFile",
-      "Fields": [
-        {
-          "Name": "AddedAt",
-          "JsonName": "addedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "EbookFormat",
-          "JsonName": "ebookFormat",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "FileType",
-          "JsonName": "fileType",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Ino",
-          "JsonName": "ino",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "IsSupplementary",
-          "JsonName": "isSupplementary",
-          "Type": {
-            "Type": "Any"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Metadata",
-          "JsonName": "metadata",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "LibraryItemFindOneAnswerMediaEbookFileMetadata"
-          }
-        },
-        {
-          "Name": "UpdatedAt",
-          "JsonName": "updatedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemFindOneAnswerMediaEbookFileMetadata",
-      "Fields": [
-        {
-          "Name": "BirthtimeMs",
-          "JsonName": "birthtimeMs",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "CtimeMs",
-          "JsonName": "ctimeMs",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "Ext",
-          "JsonName": "ext",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Filename",
-          "JsonName": "filename",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "MtimeMs",
-          "JsonName": "mtimeMs",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "Path",
-          "JsonName": "path",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "RelPath",
-          "JsonName": "relPath",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Size",
-          "JsonName": "size",
-          "Type": {
-            "Type": "Integer"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemFindOneAnswerMediaItemShare",
-      "Fields": [
-        {
-          "Name": "CreatedAt",
-          "JsonName": "createdAt",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "ExpiresAt",
-          "JsonName": "expiresAt",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "IsDownloadable",
-          "JsonName": "isDownloadable",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "MediaItemId",
-          "JsonName": "mediaItemId",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "MediaItemType",
-          "JsonName": "mediaItemType",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Slug",
-          "JsonName": "slug",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "UpdatedAt",
-          "JsonName": "updatedAt",
-          "Type": {
-            "Type": "String"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemFindOneAnswerMediaMetadata",
-      "Fields": [
-        {
-          "Name": "Abridged",
-          "JsonName": "abridged",
-          "Type": {
-            "Type": "Boolean"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Asin",
-          "JsonName": "asin",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Author",
-          "JsonName": "author",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "AuthorName",
-          "JsonName": "authorName",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "AuthorNameLF",
-          "JsonName": "authorNameLF",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Authors",
-          "JsonName": "authors",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "Reference",
-              "ReferenceName": "LibraryItemFindOneAnswerMediaMetadataAuthors"
-            }
-          }
-        },
-        {
-          "Name": "Description",
-          "JsonName": "description",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "DescriptionPlain",
-          "JsonName": "descriptionPlain",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Explicit",
-          "JsonName": "explicit",
-          "Type": {
-            "Type": "Boolean"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "FeedUrl",
-          "JsonName": "feedUrl",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Genres",
-          "JsonName": "genres",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "String"
-            }
-          }
-        },
-        {
-          "Name": "ImageUrl",
-          "JsonName": "imageUrl",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Isbn",
-          "JsonName": "isbn",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "ItunesArtistId",
-          "JsonName": "itunesArtistId",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "ItunesId",
-          "JsonName": "itunesId",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "ItunesPageUrl",
-          "JsonName": "itunesPageUrl",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Language",
-          "JsonName": "language",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "NarratorName",
-          "JsonName": "narratorName",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Narrators",
-          "JsonName": "narrators",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "String"
-            }
-          }
-        },
-        {
-          "Name": "PublishedDate",
-          "JsonName": "publishedDate",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "PublishedYear",
-          "JsonName": "publishedYear",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Publisher",
-          "JsonName": "publisher",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "ReleaseDate",
-          "JsonName": "releaseDate",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Series",
-          "JsonName": "series",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "Reference",
-              "ReferenceName": "LibraryItemFindOneAnswerMediaMetadataSeries"
-            }
-          }
-        },
-        {
-          "Name": "SeriesName",
-          "JsonName": "seriesName",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Subtitle",
-          "JsonName": "subtitle",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Title",
-          "JsonName": "title",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "TitleIgnorePrefix",
-          "JsonName": "titleIgnorePrefix",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Type",
-          "JsonName": "type",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemFindOneAnswerMediaMetadataAuthors",
-      "Fields": [
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Name",
-          "JsonName": "name",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemFindOneAnswerMediaMetadataSeries",
-      "Fields": [
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Name",
-          "JsonName": "name",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Sequence",
-          "JsonName": "sequence",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemFindOneAnswerMediaTracks",
-      "Fields": [
-        {
-          "Name": "AddedAt",
-          "JsonName": "addedAt",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "BitRate",
-          "JsonName": "bitRate",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "ChannelLayout",
-          "JsonName": "channelLayout",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Channels",
-          "JsonName": "channels",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "Chapters",
-          "JsonName": "chapters",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "Reference",
-              "ReferenceName": "LibraryItemFindOneAnswerMediaTracksChapters"
-            }
-          }
-        },
-        {
-          "Name": "Codec",
-          "JsonName": "codec",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "ContentUrl",
-          "JsonName": "contentUrl",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "DiscNumFromFilename",
-          "JsonName": "discNumFromFilename",
-          "Type": {
-            "Type": "Double"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "DiscNumFromMeta",
-          "JsonName": "discNumFromMeta",
-          "Type": {
-            "Type": "Any"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Duration",
-          "JsonName": "duration",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "EmbeddedCoverArt",
-          "JsonName": "embeddedCoverArt",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Error",
-          "JsonName": "error",
-          "Type": {
-            "Type": "Any"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Exclude",
-          "JsonName": "exclude",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "Format",
-          "JsonName": "format",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Index",
-          "JsonName": "index",
-          "Type": {
-            "Type": "Integer"
-          }
-        },
-        {
-          "Name": "Ino",
-          "JsonName": "ino",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Language",
-          "JsonName": "language",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "ManuallyVerified",
-          "JsonName": "manuallyVerified",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "MetaTags",
-          "JsonName": "metaTags",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "LibraryItemFindOneAnswerMediaTracksMetaTags"
-          }
-        },
-        {
-          "Name": "Metadata",
-          "JsonName": "metadata",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "LibraryItemFindOneAnswerMediaTracksMetadata"
-          }
-        },
-        {
-          "Name": "MimeType",
-          "JsonName": "mimeType",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "StartOffset",
-          "JsonName": "startOffset",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "TimeBase",
-          "JsonName": "timeBase",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Title",
-          "JsonName": "title",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "TrackNumFromFilename",
-          "JsonName": "trackNumFromFilename",
-          "Type": {
-            "Type": "Double"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "TrackNumFromMeta",
-          "JsonName": "trackNumFromMeta",
-          "Type": {
-            "Type": "Double"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "UpdatedAt",
-          "JsonName": "updatedAt",
-          "Type": {
-            "Type": "Double"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemFindOneAnswerMediaTracksChapters",
-      "Fields": [
-        {
-          "Name": "End",
-          "JsonName": "end",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "Start",
-          "JsonName": "start",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "Title",
-          "JsonName": "title",
-          "Type": {
-            "Type": "String"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemFindOneAnswerMediaTracksMetaTags",
-      "Fields": [
-        {
-          "Name": "TagAlbum",
-          "JsonName": "tagAlbum",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "TagAlbumArtist",
-          "JsonName": "tagAlbumArtist",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "TagArtist",
-          "JsonName": "tagArtist",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "TagComposer",
-          "JsonName": "tagComposer",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "TagDate",
-          "JsonName": "tagDate",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "TagEncoder",
-          "JsonName": "tagEncoder",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "TagGenre",
-          "JsonName": "tagGenre",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "TagGrouping",
-          "JsonName": "tagGrouping",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "TagPublisher",
-          "JsonName": "tagPublisher",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "TagTitle",
-          "JsonName": "tagTitle",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "TagTrack",
-          "JsonName": "tagTrack",
-          "Type": {
-            "Type": "String"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemFindOneAnswerMediaTracksMetadata",
-      "Fields": [
-        {
-          "Name": "BirthtimeMs",
-          "JsonName": "birthtimeMs",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "CtimeMs",
-          "JsonName": "ctimeMs",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "Ext",
-          "JsonName": "ext",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Filename",
-          "JsonName": "filename",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "MtimeMs",
-          "JsonName": "mtimeMs",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "Path",
-          "JsonName": "path",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "RelPath",
-          "JsonName": "relPath",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Size",
-          "JsonName": "size",
-          "Type": {
-            "Type": "Integer"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemFindOneAnswerUserMediaProgress",
-      "Fields": [
-        {
-          "Name": "CurrentTime",
-          "JsonName": "currentTime",
-          "Type": {
-            "Type": "Double"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Duration",
-          "JsonName": "duration",
-          "Type": {
-            "Type": "Double"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "EbookLocation",
-          "JsonName": "ebookLocation",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "EbookProgress",
-          "JsonName": "ebookProgress",
-          "Type": {
-            "Type": "Double"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "EpisodeId",
-          "JsonName": "episodeId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "EpisodeID"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "FinishedAt",
-          "JsonName": "finishedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "HideFromContinueListening",
-          "JsonName": "hideFromContinueListening",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "IsFinished",
-          "JsonName": "isFinished",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "LastUpdate",
-          "JsonName": "lastUpdate",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "LibraryItemId",
-          "JsonName": "libraryItemId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "LibraryItemID"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "MediaItemId",
-          "JsonName": "mediaItemId",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "MediaItemType",
-          "JsonName": "mediaItemType",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Progress",
-          "JsonName": "progress",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "StartedAt",
-          "JsonName": "startedAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "UserId",
-          "JsonName": "userId",
-          "Type": {
-            "Type": "ID",
-            "ReferenceName": "UserID"
-          },
-          "Nullable": true
         }
       ]
     },
@@ -3238,7 +1109,7 @@
           "Name": "Id",
           "JsonName": "id",
           "Type": {
-            "Type": "Double"
+            "Type": "Integer"
           }
         },
         {
@@ -3533,7 +1404,7 @@
           "Name": "Channels",
           "JsonName": "channels",
           "Type": {
-            "Type": "Double"
+            "Type": "Integer"
           }
         },
         {
@@ -3653,7 +1524,7 @@
           "Name": "Index",
           "JsonName": "index",
           "Type": {
-            "Type": "Double"
+            "Type": "Integer"
           }
         },
         {
@@ -4052,6 +1923,60 @@
       ]
     },
     {
+      "Name": "LibraryItemMatchRequest",
+      "Fields": [
+        {
+          "Name": "Asin",
+          "JsonName": "asin",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Author",
+          "JsonName": "author",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Isbn",
+          "JsonName": "isbn",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "OverrideCover",
+          "JsonName": "overrideCover",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "OverrideDetails",
+          "JsonName": "overrideDetails",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Provider",
+          "JsonName": "provider",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
       "Name": "LibraryItemScanAnswer",
       "Fields": [
         {
@@ -4247,324 +2172,8 @@
             "Type": "List",
             "NestedItem": {
               "Type": "Reference",
-              "ReferenceName": "LibraryItemUpdateMediaChaptersRequestChapters"
+              "ReferenceName": "Chapter"
             }
-          }
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemUpdateMediaChaptersRequestChapters",
-      "Fields": [
-        {
-          "Name": "End",
-          "JsonName": "end",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "Integer"
-          }
-        },
-        {
-          "Name": "Start",
-          "JsonName": "start",
-          "Type": {
-            "Type": "Double"
-          }
-        },
-        {
-          "Name": "Title",
-          "JsonName": "title",
-          "Type": {
-            "Type": "String"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemUpdateMediaRequest",
-      "Fields": [
-        {
-          "Name": "AutoDownloadEpisodes",
-          "JsonName": "autoDownloadEpisodes",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "AutoDownloadSchedule",
-          "JsonName": "autoDownloadSchedule",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "LastEpisodeCheck",
-          "JsonName": "lastEpisodeCheck",
-          "Type": {
-            "Type": "Any"
-          }
-        },
-        {
-          "Name": "MaxEpisodesToKeep",
-          "JsonName": "maxEpisodesToKeep",
-          "Type": {
-            "Type": "Integer"
-          }
-        },
-        {
-          "Name": "MaxNewEpisodesToDownload",
-          "JsonName": "maxNewEpisodesToDownload",
-          "Type": {
-            "Type": "Integer"
-          }
-        },
-        {
-          "Name": "Metadata",
-          "JsonName": "metadata",
-          "Type": {
-            "Type": "Reference",
-            "ReferenceName": "LibraryItemUpdateMediaRequestMetadata"
-          }
-        },
-        {
-          "Name": "Tags",
-          "JsonName": "tags",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "String"
-            }
-          }
-        },
-        {
-          "Name": "Url",
-          "JsonName": "url",
-          "Type": {
-            "Type": "Any"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemUpdateMediaRequestMetadata",
-      "Fields": [
-        {
-          "Name": "Abridged",
-          "JsonName": "abridged",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "Asin",
-          "JsonName": "asin",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Author",
-          "JsonName": "author",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Authors",
-          "JsonName": "authors",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "Reference",
-              "ReferenceName": "LibraryItemUpdateMediaRequestMetadataAuthors"
-            }
-          }
-        },
-        {
-          "Name": "Description",
-          "JsonName": "description",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Explicit",
-          "JsonName": "explicit",
-          "Type": {
-            "Type": "Boolean"
-          }
-        },
-        {
-          "Name": "FeedUrl",
-          "JsonName": "feedUrl",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Genres",
-          "JsonName": "genres",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "String"
-            }
-          }
-        },
-        {
-          "Name": "ImageUrl",
-          "JsonName": "imageUrl",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Isbn",
-          "JsonName": "isbn",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "ItunesId",
-          "JsonName": "itunesId",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Language",
-          "JsonName": "language",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Narrators",
-          "JsonName": "narrators",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "String"
-            }
-          }
-        },
-        {
-          "Name": "PublishedDate",
-          "JsonName": "publishedDate",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "PublishedYear",
-          "JsonName": "publishedYear",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Publisher",
-          "JsonName": "publisher",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "ReleaseDate",
-          "JsonName": "releaseDate",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Series",
-          "JsonName": "series",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "Reference",
-              "ReferenceName": "LibraryItemUpdateMediaRequestMetadataSeries"
-            }
-          }
-        },
-        {
-          "Name": "Subtitle",
-          "JsonName": "subtitle",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Title",
-          "JsonName": "title",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Type",
-          "JsonName": "type",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemUpdateMediaRequestMetadataAuthors",
-      "Fields": [
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Name",
-          "JsonName": "name",
-          "Type": {
-            "Type": "String"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "LibraryItemUpdateMediaRequestMetadataSeries",
-      "Fields": [
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Name",
-          "JsonName": "name",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Sequence",
-          "JsonName": "sequence",
-          "Type": {
-            "Type": "String"
           }
         }
       ]
@@ -4620,6 +2229,264 @@
           "Type": {
             "Type": "Boolean"
           }
+        }
+      ]
+    },
+    {
+      "Name": "MediaUpdate",
+      "SchemaName": "MediaUpdate",
+      "Fields": [
+        {
+          "Name": "AutoDownloadEpisodes",
+          "JsonName": "autoDownloadEpisodes",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "AutoDownloadSchedule",
+          "JsonName": "autoDownloadSchedule",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "LastEpisodeCheck",
+          "JsonName": "lastEpisodeCheck",
+          "Type": {
+            "Type": "Any"
+          }
+        },
+        {
+          "Name": "MaxEpisodesToKeep",
+          "JsonName": "maxEpisodesToKeep",
+          "Type": {
+            "Type": "Integer"
+          },
+          "Nullable": true,
+          "KeepsNull": true
+        },
+        {
+          "Name": "MaxNewEpisodesToDownload",
+          "JsonName": "maxNewEpisodesToDownload",
+          "Type": {
+            "Type": "Integer"
+          },
+          "Nullable": true,
+          "KeepsNull": true
+        },
+        {
+          "Name": "Metadata",
+          "JsonName": "metadata",
+          "Type": {
+            "Type": "Reference",
+            "ReferenceName": "MediaUpdateMetadata"
+          }
+        },
+        {
+          "Name": "Tags",
+          "JsonName": "tags",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "Url",
+          "JsonName": "url",
+          "Type": {
+            "Type": "Any"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "MediaUpdateMetadata",
+      "Fields": [
+        {
+          "Name": "Abridged",
+          "JsonName": "abridged",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "Asin",
+          "JsonName": "asin",
+          "Type": {
+            "Type": "String"
+          },
+          "KeepsNull": true
+        },
+        {
+          "Name": "Author",
+          "JsonName": "author",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true,
+          "KeepsNull": true
+        },
+        {
+          "Name": "Authors",
+          "JsonName": "authors",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "AuthorMinimal"
+            }
+          }
+        },
+        {
+          "Name": "Description",
+          "JsonName": "description",
+          "Type": {
+            "Type": "String"
+          },
+          "KeepsNull": true
+        },
+        {
+          "Name": "Explicit",
+          "JsonName": "explicit",
+          "Type": {
+            "Type": "Boolean"
+          }
+        },
+        {
+          "Name": "FeedUrl",
+          "JsonName": "feedUrl",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true,
+          "KeepsNull": true
+        },
+        {
+          "Name": "Genres",
+          "JsonName": "genres",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "ImageUrl",
+          "JsonName": "imageUrl",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true,
+          "KeepsNull": true
+        },
+        {
+          "Name": "Isbn",
+          "JsonName": "isbn",
+          "Type": {
+            "Type": "String"
+          },
+          "KeepsNull": true
+        },
+        {
+          "Name": "ItunesId",
+          "JsonName": "itunesId",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true,
+          "KeepsNull": true
+        },
+        {
+          "Name": "Language",
+          "JsonName": "language",
+          "Type": {
+            "Type": "String"
+          },
+          "KeepsNull": true
+        },
+        {
+          "Name": "Narrators",
+          "JsonName": "narrators",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "PublishedDate",
+          "JsonName": "publishedDate",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true,
+          "KeepsNull": true
+        },
+        {
+          "Name": "PublishedYear",
+          "JsonName": "publishedYear",
+          "Type": {
+            "Type": "String"
+          },
+          "KeepsNull": true
+        },
+        {
+          "Name": "Publisher",
+          "JsonName": "publisher",
+          "Type": {
+            "Type": "String"
+          },
+          "KeepsNull": true
+        },
+        {
+          "Name": "ReleaseDate",
+          "JsonName": "releaseDate",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true,
+          "KeepsNull": true
+        },
+        {
+          "Name": "Series",
+          "JsonName": "series",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "SeriesMinimal"
+            }
+          }
+        },
+        {
+          "Name": "Subtitle",
+          "JsonName": "subtitle",
+          "Type": {
+            "Type": "String"
+          },
+          "KeepsNull": true
+        },
+        {
+          "Name": "Title",
+          "JsonName": "title",
+          "Type": {
+            "Type": "String"
+          },
+          "KeepsNull": true
+        },
+        {
+          "Name": "Type",
+          "JsonName": "type",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true,
+          "KeepsNull": true
         }
       ]
     }

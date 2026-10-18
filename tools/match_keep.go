@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // A match with override_details is all or nothing: the server replaces every
@@ -45,10 +45,10 @@ func parseKeep(keep []string) ([]string, error) {
 // keptUpdate is the update that restores the named fields to what the item
 // held before the match. An empty field is restored as empty: keeping the
 // series means the provider's does not arrive either.
-func keptUpdate(before *abs.Item, keep []string) abs.MediaUpdate {
-	m := &before.Media.Metadata
-	md := abs.MetadataUpdate{}
-	upd := abs.MediaUpdate{}
+func keptUpdate(before *api.LibraryItemExpanded, keep []string) api.MediaUpdate {
+	m := before.Media.Metadata
+	md := api.MediaUpdateMetadata{}
+	upd := api.MediaUpdate{}
 	str := func(v string) *string { return &v }
 	for _, k := range keep {
 		switch k {
@@ -57,13 +57,13 @@ func keptUpdate(before *abs.Item, keep []string) abs.MediaUpdate {
 		case "subtitle":
 			md.Subtitle = str(m.Subtitle)
 		case "authors":
-			md.Authors = []abs.NameRef{}
+			md.Authors = []api.AuthorMinimal{}
 			for _, a := range m.Authors {
-				md.Authors = append(md.Authors, abs.NameRef{ID: a.ID, Name: a.Name})
+				md.Authors = append(md.Authors, api.AuthorMinimal{Id: a.Id, Name: a.Name})
 			}
 			if len(md.Authors) == 0 {
 				for _, a := range splitNames(m.AuthorDisplay()) {
-					md.Authors = append(md.Authors, abs.NameRef{Name: a})
+					md.Authors = append(md.Authors, api.AuthorMinimal{Name: a})
 				}
 			}
 		case "narrators":
@@ -74,9 +74,9 @@ func keptUpdate(before *abs.Item, keep []string) abs.MediaUpdate {
 				md.Narrators = append(md.Narrators, splitNames(m.NarratorDisplay())...)
 			}
 		case "series":
-			md.Series = []abs.SeriesRef{}
+			md.Series = []api.SeriesMinimal{}
 			for _, s := range m.Series {
-				md.Series = append(md.Series, abs.SeriesRef{ID: s.ID, Name: s.Name, Sequence: s.Sequence})
+				md.Series = append(md.Series, api.SeriesMinimal{Id: s.Id, Name: s.Name, Sequence: s.Sequence})
 			}
 		case "genres":
 			md.Genres = slices.Clone(m.Genres)
@@ -91,7 +91,7 @@ func keptUpdate(before *abs.Item, keep []string) abs.MediaUpdate {
 		case "publisher":
 			md.Publisher = str(m.Publisher)
 		case "year":
-			md.PublishedYear = str(m.PublishedYear.String())
+			md.PublishedYear = str(m.PublishedYear)
 		case "language":
 			md.Language = str(m.Language)
 		case "description":
@@ -106,7 +106,7 @@ func keptUpdate(before *abs.Item, keep []string) abs.MediaUpdate {
 // are written: the match's own, since it fills an empty list, unless the tags
 // were kept. The provider tag is added to this list, and one read from before
 // the match would wipe the tags the match had just filled.
-func tagsAfter(before *abs.Item, res *abs.MatchResult, keep []string) []string {
+func tagsAfter(before *api.LibraryItemExpanded, res *api.LibraryItemMatchAnswer, keep []string) []string {
 	if slices.Contains(keep, "tags") {
 		return before.Media.Tags
 	}
@@ -114,10 +114,10 @@ func tagsAfter(before *abs.Item, res *abs.MatchResult, keep []string) []string {
 }
 
 // restoreKept puts the kept fields back after a match.
-func restoreKept(ctx context.Context, client *abs.Client, before *abs.Item, keep []string) error {
+func restoreKept(ctx context.Context, gen *api.Client, before *api.LibraryItemExpanded, keep []string) error {
 	if len(keep) == 0 {
 		return nil
 	}
-	_, err := client.UpdateMedia(ctx, before.ID, keptUpdate(before, keep))
+	_, err := gen.LibraryItemUpdateMedia(ctx, before.Id, keptUpdate(before, keep))
 	return err
 }

@@ -4,22 +4,22 @@ package abs
 
 // UserForBrowser is the "UserForBrowser" schema.
 type UserForBrowser struct {
-	Bookmarks                       []UserForBrowserBookmarks     `json:"bookmarks,omitzero"`
-	CreatedAt                       UnixMilli                     `json:"createdAt,omitzero"`
-	Email                           string                        `json:"email,omitempty"`
-	HasOpenIDLink                   bool                          `json:"hasOpenIDLink"`
-	Id                              UserID                        `json:"id,omitempty"`
-	IsActive                        *bool                         `json:"isActive,omitempty"`
-	IsLocked                        *bool                         `json:"isLocked,omitempty"`
-	IsOldToken                      any                           `json:"isOldToken,omitempty"`
-	ItemTagsSelected                []string                      `json:"itemTagsSelected,omitzero"`
-	LastSeen                        UnixMilli                     `json:"lastSeen,omitzero"`
-	LatestSession                   *UserForBrowserLatestSession  `json:"latestSession,omitempty"`
-	LibrariesAccessible             []string                      `json:"librariesAccessible,omitzero"`
-	MediaProgress                   []UserForBrowserMediaProgress `json:"mediaProgress,omitzero"`
-	Permissions                     *UserForBrowserPermissions    `json:"permissions,omitempty"`
-	SeriesHideFromContinueListening []string                      `json:"seriesHideFromContinueListening,omitzero"`
-	Token                           string                        `json:"token,omitempty"`
-	Type                            string                        `json:"type,omitempty"`
-	Username                        string                        `json:"username,omitempty"`
+	Bookmarks                       []AudioBookmark  `json:"bookmarks,omitzero"`
+	CreatedAt                       UnixMilli        `json:"createdAt,omitzero"`
+	Email                           string           `json:"email,omitempty"`
+	HasOpenIDLink                   bool             `json:"hasOpenIDLink"`
+	Id                              UserID           `json:"id,omitempty"`
+	IsActive                        *bool            `json:"isActive,omitempty"`
+	IsLocked                        *bool            `json:"isLocked,omitempty"`
+	IsOldToken                      any              `json:"isOldToken,omitempty"`
+	ItemTagsSelected                []string         `json:"itemTagsSelected,omitzero"`
+	LastSeen                        UnixMilli        `json:"lastSeen,omitzero"`
+	LatestSession                   *PlaybackSession `json:"latestSession,omitempty"`
+	LibrariesAccessible             []string         `json:"librariesAccessible,omitzero"`
+	MediaProgress                   []MediaProgress  `json:"mediaProgress,omitzero"`
+	Permissions                     *UserPermissions `json:"permissions,omitempty"`
+	SeriesHideFromContinueListening []string         `json:"seriesHideFromContinueListening,omitzero"`
+	Token                           string           `json:"token,omitempty"`
+	Type                            string           `json:"type,omitempty"`
+	Username                        string           `json:"username,omitempty"`
 }

@@ -236,7 +236,7 @@ func TestCollectionListPages(t *testing.T) {
 		rows = append(rows, fmt.Sprintf(`{"id":"c%d","libraryId":"`+libID+`","name":"Shelf %d","books":[]}`, i, i))
 	}
 	f := newFakeABS(t)
-	f.json("GET /api/collections", `{"results":[`+strings.Join(rows, ",")+`]}`)
+	f.json("GET /api/collections", `{"collections":[`+strings.Join(rows, ",")+`]}`)
 	call := toolCaller(t, f)
 
 	out, err := call("collection_list", map[string]any{"limit": 2, "offset": 2})

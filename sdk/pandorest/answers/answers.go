@@ -582,8 +582,13 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	resp, err := t.next.RoundTrip(req)
-	if err != nil || resp.StatusCode < 200 || resp.StatusCode > 299 || !isJSON(resp.Header.Get("Content-Type")) {
+	if err != nil || resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return resp, err
+	}
+	// what was sent is kept whatever the answer, which is left unread when it is not JSON: text, nothing, or a file
+	if !isJSON(resp.Header.Get("Content-Type")) {
+		t.rec.record(req.Method, req.URL.EscapedPath(), resp.StatusCode, sent, nil)
+		return resp, nil
 	}
 
 	answer, err := io.ReadAll(resp.Body)

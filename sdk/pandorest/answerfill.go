@@ -84,8 +84,13 @@ func infer(v any) *schema {
 		// an empty list is a list of something no answer has shown
 		return &schema{Type: "array", Items: cmp.Or(inferAll(v), &schema{})}
 	case map[string]any:
+		// a map keyed by data, such as listening time by day, holds what every key holds
 		if answers.Keyed(v) {
-			return &schema{Type: "object", AdditionalProperties: true}
+			out := &schema{Type: "object"}
+			for _, k := range slices.Sorted(maps.Keys(v)) {
+				out.Values = unite(out.Values, infer(v[k]))
+			}
+			return out
 		}
 		s := &schema{Type: "object", Properties: map[string]*schema{}}
 		for k, x := range v {
@@ -108,13 +113,17 @@ func inferAll(values []any) *schema {
 }
 
 // unite is the schema two samples of one place both fit: a field either holds is kept, a whole number and a fraction are a number, a null makes
-// it nullable, and two kinds that do not go together leave it untyped.
+// it nullable, two kinds that do not go together leave it untyped, and a record referred to stays referred to.
 func unite(a, b *schema) *schema {
 	switch {
 	case a == nil:
 		return b
 	case b == nil:
 		return a
+	case a.Ref != "":
+		return clone(a)
+	case b.Ref != "":
+		return clone(b)
 	}
 
 	nullable := a.Nullable || b.Nullable
@@ -125,7 +134,8 @@ func unite(a, b *schema) *schema {
 	case b.Type == "":
 		out = clone(a)
 	case a.Type == "object" && b.Type == "object":
-		out = &schema{Type: "object", AdditionalProperties: a.AdditionalProperties || b.AdditionalProperties, Properties: map[string]*schema{}}
+		// a record a stated place made where the scan saw nothing of it stays one the answers may fill
+		out = &schema{Type: "object", AdditionalProperties: a.AdditionalProperties || b.AdditionalProperties, Properties: map[string]*schema{}, unseen: a.unseen || b.unseen}
 		for _, n := range slices.Sorted(maps.Keys(a.Properties)) {
 			out.Properties[n] = unite(a.Properties[n], b.Properties[n])
 		}
@@ -134,6 +144,7 @@ func unite(a, b *schema) *schema {
 				out.Properties[n] = clone(b.Properties[n])
 			}
 		}
+		out.Values = unite(clone(a.Values), clone(b.Values))
 	case a.Type == "array" && b.Type == "array":
 		out = &schema{Type: "array", Items: unite(a.Items, b.Items)}
 	case a.Type == b.Type:
@@ -162,6 +173,7 @@ func loosen(s *schema) *schema {
 		s.sampled = true
 	}
 	loosen(s.Items)
+	loosen(s.Values)
 	for _, p := range s.Properties {
 		loosen(p)
 	}
@@ -219,10 +231,24 @@ func (a *answerFill) merge(to, from *schema, components map[string]*schema, wher
 	}
 
 	switch {
+	case to.Type == "object" && from.Type == "object" && to.Values != nil:
+		// a map's keys are data, so what each holds fills what every key holds, whether or not the answer's keys looked like data
+		a.merge(to.Values, from.Values, components, where+"{}", at)
+		for _, n := range slices.Sorted(maps.Keys(from.Properties)) {
+			a.merge(to.Values, from.Properties[n], components, where+"{}", at)
+		}
+
+	case to.Type == "object" && from.Type == "object" && from.Values != nil:
+		// a map the source writes as {} without filling it where the scan can see
+		if len(to.Properties) == 0 {
+			to.Values = loosen(clone(from.Values))
+			a.filled++
+		}
+
 	case to.Type == "object" && from.Type == "object":
 		// a field of a record the source leaves open, or of a body it hands on whole, is filled in, and one the source's record lacks is a
 		// correction, except where it is only what a client chose to send
-		open := to.AdditionalProperties || len(to.Properties) == 0
+		open := to.AdditionalProperties || len(to.Properties) == 0 || to.unseen
 		for _, n := range slices.Sorted(maps.Keys(from.Properties)) {
 			if p, ok := to.Properties[n]; ok {
 				a.merge(p, from.Properties[n], components, where+"."+n, place{sent: at.sent})
@@ -254,6 +280,10 @@ func (a *answerFill) merge(to, from *schema, components map[string]*schema, wher
 
 	case to.Type == "number" && from.Type == "integer":
 		// a number that came back whole is still a number
+
+	case to.Type == "number" && from.Type == "number":
+		// and one seen whole elsewhere that came back with a fraction is not a whole number, whatever its name
+		to.whole = false
 
 	case to.Type != from.Type:
 		who := "the server sent"

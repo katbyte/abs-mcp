@@ -11,14 +11,14 @@ import (
 
 	"github.com/katbyte/go-kt/httpc"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // ItemFile is a Fetch over one file of an item, through the server's file
 // route with byte ranges.
-func ItemFile(client *abs.Client, itemID, fileID string) Fetch {
+func ItemFile(gen *api.Client, itemID api.LibraryItemID, fileID string) Fetch {
 	return func(ctx context.Context, off, n int64) ([]byte, int64, error) {
-		resp, err := client.ItemFileRange(ctx, itemID, fileID, fmt.Sprintf("bytes=%d-%d", off, off+n-1))
+		got, err := gen.LibraryItemGetLibraryFile(ctx, itemID, fileID, api.LibraryItemGetLibraryFileOptions{Range: fmt.Sprintf("bytes=%d-%d", off, off+n-1)})
 		if err != nil {
 			// a range past the end of an empty file: nothing to read
 			if httpc.StatusCode(err) == http.StatusRequestedRangeNotSatisfiable && off == 0 {
@@ -26,7 +26,9 @@ func ItemFile(client *abs.Client, itemID, fileID string) Fetch {
 			}
 			return nil, 0, err
 		}
-		defer func() { _ = resp.Body.Close() }()
+		body, _ := got.Reader()
+		defer func() { _ = body.Close() }()
+		resp := got.HttpResponse
 
 		var size int64
 		switch resp.StatusCode {
@@ -52,7 +54,7 @@ func ItemFile(client *abs.Client, itemID, fileID string) Fetch {
 		}
 
 		buf := make([]byte, n)
-		k, err := io.ReadFull(resp.Body, buf)
+		k, err := io.ReadFull(body, buf)
 		if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
 			return nil, 0, fmt.Errorf("reading bytes %d-%d of the file: %w", off, off+n-1, err)
 		}

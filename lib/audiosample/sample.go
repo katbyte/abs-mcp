@@ -36,7 +36,8 @@ import (
 
 	"github.com/katbyte/go-kt/httpc"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/go-kt/pointer"
 )
 
 // ErrNoFFmpeg is returned by New when ffmpeg is not on the PATH.
@@ -69,15 +70,16 @@ func (b *Book) Duration() float64 {
 // own track list, which leaves excluded files out and carries each file's
 // start, or, when the item came without one, its included audio files in
 // index order, which is what the server builds the list from.
-func BookOf(it *abs.Item) (*Book, error) {
+func BookOf(it *api.LibraryItemExpanded) (*Book, error) {
 	if it.IsPodcast() {
 		return nil, fmt.Errorf("%q is a podcast: its audio is its episodes, not one book", it.Title())
 	}
-	b := &Book{ItemID: it.ID}
-	for _, t := range it.Media.Tracks {
+	media := pointer.From(it.Media)
+	b := &Book{ItemID: string(it.Id)}
+	for _, t := range media.Tracks {
 		id := t.Ino
-		if id == "" && t.ContentURL != "" {
-			id = path.Base(t.ContentURL) // .../api/items/<id>/file/<ino>
+		if id == "" && t.ContentUrl != "" {
+			id = path.Base(t.ContentUrl) // .../api/items/<id>/file/<ino>
 		}
 		if id == "" || t.Duration <= 0 {
 			continue
@@ -85,8 +87,8 @@ func BookOf(it *abs.Item) (*Book, error) {
 		b.Tracks = append(b.Tracks, Track{FileID: id, Start: t.StartOffset, Duration: t.Duration})
 	}
 	if len(b.Tracks) == 0 {
-		files := slices.Clone(it.Media.AudioFiles)
-		slices.SortStableFunc(files, func(x, y abs.AudioFile) int { return cmp.Compare(x.Index, y.Index) })
+		files := slices.Clone(media.AudioFiles)
+		slices.SortStableFunc(files, func(x, y api.AudioFile) int { return cmp.Compare(x.Index, y.Index) })
 		start := 0.0
 		for _, f := range files {
 			if f.Exclude || f.Ino == "" || f.Duration <= 0 {
@@ -108,7 +110,7 @@ func BookOf(it *abs.Item) (*Book, error) {
 // must be closed. The proxy answers only under a random path, and only for
 // the items this sampler was asked to read.
 type Sampler struct {
-	client *abs.Client
+	gen    *api.Client
 	ffmpeg string
 	secret string
 	base   string // the proxy's address and secret path, what ffmpeg is given
@@ -124,9 +126,9 @@ type Sampler struct {
 	stopped error            // why the proxy stopped serving, when it did before Close
 }
 
-// New starts a sampler reading through client. It fails with ErrNoFFmpeg when
+// New starts a sampler reading through gen. It fails with ErrNoFFmpeg when
 // ffmpeg is not installed.
-func New(ctx context.Context, client *abs.Client) (*Sampler, error) {
+func New(ctx context.Context, gen *api.Client) (*Sampler, error) {
 	bin, err := exec.LookPath("ffmpeg")
 	if err != nil {
 		return nil, ErrNoFFmpeg
@@ -141,7 +143,7 @@ func New(ctx context.Context, client *abs.Client) (*Sampler, error) {
 	}
 
 	s := &Sampler{
-		client: client,
+		gen:    gen,
 		ffmpeg: bin,
 		secret: hex.EncodeToString(key[:]),
 		items:  map[string]bool{},
@@ -499,7 +501,7 @@ func (s *Sampler) serve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	read := r.URL.Query().Get("read")
-	resp, err := s.client.ItemFileRange(r.Context(), item, file, r.Header.Get("Range"))
+	got, err := s.gen.LibraryItemGetLibraryFile(r.Context(), api.LibraryItemID(item), file, api.LibraryItemGetLibraryFileOptions{Range: r.Header.Get("Range")})
 	if err != nil {
 		status := http.StatusBadGateway
 		if code := httpc.StatusCode(err); code != 0 {
@@ -513,7 +515,9 @@ func (s *Sampler) serve(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(status), status)
 		return
 	}
-	defer func() { _ = resp.Body.Close() }()
+	reply, _ := got.Reader()
+	defer func() { _ = reply.Close() }()
+	resp := got.HttpResponse
 
 	for _, h := range []string{"Content-Type", "Content-Length", "Content-Range", "Accept-Ranges", "Last-Modified", "Etag"} {
 		if v := resp.Header.Get(h); v != "" {
@@ -525,7 +529,7 @@ func (s *Sampler) serve(w http.ResponseWriter, r *http.Request) {
 	// write that fails or a read cancelled with the request: neither is the
 	// server's doing. A read failing while ffmpeg still waits is, and the
 	// audio it was reading comes back short
-	body := &readErr{r: resp.Body}
+	body := &readErr{r: reply}
 	n, _ := io.Copy(w, body) // a failed write is ffmpeg hanging up; a failed read is kept in body.err
 	s.read.Add(n)
 	if body.err != nil && r.Context().Err() == nil {

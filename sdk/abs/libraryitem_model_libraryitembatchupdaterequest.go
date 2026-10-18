@@ -4,6 +4,6 @@ package abs
 
 // LibraryItemBatchUpdateRequest is an object the document declares inline.
 type LibraryItemBatchUpdateRequest struct {
-	Id           string                                     `json:"id,omitempty"`
-	MediaPayload *LibraryItemBatchUpdateRequestMediaPayload `json:"mediaPayload,omitempty"`
+	Id           string       `json:"id,omitempty"`
+	MediaPayload *MediaUpdate `json:"mediaPayload,omitempty"`
 }

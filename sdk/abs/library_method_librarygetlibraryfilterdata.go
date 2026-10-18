@@ -14,41 +14,71 @@ import (
 
 // LibraryGetLibraryFilterDataResponse is the result of LibraryGetLibraryFilterData.
 //
-// Answer is the LibraryGetLibraryFilterDataAnswer answered, nil when the server answered none (a 204), which
+// Answer is the LibraryFilterData answered, nil when the server answered none (a 204), which
 // Answered tells. The same record is embedded, so res.Answer.Name may be read as
 // res.Name; when nothing was answered the embedded record is a zero one, so that
 // read is empty rather than a panic. Only the method sets the two; a response built
 // by hand sets both or neither.
 type LibraryGetLibraryFilterDataResponse struct {
 	HttpResponse *http.Response
-	Answer       *LibraryGetLibraryFilterDataAnswer
-	*LibraryGetLibraryFilterDataAnswer
+	Answer       *LibraryFilterData
+	*LibraryFilterData
 }
 
 // Answered reports whether the server answered with a body that was decoded:
 // false for a 204, or a call that failed before one came.
 func (r LibraryGetLibraryFilterDataResponse) Answered() bool { return r.Answer != nil }
 
-// Record is the LibraryGetLibraryFilterDataAnswer answered, as a value to change and write back, or an
+// Record is the LibraryFilterData answered, as a value to change and write back, or an
 // error when the server answered none.
-func (r LibraryGetLibraryFilterDataResponse) Record() (LibraryGetLibraryFilterDataAnswer, error) {
+func (r LibraryGetLibraryFilterDataResponse) Record() (LibraryFilterData, error) {
 	if r.Answer == nil {
-		return LibraryGetLibraryFilterDataAnswer{}, errors.New("LibraryGetLibraryFilterData answered no LibraryGetLibraryFilterDataAnswer")
+		return LibraryFilterData{}, errors.New("LibraryGetLibraryFilterData answered no LibraryFilterData")
 	}
 
 	return *r.Answer, nil
 }
 
+// LibraryGetLibraryFilterDataOptions holds the query and header parameters of LibraryGetLibraryFilterData.
+type LibraryGetLibraryFilterDataOptions struct {
+	Sort string
+}
+
+// ToHeaders returns the header parameters the options set.
+func (o LibraryGetLibraryFilterDataOptions) ToHeaders() *client.Headers {
+	out := client.Headers{}
+	return &out
+}
+
+// ToQuery returns the query parameters the options set.
+func (o LibraryGetLibraryFilterDataOptions) ToQuery() *client.QueryParams {
+	out := client.QueryParams{}
+	if o.Sort != "" {
+		out.Append("sort", o.Sort)
+	}
+	return &out
+}
+
 // LibraryGetLibraryFilterData calls GET /api/libraries/{id}/filterdata.
-func (c Client) LibraryGetLibraryFilterData(ctx context.Context, id LibraryID) (result LibraryGetLibraryFilterDataResponse, err error) {
-	result.LibraryGetLibraryFilterDataAnswer = &LibraryGetLibraryFilterDataAnswer{}
+func (c Client) LibraryGetLibraryFilterData(ctx context.Context, id LibraryID, options ...LibraryGetLibraryFilterDataOptions) (result LibraryGetLibraryFilterDataResponse, err error) {
+	if len(options) > 1 {
+		err = fmt.Errorf("LibraryGetLibraryFilterData takes one options struct at most, not %d", len(options))
+		return
+	}
+	var option LibraryGetLibraryFilterDataOptions
+	if len(options) == 1 {
+		option = options[0]
+	}
+
+	result.LibraryFilterData = &LibraryFilterData{}
 	opts := client.RequestOptions{
 		ExpectedStatusCodes: []int{
 			http.StatusOK,
 		},
-		HTTPMethod: http.MethodGet,
-		Operation:  "LibraryGetLibraryFilterData",
-		Path:       fmt.Sprintf("/api/libraries/%s/filterdata", url.PathEscape(string(id))),
+		HTTPMethod:    http.MethodGet,
+		Operation:     "LibraryGetLibraryFilterData",
+		OptionsObject: option,
+		Path:          fmt.Sprintf("/api/libraries/%s/filterdata", url.PathEscape(string(id))),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
@@ -65,12 +95,12 @@ func (c Client) LibraryGetLibraryFilterData(ctx context.Context, id LibraryID) (
 		return
 	}
 
-	var answer LibraryGetLibraryFilterDataAnswer
+	var answer LibraryFilterData
 	result.Answer = &answer
 	if err = resp.Unmarshal(result.Answer); err != nil {
 		return
 	}
-	result.LibraryGetLibraryFilterDataAnswer = result.Answer
+	result.LibraryFilterData = result.Answer
 
 	return
 }

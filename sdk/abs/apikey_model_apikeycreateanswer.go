@@ -4,5 +4,5 @@ package abs
 
 // ApiKeyCreateAnswer is an object the document declares inline.
 type ApiKeyCreateAnswer struct {
-	ApiKey *ApiKeyCreateAnswerApiKey `json:"apiKey,omitempty"`
+	ApiKey *ApiKeyRecord `json:"apiKey,omitempty"`
 }

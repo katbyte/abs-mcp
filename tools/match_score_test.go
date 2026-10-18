@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // The comparator on the cases that motivated it: the Adams editions that
@@ -14,19 +14,17 @@ import (
 func TestScoreMatch(t *testing.T) {
 	t.Parallel()
 
-	book := func(title, author, narrator, relPath string, seconds float64) *abs.Item {
-		it := &abs.Item{RelPath: relPath}
-		it.Media.Metadata.Title, it.Media.Metadata.AuthorName, it.Media.Metadata.NarratorName = title, author, narrator
-		it.Media.Duration = seconds
-		return it
+	book := func(title, author, narrator, relPath string, seconds float64) *api.LibraryItemMinified {
+		meta := &api.LibraryItemMinifiedMediaMetadata{Title: title, AuthorName: author, NarratorName: narrator}
+		return &api.LibraryItemMinified{RelPath: relPath, Media: &api.LibraryItemMinifiedMedia{Duration: seconds, Metadata: meta}}
 	}
-	hit := func(title, author, narrator string, minutes float64) *abs.BookSearchResult {
-		return &abs.BookSearchResult{Title: title, Author: author, Narrator: narrator, Duration: minutes}
+	hit := func(title, author, narrator string, minutes float64) *api.SearchFindBooksAnswer {
+		return &api.SearchFindBooksAnswer{Title: title, Author: author, Narrator: narrator, Duration: minutes}
 	}
 	for _, tc := range []struct {
 		name string
-		item *abs.Item
-		hit  *abs.BookSearchResult
+		item *api.LibraryItemMinified
+		hit  *api.SearchFindBooksAnswer
 		want string
 	}{
 		{"same recording", book("Killingly", "Katharine Beutner", "Rachel Botchan", "", 12*3600+23*60), hit("Killingly", "Katharine Beutner", "Rachel Botchan", 12*60+23), confExact},
@@ -47,18 +45,18 @@ func TestScoreMatch(t *testing.T) {
 
 	// who reads it, each place the library says on its own: the cases held
 	// back from the 2026-09-13 pass because the scorer could not see them
-	inSeries := func(it *abs.Item, series string) *abs.Item {
+	inSeries := func(it *api.LibraryItemMinified, series string) *api.LibraryItemMinified {
 		it.Media.Metadata.SeriesName = series
 		return it
 	}
-	described := func(it *abs.Item, desc string) *abs.Item {
+	described := func(it *api.LibraryItemMinified, desc string) *api.LibraryItemMinified {
 		it.Media.Metadata.Description = desc
 		return it
 	}
 	for _, tc := range []struct {
 		name string
-		item *abs.Item
-		hit  *abs.BookSearchResult
+		item *api.LibraryItemMinified
+		hit  *api.SearchFindBooksAnswer
 		want string
 	}{
 		// a second copy matched to the first copy's reading: the field
@@ -120,7 +118,7 @@ func TestScoreMatch(t *testing.T) {
 
 	// ranking puts the recording before the book
 	it := book("The Hitchhiker's Guide To The Galaxy", "Douglas Adams", "", "", 4*3600+56*60)
-	ranked := rankCandidates(it, []abs.BookSearchResult{
+	ranked := rankCandidates(it, []api.SearchFindBooksAnswer{
 		*hit("The Hitchhiker's Guide to the Galaxy", "Douglas Adams", "Stephen Fry", 5*60+51),
 		*hit("So Long, and Thanks for All the Fish", "Douglas Adams", "Martin Freeman", 4*60+39),
 		*hit("The Hitchhiker's Guide to the Galaxy", "Douglas Adams", "Stephen Moore", 4*60+56),

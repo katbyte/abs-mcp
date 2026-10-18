@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // wholeWithFiles is a book fetched whole, holding the files named, each by
@@ -583,21 +583,15 @@ func TestAuditWhitespaceReadsOnlySpacedHiddenSeries(t *testing.T) {
 	serveWhole(f, map[string]string{
 		"s1": `{"id":"s1","libraryId":"` + libID + `","relPath":"Brandon Sanderson/Warbreaker","mediaType":"book","media":{"metadata":{"title":"Warbreaker","series":[{"id":"s-w","name":"Warbreaker ","sequence":"1"}]}}}`,
 	})
-	client := f.client(t)
-	libs, err := client.Libraries(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
+	gen := f.gen(t)
 	sweep := whitespaceSweep{namesOnly: true}
-	if err := client.ItemsAll(t.Context(), libs[0].ID, abs.ItemsOptions{}, func(items []abs.Item) bool {
-		for i := range items {
-			sweep.add(&items[i])
-		}
+	if err := eachItem(t.Context(), gen, libID, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+		sweep.add(it)
 		return true
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := sweep.resolve(t.Context(), client); err != nil {
+	if err := sweep.resolve(t.Context(), gen); err != nil {
 		t.Fatal(err)
 	}
 	reads := f.requests("/api/items/batch/get")

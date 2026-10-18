@@ -40,7 +40,7 @@ func (r MeReaddSeriesFromContinueListeningResponse) Record() (UserForBrowser, er
 }
 
 // MeReaddSeriesFromContinueListening calls GET /api/me/series/{id}/readd-to-continue-listening.
-func (c Client) MeReaddSeriesFromContinueListening(ctx context.Context, id UserID) (result MeReaddSeriesFromContinueListeningResponse, err error) {
+func (c Client) MeReaddSeriesFromContinueListening(ctx context.Context, id SeriesID) (result MeReaddSeriesFromContinueListeningResponse, err error) {
 	result.UserForBrowser = &UserForBrowser{}
 	opts := client.RequestOptions{
 		ExpectedStatusCodes: []int{

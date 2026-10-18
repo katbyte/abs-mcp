@@ -18,6 +18,7 @@ func TestOperationAuthorGetImage(t *testing.T) {
 	result, err := c.AuthorGetImage(t.Context(), AuthorID("v-id"), AuthorGetImageOptions{
 		Format: "v-Format",
 		Height: "v-Height",
+		Raw:    "v-Raw",
 		Width:  "v-Width",
 	})
 	if err != nil {
@@ -28,6 +29,7 @@ func TestOperationAuthorGetImage(t *testing.T) {
 	expectRequest(t, r, http.MethodGet, "/api/authors/v-id/image")
 	expectQuery(t, r, "format", "v-Format")
 	expectQuery(t, r, "height", "v-Height")
+	expectQuery(t, r, "raw", "v-Raw")
 	expectQuery(t, r, "width", "v-Width")
 	if got := r.Header.Get("Accept"); !strings.HasPrefix(got, "application/octet-stream") {
 		t.Errorf("Accept = %q, want application/octet-stream asked for first", got)
@@ -45,6 +47,7 @@ func TestOperationAuthorGetImage(t *testing.T) {
 	result, err = c.AuthorGetImage(t.Context(), AuthorID("v-id"), AuthorGetImageOptions{
 		Format: "v-Format",
 		Height: "v-Height",
+		Raw:    "v-Raw",
 		Width:  "v-Width",
 	})
 	if err != nil {
@@ -57,6 +60,7 @@ func TestOperationAuthorGetImage(t *testing.T) {
 	result, err = c.AuthorGetImage(t.Context(), AuthorID("v-id"), AuthorGetImageOptions{
 		Format: "v-Format",
 		Height: "v-Height",
+		Raw:    "v-Raw",
 		Width:  "v-Width",
 	})
 	if err != nil {
@@ -81,6 +85,7 @@ func TestOperationAuthorGetImage(t *testing.T) {
 	result, err = c.AuthorGetImage(t.Context(), AuthorID("v-id"), AuthorGetImageOptions{
 		Format: "v-Format",
 		Height: "v-Height",
+		Raw:    "v-Raw",
 		Width:  "v-Width",
 	})
 	if client.StatusCode(err) != 418 || result.HttpResponse == nil {

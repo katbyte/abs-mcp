@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // A match applied the default way fills only the empty fields, so what the
@@ -30,9 +30,9 @@ type fieldDiff struct {
 // authors, narrators, series, genres, publisher, year, language, and whether
 // there is a description at all. Names are compared spelling and order
 // aside; a field the provider leaves blank is not a difference, since a
-// match would not blank it either.
-func fieldDiffs(it *abs.Item, hit *abs.BookSearchResult) []fieldDiff {
-	m := &it.Media.Metadata
+// match would not blank it either. series is the book's series as lines,
+// "Discworld #3", from its whole record when the caller has one.
+func fieldDiffs(m *api.LibraryItemMinifiedMediaMetadata, series []string, hit *api.SearchFindBooksAnswer) []fieldDiff {
 	var out []fieldDiff
 	text := func(field, local, provider string) {
 		if strings.TrimSpace(provider) == "" || norm(local) == norm(provider) {
@@ -58,18 +58,18 @@ func fieldDiffs(it *abs.Item, hit *abs.BookSearchResult) []fieldDiff {
 	names("authors", m.AuthorDisplay(), hit.Author)
 	names("narrators", m.NarratorDisplay(), hit.Narrator)
 
-	var series []string
+	var theirs []string
 	for _, s := range hit.Series {
 		if s.Sequence != "" {
-			series = append(series, s.Title()+" #"+s.Sequence)
+			theirs = append(theirs, s.Title()+" #"+s.Sequence)
 		} else {
-			series = append(series, s.Title())
+			theirs = append(theirs, s.Title())
 		}
 	}
-	list("series", m.SeriesDisplay(), series)
+	list("series", series, theirs)
 	list("genres", m.Genres, hit.Genres)
 	text("publisher", m.Publisher, hit.Publisher)
-	text("year", m.PublishedYear.String(), hit.PublishedYear.String())
+	text("year", m.PublishedYear, string(hit.PublishedYear))
 	text("language", m.Language, hit.Language)
 	// a description is compared by presence, not text: providers differ on
 	// markup. A stub under 120 characters ("Read by Lee Ewing") counts as

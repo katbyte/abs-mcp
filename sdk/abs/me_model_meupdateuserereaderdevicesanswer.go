@@ -4,5 +4,5 @@ package abs
 
 // MeUpdateUserEReaderDevicesAnswer is an object the document declares inline.
 type MeUpdateUserEReaderDevicesAnswer struct {
-	EreaderDevices []MeUpdateUserEReaderDevicesAnswerEreaderDevices `json:"ereaderDevices,omitzero"`
+	EreaderDevices []EreaderDevice `json:"ereaderDevices,omitzero"`
 }

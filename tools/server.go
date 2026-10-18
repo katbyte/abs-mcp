@@ -8,13 +8,14 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/go-kt/pointer"
 	"github.com/katbyte/go-kt/version"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func registerServerTools(r *registry) {
-	client := r.client
+	gen := r.gen
 
 	// totals are a nested object rather than flat fields so their absence is a
 	// single unambiguous fact. Flat and omitempty could not tell "this key may
@@ -48,63 +49,71 @@ func registerServerTools(r *registry) {
 		Name:        "server_info",
 		Description: "Check connectivity and see the whole server at once: its version and this MCP server's, the user the API key acts as and their permissions, the libraries, the metadata providers available for matching, and - for an admin key - server-wide item counts, disk usage, user count and how many people are listening. Call this first when unsure what the key can do. server_sessions lists who is playing what.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, infoOut, error) {
-		status, err := client.Status(ctx)
+		status, err := record(gen.ServerGetStatus(ctx))
 		if err != nil {
 			return nil, infoOut{}, err
 		}
-		me, err := client.Me(ctx)
+		me, err := record(gen.MeGetCurrentUser(ctx))
 		if err != nil {
 			return nil, infoOut{}, err
 		}
-		libs, err := client.Libraries(ctx)
+		libs, err := libraries(ctx, gen)
 		if err != nil {
 			return nil, infoOut{}, err
 		}
+		active, perms := pointer.From(me.IsActive), pointer.From(me.Permissions)
 
 		out := infoOut{
 			Version: status.ServerVersion,
 			// both change what a caller can expect: a server ahead of the
 			// client may answer with things it does not read
 			AbsMCPVersion: version.Version,
-			URL:           client.BaseURL(),
+			URL:           gen.Client.BaseURL,
 			User:          me.Username,
 			UserType:      me.Type,
 			// the server grants each by the permission alone, an admin's too
-			CanUpdate: me.IsActive && me.Permissions.Update,
-			CanDelete: me.IsActive && me.Permissions.Delete,
+			CanUpdate: active && pointer.From(perms.Update),
+			CanDelete: active && pointer.From(perms.Delete),
 			Libraries: []libraryRow{}, // none is an answer, not null
 		}
 		for i := range libs {
 			out.Libraries = append(out.Libraries, libraryRowOf(&libs[i]))
 		}
-		if out.BookProviders, out.PodcastProviders, err = client.Providers(ctx); err != nil {
+		providers, err := record(gen.SearchGetAllProviders(ctx))
+		if err != nil {
 			return nil, infoOut{}, fmt.Errorf("reading the server's metadata providers: %w", err)
+		}
+		if providers.Providers != nil {
+			out.BookProviders, out.PodcastProviders = providerValues(providers.Providers.Books), providerValues(providers.Providers.Podcasts)
 		}
 		// the totals are admin-only, and this is the one tool that has to answer
 		// for any key: a key the server refuses them is told so, as it would
 		// read the silence as an empty server; any other failure is an error
-		st, err := client.ServerStats(ctx)
+		st, err := record(gen.StatsGetServerStats(ctx))
 		switch {
 		case err == nil:
+			books := cmp.Or(st.Books, &api.StatsGetServerStatsAnswerBooks{})
+			podcasts := cmp.Or(st.Podcasts, &api.StatsGetServerStatsAnswerPodcasts{})
+			total := cmp.Or(st.Total, &api.StatsGetServerStatsAnswerTotal{})
 			t := totalsOut{
-				Books:        st.Books.NumItems,
-				Podcasts:     st.Podcasts.NumItems,
-				AudioFiles:   st.Total.NumAudioFiles,
-				TotalSize:    st.Total.TotalSize,
-				BooksSize:    st.Books.TotalSize,
-				PodcastsSize: st.Podcasts.TotalSize,
+				Books:        int(books.NumItems),
+				Podcasts:     int(podcasts.NumItems),
+				AudioFiles:   int(total.NumAudioFiles),
+				TotalSize:    int64(total.TotalSize),
+				BooksSize:    int64(books.TotalSize),
+				PodcastsSize: int64(podcasts.TotalSize),
 			}
-			users, uerr := client.Users(ctx, false)
+			users, uerr := record(gen.UserFindAll(ctx))
 			if uerr != nil {
 				return nil, infoOut{}, fmt.Errorf("counting the server's users: %w", uerr)
 			}
-			sessions, serr := client.OpenSessions(ctx)
+			sessions, serr := record(gen.SessionGetOpenSessions(ctx))
 			if serr != nil {
 				return nil, infoOut{}, fmt.Errorf("counting the open sessions: %w", serr)
 			}
-			t.Users, t.OpenSessions = len(users), len(sessions)
+			t.Users, t.OpenSessions = len(users.Users), len(sessions.Sessions)
 			out.Totals = &t
-		case abs.IsForbidden(err):
+		case api.IsForbidden(err):
 			out.Note = fmt.Sprintf("server-wide totals need an admin key and are not included: this key acts as %s (%s). "+
 				"The libraries and permissions above are complete. Treat the totals as unknown rather than zero, "+
 				"and expect the other admin-only tools (server_sessions, server_tasks, server_backups, server_tags, user_list) to be refused as well.",
@@ -160,19 +169,19 @@ func registerServerTools(r *registry) {
 		if in.Limit < 0 || in.Limit > maxLogLines {
 			return nil, tasksOut{}, fmt.Errorf("limit %d: 1 to %d", in.Limit, maxLogLines)
 		}
-		tasks, err := client.Tasks(ctx)
+		tasks, err := record(gen.MiscGetTasks(ctx))
 		if err != nil {
 			return nil, tasksOut{}, err
 		}
 		out := tasksOut{Tasks: []taskRow{}}
 		if in.Log {
-			lines, err := client.LoggerData(ctx)
+			logs, err := record(gen.MiscGetLoggerData(ctx))
 			if err != nil {
 				return nil, tasksOut{}, err
 			}
 			match := strings.ToLower(in.Match)
-			for _, l := range slices.Backward(lines) {
-				if l.Level < least || !strings.Contains(strings.ToLower(l.Message+" "+l.Source), match) {
+			for _, l := range slices.Backward(logs.CurrentDailyLogs) {
+				if int(l.Level) < least || !strings.Contains(strings.ToLower(l.Message+" "+l.Source), match) {
 					continue
 				}
 				out.LogMatched++
@@ -181,7 +190,7 @@ func registerServerTools(r *registry) {
 				}
 			}
 		}
-		for _, t := range tasks {
+		for _, t := range tasks.Tasks {
 			status := "running"
 			switch {
 			case t.IsFailed:
@@ -190,7 +199,7 @@ func registerServerTools(r *registry) {
 				status = "finished"
 			}
 			out.Tasks = append(out.Tasks, taskRow{
-				ID:          t.ID,
+				ID:          t.Id,
 				Action:      t.Action,
 				Title:       t.Title,
 				Description: t.Description,
@@ -211,8 +220,8 @@ func registerServerTools(r *registry) {
 		Name:        "server_sessions",
 		Description: "What is playing right now: open playback sessions across all users with title, position and device. Admin only. For history use user_history.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, sessionsOut, error) {
-		sessions, err := client.OpenSessions(ctx)
-		if abs.IsNotFound(err) {
+		open, err := record(gen.SessionGetOpenSessions(ctx))
+		if api.IsNotFound(err) {
 			return nil, sessionsOut{}, fmt.Errorf("open sessions are admin only: Audiobookshelf answers anyone else as if the route did not exist (%w)", err)
 		}
 		if err != nil {
@@ -220,18 +229,18 @@ func registerServerTools(r *registry) {
 		}
 		out := sessionsOut{Sessions: []sessionSummary{}}
 		var names map[string]string
-		for i := range sessions {
-			row := summarizeSession(&sessions[i])
+		for i := range open.Sessions {
+			row := summarizeSession(&open.Sessions[i])
 			// an open session names its user by id only
 			if row.User == "" && row.UserID != "" {
 				if names == nil {
 					names = map[string]string{}
-					users, err := client.Users(ctx, false)
+					users, err := record(gen.UserFindAll(ctx))
 					if err != nil {
 						return nil, sessionsOut{}, fmt.Errorf("reading the users, to name each session's: %w", err)
 					}
-					for j := range users {
-						names[users[j].ID] = users[j].Username
+					for _, u := range users.Users {
+						names[string(u.Id)] = u.Username
 					}
 				}
 				row.User = names[row.UserID]
@@ -253,10 +262,10 @@ func registerServerTools(r *registry) {
 		Location string      `json:"location,omitempty"`
 		Backups  []backupRow `json:"backups"`
 	}
-	backupRows := func(bs []abs.Backup) []backupRow {
+	backupRows := func(bs []api.Backup) []backupRow {
 		rows := make([]backupRow, 0, len(bs))
 		for _, b := range bs {
-			rows = append(rows, backupRow{ID: b.ID, Filename: b.Filename, Size: b.FileSize, Created: fmtTime(b.CreatedAt), Version: b.ServerVersion})
+			rows = append(rows, backupRow{ID: b.Id, Filename: b.Filename, Size: int64(b.FileSize), Created: fmtTime(b.CreatedAt), Version: b.ServerVersion})
 		}
 		return rows
 	}
@@ -264,12 +273,12 @@ func registerServerTools(r *registry) {
 		Name:        "server_backups",
 		Description: "List server backups (database + metadata) and where they are stored. Admin only.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, backupsOut, error) {
-		bs, loc, err := client.Backups(ctx)
+		all, err := record(gen.BackupGetAll(ctx))
 		if err != nil {
 			return nil, backupsOut{}, err
 		}
 
-		return nil, backupsOut{Location: loc, Backups: backupRows(bs)}, nil
+		return nil, backupsOut{Location: all.BackupLocation, Backups: backupRows(all.Backups)}, nil
 	})
 
 	type backupCreateOut struct {
@@ -282,31 +291,32 @@ func registerServerTools(r *registry) {
 		Name:        "server_backup_create",
 		Description: "Run a server backup now and say which it made, then list the backups. The server names a backup by the minute it was made, so a second one in the same minute replaces the first, and it deletes the oldest past the number it keeps: replaced and pruned say when either happened. Admin only. Changes server state (writes a backup file).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, backupCreateOut, error) {
-		before, _, err := client.Backups(ctx)
+		listed, err := record(gen.BackupGetAll(ctx))
 		if err != nil {
 			return nil, backupCreateOut{}, err
 		}
-		after, err := client.CreateBackup(ctx)
+		made, err := record(gen.BackupCreate(ctx))
 		if err != nil {
 			return nil, backupCreateOut{}, err
 		}
+		before, after := listed.Backups, made.Backups
 		if len(after) == 0 {
 			return nil, backupCreateOut{}, errors.New("the server accepted the backup but lists none afterwards")
 		}
 		// the one made is the newest; its id can be one listed before, when
 		// it replaced a backup made earlier in the same minute
-		made := slices.MaxFunc(after, func(a, b abs.Backup) int { return cmp.Compare(a.CreatedAt, b.CreatedAt) })
-		out := backupCreateOut{Created: backupRows([]abs.Backup{made})[0], Backups: backupRows(after)}
+		newest := slices.MaxFunc(after, func(a, b api.Backup) int { return a.CreatedAt.Compare(b.CreatedAt.Time) })
+		out := backupCreateOut{Created: backupRows([]api.Backup{newest})[0], Backups: backupRows(after)}
 		kept := map[string]bool{}
 		for _, b := range after {
-			kept[b.ID] = true
+			kept[b.Id] = true
 		}
 		for _, b := range before {
 			switch {
-			case b.ID == made.ID:
+			case b.Id == newest.Id:
 				out.Replaced = true
-			case !kept[b.ID]:
-				out.Pruned = append(out.Pruned, b.ID)
+			case !kept[b.Id]:
+				out.Pruned = append(out.Pruned, b.Id)
 			}
 		}
 
@@ -337,16 +347,19 @@ func registerServerTools(r *registry) {
 			return nil, tagsOut{}, fmt.Errorf("unknown kind %q; choose tags or genres, or omit it for both", in.Kind)
 		}
 		var out tagsOut
-		var err error
 		if wantTags {
-			if out.Tags, err = client.Tags(ctx); err != nil {
+			tags, err := record(gen.MiscGetAllTags(ctx))
+			if err != nil {
 				return nil, tagsOut{}, err
 			}
+			out.Tags = tags.Tags
 		}
 		if wantGenres {
-			if out.Genres, err = client.Genres(ctx); err != nil {
+			genres, err := record(gen.MiscGetAllGenres(ctx))
+			if err != nil {
 				return nil, tagsOut{}, err
 			}
+			out.Genres = genres.Genres
 		}
 
 		return nil, out, nil
@@ -363,3 +376,15 @@ const (
 	// logMessageCap is where a line is cut: the server logs whole objects
 	logMessageCap = 1000
 )
+
+// providerValues are the providers' names as a match takes them.
+func providerValues(opts []api.ProviderOption) []string {
+	out := make([]string, 0, len(opts))
+	for _, o := range opts {
+		if o.Value != "" {
+			out = append(out, o.Value)
+		}
+	}
+
+	return out
+}

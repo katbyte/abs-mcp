@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -24,6 +25,51 @@ func TestFullSizeCoverURL(t *testing.T) {
 		if got := fullSizeCoverURL(in); got != want {
 			t.Errorf("fullSizeCoverURL(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// A cover's size is the file's own, and a cover that is not there, named but gone or sent empty, is told apart from one Go cannot read and
+// from a server that failed to send it: the first is missing, the second skipped, the third an error.
+func TestCoverSize(t *testing.T) {
+	t.Parallel()
+
+	var status int
+	var body string
+	f := newFakeABS(t)
+	f.mux.HandleFunc("GET /api/items/{id}/cover", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("raw") != "1" {
+			http.Error(w, "the cache, not the file", http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(status)
+		_, _ = io.WriteString(w, body)
+	})
+	gen := f.gen(t)
+
+	// a large trailer stands in for the rest of a real scan
+	status, body = http.StatusOK, pngOf(t, 640, 480)+strings.Repeat("\x00", 1<<20)
+	if w, h, err := coverSize(t.Context(), gen, "li_1"); err != nil || w != 640 || h != 480 {
+		t.Errorf("coverSize = %dx%d, %v, want 640x480", w, h, err)
+	}
+
+	for _, c := range []struct {
+		name, body string
+		status     int
+		want       error
+	}{
+		{"a cover file that is gone", "Not Found", http.StatusNotFound, errNoCover},
+		{"an empty cover", "", http.StatusOK, errNoCover},
+		{"an undecodable cover", "not an image at all", http.StatusOK, errCoverUnreadable},
+	} {
+		status, body = c.status, c.body
+		if _, _, err := coverSize(t.Context(), gen, "li_1"); !errors.Is(err, c.want) {
+			t.Errorf("%s gave %v, want %v", c.name, err, c.want)
+		}
+	}
+
+	status, body = http.StatusInternalServerError, "boom"
+	if _, _, err := coverSize(t.Context(), gen, "li_1"); err == nil || errors.Is(err, errCoverUnreadable) || errors.Is(err, errNoCover) {
+		t.Errorf("a server failing to send the cover gave %v, want its own error", err)
 	}
 }
 

@@ -4,5 +4,5 @@ package abs
 
 // MeGetAllMediaProgressAnswer is an object the document declares inline.
 type MeGetAllMediaProgressAnswer struct {
-	MediaProgress []MeGetAllMediaProgressAnswerMediaProgress `json:"mediaProgress,omitzero"`
+	MediaProgress []MediaProgress `json:"mediaProgress,omitzero"`
 }

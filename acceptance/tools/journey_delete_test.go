@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
@@ -51,7 +51,7 @@ func TestJourneyADeletedBookLeavesNothingBehind(t *testing.T) {
 			_, _ = suite.Invoke("playlist_delete", map[string]any{"playlist": p})
 		}
 		eventually(t, "deleting the library", func() error {
-			if err := admin.DeleteLibrary(ctx, libID); err != nil && !isNotFound(err) {
+			if _, err := admin.LibraryDelete(ctx, api.LibraryID(libID)); err != nil && !isNotFound(err) {
 				return err
 			}
 			return nil
@@ -86,19 +86,19 @@ func TestJourneyADeletedBookLeavesNothingBehind(t *testing.T) {
 	suite.Call(t, "user_bookmark_edit", map[string]any{"item": one, "add_bookmarks": []any{map[string]any{"time_s": 0.5, "title": "Zzyzx Gone Mark"}}})
 
 	// someone else listens to it
-	listener := newUser(t, "zzyzx-gone-listener", abs.UserCreate{})
-	lc, err := abs.New(os.Getenv("ABS_SERVER"), listener.Token, recorder.Option())
+	listener := newUser(t, "zzyzx-gone-listener", api.UserCreateRequest{})
+	lc, err := connect(listener.Token)
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := lc.Play(ctx, one, "", abs.PlayRequest{MediaPlayer: "zzyzx-player", SupportedMimeTypes: []string{"audio/mpeg"}, ForceDirectPlay: true})
+	session, err := record(lc.LibraryItemStartPlaybackSession(ctx, api.LibraryItemID(one), api.LibraryItemStartPlaybackSessionRequest{MediaPlayer: "zzyzx-player", SupportedMimeTypes: []string{"audio/mpeg"}, ForceDirectPlay: new(true)}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := lc.SyncSession(ctx, session.ID, 0.4, 0.4); err != nil {
+	if _, err := lc.SessionSync(ctx, session.Id, api.SessionSyncRequest{CurrentTime: 0.4, TimeListened: 0.4}); err != nil {
 		t.Fatal(err)
 	}
-	if err := lc.CloseSession(ctx, session.ID, map[string]any{"currentTime": 0.4, "timeListened": 0.4}); err != nil {
+	if _, err := lc.SessionClose(ctx, session.Id, api.SessionCloseRequest{CurrentTime: 0.4, TimeListened: 0.4}); err != nil {
 		t.Fatal(err)
 	}
 	listener.call(t, "user_bookmark_edit", map[string]any{"item": one, "add_bookmarks": []any{map[string]any{"time_s": 0.25, "title": "Zzyzx Listener Mark"}}})

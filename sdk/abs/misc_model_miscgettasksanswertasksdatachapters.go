@@ -5,7 +5,7 @@ package abs
 // MiscGetTasksAnswerTasksDataChapters is an object the document declares inline.
 type MiscGetTasksAnswerTasksDataChapters struct {
 	End   float64 `json:"end,omitempty"`
-	Id    float64 `json:"id,omitempty"`
+	Id    int     `json:"id,omitempty"`
 	Start float64 `json:"start,omitempty"`
 	Title string  `json:"title,omitempty"`
 }

@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -81,7 +81,7 @@ type chaptersOut struct {
 // their chapter lists once fetched.
 type chapterSweep struct {
 	scanned, read int
-	pending       []string // books with chapters, still to fetch
+	pending       []api.LibraryItemID // books with chapters, still to fetch
 	rows          []chapterRow
 	// singleOnly judges from the listing alone, which carries each book's
 	// chapter count and length but not its chapters: one chapter over a
@@ -92,7 +92,7 @@ type chapterSweep struct {
 }
 
 // add takes one item from a listing: a book with chapters is held to fetch.
-func (c *chapterSweep) add(it *abs.Item) {
+func (c *chapterSweep) add(it *api.LibraryItemMinified) {
 	if it.IsPodcast() {
 		return
 	}
@@ -101,21 +101,21 @@ func (c *chapterSweep) add(it *abs.Item) {
 	case c.singleOnly:
 		if it.Media.NumChapters == 1 && it.Media.Duration >= chapterlessMinHours*3600 {
 			c.rows = append(c.rows, chapterRow{
-				ID: it.ID, Title: it.Title(), Path: it.RelPath, Problem: "single",
+				ID: string(it.Id), Title: it.Title(), Path: it.RelPath, Problem: "single",
 				Detail: "one chapter over the whole " + fmtDuration(it.Media.Duration), Fix: chapterFixes["single"],
 			})
 		}
 	case it.Media.NumChapters > 0:
-		c.pending = append(c.pending, it.ID)
+		c.pending = append(c.pending, it.Id)
 	}
 }
 
 // resolve fetches the held books whole, a batch at a time, and judges each.
-func (c *chapterSweep) resolve(ctx context.Context, client *abs.Client) error {
+func (c *chapterSweep) resolve(ctx context.Context, gen *api.Client) error {
 	pending := c.pending
 	c.pending = nil
 	for chunk := range slices.Chunk(pending, embedBatchSize) {
-		items, err := client.ItemsBatch(ctx, chunk)
+		items, err := itemsBatch(ctx, gen, chunk)
 		if err != nil {
 			return err
 		}
@@ -128,19 +128,17 @@ func (c *chapterSweep) resolve(ctx context.Context, client *abs.Client) error {
 }
 
 // library sweeps one library's listing and judges its books.
-func (c *chapterSweep) library(ctx context.Context, client *abs.Client, lib *abs.Library) error {
+func (c *chapterSweep) library(ctx context.Context, gen *api.Client, lib *api.Library) error {
 	if lib.IsPodcast() {
 		return nil
 	}
-	if err := client.ItemsAll(ctx, lib.ID, abs.ItemsOptions{Minified: true}, func(items []abs.Item) bool {
-		for j := range items {
-			c.add(&items[j])
-		}
+	if err := eachItem(ctx, gen, lib.Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+		c.add(it)
 		return true
 	}); err != nil {
 		return err
 	}
-	return c.resolve(ctx, client)
+	return c.resolve(ctx, gen)
 }
 
 // report is what was found, by problem and then by title, keeping at most
@@ -178,14 +176,14 @@ func secs(v float64) string {
 
 // chapterProblems is everything wrong with a whole book's chapter list,
 // one row per problem.
-func chapterProblems(it *abs.Item) []chapterRow {
+func chapterProblems(it *api.LibraryItemExpanded) []chapterRow {
 	chapters, end := it.Media.Chapters, it.Media.Duration
 	if it.IsPodcast() || len(chapters) == 0 || end <= 0 {
 		return nil
 	}
 	var out []chapterRow
 	row := func(problem, detail string) {
-		out = append(out, chapterRow{ID: it.ID, Title: it.Title(), Path: it.RelPath, Problem: problem, Detail: detail, Fix: chapterFixes[problem]})
+		out = append(out, chapterRow{ID: string(it.Id), Title: it.Title(), Path: it.RelPath, Problem: problem, Detail: detail, Fix: chapterFixes[problem]})
 	}
 
 	// the chapter that ends last, which is the last one unless the list is
@@ -197,7 +195,7 @@ func chapterProblems(it *abs.Item) []chapterRow {
 		}
 	}
 
-	if first := slices.IndexFunc(chapters, func(ch abs.Chapter) bool { return ch.Start >= end }); first >= 0 {
+	if first := slices.IndexFunc(chapters, func(ch api.Chapter) bool { return ch.Start >= end }); first >= 0 {
 		past := 0
 		for _, ch := range chapters {
 			if ch.Start >= end {
@@ -248,7 +246,7 @@ func chapterProblems(it *abs.Item) []chapterRow {
 // covers audio a track added left after it. A list out of order is refused
 // rather than fitted: fitting keeps the order it finds, and the order is what
 // is wrong.
-func fitChapters(it *abs.Item) (kept []abs.Chapter, dropped int, err error) {
+func fitChapters(it *api.LibraryItemExpanded) (kept []api.Chapter, dropped int, err error) {
 	end := it.Media.Duration
 	switch {
 	case len(it.Media.Chapters) == 0:
@@ -273,14 +271,14 @@ func fitChapters(it *abs.Item) (kept []abs.Chapter, dropped int, err error) {
 		}
 	}
 	for i := range kept {
-		kept[i].ID = i
+		kept[i].Id = i
 	}
 	kept[len(kept)-1].End = end
 	return kept, len(it.Media.Chapters) - len(kept), nil
 }
 
 func registerChaptersAudit(r *registry) {
-	client := r.client
+	gen := r.gen
 
 	add(r, readTool, &mcp.Tool{
 		Name: "audit_chapters",
@@ -291,13 +289,13 @@ func registerChaptersAudit(r *registry) {
 			"Each row names the chapter and the times in seconds, and the fix: item_chapters_set fit=true for past_end and short, which keeps the book's chapters, drops those past the end and ends the last at the end of the audio; from_asin or a list for the others. " +
 			"The item listing carries only a chapter count, so every book with chapters is fetched, fifty to a request.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in auditIn) (*mcp.CallToolResult, chaptersOut, error) {
-		libs, err := resolveLibraries(ctx, client, in.Library)
+		libs, err := resolveLibraries(ctx, gen, in.Library)
 		if err != nil {
 			return nil, chaptersOut{}, err
 		}
 		var sweep chapterSweep
 		for i := range libs {
-			if err := sweep.library(ctx, client, &libs[i]); err != nil {
+			if err := sweep.library(ctx, gen, &libs[i]); err != nil {
 				return nil, chaptersOut{}, err
 			}
 		}

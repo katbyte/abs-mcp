@@ -4,6 +4,6 @@ package abs
 
 // LibraryGetEpisodeDownloadQueueAnswer is an object the document declares inline.
 type LibraryGetEpisodeDownloadQueueAnswer struct {
-	CurrentDownload *LibraryGetEpisodeDownloadQueueAnswerCurrentDownload `json:"currentDownload,omitempty"`
-	Queue           []LibraryGetEpisodeDownloadQueueAnswerQueue          `json:"queue,omitzero"`
+	CurrentDownload *PodcastEpisodeDownload  `json:"currentDownload,omitempty"`
+	Queue           []PodcastEpisodeDownload `json:"queue,omitzero"`
 }

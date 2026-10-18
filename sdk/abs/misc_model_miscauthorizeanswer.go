@@ -4,9 +4,9 @@ package abs
 
 // MiscAuthorizeAnswer is an object the document declares inline.
 type MiscAuthorizeAnswer struct {
-	Source               string                              `json:"Source,omitempty"`
-	EreaderDevices       []MiscAuthorizeAnswerEreaderDevices `json:"ereaderDevices,omitzero"`
-	ServerSettings       *ServerSettings                     `json:"serverSettings,omitempty"`
-	User                 *UserForBrowser                     `json:"user,omitempty"`
-	UserDefaultLibraryId LibraryID                           `json:"userDefaultLibraryId,omitempty"`
+	Source               string          `json:"Source,omitempty"`
+	EreaderDevices       []EreaderDevice `json:"ereaderDevices,omitzero"`
+	ServerSettings       *ServerSettings `json:"serverSettings,omitempty"`
+	User                 *UserForBrowser `json:"user,omitempty"`
+	UserDefaultLibraryId LibraryID       `json:"userDefaultLibraryId,omitempty"`
 }

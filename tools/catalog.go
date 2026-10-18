@@ -1,13 +1,14 @@
 package tools
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"slices"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -19,19 +20,40 @@ const authorPageSize = 500
 
 // allAuthors lists every author in a library, a page at a time, in the order
 // opts asks for.
-func allAuthors(ctx context.Context, client *abs.Client, libraryID string, opts abs.ListOptions) ([]abs.Author, error) {
-	opts.Limit = authorPageSize
-	var all []abs.Author
-	for opts.Page = 0; ; opts.Page++ {
-		authors, total, err := client.Authors(ctx, libraryID, opts)
+func allAuthors(ctx context.Context, gen *api.Client, library api.LibraryID, opts api.LibraryGetAuthorsOptions) ([]api.Author, error) {
+	opts.Limit = new(authorPageSize)
+	var all []api.Author
+	for page := 0; ; page++ {
+		opts.Page = new(page)
+		got, err := record(gen.LibraryGetAuthors(ctx, library, opts))
 		if err != nil {
 			return nil, err
 		}
+		authors, total := authorsOf(got)
 		all = append(all, authors...)
 		if len(authors) == 0 || len(authors) < authorPageSize || len(all) >= total {
 			return all, nil
 		}
 	}
+}
+
+// authorsOf are the authors of one page and how many there are in all; a server before 2.20 answers them as authors, every one at once.
+func authorsOf(got api.LibraryGetAuthorsAnswer) (authors []api.Author, total int) {
+	if got.Results == nil && got.Authors != nil {
+		return got.Authors, len(got.Authors)
+	}
+
+	return got.Results, got.Total
+}
+
+// getAuthor is one author, with their books.
+func getAuthor(ctx context.Context, gen *api.Client, id api.AuthorID) (*api.Author, error) {
+	a, err := record(gen.AuthorFindOne(ctx, id, api.AuthorFindOneOptions{Include: "items"}))
+	if err != nil {
+		return nil, err
+	}
+
+	return &a, nil
 }
 
 // nameTier says how a stored name answers one a caller gave: 2 when it is
@@ -95,20 +117,20 @@ func severalNamed(kind, given string, names, ids, libraries []string) error {
 // resolveAuthor finds an author by id or name, searching the named library or
 // all of them: the name exactly as given, and with case aside when it has no
 // space at an end; several such are refused, each named with its id.
-func resolveAuthor(ctx context.Context, client *abs.Client, library, nameOrID string) (*abs.Author, error) {
+func resolveAuthor(ctx context.Context, gen *api.Client, library, nameOrID string) (*api.Author, error) {
 	if id := strings.TrimSpace(nameOrID); looksLikeID(id) {
-		return client.Author(ctx, id, true)
+		return getAuthor(ctx, gen, api.AuthorID(id))
 	}
-	candidates, err := authorsNamed(ctx, client, library, nameOrID)
+	candidates, err := authorsNamed(ctx, gen, library, nameOrID)
 	if err != nil {
 		return nil, err
 	}
 	if len(candidates) == 1 {
-		return client.Author(ctx, candidates[0].ID, true)
+		return getAuthor(ctx, gen, candidates[0].Id)
 	}
 	names, ids, libraries := make([]string, 0, len(candidates)), make([]string, 0, len(candidates)), make([]string, 0, len(candidates))
 	for _, c := range candidates {
-		names, ids, libraries = append(names, c.Name), append(ids, c.ID), append(libraries, c.LibraryID)
+		names, ids, libraries = append(names, c.Name), append(ids, string(c.Id)), append(libraries, string(c.LibraryId))
 	}
 	return nil, severalNamed("authors", nameOrID, names, ids, libraries)
 }
@@ -117,36 +139,36 @@ func resolveAuthor(ctx context.Context, client *abs.Client, library, nameOrID st
 // records whose name is the one given exactly, spaces and all, and, for a
 // name with no space at an end, those equal to it case aside. A stored name
 // is never trimmed to answer. An id is its record.
-func authorsNamed(ctx context.Context, client *abs.Client, library, nameOrID string) ([]abs.Author, error) {
+func authorsNamed(ctx context.Context, gen *api.Client, library, nameOrID string) ([]api.Author, error) {
 	given := nameOrID
 	nameOrID = strings.TrimSpace(nameOrID)
 	if nameOrID == "" {
 		return nil, errors.New("author id or name is required")
 	}
 	if looksLikeID(nameOrID) {
-		a, err := client.Author(ctx, nameOrID, true)
+		a, err := getAuthor(ctx, gen, api.AuthorID(nameOrID))
 		if err != nil {
 			return nil, err
 		}
-		return []abs.Author{*a}, nil
+		return []api.Author{*a}, nil
 	}
 
-	libs, err := resolveLibraries(ctx, client, library)
+	libs, err := resolveLibraries(ctx, gen, library)
 	if err != nil {
 		return nil, err
 	}
-	matches := [3][]abs.Author{} // by tier
+	matches := [3][]api.Author{} // by tier
 	var names, ids []string
 	for i := range libs {
 		// the live authors endpoint, not FilterData: the server caches filter
 		// data and does not invalidate it on an edit or a scan, so a renamed
 		// author would not be found there
-		authors, err := allAuthors(ctx, client, libs[i].ID, abs.ListOptions{})
+		authors, err := allAuthors(ctx, gen, libs[i].Id, api.LibraryGetAuthorsOptions{})
 		if err != nil {
 			return nil, err
 		}
 		for _, a := range authors {
-			names, ids = append(names, a.Name), append(ids, a.ID)
+			names, ids = append(names, a.Name), append(ids, string(a.Id))
 			if tier := nameTier(a.Name, given); tier > 0 {
 				matches[tier] = append(matches[tier], a)
 			}
@@ -165,53 +187,63 @@ func authorsNamed(ctx context.Context, client *abs.Client, library, nameOrID str
 // page at a time. The filter data the server also offers is cached for half
 // an hour and not refreshed when a series is renamed, so a series looked up
 // there by its new name is not found and its old name still is.
-func allSeries(ctx context.Context, client *abs.Client, libraryID string) ([]abs.Series, error) {
-	var all []abs.Series
+func allSeries(ctx context.Context, gen *api.Client, library api.LibraryID) ([]api.Series, error) {
+	var all []api.Series
 	for page := 0; ; page++ {
-		series, total, err := client.SeriesList(ctx, libraryID, abs.ListOptions{Limit: seriesPageSize, Page: page, Sort: "name"})
+		got, err := record(gen.LibraryGetAllSeriesForLibrary(ctx, library, api.LibraryGetAllSeriesForLibraryOptions{Limit: new(seriesPageSize), Page: new(page), Sort: "name"}))
 		if err != nil {
 			return nil, err
 		}
-		all = append(all, series...)
-		if len(series) == 0 || len(series) < seriesPageSize || len(all) >= total {
+		all = append(all, got.Results...)
+		if len(got.Results) == 0 || len(got.Results) < seriesPageSize || len(all) >= got.Total {
 			return all, nil
 		}
 	}
 }
 
+// getSeries is one series, with the API key user's progress through it.
+func getSeries(ctx context.Context, gen *api.Client, id api.SeriesID) (*api.Series, error) {
+	s, err := record(gen.SeriesFindOne(ctx, id, api.SeriesFindOneOptions{Include: "progress"}))
+	if err != nil {
+		return nil, err
+	}
+
+	return &s, nil
+}
+
 // resolveSeries finds a series by id or name in the named library or all of
 // them, as resolveAuthor finds an author.
-func resolveSeries(ctx context.Context, client *abs.Client, library, nameOrID string) (*abs.Series, error) {
+func resolveSeries(ctx context.Context, gen *api.Client, library, nameOrID string) (*api.Series, error) {
 	given := nameOrID
 	nameOrID = strings.TrimSpace(nameOrID)
 	if nameOrID == "" {
 		return nil, errors.New("series id or name is required")
 	}
 	if looksLikeID(nameOrID) {
-		return client.Series(ctx, nameOrID)
+		return getSeries(ctx, gen, api.SeriesID(nameOrID))
 	}
 
-	libs, err := resolveLibraries(ctx, client, library)
+	libs, err := resolveLibraries(ctx, gen, library)
 	if err != nil {
 		return nil, err
 	}
 	// a series whose books have all gone can outlive them: the server lists
 	// it, with no books, and answers 404 to opening it
-	matches := [3][]abs.Series{} // by tier
+	matches := [3][]api.Series{} // by tier
 	var names, ids, hiding []string
 	for i := range libs {
 		if libs[i].IsPodcast() {
 			continue
 		}
-		if libs[i].Settings.HideSingleBookSeries {
+		if libs[i].Settings != nil && libs[i].Settings.HideSingleBookSeries {
 			hiding = append(hiding, libs[i].Name)
 		}
-		series, err := allSeries(ctx, client, libs[i].ID)
+		series, err := allSeries(ctx, gen, libs[i].Id)
 		if err != nil {
 			return nil, err
 		}
 		for _, s := range series {
-			names, ids = append(names, s.Name), append(ids, s.ID)
+			names, ids = append(names, s.Name), append(ids, string(s.Id))
 			if tier := nameTier(s.Name, given); tier > 0 {
 				matches[tier] = append(matches[tier], s)
 			}
@@ -222,9 +254,9 @@ func resolveSeries(ctx context.Context, client *abs.Client, library, nameOrID st
 	// An empty list, not an absent one: that would be a reply that left the
 	// books out, and says nothing about them
 	empty := false
-	var exactEmpty []abs.Series // the name as given, held only by series with no books
+	var exactEmpty []api.Series // the name as given, held only by series with no books
 	for t := range matches {
-		matches[t] = slices.DeleteFunc(matches[t], func(s abs.Series) bool {
+		matches[t] = slices.DeleteFunc(matches[t], func(s api.Series) bool {
 			gone := s.Books != nil && len(s.Books) == 0
 			empty = empty || gone
 			if gone && t == 2 {
@@ -238,10 +270,10 @@ func resolveSeries(ctx context.Context, client *abs.Client, library, nameOrID st
 	// only a case variant has books, neither is picked
 	found := slices.Concat(matches[2], matches[1])
 	if len(matches[2]) == 0 && len(exactEmpty) > 0 && len(found) > 0 {
-		list := func(ss []abs.Series) string {
+		list := func(ss []api.Series) string {
 			out := make([]string, 0, len(ss))
 			for _, s := range ss {
-				out = append(out, fmt.Sprintf("%q (%s)", s.Name, s.ID))
+				out = append(out, fmt.Sprintf("%q (%s)", s.Name, s.Id))
 			}
 			return strings.Join(out, ", ")
 		}
@@ -249,7 +281,7 @@ func resolveSeries(ctx context.Context, client *abs.Client, library, nameOrID st
 	}
 	switch {
 	case len(found) == 1:
-		return client.Series(ctx, found[0].ID)
+		return getSeries(ctx, gen, found[0].Id)
 	case len(found) == 0 && empty:
 		err := fmt.Errorf("no series named %q with a book in it: the server still lists one by that name, but its books are gone and it cannot be opened", given)
 		if near := nearList(given, names, ids); near != "" {
@@ -267,7 +299,7 @@ func resolveSeries(ctx context.Context, client *abs.Client, library, nameOrID st
 	}
 	names, ids, libraries := make([]string, 0, len(found)), make([]string, 0, len(found)), make([]string, 0, len(found))
 	for _, s := range found {
-		names, ids, libraries = append(names, s.Name), append(ids, s.ID), append(libraries, s.LibraryID)
+		names, ids, libraries = append(names, s.Name), append(ids, string(s.Id)), append(libraries, string(s.LibraryId))
 	}
 
 	return nil, severalNamed("series", given, names, ids, libraries)
@@ -286,16 +318,16 @@ type authorRow struct {
 // image and match routes answer with the record alone, so a row built from
 // that reply says the author has no books. A failed read says the write was
 // made.
-func withBooks(ctx context.Context, client *abs.Client, a *abs.Author) (*abs.Author, error) {
-	full, err := client.Author(ctx, a.ID, true)
+func withBooks(ctx context.Context, gen *api.Client, a *api.Author) (*api.Author, error) {
+	full, err := getAuthor(ctx, gen, a.Id)
 	if err != nil {
-		return nil, fmt.Errorf("the change to author %q (%s) was made, but reading it back failed: %w", a.Name, a.ID, err)
+		return nil, fmt.Errorf("the change to author %q (%s) was made, but reading it back failed: %w", a.Name, a.Id, err)
 	}
 	return full, nil
 }
 
-func authorRowOf(a *abs.Author, withDescription bool) authorRow {
-	row := authorRow{ID: a.ID, Name: a.Name, Books: a.NumBooks, ASIN: a.ASIN, HasImage: a.ImagePath != ""}
+func authorRowOf(a *api.Author, withDescription bool) authorRow {
+	row := authorRow{ID: string(a.Id), Name: a.Name, Books: a.NumBooks, ASIN: a.Asin, HasImage: a.ImagePath != ""}
 	if row.Books == 0 {
 		row.Books = len(a.LibraryItems)
 	}
@@ -322,7 +354,7 @@ var (
 )
 
 func registerAuthorTools(r *registry) {
-	client := r.client
+	gen := r.gen
 
 	type listIn struct {
 		Library string `json:"library,omitempty" jsonschema:"library name or id; optional when the server has one library"`
@@ -341,7 +373,7 @@ func registerAuthorTools(r *registry) {
 		Name:        "author_list",
 		Description: "List a library's authors with book counts, sortable by name or number of books. Authors without an asin or image are candidates for author_match.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in listIn) (*mcp.CallToolResult, listOut, error) {
-		lib, err := resolveLibrary(ctx, client, in.Library)
+		lib, err := resolveLibrary(ctx, gen, in.Library)
 		if err != nil {
 			return nil, listOut{}, err
 		}
@@ -350,8 +382,13 @@ func registerAuthorTools(r *registry) {
 			return nil, listOut{}, fmt.Errorf("unknown sort %q; choose one of: name, last_first, books, added, updated", in.Sort)
 		}
 		limit, offset := pageArgs(in.Limit, in.Offset, 50)
-		authors, total, err := window(offset, limit, func(page int) ([]abs.Author, int, error) {
-			return client.Authors(ctx, lib.ID, abs.ListOptions{Limit: limit, Page: page, Sort: sortBy, Desc: in.Desc})
+		authors, total, err := window(offset, limit, func(page int) ([]api.Author, int, error) {
+			got, gerr := record(gen.LibraryGetAuthors(ctx, lib.Id, api.LibraryGetAuthorsOptions{Limit: new(limit), Page: new(page), Sort: sortBy, Desc: descFlag(in.Desc)}))
+			if gerr != nil {
+				return nil, 0, gerr
+			}
+			authors, total := authorsOf(got)
+			return authors, total, nil
 		})
 		if err != nil {
 			return nil, listOut{}, err
@@ -377,7 +414,7 @@ func registerAuthorTools(r *registry) {
 		Name:        "author_get",
 		Description: "One author with their description, asin and every book of theirs in the library.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in authorIn) (*mcp.CallToolResult, getOut, error) {
-		a, err := resolveAuthor(ctx, client, in.Library, in.Author)
+		a, err := resolveAuthor(ctx, gen, in.Library, in.Author)
 		if err != nil {
 			return nil, getOut{}, err
 		}
@@ -402,7 +439,7 @@ func registerAuthorTools(r *registry) {
 		Name:        "author_edit",
 		Description: "Rename an author, set their description, asin or photo, or blank those with clear. Renaming to a name that already exists merges the two authors (the way to fix 'J.R.R. Tolkien' vs 'J. R. Tolkien'); clear=[asin, description, image] undoes an author_match that found the wrong person. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in editIn) (*mcp.CallToolResult, editOut, error) {
-		upd := abs.AuthorUpdate{Name: strPtr(in.Name), Description: strPtr(in.Description), ASIN: strPtr(in.ASIN)}
+		upd := api.AuthorUpdateRequest{Name: in.Name, Description: strPtr(in.Description), Asin: strPtr(in.ASIN)}
 		var clearImage bool
 		empty := ""
 		for _, c := range in.Clear {
@@ -410,7 +447,7 @@ func registerAuthorTools(r *registry) {
 			case "description":
 				upd.Description = &empty
 			case "asin":
-				upd.ASIN = &empty
+				upd.Asin = &empty
 			case "image":
 				clearImage = true
 			default:
@@ -421,17 +458,17 @@ func registerAuthorTools(r *registry) {
 		switch {
 		case imageURL != "" && clearImage:
 			return nil, editOut{}, errors.New("image_url sets the photo and clear image removes it; one or the other")
-		case upd.Name == nil && upd.Description == nil && upd.ASIN == nil && !clearImage && imageURL == "":
+		case upd.Name == "" && upd.Description == nil && upd.Asin == nil && !clearImage && imageURL == "":
 			return nil, editOut{}, errors.New("nothing to change: pass name, description, asin or image_url, or list fields in clear")
 		}
 
-		a, err := resolveAuthor(ctx, client, in.Library, in.Author)
+		a, err := resolveAuthor(ctx, gen, in.Library, in.Author)
 		if err != nil {
 			return nil, editOut{}, err
 		}
 		// a rename that changes nothing writes nothing, and says so rather
 		// than report a rename done
-		if upd.Name != nil && *upd.Name == a.Name && upd.Description == nil && upd.ASIN == nil && !clearImage && imageURL == "" {
+		if upd.Name != "" && upd.Name == a.Name && upd.Description == nil && upd.Asin == nil && !clearImage && imageURL == "" {
 			return nil, editOut{Unchanged: true, Author: authorRowOf(a, true)}, nil
 		}
 		updated, merged := a, false
@@ -443,28 +480,34 @@ func registerAuthorTools(r *registry) {
 		// The server answers 400 to removing a photo that is not there, and
 		// clearing what is already blank is not a failure.
 		if clearImage && a.ImagePath != "" {
-			if updated, err = client.DeleteAuthorImage(ctx, a.ID); err != nil {
-				return nil, editOut{}, err
+			got, derr := record(gen.AuthorDeleteImage(ctx, a.Id))
+			if derr != nil {
+				return nil, editOut{}, derr
 			}
+			updated = cmp.Or(got.Author, updated)
 		}
-		if upd.Name != nil || upd.Description != nil || upd.ASIN != nil {
-			if updated, merged, err = client.UpdateAuthor(ctx, a.ID, upd); err != nil {
-				return nil, editOut{}, err
+		if upd.Name != "" || upd.Description != nil || upd.Asin != nil {
+			got, uerr := record(gen.AuthorUpdate(ctx, a.Id, upd))
+			if uerr != nil {
+				return nil, editOut{}, uerr
 			}
+			updated, merged = cmp.Or(got.Author, updated), got.Merged
 		}
 		// a new photo goes last, onto the record that is left: after a
 		// rename that merged, that is the author merged into
 		if imageURL != "" {
 			was := updated
-			if updated, err = client.SetAuthorImage(ctx, was.ID, imageURL); err != nil {
-				if upd.Name != nil || upd.Description != nil || upd.ASIN != nil {
-					return nil, editOut{}, fmt.Errorf("%q was changed, but setting the photo failed: %w", was.Name, err)
+			got, ierr := record(gen.AuthorUploadImage(ctx, was.Id, api.AuthorUploadImageRequest{Url: imageURL}))
+			if ierr != nil {
+				if upd.Name != "" || upd.Description != nil || upd.Asin != nil {
+					return nil, editOut{}, fmt.Errorf("%q was changed, but setting the photo failed: %w", was.Name, ierr)
 				}
-				return nil, editOut{}, err
+				return nil, editOut{}, ierr
 			}
+			updated = cmp.Or(got.Author, was)
 		}
 
-		full, err := withBooks(ctx, client, updated)
+		full, err := withBooks(ctx, gen, updated)
 		if err != nil {
 			return nil, editOut{}, err
 		}
@@ -492,7 +535,7 @@ func registerAuthorTools(r *registry) {
 			"The lookup is by name and tolerant of small differences, so the candidate can be someone else (Emily Andras came back as Emily Adrian): " +
 			"check name_matches and the description, then author_match_apply with the asin to take it.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in matchIn) (*mcp.CallToolResult, matchOut, error) {
-		a, err := resolveAuthor(ctx, client, in.Library, in.Author)
+		a, err := resolveAuthor(ctx, gen, in.Library, in.Author)
 		if err != nil {
 			return nil, matchOut{}, err
 		}
@@ -500,15 +543,16 @@ func registerAuthorTools(r *registry) {
 		if q == "" {
 			q = a.Name
 		}
-		cand, err := client.SearchAuthor(ctx, q)
+		// the server answers null for nobody found, which reads as no name and no asin
+		cand, err := record(gen.SearchFindAuthor(ctx, api.SearchFindAuthorOptions{Q: q}))
 		if err != nil {
 			return nil, matchOut{}, err
 		}
 
 		out := matchOut{Author: authorRowOf(a, true)}
-		if cand != nil {
+		if cand.Name != "" || cand.Asin != "" {
 			out.Candidate = &matchCandidate{
-				ASIN: cand.ASIN, Name: cand.Name,
+				ASIN: cand.Asin, Name: cand.Name,
 				Description: clip(plain(cand.Description), descriptionCap),
 				HasImage:    cand.Image != "",
 				NameMatches: sameName(cand.Name, a.Name),
@@ -535,20 +579,20 @@ func registerAuthorTools(r *registry) {
 		if asin == "" {
 			return nil, applyOut{}, errors.New("pass the asin of the candidate to apply; author_match finds it")
 		}
-		a, err := resolveAuthor(ctx, client, in.Library, in.Author)
+		a, err := resolveAuthor(ctx, gen, in.Library, in.Author)
 		if err != nil {
 			return nil, applyOut{}, err
 		}
-		updated, changed, err := client.MatchAuthor(ctx, a.ID, "", asin, in.Region)
+		got, err := record(gen.AuthorMatch(ctx, a.Id, api.AuthorMatchRequest{Asin: asin, Region: in.Region}))
 		if err != nil {
 			return nil, applyOut{}, err
 		}
 
-		full, err := withBooks(ctx, client, updated)
+		full, err := withBooks(ctx, gen, cmp.Or(got.Author, a))
 		if err != nil {
 			return nil, applyOut{}, err
 		}
-		return nil, applyOut{Updated: changed, Author: authorRowOf(full, true)}, nil
+		return nil, applyOut{Updated: got.Updated, Author: authorRowOf(full, true)}, nil
 	})
 
 	type deleteOut struct {
@@ -558,11 +602,11 @@ func registerAuthorTools(r *registry) {
 		Name:        "author_delete",
 		Description: "Delete an author record; their books stay but lose the author link. Usually author_edit (merge by rename) is the better fix for duplicates. Requires the delete permission.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in authorIn) (*mcp.CallToolResult, deleteOut, error) {
-		a, err := resolveAuthor(ctx, client, in.Library, in.Author)
+		a, err := resolveAuthor(ctx, gen, in.Library, in.Author)
 		if err != nil {
 			return nil, deleteOut{}, err
 		}
-		if err := client.DeleteAuthor(ctx, a.ID); err != nil {
+		if _, err := gen.AuthorDelete(ctx, a.Id); err != nil {
 			return nil, deleteOut{}, err
 		}
 
@@ -571,7 +615,7 @@ func registerAuthorTools(r *registry) {
 }
 
 func registerNarratorTools(r *registry) {
-	client := r.client
+	gen := r.gen
 
 	type narratorRow struct {
 		Name  string `json:"name"`
@@ -592,18 +636,18 @@ func registerNarratorTools(r *registry) {
 		Name:        "narrator_list",
 		Description: "List a library's narrators with the number of books each reads. The vocabulary to normalize against: near-duplicates like 'Jim Dale' and 'jim dale' show up as separate entries, and metadata_rename merges them.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in listIn) (*mcp.CallToolResult, listOut, error) {
-		lib, err := resolveLibrary(ctx, client, in.Library)
+		lib, err := resolveLibrary(ctx, gen, in.Library)
 		if err != nil {
 			return nil, listOut{}, err
 		}
 		limit, offset := pageArgs(in.Limit, in.Offset, 100)
-		restricted, err := restrictedKey(ctx, client)
+		restricted, err := restrictedKey(ctx, gen)
 		if err != nil {
 			return nil, listOut{}, err
 		}
 		if restricted {
 			// the narrator route counts books this key may not see
-			v, verr := sweepVisible(ctx, client, lib)
+			v, verr := sweepVisible(ctx, gen, lib)
 			if verr != nil {
 				return nil, listOut{}, verr
 			}
@@ -614,14 +658,15 @@ func registerNarratorTools(r *registry) {
 			}
 			return nil, out, nil
 		}
-		ns, err := client.Narrators(ctx, lib.ID)
+		got, err := record(gen.LibraryGetNarrators(ctx, lib.Id))
 		if err != nil {
 			return nil, listOut{}, err
 		}
+		ns := got.Narrators
 
 		// by name, as an account kept from some books is answered, so a page
 		// is the same page however the server happened to list them
-		slices.SortStableFunc(ns, func(a, b abs.NarratorRow) int { return strings.Compare(a.Name, b.Name) })
+		slices.SortStableFunc(ns, func(a, b api.LibraryGetNarratorsAnswerNarrators) int { return strings.Compare(a.Name, b.Name) })
 		page, next := pageOf(ns, limit, offset)
 		out := listOut{Total: len(ns), Offset: offset, NextOffset: next, Narrators: make([]narratorRow, 0, len(page))}
 		for i := range page {
@@ -632,90 +677,81 @@ func registerNarratorTools(r *registry) {
 	})
 }
 
-// seriesBooks is a series' books in sequence order, each with its whole
+// seriesBooks is a series' books in sequence order, each whole, with its whole
 // series list. An item listing filtered by series comes back with that field
 // collapsed to the one series matched (docs/README.md), which is fine for the
 // sequence but not for anything that writes the list back: four Stormlight
-// books lost their Cosmere link to an edit built from it. So the order and
-// the sequence come from the filtered listing, every page of it, and the
-// series lists from a batch fetch of the same ids.
-func seriesBooks(ctx context.Context, client *abs.Client, s *abs.Series) ([]abs.Item, error) {
-	var books []abs.Item
-	if err := client.ItemsAll(ctx, s.LibraryID, abs.ItemsOptions{Sort: "sequence", Filter: abs.EncodeFilter("series", s.ID)}, func(items []abs.Item) bool {
-		books = append(books, items...)
+// books lost their Cosmere link to an edit built from it. So the order comes
+// from the filtered listing, every page of it, and the books from a batch
+// fetch of the same ids.
+func seriesBooks(ctx context.Context, gen *api.Client, s *api.Series) ([]api.LibraryItemExpanded, error) {
+	var listed []*api.LibraryItemMinified
+	if err := eachItem(ctx, gen, s.LibraryId, api.LibraryGetLibraryItemsOptions{Sort: "sequence", Filter: api.ListFilter("series", string(s.Id))}, func(it *api.LibraryItemMinified) bool {
+		listed = append(listed, it)
 		return true
 	}); err != nil {
 		return nil, err
 	}
-	if err := fullSeriesLists(ctx, client, books); err != nil {
-		return nil, err
-	}
-	return books, nil
+
+	return wholeInOrder(ctx, gen, listed)
 }
 
-// fullSeriesLists puts every series each item is in back onto items that came
-// from a listing filtered by series, with batch fetches of their ids.
-func fullSeriesLists(ctx context.Context, client *abs.Client, items []abs.Item) error {
-	if len(items) == 0 {
-		return nil
+// wholeInOrder fetches the items a listing named whole, in the listing's order, in batches: a thousand expanded items in one reply is what a
+// reverse proxy times out on.
+func wholeInOrder(ctx context.Context, gen *api.Client, listed []*api.LibraryItemMinified) ([]api.LibraryItemExpanded, error) {
+	ids := make([]api.LibraryItemID, 0, len(listed))
+	for _, it := range listed {
+		ids = append(ids, it.Id)
 	}
-	ids := make([]string, 0, len(items))
-	for i := range items {
-		ids = append(ids, items[i].ID)
-	}
-	refs := make(map[string]abs.SeriesRefs, len(ids))
-	// in batches: the fetch is of the expanded items, and a thousand of those
-	// in one reply is what a reverse proxy times out on
+	byID := make(map[api.LibraryItemID]api.LibraryItemExpanded, len(ids))
 	for chunk := range slices.Chunk(ids, sweepBatchSize) {
-		full, err := client.ItemsBatch(ctx, chunk)
+		full, err := itemsBatch(ctx, gen, chunk)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		for i := range full {
-			refs[full[i].ID] = full[i].Media.Metadata.Series
+			byID[full[i].Id] = full[i]
 		}
 	}
-	for i := range items {
-		it := &items[i]
-		all, ok := refs[it.ID]
+
+	out := make([]api.LibraryItemExpanded, 0, len(listed))
+	for _, it := range listed {
+		whole, ok := byID[it.Id]
 		if !ok {
-			// the batch leaves out what is gone: its one-series list is not
-			// a list to write back
-			return fmt.Errorf("%q (%s) was not in the server's reply for its full series list: deleted meanwhile?", it.Title(), it.ID)
+			// the batch leaves out what is gone
+			return nil, fmt.Errorf("%q (%s) was not in the server's reply for its full series list: deleted meanwhile?", it.Title(), it.Id)
 		}
-		if len(all) > 0 {
-			it.Media.Metadata.Series = all
-			it.Media.Metadata.SeriesName = ""
-		}
+		out = append(out, whole)
 	}
-	return nil
+
+	return out, nil
 }
 
 // mergeSeriesRefs is a book's series list with from replaced by into, in
 // its place: the from entry's number goes to into unless into is already
 // there with a number of its own, in which case the from entry just goes.
 // Every other series is kept as it was.
-func mergeSeriesRefs(refs []abs.SeriesRef, from, into *abs.Series) []abs.SeriesRef {
+func mergeSeriesRefs(refs []api.SeriesMinimal, from, into *api.Series) []api.SeriesMinimal {
 	// by id where the book's entry has one: "Mistborn " and "Mistborn" are
 	// two records, and a name compared trimmed would take the one for the
 	// other. An entry with no id goes by its name as written, and only when
 	// neither series has that name exactly, by the name trimmed and folded
-	sameSeries := func(ref abs.SeriesRef, s *abs.Series) bool {
+	sameSeries := func(ref api.SeriesMinimal, s *api.Series) bool {
 		switch {
-		case ref.ID != "":
-			return ref.ID == s.ID
+		case ref.Id != "":
+			return ref.Id == s.Id
 		case ref.Name == from.Name || ref.Name == into.Name:
 			return ref.Name == s.Name
 		}
 		return strings.EqualFold(strings.TrimSpace(ref.Name), strings.TrimSpace(s.Name))
 	}
-	out := make([]abs.SeriesRef, 0, len(refs))
+	out := make([]api.SeriesMinimal, 0, len(refs))
 	seq, fromAt, intoAt := "", -1, -1
 	for _, ref := range refs {
 		switch {
 		case sameSeries(ref, from):
 			seq, fromAt = ref.Sequence, len(out)
-			out = append(out, abs.SeriesRef{Name: into.Name})
+			out = append(out, api.SeriesMinimal{Name: into.Name})
 		case sameSeries(ref, into):
 			intoAt = len(out)
 			out = append(out, ref)
@@ -745,7 +781,7 @@ func seqSuffix(seq string) string {
 }
 
 func registerSeriesTools(r *registry) {
-	client := r.client
+	gen := r.gen
 
 	type listIn struct {
 		Library string `json:"library,omitempty" jsonschema:"library name or id; optional when the server has one library"`
@@ -773,7 +809,7 @@ func registerSeriesTools(r *registry) {
 		Name:        "series_list",
 		Description: "List series with book counts and the sequence numbers present, so gaps (missing books) stand out. One library by name or id, or every book library when none is given; limit and offset page each library.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in listIn) (*mcp.CallToolResult, listOut, error) {
-		libs, err := resolveLibraries(ctx, client, in.Library)
+		libs, err := resolveLibraries(ctx, gen, in.Library)
 		if err != nil {
 			return nil, listOut{}, err
 		}
@@ -789,8 +825,9 @@ func registerSeriesTools(r *registry) {
 			if lib.IsPodcast() {
 				continue
 			}
-			series, total, err := window(offset, limit, func(page int) ([]abs.Series, int, error) {
-				return client.SeriesList(ctx, lib.ID, abs.ListOptions{Limit: limit, Page: page, Sort: sortBy, Desc: in.Desc})
+			series, total, err := window(offset, limit, func(page int) ([]api.Series, int, error) {
+				got, err := record(gen.LibraryGetAllSeriesForLibrary(ctx, lib.Id, api.LibraryGetAllSeriesForLibraryOptions{Limit: new(limit), Page: new(page), Sort: sortBy, Desc: descFlag(in.Desc)}))
+				return got.Results, got.Total, err
 			})
 			if err != nil {
 				return nil, listOut{}, err
@@ -801,19 +838,20 @@ func registerSeriesTools(r *registry) {
 			}
 			for j := range series {
 				s := &series[j]
-				row := seriesRow{ID: s.ID, Name: s.Name, Books: len(s.Books), Duration: wholeSec(s.TotalDuration)}
+				row := seriesRow{ID: string(s.Id), Name: s.Name, Books: len(s.Books), Duration: wholeSec(s.TotalDuration)}
 				if len(libs) > 1 {
 					row.Library = lib.Name
 				}
 				for k := range s.Books {
-					m := &s.Books[k].Media.Metadata
+					filledMinified(&s.Books[k])
+					m := s.Books[k].Media.Metadata
 					if row.Author == "" {
 						row.Author = m.AuthorDisplay()
 					}
 					// the listing's books are minified, with the series only
 					// as the joined "Name #1" string, so by name as well as id
 					for _, ref := range seriesRefsOf(&s.Books[k]) {
-						if (ref.ID == s.ID || strings.EqualFold(ref.Name, s.Name)) && ref.Sequence != "" {
+						if (ref.Id == s.Id || strings.EqualFold(ref.Name, s.Name)) && ref.Sequence != "" {
 							row.Sequence = append(row.Sequence, ref.Sequence)
 						}
 					}
@@ -846,28 +884,28 @@ func registerSeriesTools(r *registry) {
 		Name:        "series_get",
 		Description: "A series' books in order with sequence numbers and which ones the API key's user has finished. Each book's series list is complete, every series it is in and not only this one, so it is safe to build an item_edit series= list from.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, getOut, error) {
-		s, err := resolveSeries(ctx, client, in.Library, in.Series)
+		s, err := resolveSeries(ctx, gen, in.Library, in.Series)
 		if err != nil {
 			return nil, getOut{}, err
 		}
-		books, err := seriesBooks(ctx, client, s)
+		books, err := seriesBooks(ctx, gen, s)
 		if err != nil {
 			return nil, getOut{}, err
 		}
 
 		finished := map[string]bool{}
 		if s.Progress != nil {
-			for _, id := range s.Progress.LibraryItemIDsFinished {
+			for _, id := range s.Progress.LibraryItemIdsFinished {
 				finished[id] = true
 			}
 		}
 
-		out := getOut{ID: s.ID, Name: s.Name, Description: clip(plain(s.Description), descriptionCap), Books: []bookRow{}}
+		out := getOut{ID: string(s.Id), Name: s.Name, Description: clip(plain(s.Description), descriptionCap), Books: []bookRow{}}
 		for i := range books {
 			it := &books[i]
-			row := bookRow{itemSummary: summarize(it), Finished: finished[it.ID]}
+			row := bookRow{itemSummary: summarizeWhole(it), Finished: finished[string(it.Id)]}
 			for _, ref := range it.Media.Metadata.Series {
-				if ref.ID == s.ID || strings.EqualFold(ref.Name, s.Name) {
+				if ref.Id == s.Id || strings.EqualFold(ref.Name, s.Name) {
 					row.Sequence = ref.Sequence
 				}
 			}
@@ -899,43 +937,43 @@ func registerSeriesTools(r *registry) {
 		if in.Name != "" && name == "" {
 			return nil, editOut{}, errors.New("name cannot be blank")
 		}
-		s, err := resolveSeries(ctx, client, in.Library, in.Series)
+		s, err := resolveSeries(ctx, gen, in.Library, in.Series)
 		if err != nil {
 			return nil, editOut{}, err
 		}
-		upd := abs.SeriesUpdate{Name: strPtr(name), Description: strPtr(in.Description)}
-		if upd.Name == nil && upd.Description == nil {
+		upd := api.SeriesUpdateRequest{Name: name, Description: in.Description}
+		if upd.Name == "" && upd.Description == "" {
 			return nil, editOut{}, errors.New("nothing to change: pass name or description")
 		}
 		// the name it already has, spaces and all, is no rename: a
 		// description set beside it leaves the name as it is
-		if upd.Name != nil && (*upd.Name == s.Name || in.Name == s.Name) {
-			upd.Name = nil
+		if upd.Name != "" && (upd.Name == s.Name || in.Name == s.Name) {
+			upd.Name = ""
 		}
 		// a rename that changes nothing writes nothing, and says so rather
 		// than report a rename done
-		if upd.Name == nil && upd.Description == nil {
-			return nil, editOut{ID: s.ID, Name: s.Name, Unchanged: true}, nil
+		if upd.Name == "" && upd.Description == "" {
+			return nil, editOut{ID: string(s.Id), Name: s.Name, Unchanged: true}, nil
 		}
-		if upd.Name != nil && *upd.Name != s.Name {
+		if upd.Name != "" && upd.Name != s.Name {
 			// two series with one name is not a merge, it is two series
 			// with one name; series_merge is how books move
-			others, ferr := allSeries(ctx, client, s.LibraryID)
+			others, ferr := allSeries(ctx, gen, s.LibraryId)
 			if ferr != nil {
 				return nil, editOut{}, ferr
 			}
 			for _, other := range others {
-				if other.ID != s.ID && strings.EqualFold(strings.TrimSpace(other.Name), name) {
-					return nil, editOut{}, fmt.Errorf("a series named %q already exists (%s): series_merge from=%s into=%s moves the books of %q there instead", other.Name, other.ID, s.ID, other.ID, s.Name)
+				if other.Id != s.Id && strings.EqualFold(strings.TrimSpace(other.Name), name) {
+					return nil, editOut{}, fmt.Errorf("a series named %q already exists (%s): series_merge from=%s into=%s moves the books of %q there instead", other.Name, other.Id, s.Id, other.Id, s.Name)
 				}
 			}
 		}
-		updated, err := client.UpdateSeries(ctx, s.ID, upd)
+		updated, err := record(gen.SeriesUpdate(ctx, s.Id, upd))
 		if err != nil {
 			return nil, editOut{}, err
 		}
 
-		return nil, editOut{ID: updated.ID, Name: updated.Name}, nil
+		return nil, editOut{ID: string(updated.Id), Name: updated.Name}, nil
 	})
 
 	type mergeIn struct {
@@ -960,18 +998,18 @@ func registerSeriesTools(r *registry) {
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in mergeIn) (*mcp.CallToolResult, mergeOut, error) {
 		// every book of the series is read and its series list written back
 		defer r.locks.All()()
-		from, err := resolveSeries(ctx, client, in.Library, in.From)
+		from, err := resolveSeries(ctx, gen, in.Library, in.From)
 		if err != nil {
 			return nil, mergeOut{}, fmt.Errorf("from: %w", err)
 		}
-		into, err := resolveSeries(ctx, client, in.Library, in.Into)
+		into, err := resolveSeries(ctx, gen, in.Library, in.Into)
 		if err != nil {
 			return nil, mergeOut{}, fmt.Errorf("into: %w", err)
 		}
-		if from.ID == into.ID {
+		if from.Id == into.Id {
 			return nil, mergeOut{}, fmt.Errorf("%q is one series: nothing to merge", from.Name)
 		}
-		books, err := seriesBooks(ctx, client, from)
+		books, err := seriesBooks(ctx, gen, from)
 		if err != nil {
 			return nil, mergeOut{}, err
 		}
@@ -979,12 +1017,12 @@ func registerSeriesTools(r *registry) {
 			return nil, mergeOut{}, fmt.Errorf("%q has no books", from.Name)
 		}
 
-		out := mergeOut{From: from.Name, Into: into.Name, IntoID: into.ID, Books: make([]string, 0, len(books))}
-		updates := make([]abs.BatchMediaUpdate, 0, len(books))
+		out := mergeOut{From: from.Name, Into: into.Name, IntoID: string(into.Id), Books: make([]string, 0, len(books))}
+		updates := make([]api.LibraryItemBatchUpdateRequest, 0, len(books))
 		for i := range books {
 			it := &books[i]
 			refs := mergeSeriesRefs(it.Media.Metadata.Series, from, into)
-			updates = append(updates, abs.BatchMediaUpdate{ID: it.ID, MediaPayload: abs.MediaUpdate{Metadata: &abs.MetadataUpdate{Series: refs}}})
+			updates = append(updates, api.LibraryItemBatchUpdateRequest{Id: string(it.Id), MediaPayload: &api.MediaUpdate{Metadata: &api.MediaUpdateMetadata{Series: refs}}})
 			for _, ref := range refs {
 				if strings.EqualFold(ref.Name, into.Name) {
 					out.Books = append(out.Books, it.Title()+seqSuffix(ref.Sequence))
@@ -995,7 +1033,8 @@ func registerSeriesTools(r *registry) {
 		// books is what a reverse proxy times out on. A batch that fails
 		// leaves the ones before it moved, and the error says how many.
 		for chunk := range slices.Chunk(updates, sweepBatchSize) {
-			n, berr := client.BatchUpdate(ctx, chunk)
+			got, berr := record(gen.LibraryItemBatchUpdate(ctx, chunk))
+			n := got.Updates
 			if berr != nil {
 				return nil, mergeOut{}, fmt.Errorf("%d of the %d books of %q were moved into %q before this, and stay there; the rest were not: %w", out.Moved, len(books), from.Name, into.Name, berr)
 			}
@@ -1008,13 +1047,13 @@ func registerSeriesTools(r *registry) {
 		}
 
 		// read back rather than promised: a series can outlive its books
-		left, err := allSeries(ctx, client, from.LibraryID)
+		left, err := allSeries(ctx, gen, from.LibraryId)
 		if err != nil {
 			return nil, mergeOut{}, fmt.Errorf("all %d books moved into %q, but the series could not be read back to see whether %q is gone: %w", out.Moved, into.Name, from.Name, err)
 		}
-		out.FromRemoved = !slices.ContainsFunc(left, func(s abs.Series) bool { return s.ID == from.ID })
+		out.FromRemoved = !slices.ContainsFunc(left, func(s api.Series) bool { return s.Id == from.Id })
 		if !out.FromRemoved {
-			out.Note = fmt.Sprintf("the server still lists %q (%s), with no books; a lookup by its name refuses it", from.Name, from.ID)
+			out.Note = fmt.Sprintf("the server still lists %q (%s), with no books; a lookup by its name refuses it", from.Name, from.Id)
 		}
 
 		return nil, out, nil
@@ -1026,4 +1065,32 @@ func registerSeriesTools(r *registry) {
 // but "Emily Andras" is not "Emily Adrian".
 func sameName(a, b string) bool {
 	return strings.Join(strings.Fields(norm(a)), " ") == strings.Join(strings.Fields(norm(b)), " ")
+}
+
+// fullSeriesLists are the series each item of a listing filtered by series is in, every one, by item: the listing gives only the one it was
+// filtered by. An item the server has deleted meanwhile is an error, as its one series is not its list.
+func fullSeriesLists(ctx context.Context, gen *api.Client, items []api.LibraryItemMinified) (map[api.LibraryItemID][]string, error) {
+	ids := make([]api.LibraryItemID, 0, len(items))
+	for i := range items {
+		ids = append(ids, items[i].Id)
+	}
+	out := make(map[api.LibraryItemID][]string, len(ids))
+	// in batches: the fetch is of the expanded items, and a thousand of those
+	// in one reply is what a reverse proxy times out on
+	for chunk := range slices.Chunk(ids, sweepBatchSize) {
+		full, err := itemsBatch(ctx, gen, chunk)
+		if err != nil {
+			return nil, err
+		}
+		for i := range full {
+			out[full[i].Id] = full[i].Media.Metadata.SeriesDisplay()
+		}
+	}
+	for i := range items {
+		if _, ok := out[items[i].Id]; !ok {
+			return nil, fmt.Errorf("%q (%s) was not in the server's reply for its full series list: deleted meanwhile?", items[i].Title(), items[i].Id)
+		}
+	}
+
+	return out, nil
 }

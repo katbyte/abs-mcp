@@ -4,7 +4,7 @@ package abs
 
 // NotificationUpdateRequest is an object the document declares inline.
 type NotificationUpdateRequest struct {
-	AppriseApiUrl        any `json:"appriseApiUrl,omitempty"`
-	MaxFailedAttempts    any `json:"maxFailedAttempts,omitempty"`
-	MaxNotificationQueue any `json:"maxNotificationQueue,omitempty"`
+	AppriseApiUrl        any     `json:"appriseApiUrl,omitempty"`
+	MaxFailedAttempts    float64 `json:"maxFailedAttempts,omitempty"`
+	MaxNotificationQueue any     `json:"maxNotificationQueue,omitempty"`
 }

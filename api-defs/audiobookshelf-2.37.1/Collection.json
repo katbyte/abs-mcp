@@ -73,6 +73,13 @@
       "OperationId": "CollectionCreate",
       "Method": "POST",
       "Path": "/api/collections",
+      "Request": {
+        "ContentType": "application/json",
+        "Type": {
+          "Type": "Reference",
+          "ReferenceName": "CollectionCreateRequest"
+        }
+      },
       "Response": {
         "ContentType": "application/json",
         "Type": {
@@ -102,7 +109,7 @@
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -284,6 +291,43 @@
         {
           "Name": "Id",
           "JsonName": "id",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "CollectionCreateRequest",
+      "Fields": [
+        {
+          "Name": "Books",
+          "JsonName": "books",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "String"
+            }
+          }
+        },
+        {
+          "Name": "Description",
+          "JsonName": "description",
+          "Type": {
+            "Type": "String"
+          }
+        },
+        {
+          "Name": "LibraryId",
+          "JsonName": "libraryId",
+          "Type": {
+            "Type": "ID",
+            "ReferenceName": "LibraryID"
+          }
+        },
+        {
+          "Name": "Name",
+          "JsonName": "name",
           "Type": {
             "Type": "String"
           }

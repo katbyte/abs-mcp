@@ -4,8 +4,8 @@ package abs
 
 // LibraryGetUserPlaylistsForLibraryAnswer is an object the document declares inline.
 type LibraryGetUserPlaylistsForLibraryAnswer struct {
-	Limit   float64                                          `json:"limit,omitempty"`
-	Page    float64                                          `json:"page,omitempty"`
-	Results []LibraryGetUserPlaylistsForLibraryAnswerResults `json:"results,omitzero"`
-	Total   int                                              `json:"total,omitempty"`
+	Limit   int        `json:"limit,omitempty"`
+	Page    int        `json:"page,omitempty"`
+	Results []Playlist `json:"results,omitzero"`
+	Total   int        `json:"total,omitempty"`
 }

@@ -13,7 +13,8 @@ import (
 	"github.com/katbyte/go-kt/lock"
 	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/go-kt/pointer"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -25,7 +26,7 @@ type itemRef struct {
 }
 
 func registerItemTools(r *registry) {
-	client := r.client
+	gen := r.gen
 	prov := r.providerConfig()
 
 	type chapterRow struct {
@@ -65,8 +66,8 @@ func registerItemTools(r *registry) {
 		Downloads     *downloadSettings `json:"downloads,omitempty"      jsonschema:"podcasts: the automatic download settings podcast_edit changes"`
 		Description   string            `json:"description,omitempty"`
 		PublishedDate string            `json:"published_date,omitempty"`
-		Authors       []abs.NameRef     `json:"authors,omitempty"        jsonschema:"with ids for author_get"`
-		SeriesRefs    []abs.SeriesRef   `json:"series_refs,omitempty"    jsonschema:"with ids for series_get"`
+		Authors       []nameRef         `json:"authors,omitempty"        jsonschema:"with ids for author_get"`
+		SeriesRefs    []seriesRef       `json:"series_refs,omitempty"    jsonschema:"with ids for series_get"`
 		LibraryID     string            `json:"library_id"`
 		FullPath      string            `json:"full_path,omitempty"`
 		LastScan      string            `json:"last_scan,omitempty"`
@@ -81,21 +82,25 @@ func registerItemTools(r *registry) {
 		Name:        "item_get",
 		Description: "One book or podcast: metadata with provider ids, description, listening progress, how many chapters and tracks it has, and for podcasts the newest episodes. Set chapters or files to pull in the full lists - both are off by default because they are unbounded, and the counts in the default answer are usually enough to decide.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, getOut, error) {
-		it, err := resolveItem(ctx, client, in.Library, in.Item)
+		it, err := resolveItem(ctx, gen, in.Library, in.Item)
 		if err != nil {
 			return nil, getOut{}, err
 		}
 
-		m := &it.Media.Metadata
+		m := it.Media.Metadata
 		out := getOut{
-			itemSummary:   summarize(it),
+			itemSummary:   summarizeWhole(it),
 			Description:   clip(plain(m.Description), 1500),
 			PublishedDate: m.PublishedDate,
-			Authors:       m.Authors,
-			SeriesRefs:    m.Series,
-			LibraryID:     it.LibraryID,
+			LibraryID:     string(it.LibraryId),
 			FullPath:      it.Path,
 			LastScan:      fmtTime(it.LastScan),
+		}
+		for _, a := range m.Authors {
+			out.Authors = append(out.Authors, nameRef{ID: string(a.Id), Name: a.Name})
+		}
+		for _, s := range m.Series {
+			out.SeriesRefs = append(out.SeriesRefs, seriesRef{ID: string(s.Id), Name: s.Name, Sequence: s.Sequence})
 		}
 		if len(it.Media.AudioFiles) > 0 {
 			af := it.Media.AudioFiles[0]
@@ -105,14 +110,15 @@ func registerItemTools(r *registry) {
 			if f.FileType == "audio" {
 				continue
 			}
+			meta := pointer.From(f.Metadata)
 			out.OtherFiles = append(out.OtherFiles, fileRow{
-				Filename: f.Metadata.Filename, Path: subfolderPath(f.Metadata), Size: f.Metadata.Size, Type: f.FileType,
+				Filename: meta.Filename, Path: subfolderPath(meta), Size: int64(meta.Size), Type: f.FileType,
 				Main: f.FileType == "ebook" && it.Media.EbookFile != nil && it.Media.EbookFile.Ino == f.Ino,
 			})
 		}
 		if it.IsPodcast() {
 			out.Downloads = &downloadSettings{
-				AutoDownload: it.Media.AutoDownloadEpisodes,
+				AutoDownload: pointer.From(it.Media.AutoDownloadEpisodes),
 				Schedule:     it.Media.AutoDownloadSchedule,
 				KeepEpisodes: it.Media.MaxEpisodesToKeep,
 				NewPerCheck:  it.Media.MaxNewEpisodesToDownload,
@@ -121,7 +127,7 @@ func registerItemTools(r *registry) {
 			eps := newestEpisodes(it.Media.Episodes)
 			out.EpisodeTotal = len(eps)
 			for i := 0; i < len(eps) && len(out.Episodes) < defaultLimit; i++ {
-				out.Episodes = append(out.Episodes, summarizeEpisode(&eps[i], "", false))
+				out.Episodes = append(out.Episodes, summarizeEpisode(&eps[i], "", false, nil))
 			}
 		}
 
@@ -130,7 +136,7 @@ func registerItemTools(r *registry) {
 		if in.Chapters {
 			list := []chapterRow{}
 			for _, ch := range it.Media.Chapters {
-				list = append(list, chapterRow{Index: ch.ID, Title: ch.Title, Start: ch.Start, End: ch.End})
+				list = append(list, chapterRow{Index: ch.Id, Title: ch.Title, Start: ch.Start, End: ch.End})
 			}
 			out.ChapterList = &list
 		}
@@ -145,14 +151,15 @@ func registerItemTools(r *registry) {
 			}
 			list := []fileRow{}
 			for _, af := range audio {
+				meta := pointer.From(af.Metadata)
 				list = append(list, fileRow{
 					Index:    af.Index,
-					Filename: af.Metadata.Filename,
-					Path:     subfolderPath(af.Metadata),
+					Filename: meta.Filename,
+					Path:     subfolderPath(meta),
 					Duration: wholeSec(af.Duration),
-					Size:     af.Metadata.Size,
+					Size:     int64(meta.Size),
 					Codec:    af.Codec,
-					Bitrate:  af.BitRate / 1000,
+					Bitrate:  int64(af.BitRate / 1000),
 					Channels: af.Channels,
 					Excluded: af.Exclude,
 					Error:    af.Error,
@@ -236,17 +243,17 @@ func registerItemTools(r *registry) {
 			refs = []string{in.Item}
 		}
 		var (
-			items []*abs.Item
-			ids   []string
+			items []*api.LibraryItemExpanded
+			ids   []api.LibraryItemID
 		)
 		for _, ref := range refs {
-			found, err := resolveItemToChange(ctx, client, in.Library, ref)
+			found, err := resolveItemToChange(ctx, gen, in.Library, ref)
 			if err != nil {
 				return nil, editOut{}, err
 			}
 			// named twice, it is changed once
-			if !slices.Contains(ids, found.ID) {
-				items, ids = append(items, found), append(ids, found.ID)
+			if !slices.Contains(ids, found.Id) {
+				items, ids = append(items, found), append(ids, found.Id)
 			}
 		}
 		it := items[0] // the item, when there is one
@@ -261,27 +268,27 @@ func registerItemTools(r *registry) {
 		var err error
 		switch {
 		case many && (editSeries || editTags):
-			var fresh []abs.Item
-			if fresh, err = client.ItemsBatch(ctx, ids); err != nil {
+			var fresh []api.LibraryItemExpanded
+			if fresh, err = itemsBatch(ctx, gen, ids); err != nil {
 				return nil, editOut{}, err
 			}
 			for i := range items {
-				j := slices.IndexFunc(fresh, func(f abs.Item) bool { return f.ID == items[i].ID })
+				j := slices.IndexFunc(fresh, func(f api.LibraryItemExpanded) bool { return f.Id == items[i].Id })
 				if j < 0 {
 					// the batch leaves out what is gone: its tags and series
 					// from before the hold are not the ones to edit
-					return nil, editOut{}, fmt.Errorf("%q (%s) was not in the server's reply when read again to edit: deleted meanwhile? nothing was changed", items[i].Title(), items[i].ID)
+					return nil, editOut{}, fmt.Errorf("%q (%s) was not in the server's reply when read again to edit: deleted meanwhile? nothing was changed", items[i].Title(), items[i].Id)
 				}
 				items[i] = &fresh[j]
 			}
 		case !many && (editSeries || editTags || len(in.Tracks) > 0 || in.Ebook != ""):
-			if it, err = client.Item(ctx, it.ID); err != nil {
+			if it, err = getItem(ctx, gen, it.Id); err != nil {
 				return nil, editOut{}, err
 			}
 		}
 
-		md := abs.MetadataUpdate{}
-		upd := abs.MediaUpdate{}
+		md := api.MediaUpdateMetadata{}
+		upd := api.MediaUpdate{}
 		var fields []string
 		set := func(name string, dst **string, val string) {
 			if val != "" {
@@ -294,11 +301,11 @@ func registerItemTools(r *registry) {
 		set("year", &md.PublishedYear, in.Year)
 		set("publisher", &md.Publisher, in.Publisher)
 		set("description", &md.Description, in.Description)
-		set("isbn", &md.ISBN, in.ISBN)
-		set("asin", &md.ASIN, in.ASIN)
+		set("isbn", &md.Isbn, in.ISBN)
+		set("asin", &md.Asin, in.ASIN)
 		set("language", &md.Language, in.Language)
 		set("podcast_author", &md.Author, in.PodcastAuthor)
-		set("feed_url", &md.FeedURL, in.FeedURL)
+		set("feed_url", &md.FeedUrl, in.FeedURL)
 		if in.Explicit != nil {
 			md.Explicit = in.Explicit
 			fields = append(fields, "explicit")
@@ -309,7 +316,7 @@ func registerItemTools(r *registry) {
 		}
 		if len(in.Authors) > 0 {
 			for _, a := range in.Authors {
-				md.Authors = append(md.Authors, abs.NameRef{Name: strings.TrimSpace(a)})
+				md.Authors = append(md.Authors, api.AuthorMinimal{Name: strings.TrimSpace(a)})
 			}
 			fields = append(fields, "authors")
 		}
@@ -364,7 +371,7 @@ func registerItemTools(r *registry) {
 			case "narrators", "narrator":
 				md.Narrators = []string{}
 			case "series":
-				md.Series = []abs.SeriesRef{}
+				md.Series = []api.SeriesMinimal{}
 			case "genres":
 				md.Genres = []string{}
 			case "tags":
@@ -376,9 +383,9 @@ func registerItemTools(r *registry) {
 			case "description":
 				md.Description = &empty
 			case "isbn":
-				md.ISBN = &empty
+				md.Isbn = &empty
 			case "asin":
-				md.ASIN = &empty
+				md.Asin = &empty
 			case "language":
 				md.Language = &empty
 			default:
@@ -390,7 +397,7 @@ func registerItemTools(r *registry) {
 		// one item's update: the change given, with the lists that are edited
 		// worked out from the item's own
 		tagsOnly := !slices.ContainsFunc(fields, func(f string) bool { return f != "tags" && f != "clear:tags" })
-		updateFor := func(it *abs.Item) (abs.MediaUpdate, error) {
+		updateFor := func(it *api.LibraryItemExpanded) (api.MediaUpdate, error) {
 			u, m := upd, md
 			if editSeries {
 				refs, serr := editSeriesList(it.Media.Metadata.Series, in.AddSeries, in.RemoveSeries)
@@ -413,19 +420,19 @@ func registerItemTools(r *registry) {
 				return nil, editOut{}, errors.New("nothing to change: pass at least one field")
 			}
 			out := editOut{Fields: fields, Items: make([]string, 0, len(items))}
-			updates := make([]abs.BatchMediaUpdate, 0, len(items))
+			updates := make([]api.LibraryItemBatchUpdateRequest, 0, len(items))
 			shows := map[string]bool{}
 			for _, it := range items {
-				var u abs.MediaUpdate
+				var u api.MediaUpdate
 				if u, err = updateFor(it); err != nil {
 					return nil, editOut{}, err
 				}
-				updates = append(updates, abs.BatchMediaUpdate{ID: it.ID, MediaPayload: u})
+				updates = append(updates, api.LibraryItemBatchUpdateRequest{Id: string(it.Id), MediaPayload: &u})
 				out.Items = append(out.Items, it.Title())
-				shows[it.ID] = it.IsPodcast()
+				shows[string(it.Id)] = it.IsPodcast()
 			}
 			var n int
-			if n, err = updateMany(ctx, client, updates, shows); err != nil {
+			if n, err = updateMany(ctx, gen, updates, shows); err != nil {
 				return nil, editOut{}, err
 			}
 			out.ItemsUpdated, out.Updated = &n, n > 0
@@ -439,20 +446,20 @@ func registerItemTools(r *registry) {
 		// the files are planned before anything is sent, so a list that names
 		// a file wrongly changes nothing at all
 		var (
-			order          []abs.TrackOrder
-			before, played []abs.AudioFile
-			chapters       []abs.Chapter
-			flip           *abs.LibraryFile
+			order          []api.LibraryItemUpdateTracksRequestOrderedFileData
+			before, played []api.AudioFile
+			chapters       []api.Chapter
+			flip           *api.LibraryFile
 			wantEbook      string
 		)
 		out := editOut{}
 		if len(in.Tracks) > 0 {
-			var listed []abs.AudioFile
+			var listed []api.AudioFile
 			if order, listed, err = trackOrder(it, in.Tracks); err != nil {
 				return nil, editOut{}, err
 			}
 			before = playOrder(it.Media.AudioFiles)
-			played = slices.DeleteFunc(listed, func(af abs.AudioFile) bool { return af.Exclude })
+			played = slices.DeleteFunc(listed, func(af api.AudioFile) bool { return af.Exclude })
 			switch moved, ok := chaptersMoved(it.Media.Chapters, before, played); {
 			case sameTracks(before, played):
 				order, out.Chapters = nil, "unchanged"
@@ -492,23 +499,25 @@ func registerItemTools(r *registry) {
 			return fmt.Errorf("%s changed, but %s failed: %w", strings.Join(done, " and "), what, err)
 		}
 		if metadata {
-			if out.Updated, err = client.UpdateMedia(ctx, it.ID, one); err != nil {
+			got, err := record(gen.LibraryItemUpdateMedia(ctx, it.Id, one))
+			if err != nil {
 				return nil, editOut{}, err
 			}
+			out.Updated = got.Updated
 			done = append(done, "the metadata")
 		}
 		if order != nil {
-			got, err := client.UpdateTracks(ctx, it.ID, order)
+			got, err := record(gen.LibraryItemUpdateTracks(ctx, it.Id, api.LibraryItemUpdateTracksRequest{OrderedFileData: order}))
 			if err != nil {
 				return nil, editOut{}, failed("reordering the tracks", err)
 			}
 			done = append(done, "the track order")
 			out.Updated = true
-			if now := playOrder(got.Media.AudioFiles); !sameTracks(now, played) {
+			if now := playOrder(pointer.From(got.Media).AudioFiles); !sameTracks(now, played) {
 				return nil, editOut{}, failed("checking the order", fmt.Errorf("the server was sent %s but plays %s", strings.Join(trackNames(played), ", "), strings.Join(trackNames(now), ", ")))
 			}
 			if chapters != nil {
-				if _, err := client.SetChapters(ctx, it.ID, chapters); err != nil {
+				if _, err := gen.LibraryItemUpdateMediaChapters(ctx, it.Id, api.LibraryItemUpdateMediaChaptersRequest{Chapters: chapters}); err != nil {
 					return nil, editOut{}, failed("moving the chapters with their tracks (they still follow the old order: item_chapters_set)", err)
 				}
 				done = append(done, "the chapters")
@@ -520,12 +529,12 @@ func registerItemTools(r *registry) {
 		if in.Ebook != "" {
 			out.Ebook = wantEbook
 			if flip != nil {
-				if err := client.SetEbookPrimary(ctx, it.ID, flip.Ino, wantEbook != "none"); err != nil {
+				if _, err := gen.LibraryItemUpdateEbookFileStatus(ctx, it.Id, flip.Ino); err != nil {
 					return nil, editOut{}, failed("setting the main ebook", err)
 				}
 				done = append(done, "the main ebook")
 				out.Updated = true
-				got, err := client.Item(ctx, it.ID)
+				got, err := getItem(ctx, gen, it.Id)
 				if err != nil {
 					return nil, editOut{}, failed("reading the main ebook back", err)
 				}
@@ -572,7 +581,7 @@ func registerItemTools(r *registry) {
 		Name:        "item_match",
 		Description: "Ask a metadata provider for candidate matches for a book (suggestions only). Compare title, author, narrator and duration against the item before applying one with item_match_apply.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in matchIn) (*mcp.CallToolResult, matchOut, error) {
-		it, err := resolveItem(ctx, client, in.Library, in.Item)
+		it, err := resolveItem(ctx, gen, in.Library, in.Item)
 		if err != nil {
 			return nil, matchOut{}, err
 		}
@@ -580,15 +589,15 @@ func registerItemTools(r *registry) {
 			return nil, matchOut{}, errNotBook
 		}
 
-		if err := prov.checkNamed(ctx, client, in.Providers); err != nil {
+		if err := prov.checkNamed(ctx, gen, in.Providers); err != nil {
 			return nil, matchOut{}, err
 		}
-		providers, err := prov.itemProviders(ctx, client, it, in.Providers)
+		providers, err := prov.itemProviders(ctx, gen, it, in.Providers)
 		if err != nil {
 			return nil, matchOut{}, err
 		}
 		title, author := matchSearch(it, in.Title, in.Author)
-		provider, results, err := searchProviders(ctx, client, it, providers, title, author)
+		provider, results, err := searchProviders(ctx, gen, it.Id, providers, title, author)
 		if err != nil {
 			return nil, matchOut{}, err
 		}
@@ -604,11 +613,11 @@ func registerItemTools(r *registry) {
 				Subtitle:    res.Subtitle,
 				Author:      res.Author,
 				Narrator:    res.Narrator,
-				Year:        res.PublishedYear.String(),
+				Year:        string(res.PublishedYear),
 				Publisher:   res.Publisher,
 				Duration:    wholeSec(res.Duration * 60),
-				ASIN:        res.ASIN,
-				ISBN:        res.ISBN,
+				ASIN:        res.Asin,
+				ISBN:        res.Isbn,
 				Language:    res.Language,
 				Abridged:    res.Abridged,
 				HasCover:    res.Cover != "",
@@ -669,7 +678,7 @@ func registerItemTools(r *registry) {
 			return nil, applyOut{}, errors.New("pass candidate (an index from item_match), asin or isbn to say which book to apply")
 		}
 
-		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
+		it, err := resolveItemToChange(ctx, gen, in.Library, in.Item)
 		if err != nil {
 			return nil, applyOut{}, err
 		}
@@ -678,8 +687,8 @@ func registerItemTools(r *registry) {
 		}
 		// held from the read the kept fields and the provider tag are
 		// restored from, to the last write
-		defer r.locks.By(it)()
-		if it, err = client.Item(ctx, it.ID); err != nil {
+		defer r.locks.By(itemLocks(it.Id)...)()
+		if it, err = getItem(ctx, gen, it.Id); err != nil {
 			return nil, applyOut{}, err
 		}
 
@@ -694,50 +703,50 @@ func registerItemTools(r *registry) {
 			return nil, applyOut{}, errors.New("smart and override_details are two answers to the same question; pick one")
 		}
 
-		if err := prov.checkNamed(ctx, client, in.Providers); err != nil {
+		if err := prov.checkNamed(ctx, gen, in.Providers); err != nil {
 			return nil, applyOut{}, err
 		}
-		providers, err := prov.itemProviders(ctx, client, it, in.Providers)
+		providers, err := prov.itemProviders(ctx, gen, it, in.Providers)
 		if err != nil {
 			return nil, applyOut{}, err
 		}
 		title, author := matchSearch(it, in.Title, in.Author)
-		opts := abs.MatchOptions{ASIN: strings.TrimSpace(in.ASIN), ISBN: strings.TrimSpace(in.ISBN), OverrideCover: in.OverrideCover, OverrideDetails: in.OverrideDetails}
+		opts := api.LibraryItemMatchRequest{Asin: strings.TrimSpace(in.ASIN), Isbn: strings.TrimSpace(in.ISBN), OverrideCover: new(in.OverrideCover), OverrideDetails: new(in.OverrideDetails)}
 		var applied appliedRef
 		var provider string
 
 		// a candidate comes from the first store with any, as item_match's
 		// did; an asin or isbn from the first store that holds it
-		if in.Candidate != nil && opts.ASIN == "" && opts.ISBN == "" {
-			var results []abs.BookSearchResult
+		if in.Candidate != nil && opts.Asin == "" && opts.Isbn == "" {
+			var results []api.SearchFindBooksAnswer
 			var serr error
-			if provider, results, serr = searchProviders(ctx, client, it, providers, title, author); serr != nil {
+			if provider, results, serr = searchProviders(ctx, gen, it.Id, providers, title, author); serr != nil {
 				return nil, applyOut{}, serr
 			}
 			if *in.Candidate < 0 || *in.Candidate >= len(results) {
 				return nil, applyOut{}, fmt.Errorf("candidate %d out of range (item_match returned %d)", *in.Candidate, len(results))
 			}
 			c := results[*in.Candidate]
-			opts.ASIN, opts.ISBN = c.ASIN, c.ISBN
+			opts.Asin, opts.Isbn = c.Asin, c.Isbn
 			applied.Title, applied.Author = c.Title, c.Author
-			if opts.ASIN == "" && opts.ISBN == "" {
+			if opts.Asin == "" && opts.Isbn == "" {
 				// providers without ids: the server searches again by the
 				// candidate's exact title and author and takes its first
 				// hit, which is the one place a match is not pinned to an id
 				opts.Title, opts.Author = c.Title, c.Author
 			}
-		} else if provider, err = providerHolding(ctx, client, it, providers, opts.ASIN, opts.ISBN); err != nil {
+		} else if provider, err = providerHolding(ctx, gen, it.Id, providers, opts.Asin, opts.Isbn); err != nil {
 			// no store named holds the asin or isbn
 			return nil, applyOut{}, err
 		}
 		opts.Provider = provider
-		applied.ASIN, applied.ISBN, applied.Provider = opts.ASIN, opts.ISBN, provider
+		applied.ASIN, applied.ISBN, applied.Provider = opts.Asin, opts.Isbn, provider
 
 		if in.Smart {
-			if opts.ASIN == "" && opts.ISBN == "" {
+			if opts.Asin == "" && opts.Isbn == "" {
 				return nil, applyOut{}, errors.New("smart needs an asin or isbn to fetch the provider's record")
 			}
-			decisions, res, serr := smartApply(ctx, client, it, provider, opts.ASIN, opts.ISBN, !in.Confirm)
+			decisions, res, serr := smartApply(ctx, gen, it, provider, opts.Asin, opts.Isbn, !in.Confirm)
 			if serr != nil {
 				return nil, applyOut{}, serr
 			}
@@ -748,15 +757,15 @@ func registerItemTools(r *registry) {
 			out.Updated, out.Warning = res.Updated, res.Warning
 			// a match that found nothing has no store to record
 			if res.LibraryItem != nil {
-				if err := prov.tagProvider(ctx, client, it.ID, tagsAfter(it, res, nil), provider); err != nil {
+				if err := prov.tagProvider(ctx, gen, it.Id, tagsAfter(it, res, nil), provider); err != nil {
 					out.Warning = joinWarnings(out.Warning, "recording the provider tag failed: "+err.Error())
 				}
 			}
-			after, aerr := client.Item(ctx, it.ID)
+			after, aerr := getItem(ctx, gen, it.Id)
 			if aerr != nil {
 				return nil, applyOut{}, fmt.Errorf("matched, but reading the item back failed: %w", aerr)
 			}
-			s := summarize(after)
+			s := summarizeWhole(after)
 			out.Item = &s
 			return nil, out, nil
 		}
@@ -764,7 +773,7 @@ func registerItemTools(r *registry) {
 		if !in.Confirm {
 			return nil, applyOut{WouldApply: &applied}, nil
 		}
-		res, err := client.Match(ctx, it.ID, opts)
+		res, err := matchItem(ctx, gen, it.Id, opts)
 		if err != nil {
 			return nil, applyOut{}, err
 		}
@@ -772,35 +781,34 @@ func registerItemTools(r *registry) {
 		// a match that found nothing changed nothing: there is no field to
 		// put back, no store to record, and no id the item failed to take
 		if res.LibraryItem == nil {
-			s := summarize(it)
+			s := summarizeWhole(it)
 			out.Item = &s
 			return nil, out, nil
 		}
 		tags := tagsAfter(it, res, keep)
-		if err := restoreKept(ctx, client, it, keep); err != nil {
+		if err := restoreKept(ctx, gen, it, keep); err != nil {
 			return nil, applyOut{}, fmt.Errorf("matched, but restoring %s failed: %w", strings.Join(keep, ", "), err)
 		}
 		out.Kept = keep
-		if err := prov.tagProvider(ctx, client, it.ID, tags, provider); err != nil {
+		if err := prov.tagProvider(ctx, gen, it.Id, tags, provider); err != nil {
 			out.Warning = joinWarnings(out.Warning, "recording the provider tag failed: "+err.Error())
 		}
 		// the match result predates the restored fields and the provider
 		// tag; the item as it is now is one more read
-		after, err := client.Item(ctx, it.ID)
+		after, err := getItem(ctx, gen, it.Id)
 		if err != nil {
 			return nil, applyOut{}, fmt.Errorf("matched, but reading the item back failed: %w", err)
 		}
-		res.LibraryItem = after
-		s := summarize(res.LibraryItem)
+		s := summarizeWhole(after)
 		out.Item = &s
 		// say when the id asked for is not the one the item ended up with:
 		// without override_details a field already set is kept
-		got := res.LibraryItem.Media.Metadata
+		got := after.Media.Metadata
 		switch {
-		case applied.ASIN != "" && !strings.EqualFold(got.ASIN, applied.ASIN):
-			out.Warning = joinWarnings(out.Warning, fmt.Sprintf("the item's asin is %q, not the applied %s; set override_details to replace it", got.ASIN, applied.ASIN))
-		case applied.ISBN != "" && got.ISBN != applied.ISBN:
-			out.Warning = joinWarnings(out.Warning, fmt.Sprintf("the item's isbn is %q, not the applied %s; set override_details to replace it", got.ISBN, applied.ISBN))
+		case applied.ASIN != "" && !strings.EqualFold(got.Asin, applied.ASIN):
+			out.Warning = joinWarnings(out.Warning, fmt.Sprintf("the item's asin is %q, not the applied %s; set override_details to replace it", got.Asin, applied.ASIN))
+		case applied.ISBN != "" && got.Isbn != applied.ISBN:
+			out.Warning = joinWarnings(out.Warning, fmt.Sprintf("the item's isbn is %q, not the applied %s; set override_details to replace it", got.Isbn, applied.ISBN))
 		}
 
 		return nil, out, nil
@@ -813,16 +821,16 @@ func registerItemTools(r *registry) {
 		Name:        "item_rescan",
 		Description: "Rescan one item's folder for changed files (new tracks, replaced cover, edited metadata.json). Admin only. Changes server state.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in itemRef) (*mcp.CallToolResult, rescanOut, error) {
-		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
+		it, err := resolveItemToChange(ctx, gen, in.Library, in.Item)
 		if err != nil {
 			return nil, rescanOut{}, err
 		}
-		res, err := client.ScanItem(ctx, it.ID)
+		res, err := record(gen.LibraryItemScan(ctx, it.Id))
 		if err != nil {
 			return nil, rescanOut{}, err
 		}
 
-		return nil, rescanOut{Result: res}, nil
+		return nil, rescanOut{Result: res.Result}, nil
 	})
 
 	type coverSearchIn struct {
@@ -840,14 +848,14 @@ func registerItemTools(r *registry) {
 		Name:        "item_cover_search",
 		Description: "Find candidate cover images for an item from the metadata providers. Returns urls for item_cover_edit.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in coverSearchIn) (*mcp.CallToolResult, coverSearchOut, error) {
-		it, err := resolveItem(ctx, client, in.Library, in.Item)
+		it, err := resolveItem(ctx, gen, in.Library, in.Item)
 		if err != nil {
 			return nil, coverSearchOut{}, err
 		}
-		if err := prov.checkNamed(ctx, client, in.Providers); err != nil {
+		if err := prov.checkNamed(ctx, gen, in.Providers); err != nil {
 			return nil, coverSearchOut{}, err
 		}
-		providers, err := prov.itemProviders(ctx, client, it, in.Providers)
+		providers, err := prov.itemProviders(ctx, gen, it, in.Providers)
 		if err != nil {
 			return nil, coverSearchOut{}, err
 		}
@@ -855,14 +863,18 @@ func registerItemTools(r *registry) {
 		if it.IsPodcast() {
 			author = ""
 		}
+		podcast := ""
+		if it.IsPodcast() {
+			podcast = "1"
+		}
 		out := coverSearchOut{Item: it.Title(), Covers: []string{}}
 		for _, out.Provider = range providers {
-			covers, err := client.SearchCovers(ctx, out.Provider, title, author, it.IsPodcast())
+			got, err := record(gen.SearchFindCovers(ctx, api.SearchFindCoversOptions{Provider: out.Provider, Title: title, Author: author, Podcast: podcast}))
 			if err != nil {
 				return nil, coverSearchOut{}, err
 			}
-			if len(covers) > 0 {
-				out.Covers = covers
+			if len(got.Results) > 0 {
+				out.Covers = got.Results
 				break
 			}
 		}
@@ -899,34 +911,34 @@ func registerItemTools(r *registry) {
 			// only the first would be done: a remove that sets a cover instead
 			return nil, coverEditOut{}, errors.New("url, file and remove each say what to do with the cover; pass one")
 		}
-		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
+		it, err := resolveItemToChange(ctx, gen, in.Library, in.Item)
 		if err != nil {
 			return nil, coverEditOut{}, err
 		}
 
 		switch {
 		case in.URL != "":
-			err = client.SetCoverFromURL(ctx, it.ID, in.URL)
+			err = coverFromURL(ctx, gen, it.Id, in.URL)
 		case in.File != "":
-			var f *abs.LibraryFile
-			if f, err = coverFile(ctx, client, it, in.File); err == nil {
-				err = client.SetCoverFromFile(ctx, it.ID, f.Metadata.Path)
+			var f *api.LibraryFile
+			if f, err = coverFile(ctx, gen, it, in.File); err == nil {
+				_, err = gen.LibraryItemUpdateCover(ctx, it.Id, api.LibraryItemUpdateCoverRequest{Cover: pointer.From(f.Metadata).Path})
 			}
 		default:
-			err = client.RemoveCover(ctx, it.ID)
+			_, err = gen.LibraryItemRemoveCover(ctx, it.Id)
 		}
 		if err != nil {
 			return nil, coverEditOut{}, err
 		}
 		// the cover the server now has, not the request's word for it: a url
 		// it could not fetch answers as a set that left nothing behind
-		after, err := client.Item(ctx, it.ID)
+		after, err := getItem(ctx, gen, it.Id)
 		switch {
 		case err != nil:
 			return nil, coverEditOut{}, fmt.Errorf("the cover was sent, but reading %q back failed: %w", it.Title(), err)
-		case in.Remove && after.HasCover():
+		case in.Remove && after.Media.CoverPath != "":
 			return nil, coverEditOut{}, fmt.Errorf("the server accepted the removal but %q still has a cover (%s)", it.Title(), after.Media.CoverPath)
-		case !in.Remove && !after.HasCover():
+		case !in.Remove && after.Media.CoverPath == "":
 			return nil, coverEditOut{}, fmt.Errorf("the server accepted the cover but %q has none afterwards", it.Title())
 		}
 
@@ -963,7 +975,7 @@ func registerItemTools(r *registry) {
 		if in.Fit && (len(in.Chapters) > 0 || strings.TrimSpace(in.FromASIN) != "") {
 			return nil, chaptersSetOut{}, errors.New("fit keeps the book's own chapters, and chapters or from_asin replaces them; pass one of the three")
 		}
-		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
+		it, err := resolveItemToChange(ctx, gen, in.Library, in.Item)
 		if err != nil {
 			return nil, chaptersSetOut{}, err
 		}
@@ -971,7 +983,7 @@ func registerItemTools(r *registry) {
 			return nil, chaptersSetOut{}, errNotBook
 		}
 
-		var chapters []abs.Chapter
+		var chapters []api.Chapter
 		out := chaptersSetOut{}
 		switch {
 		case in.Fit:
@@ -995,12 +1007,12 @@ func registerItemTools(r *registry) {
 				if i+1 < len(in.Chapters) {
 					end = in.Chapters[i+1].Start
 				}
-				chapters = append(chapters, abs.Chapter{ID: i, Title: ch.Title, Start: ch.Start, End: end})
+				chapters = append(chapters, api.Chapter{Id: i, Title: ch.Title, Start: ch.Start, End: end})
 			}
 		default:
 			asin := in.FromASIN
 			if asin == "" {
-				asin = it.Media.Metadata.ASIN
+				asin = it.Media.Metadata.Asin
 			}
 			if asin == "" {
 				return nil, chaptersSetOut{}, errors.New("pass chapters, or from_asin for an item without an asin")
@@ -1009,9 +1021,9 @@ func registerItemTools(r *registry) {
 			// store may be sold nowhere else, and the lookup defaults to the US
 			region := strings.ToLower(strings.TrimSpace(in.Region))
 			if region == "" {
-				region = audibleRegion(prov.providerTag(it))
+				region = audibleRegion(prov.providerTag(it.Media.Tags))
 			}
-			chapters, err = client.SearchChapters(ctx, asin, region)
+			chapters, err = storeChapters(ctx, gen, asin, region)
 			if err != nil {
 				return nil, chaptersSetOut{}, err
 			}
@@ -1037,11 +1049,11 @@ func registerItemTools(r *registry) {
 			}
 		}
 
-		updated, err := client.SetChapters(ctx, it.ID, chapters)
+		set, err := record(gen.LibraryItemUpdateMediaChapters(ctx, it.Id, api.LibraryItemUpdateMediaChaptersRequest{Chapters: chapters}))
 		if err != nil {
 			return nil, chaptersSetOut{}, err
 		}
-		out.Updated, out.Chapters = updated, len(chapters)
+		out.Updated, out.Chapters = set.Updated, len(chapters)
 
 		return nil, out, nil
 	})
@@ -1069,16 +1081,16 @@ func registerItemTools(r *registry) {
 	// stops a merge running. The server lists the merge only while it runs,
 	// failed and finished alike leaving the list, so the book is scanned and
 	// read back to learn which it was
-	mergeM4B := func(ctx context.Context, it *abs.Item, kbps, channels int, confirm, cancel bool) (embedOut, error) {
-		tasks, err := client.Tasks(ctx)
+	mergeM4B := func(ctx context.Context, it *api.LibraryItemExpanded, kbps, channels int, confirm, cancel bool) (embedOut, error) {
+		tasks, err := serverTasks(ctx, gen)
 		if err != nil {
 			return embedOut{}, err
 		}
-		switch running := mergeRunning(tasks, it.ID); {
+		switch running := mergeRunning(tasks, it.Id); {
 		case cancel && !running:
 			return embedOut{}, fmt.Errorf("no merge of %q is running", it.Title())
 		case cancel:
-			if err := client.CancelEncodeM4B(ctx, it.ID); err != nil {
+			if _, err := gen.ToolsCancelM4bEncode(ctx, it.Id); err != nil {
 				return embedOut{}, err
 			}
 			return embedOut{Cancelled: true}, nil
@@ -1086,9 +1098,9 @@ func registerItemTools(r *registry) {
 			return embedOut{Running: true}, nil
 		}
 		if confirm {
-			release := r.locks.By(it)
+			release := r.locks.By(itemLocks(it.Id)...)
 			defer release()
-			if it, err = client.Item(ctx, it.ID); err != nil { // as it is once held
+			if it, err = getItem(ctx, gen, it.Id); err != nil { // as it is once held
 				return embedOut{}, err
 			}
 		}
@@ -1104,16 +1116,16 @@ func registerItemTools(r *registry) {
 		for _, af := range playOrder(it.Media.AudioFiles) {
 			before += af.Duration
 		}
-		if err := client.EncodeM4B(ctx, it.ID, strconv.Itoa(plan.Bitrate)+"k", strconv.Itoa(plan.Channels), ""); err != nil {
+		if _, err := gen.ToolsEncodeM4b(ctx, it.Id, api.ToolsEncodeM4bOptions{Bitrate: strconv.Itoa(plan.Bitrate) + "k", Channels: strconv.Itoa(plan.Channels)}); err != nil {
 			return embedOut{}, err
 		}
 		deadline := time.Now().Add(embedWait)
 		for {
-			tasks, err = client.Tasks(ctx)
+			tasks, err = serverTasks(ctx, gen)
 			if err != nil {
 				return embedOut{}, fmt.Errorf("the merge started, but reading the server's tasks failed: %w", err)
 			}
-			if !mergeRunning(tasks, it.ID) {
+			if !mergeRunning(tasks, it.Id) {
 				break
 			}
 			if time.Now().After(deadline) {
@@ -1133,10 +1145,12 @@ func registerItemTools(r *registry) {
 		merged := playOrder(it.Media.AudioFiles)
 		settle := time.Now().Add(mergeSettle)
 		for {
-			if out.Rescan, err = client.ScanItem(ctx, it.ID); err != nil {
+			scan, err := record(gen.LibraryItemScan(ctx, it.Id))
+			if err != nil {
 				return embedOut{}, fmt.Errorf("the merge ended, but the rescan that reads the book back failed: %w", err)
 			}
-			after, err := client.Item(ctx, it.ID)
+			out.Rescan = scan.Result
+			after, err := getItem(ctx, gen, it.Id)
 			if err != nil {
 				return embedOut{}, fmt.Errorf("the merge ended, but reading the book back failed: %w", err)
 			}
@@ -1167,7 +1181,7 @@ func registerItemTools(r *registry) {
 		if in.M4B && in.Backup {
 			return nil, embedOut{}, errors.New("m4b keeps the files it merges in the server's cache already; backup is for tagging the files")
 		}
-		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
+		it, err := resolveItemToChange(ctx, gen, in.Library, in.Item)
 		if err != nil {
 			return nil, embedOut{}, err
 		}
@@ -1179,7 +1193,11 @@ func registerItemTools(r *registry) {
 			out.Item = it.Title()
 			return nil, out, merr
 		}
-		if err := client.EmbedMetadata(ctx, it.ID, true, in.Backup); err != nil {
+		embed := api.ToolsEmbedAudioFileMetadataOptions{ForceEmbedChapters: "1"}
+		if in.Backup {
+			embed.Backup = "1"
+		}
+		if _, err := gen.ToolsEmbedAudioFileMetadata(ctx, it.Id, embed); err != nil {
 			return nil, embedOut{}, err
 		}
 		out := embedOut{Item: it.Title()}
@@ -1189,7 +1207,7 @@ func registerItemTools(r *registry) {
 		// judges, stays as it was until the item is scanned again
 		deadline := time.Now().Add(embedWait)
 		for {
-			pending, perr := client.EmbedPending(ctx, it.ID)
+			pending, perr := embedPending(ctx, gen, it.Id)
 			if perr != nil {
 				return nil, embedOut{}, perr
 			}
@@ -1206,10 +1224,12 @@ func registerItemTools(r *registry) {
 			case <-time.After(embedPoll):
 			}
 		}
-		if out.Rescan, err = client.ScanItem(ctx, it.ID); err != nil {
+		scan, err := record(gen.LibraryItemScan(ctx, it.Id))
+		if err != nil {
 			return nil, embedOut{}, fmt.Errorf("embedded, but the rescan that reads the tags back failed: %w", err)
 		}
-		after, err := client.Item(ctx, it.ID)
+		out.Rescan = scan.Result
+		after, err := getItem(ctx, gen, it.Id)
 		if err != nil {
 			return nil, embedOut{}, err
 		}
@@ -1237,18 +1257,19 @@ func registerItemTools(r *registry) {
 	// deleteFile takes one file out of a book and off the disk, then looks at
 	// the disk: the server takes the file out of the book even when it cannot
 	// remove it, and the next scan would put it back
-	deleteFile := func(ctx context.Context, it *abs.Item, name string, confirm bool) (deleteOut, error) {
-		release := r.locks.By(it)
+	deleteFile := func(ctx context.Context, it *api.LibraryItemExpanded, name string, confirm bool) (deleteOut, error) {
+		release := r.locks.By(itemLocks(it.Id)...)
 		defer release()
-		it, err := client.Item(ctx, it.ID) // as it is once held
+		it, err := getItem(ctx, gen, it.Id) // as it is once held
 		if err != nil {
 			return deleteOut{}, err
 		}
-		me, err := client.Me(ctx)
+		me, err := record(gen.MeGetCurrentUser(ctx))
 		if err != nil {
 			return deleteOut{}, err
 		}
-		if !me.Permissions.Delete {
+		perms := pointer.From(me.Permissions)
+		if !pointer.From(perms.Delete) {
 			return deleteOut{}, fmt.Errorf("%s may not delete files: the account lacks the delete permission", me.Username)
 		}
 		f, err := fileToDelete(it, name)
@@ -1256,11 +1277,12 @@ func registerItemTools(r *registry) {
 			return deleteOut{}, err
 		}
 
-		label := fmt.Sprintf("%q from %q", cmp.Or(f.Metadata.RelPath, f.Metadata.Filename), it.Title())
-		out := deleteOut{Files: "the file " + f.Metadata.Path}
+		meta := pointer.From(f.Metadata)
+		label := fmt.Sprintf("%q from %q", cmp.Or(meta.RelPath, meta.Filename), it.Title())
+		out := deleteOut{Files: "the file " + meta.Path}
 		if ef := it.Media.EbookFile; ef != nil && ef.Ino == f.Ino {
 			out.Note = "it is the main ebook, and the book is left with none"
-			if slices.ContainsFunc(it.LibraryFiles, func(o abs.LibraryFile) bool { return o.FileType == "ebook" && o.Ino != f.Ino }) {
+			if slices.ContainsFunc(it.LibraryFiles, func(o api.LibraryFile) bool { return o.FileType == "ebook" && o.Ino != f.Ino }) {
 				out.Note += ": item_edit ebook makes one of the others the main one"
 			}
 		}
@@ -1269,24 +1291,24 @@ func registerItemTools(r *registry) {
 			return out, nil
 		}
 
-		if err := client.DeleteItemFile(ctx, it.ID, f.Ino); err != nil {
+		if _, err := gen.LibraryItemDeleteLibraryFile(ctx, it.Id, f.Ino); err != nil {
 			return deleteOut{}, err
 		}
 		out.Deleted = label
-		if !me.Permissions.Upload {
+		if !pointer.From(perms.Upload) {
 			out.Note = joinWarnings(out.Note, "not checked on disk: the check needs the upload permission, which "+me.Username+" lacks")
 			return out, nil
 		}
-		lib, err := client.Library(ctx, it.LibraryID)
+		lib, err := record(gen.LibraryFindOne(ctx, it.LibraryId))
 		if err != nil {
 			return deleteOut{}, fmt.Errorf("%s was taken out of the book, but reading its library to look at the disk failed: %w", label, err)
 		}
-		gone, err := fileGone(ctx, client, lib, it, f)
+		gone, err := fileGone(ctx, gen, &lib, it, f)
 		switch {
 		case err != nil:
 			return deleteOut{}, fmt.Errorf("%s was taken out of the book, but looking for it on disk failed: %w", label, err)
 		case !gone:
-			return deleteOut{}, fmt.Errorf("%s was taken out of the book but is still on disk at %s: the server could not remove it, and the next scan puts it back", label, f.Metadata.Path)
+			return deleteOut{}, fmt.Errorf("%s was taken out of the book but is still on disk at %s: the server could not remove it, and the next scan puts it back", label, meta.Path)
 		}
 		out.FilesRemoved = true
 		return out, nil
@@ -1299,7 +1321,7 @@ func registerItemTools(r *registry) {
 		if in.File != "" && in.DeleteFiles {
 			return nil, deleteOut{}, errors.New("file erases that one file and keeps the book; delete_files erases the book's whole folder. One or the other")
 		}
-		it, err := resolveItemToChange(ctx, client, in.Library, in.Item)
+		it, err := resolveItemToChange(ctx, gen, in.Library, in.Item)
 		if err != nil {
 			return nil, deleteOut{}, err
 		}
@@ -1309,26 +1331,26 @@ func registerItemTools(r *registry) {
 		}
 		// the account's bookmarks are one list, which user_bookmark_edit
 		// reads and saves whole: held from reading them to the delete
-		defer r.locks.By(it, lock.String(bookmarksLock))()
-		me, err := client.Me(ctx)
+		defer r.locks.By(append(itemLocks(it.Id), lock.String(bookmarksLock))...)()
+		me, err := record(gen.MeGetCurrentUser(ctx))
 		if err != nil {
 			return nil, deleteOut{}, err
 		}
 		// asked before the bookmarks go, so a refused delete costs nothing;
 		// the server grants it by the permission alone, an admin's too
-		if !me.Permissions.Delete {
+		if !pointer.From(pointer.From(me.Permissions).Delete) {
 			return nil, deleteOut{}, fmt.Errorf("%s may not delete items: the account lacks the delete permission", me.Username)
 		}
 		out := deleteOut{}
 		if in.DeleteFiles {
 			out.Files = "the folder " + it.Path + " and everything in it"
-			if it.IsFile {
+			if pointer.From(it.IsFile) {
 				out.Files = "the file " + it.Path
 			}
 		}
-		var marks []abs.Bookmark
+		var marks []api.AudioBookmark
 		for _, b := range me.Bookmarks {
-			if b.LibraryItemID == it.ID {
+			if b.LibraryItemId == it.Id {
 				marks = append(marks, b)
 				out.Bookmarks = append(out.Bookmarks, fmt.Sprintf("%q at %s", b.Title, cmp.Or(fmtDuration(b.Time), "0s")))
 			}
@@ -1339,7 +1361,7 @@ func registerItemTools(r *registry) {
 		}
 
 		for _, b := range marks {
-			if err := client.DeleteBookmark(ctx, it.ID, b.Time); err != nil {
+			if _, err := gen.MeRemoveBookmark(ctx, it.Id, strconv.FormatFloat(b.Time, 'f', -1, 64)); err != nil {
 				if out.BookmarksRemoved == 0 {
 					return nil, deleteOut{}, fmt.Errorf("removing the bookmark %q before deleting %q failed, and nothing was deleted: %w", b.Title, it.Title(), err)
 				}
@@ -1347,7 +1369,11 @@ func registerItemTools(r *registry) {
 			}
 			out.BookmarksRemoved++
 		}
-		if err := client.DeleteItem(ctx, it.ID, in.DeleteFiles); err != nil {
+		del := api.LibraryItemDeleteOptions{}
+		if in.DeleteFiles {
+			del.Hard = "1"
+		}
+		if _, err := gen.LibraryItemDelete(ctx, it.Id, del); err != nil {
 			if out.BookmarksRemoved > 0 {
 				return nil, deleteOut{}, fmt.Errorf("%d of its bookmarks were removed, but deleting %q then failed: %w", out.BookmarksRemoved, it.Title(), err)
 			}
@@ -1375,43 +1401,43 @@ var (
 // library's own, with the store the item's provider tag records first, as the
 // store that had the book last time is the one to ask first. Stores a call
 // names are checked by checkNamed before this, once a call.
-func (p providerConfig) itemProviders(ctx context.Context, client *abs.Client, it *abs.Item, named []string) ([]string, error) {
+func (p providerConfig) itemProviders(ctx context.Context, gen *api.Client, it *api.LibraryItemExpanded, named []string) ([]string, error) {
 	if len(named) > 0 {
 		return named, nil
 	}
 	if len(p.providers) > 0 {
-		return p.providerOrder(it, slices.Clone(p.providers)), nil
+		return p.providerOrder(it.Media.Tags, slices.Clone(p.providers)), nil
 	}
-	lib, err := client.Library(ctx, it.LibraryID)
+	lib, err := record(gen.LibraryFindOne(ctx, it.LibraryId))
 	if err != nil {
 		return nil, fmt.Errorf("reading the library's provider, as none was named: %w", err)
 	}
-	return p.providerOrder(it, []string{lib.Provider}), nil
+	return p.providerOrder(it.Media.Tags, []string{lib.Provider}), nil
 }
 
 // checkNamed refuses a store a call named that the server does not have. The
 // server answers a name it does not know by searching Google, so a misspelt
 // audible.ca comes back as Google's guesses with nothing to say so.
-func (p providerConfig) checkNamed(ctx context.Context, client *abs.Client, named []string) error {
+func (p providerConfig) checkNamed(ctx context.Context, gen *api.Client, named []string) error {
 	if len(named) == 0 {
 		return nil
 	}
-	return p.checkProviders(ctx, client, named, false)
+	return p.checkProviders(ctx, gen, named, false)
 }
 
 // matchSearch is the title and author a provider search asks for: the ones
 // given, else the item's own.
-func matchSearch(it *abs.Item, title, author string) (searchTitle, searchAuthor string) {
+func matchSearch(it *api.LibraryItemExpanded, title, author string) (searchTitle, searchAuthor string) {
 	return cmp.Or(title, it.Title()), cmp.Or(author, it.Media.Metadata.AuthorDisplay())
 }
 
 // searchProviders asks each store in turn for a title and author and answers
 // with the first that has any candidates, and which store that was; the last
 // one asked when none has.
-func searchProviders(ctx context.Context, client *abs.Client, it *abs.Item, providers []string, title, author string) (string, []abs.BookSearchResult, error) {
+func searchProviders(ctx context.Context, gen *api.Client, item api.LibraryItemID, providers []string, title, author string) (string, []api.SearchFindBooksAnswer, error) {
 	var provider string
 	for _, provider = range providers {
-		results, err := client.SearchBooks(ctx, provider, title, author, it.ID)
+		results, err := searchBooks(ctx, gen, provider, title, author, item)
 		if err != nil {
 			return provider, nil, err
 		}
@@ -1424,12 +1450,12 @@ func searchProviders(ctx context.Context, client *abs.Client, it *abs.Item, prov
 
 // providerHolding is the first of the stores that has a record for an asin
 // or isbn. One store alone is taken at its word, without asking it first.
-func providerHolding(ctx context.Context, client *abs.Client, it *abs.Item, providers []string, asin, isbn string) (string, error) {
+func providerHolding(ctx context.Context, gen *api.Client, item api.LibraryItemID, providers []string, asin, isbn string) (string, error) {
 	if len(providers) == 1 {
 		return providers[0], nil
 	}
 	for _, provider := range providers {
-		_, err := providerRecord(ctx, client, it, provider, asin, isbn)
+		_, err := providerRecord(ctx, gen, item, provider, asin, isbn)
 		var none *noRecordError
 		switch {
 		case err == nil:
@@ -1449,18 +1475,19 @@ func joinWarnings(have, add string) string {
 	return have + "; " + add
 }
 
-// parseSeriesRef reads "Name #2" or "Name" as a series entry.
-func parseSeriesRef(s string) abs.SeriesRef {
-	name, seq, _ := strings.Cut(s, " #")
-	return abs.SeriesRef{Name: strings.TrimSpace(name), Sequence: strings.TrimSpace(seq)}
+// seriesRef is one of a book's series, with its id for series_get.
+type seriesRef struct {
+	ID       string `json:"id,omitempty"`
+	Name     string `json:"name"`
+	Sequence string `json:"sequence,omitempty"`
 }
 
-// editSeriesList is a book's series list with some added and some removed,
-// the rest untouched. The whole list is what the server takes, so an edit
-// that only meant to add one series has to send the others back: four
-// Stormlight books lost their Cosmere link to a replacement built from a
-// listing that showed one series per book. An added series the book is
-// already in takes the number given, or keeps its own when none is.
+// parseSeriesRef reads "Name #2" or "Name" as a series entry.
+func parseSeriesRef(s string) api.SeriesMinimal {
+	name, seq, _ := strings.Cut(s, " #")
+	return api.SeriesMinimal{Name: strings.TrimSpace(name), Sequence: strings.TrimSpace(seq)}
+}
+
 // sendError is a change to many items that failed part way: the requests
 // before the one that failed stay made, and a caller told only of the error
 // would take the whole change as not made.
@@ -1484,10 +1511,10 @@ func (e *sendError) Unwrap() error { return e.err }
 // uses: the batch route answered 502 for two podcasts of a real library
 // where that route took the same change. No test server has reproduced it,
 // so they go the way that is known to work.
-func updateMany(ctx context.Context, client *abs.Client, updates []abs.BatchMediaUpdate, shows map[string]bool) (int, error) {
-	var books, podcasts []abs.BatchMediaUpdate
+func updateMany(ctx context.Context, gen *api.Client, updates []api.LibraryItemBatchUpdateRequest, shows map[string]bool) (int, error) {
+	var books, podcasts []api.LibraryItemBatchUpdateRequest
 	for _, u := range updates {
-		if shows[u.ID] {
+		if shows[u.Id] {
 			podcasts = append(podcasts, u)
 		} else {
 			books = append(books, u)
@@ -1502,18 +1529,18 @@ func updateMany(ctx context.Context, client *abs.Client, updates []abs.BatchMedi
 		return &sendError{from: sent + 1, to: sent + n, of: len(updates), updated: updated, err: err}
 	}
 	for chunk := range slices.Chunk(books, sweepBatchSize) {
-		n, err := client.BatchUpdate(ctx, chunk)
+		got, err := record(gen.LibraryItemBatchUpdate(ctx, chunk))
 		if err != nil {
 			return updated, failed(len(chunk), err)
 		}
-		updated, sent = updated+n, sent+len(chunk)
+		updated, sent = updated+got.Updates, sent+len(chunk)
 	}
 	for _, u := range podcasts {
-		changed, err := client.UpdateMedia(ctx, u.ID, u.MediaPayload)
+		got, err := record(gen.LibraryItemUpdateMedia(ctx, api.LibraryItemID(u.Id), pointer.From(u.MediaPayload)))
 		if err != nil {
 			return updated, failed(1, err)
 		}
-		if changed {
+		if got.Updated {
 			updated++
 		}
 		sent++
@@ -1540,10 +1567,16 @@ func editTagList(have, add, remove []string) []string {
 	return tags
 }
 
-func editSeriesList(have []abs.SeriesRef, add, remove []string) ([]abs.SeriesRef, error) {
+// editSeriesList is a book's series list with some added and some removed,
+// the rest untouched. The whole list is what the server takes, so an edit
+// that only meant to add one series has to send the others back: four
+// Stormlight books lost their Cosmere link to a replacement built from a
+// listing that showed one series per book. An added series the book is
+// already in takes the number given, or keeps its own when none is.
+func editSeriesList(have []api.SeriesMinimal, add, remove []string) ([]api.SeriesMinimal, error) {
 	out := slices.Clone(have)
 	if out == nil {
-		out = []abs.SeriesRef{}
+		out = []api.SeriesMinimal{}
 	}
 	same := func(a, b string) bool { return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b)) }
 	for _, s := range add {
@@ -1551,7 +1584,7 @@ func editSeriesList(have []abs.SeriesRef, add, remove []string) ([]abs.SeriesRef
 		if ref.Name == "" {
 			return nil, fmt.Errorf("add_series %q names no series", s)
 		}
-		if i := slices.IndexFunc(out, func(r abs.SeriesRef) bool { return same(r.Name, ref.Name) }); i >= 0 {
+		if i := slices.IndexFunc(out, func(r api.SeriesMinimal) bool { return same(r.Name, ref.Name) }); i >= 0 {
 			if ref.Sequence != "" {
 				out[i].Sequence = ref.Sequence
 			}
@@ -1564,15 +1597,15 @@ func editSeriesList(have []abs.SeriesRef, add, remove []string) ([]abs.SeriesRef
 		if name == "" {
 			return nil, fmt.Errorf("remove_series %q names no series", s)
 		}
-		if !slices.ContainsFunc(out, func(r abs.SeriesRef) bool { return same(r.Name, name) }) {
+		if !slices.ContainsFunc(out, func(r api.SeriesMinimal) bool { return same(r.Name, name) }) {
 			return nil, fmt.Errorf("remove_series: the item is not in %q (it is in %s)", name, seriesNamesOf(have))
 		}
-		out = slices.DeleteFunc(out, func(r abs.SeriesRef) bool { return same(r.Name, name) })
+		out = slices.DeleteFunc(out, func(r api.SeriesMinimal) bool { return same(r.Name, name) })
 	}
 	return out, nil
 }
 
-func seriesNamesOf(refs []abs.SeriesRef) string {
+func seriesNamesOf(refs []api.SeriesMinimal) string {
 	if len(refs) == 0 {
 		return "no series"
 	}

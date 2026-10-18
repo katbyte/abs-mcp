@@ -1,6 +1,7 @@
 package main
 
 import (
+	"regexp"
 	"slices"
 	"strings"
 
@@ -30,7 +31,16 @@ type route struct {
 	handler string // the last of the chain, as written: LibraryItemController.startPlaybackSession
 }
 
-// readRoutes finds every router.get('/path', ...) and its kin in the methods of each mounted file's classes.
+// pattern is a router.get(/^\/libraries/, ...) whose handlers run before those of every later route of its verb whose path it matches, as the
+// server's cache of the library routes does.
+type pattern struct {
+	verb  string
+	re    *regexp.Regexp
+	chain []js.IExpr
+}
+
+// readRoutes finds every router.get('/path', ...) and its kin in the methods of each mounted file's classes, each with the handlers of the
+// patterns declared before it that match it run first.
 func readRoutes(e *evaluator) []*route {
 	var out []*route
 	for _, m := range mounts {
@@ -47,10 +57,20 @@ func readRoutes(e *evaluator) []*route {
 				s.this = e.constructed(c)
 				declare(e, meth.Body.List, s)
 
+				var patterns []pattern
 				walkStmts(meth.Body.List, func(st js.IStmt) {
 					for _, x := range stmtExprs(st) {
 						walkExpr(x, func(x js.IExpr) {
+							if p := patternOf(x); p != nil {
+								patterns = append(patterns, *p)
+								return
+							}
 							if r := routeOf(x, f.path, m.prefix, s); r != nil {
+								for _, p := range patterns {
+									if p.verb == r.verb && p.re.MatchString(strings.TrimPrefix(r.path, m.prefix)) {
+										r.chain = append(slices.Clone(p.chain), r.chain...)
+									}
+								}
 								out = append(out, r)
 							}
 						})
@@ -61,6 +81,51 @@ func readRoutes(e *evaluator) []*route {
 	}
 
 	return out
+}
+
+// patternOf is the pattern a call declares, or nil: this.router.get(/^\/libraries/, ...handlers), with a pattern Go reads the same way.
+func patternOf(x js.IExpr) *pattern {
+	call, ok := x.(*js.CallExpr)
+	if !ok || len(call.Args.List) < 2 {
+		return nil
+	}
+
+	dot, ok := call.X.(*js.DotExpr)
+	if !ok || !slices.Contains(verbs, identName(dot.Y)) {
+		return nil
+	}
+	on := dot.X
+	if inner, isDot := on.(*js.DotExpr); isDot && isThis(inner.X) {
+		on = inner.Y
+	}
+	if identName(on) != "router" {
+		return nil
+	}
+
+	lit, ok := call.Args.List[0].Value.(*js.LiteralExpr)
+	if !ok || lit.TokenType != js.RegExpToken {
+		return nil
+	}
+	src := string(lit.Data)
+	end := strings.LastIndex(src, "/")
+	if end < 1 {
+		return nil
+	}
+	expr := src[1:end]
+	if strings.Contains(src[end+1:], "i") {
+		expr = "(?i)" + expr
+	}
+	re, err := regexp.Compile(expr)
+	if err != nil {
+		return nil
+	}
+
+	p := &pattern{verb: identName(dot.Y), re: re}
+	for _, a := range call.Args.List[1:] {
+		p.chain = append(p.chain, a.Value)
+	}
+
+	return p
 }
 
 // routeOf is the route a call declares, or nil: this.router.get('/path', ...handlers) or router.get(...).

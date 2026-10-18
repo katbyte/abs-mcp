@@ -80,7 +80,8 @@ func (r LibraryDownloadMultipleResponse) Bytes(max int64) ([]byte, error) {
 
 // LibraryDownloadMultipleOptions holds the query and header parameters of LibraryDownloadMultiple.
 type LibraryDownloadMultipleOptions struct {
-	Ids string
+	Ids  string
+	Sort string
 }
 
 // ToHeaders returns the header parameters the options set.
@@ -94,6 +95,9 @@ func (o LibraryDownloadMultipleOptions) ToQuery() *client.QueryParams {
 	out := client.QueryParams{}
 	if o.Ids != "" {
 		out.Append("ids", o.Ids)
+	}
+	if o.Sort != "" {
+		out.Append("sort", o.Sort)
 	}
 	return &out
 }

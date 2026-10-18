@@ -14,13 +14,16 @@ func TestOperationLibraryGetNarrators(t *testing.T) {
 	t.Parallel()
 
 	c, s := newOperationServer(t, 200, "application/json", "{}")
-	result, err := c.LibraryGetNarrators(t.Context(), LibraryID("v-id"))
+	result, err := c.LibraryGetNarrators(t.Context(), LibraryID("v-id"), LibraryGetNarratorsOptions{
+		Sort: "v-Sort",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	r, body := s.only(t)
 	_ = body
 	expectRequest(t, r, http.MethodGet, "/api/libraries/v-id/narrators")
+	expectQuery(t, r, "sort", "v-Sort")
 	if result.HttpResponse == nil || result.HttpResponse.StatusCode != 200 {
 		t.Fatalf("HttpResponse = %+v", result.HttpResponse)
 	}
@@ -36,15 +39,28 @@ func TestOperationLibraryGetNarrators(t *testing.T) {
 
 	// an answer that does not decode is an error, with the response
 	c, _ = newOperationServer(t, 200, "application/json", "<html>")
-	result, err = c.LibraryGetNarrators(t.Context(), LibraryID("v-id"))
+	result, err = c.LibraryGetNarrators(t.Context(), LibraryID("v-id"), LibraryGetNarratorsOptions{
+		Sort: "v-Sort",
+	})
 	if err == nil || client.StatusCode(err) != 0 || result.HttpResponse == nil {
 		t.Errorf("an answer that does not decode = %v", err)
 	}
 
 	// a status the operation does not document is an error, with the response
 	c, _ = newOperationServer(t, 418, "text/plain", "no")
-	result, err = c.LibraryGetNarrators(t.Context(), LibraryID("v-id"))
+	result, err = c.LibraryGetNarrators(t.Context(), LibraryID("v-id"), LibraryGetNarratorsOptions{
+		Sort: "v-Sort",
+	})
 	if client.StatusCode(err) != 418 || result.HttpResponse == nil {
 		t.Errorf("an undocumented status = %v, %+v", err, result.HttpResponse)
+	}
+
+	// the options may be left out, and two are refused before any request
+	c, s = newOperationServer(t, 200, "application/json", "{}")
+	if _, err = c.LibraryGetNarrators(t.Context(), LibraryID("v-id")); err != nil {
+		t.Errorf("without options = %v", err)
+	}
+	if _, err = c.LibraryGetNarrators(t.Context(), LibraryID("v-id"), LibraryGetNarratorsOptions{}, LibraryGetNarratorsOptions{}); err == nil || len(s.requests) != 1 {
+		t.Errorf("two options structs = %v, %d requests", err, len(s.requests))
 	}
 }

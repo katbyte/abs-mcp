@@ -5,6 +5,7 @@ package abs
 // UserGetOnlineUsersAnswerUsersOnline is an object the document declares inline.
 type UserGetOnlineUsersAnswerUsersOnline struct {
 	Bookmarks                       []UserGetOnlineUsersAnswerUsersOnlineBookmarks     `json:"bookmarks,omitzero"`
+	Connections                     int                                                `json:"connections,omitempty"`
 	CreatedAt                       UnixMilli                                          `json:"createdAt,omitzero"`
 	Email                           string                                             `json:"email,omitempty"`
 	HasOpenIDLink                   bool                                               `json:"hasOpenIDLink"`

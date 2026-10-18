@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
@@ -67,7 +68,7 @@ func TestJourneyEmbeddedIsWhatAScanReads(t *testing.T) {
 	libID := acctest.Str(object(lib["library"])["id"])
 	t.Cleanup(func() {
 		eventually(t, "deleting the embed library", func() error {
-			if err := admin.DeleteLibrary(ctx, libID); err != nil && !isNotFound(err) {
+			if _, err := admin.LibraryDelete(ctx, api.LibraryID(libID)); err != nil && !isNotFound(err) {
 				return err
 			}
 			return nil

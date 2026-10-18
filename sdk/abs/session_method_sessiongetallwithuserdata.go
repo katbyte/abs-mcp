@@ -125,7 +125,7 @@ func (c Client) SessionGetAllWithUserData(ctx context.Context, options ...Sessio
 // SessionGetAllWithUserDataCompleteResult is every result SessionGetAllWithUserDataComplete loaded.
 type SessionGetAllWithUserDataCompleteResult struct {
 	LatestHttpResponse *http.Response
-	Items              []SessionGetAllWithUserDataAnswerSessions
+	Items              []PlaybackSessionForClient
 }
 
 // SessionGetAllWithUserDataComplete calls SessionGetAllWithUserData page by page, from the
@@ -184,10 +184,10 @@ func (c Client) SessionGetAllWithUserDataComplete(ctx context.Context, options .
 //		}
 //	}
 //
-// An error is the last pair handed out, with a zero SessionGetAllWithUserDataAnswerSessions. The pages are asked for as SessionGetAllWithUserDataComplete asks for them.
-func (c Client) SessionGetAllWithUserDataEach(ctx context.Context, options ...SessionGetAllWithUserDataOptions) iter.Seq2[SessionGetAllWithUserDataAnswerSessions, error] {
-	return func(yield func(SessionGetAllWithUserDataAnswerSessions, error) bool) {
-		var zero SessionGetAllWithUserDataAnswerSessions
+// An error is the last pair handed out, with a zero PlaybackSessionForClient. The pages are asked for as SessionGetAllWithUserDataComplete asks for them.
+func (c Client) SessionGetAllWithUserDataEach(ctx context.Context, options ...SessionGetAllWithUserDataOptions) iter.Seq2[PlaybackSessionForClient, error] {
+	return func(yield func(PlaybackSessionForClient, error) bool) {
+		var zero PlaybackSessionForClient
 		if len(options) > 1 {
 			yield(zero, fmt.Errorf("SessionGetAllWithUserDataEach takes one options struct at most, not %d", len(options)))
 			return

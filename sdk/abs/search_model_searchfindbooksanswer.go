@@ -18,7 +18,7 @@ type SearchFindBooksAnswer struct {
 	Language         string                        `json:"language,omitempty"`
 	MatchConfidence  float64                       `json:"matchConfidence,omitempty"`
 	Narrator         string                        `json:"narrator,omitempty"`
-	PublishedYear    string                        `json:"publishedYear,omitempty"`
+	PublishedYear    TextOrNumber                  `json:"publishedYear,omitzero"`
 	Publisher        string                        `json:"publisher,omitempty"`
 	Rating           string                        `json:"rating,omitempty"`
 	Region           string                        `json:"region,omitempty"`

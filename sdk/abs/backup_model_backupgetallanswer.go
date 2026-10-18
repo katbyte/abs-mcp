@@ -4,7 +4,7 @@ package abs
 
 // BackupGetAllAnswer is an object the document declares inline.
 type BackupGetAllAnswer struct {
-	BackupLocation   string                      `json:"backupLocation,omitempty"`
-	BackupPathEnvSet bool                        `json:"backupPathEnvSet"`
-	Backups          []BackupGetAllAnswerBackups `json:"backups,omitzero"`
+	BackupLocation   string   `json:"backupLocation,omitempty"`
+	BackupPathEnvSet bool     `json:"backupPathEnvSet"`
+	Backups          []Backup `json:"backups,omitzero"`
 }

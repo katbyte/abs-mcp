@@ -18,6 +18,7 @@ func TestOperationLibraryItemGetCover(t *testing.T) {
 	result, err := c.LibraryItemGetCover(t.Context(), LibraryItemID("v-id"), LibraryItemGetCoverOptions{
 		Format: "v-Format",
 		Height: "v-Height",
+		Raw:    "v-Raw",
 		Ts:     "v-Ts",
 		Width:  "v-Width",
 	})
@@ -29,6 +30,7 @@ func TestOperationLibraryItemGetCover(t *testing.T) {
 	expectRequest(t, r, http.MethodGet, "/api/items/v-id/cover")
 	expectQuery(t, r, "format", "v-Format")
 	expectQuery(t, r, "height", "v-Height")
+	expectQuery(t, r, "raw", "v-Raw")
 	expectQuery(t, r, "ts", "v-Ts")
 	expectQuery(t, r, "width", "v-Width")
 	if got := r.Header.Get("Accept"); !strings.HasPrefix(got, "application/octet-stream") {
@@ -47,6 +49,7 @@ func TestOperationLibraryItemGetCover(t *testing.T) {
 	result, err = c.LibraryItemGetCover(t.Context(), LibraryItemID("v-id"), LibraryItemGetCoverOptions{
 		Format: "v-Format",
 		Height: "v-Height",
+		Raw:    "v-Raw",
 		Ts:     "v-Ts",
 		Width:  "v-Width",
 	})
@@ -60,6 +63,7 @@ func TestOperationLibraryItemGetCover(t *testing.T) {
 	result, err = c.LibraryItemGetCover(t.Context(), LibraryItemID("v-id"), LibraryItemGetCoverOptions{
 		Format: "v-Format",
 		Height: "v-Height",
+		Raw:    "v-Raw",
 		Ts:     "v-Ts",
 		Width:  "v-Width",
 	})
@@ -85,6 +89,7 @@ func TestOperationLibraryItemGetCover(t *testing.T) {
 	result, err = c.LibraryItemGetCover(t.Context(), LibraryItemID("v-id"), LibraryItemGetCoverOptions{
 		Format: "v-Format",
 		Height: "v-Height",
+		Raw:    "v-Raw",
 		Ts:     "v-Ts",
 		Width:  "v-Width",
 	})

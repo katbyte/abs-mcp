@@ -16,7 +16,8 @@ func TestOperationLibraryDownloadMultiple(t *testing.T) {
 
 	c, s := newOperationServer(t, 200, "application/octet-stream", "file bytes")
 	result, err := c.LibraryDownloadMultiple(t.Context(), LibraryID("v-id"), LibraryDownloadMultipleOptions{
-		Ids: "v-Ids",
+		Ids:  "v-Ids",
+		Sort: "v-Sort",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -25,6 +26,7 @@ func TestOperationLibraryDownloadMultiple(t *testing.T) {
 	_ = body
 	expectRequest(t, r, http.MethodGet, "/api/libraries/v-id/download")
 	expectQuery(t, r, "ids", "v-Ids")
+	expectQuery(t, r, "sort", "v-Sort")
 	if got := r.Header.Get("Accept"); !strings.HasPrefix(got, "application/octet-stream") {
 		t.Errorf("Accept = %q, want application/octet-stream asked for first", got)
 	}
@@ -39,7 +41,8 @@ func TestOperationLibraryDownloadMultiple(t *testing.T) {
 	}
 	c, _ = newOperationServer(t, 200, "application/octet-stream", "file bytes")
 	result, err = c.LibraryDownloadMultiple(t.Context(), LibraryID("v-id"), LibraryDownloadMultipleOptions{
-		Ids: "v-Ids",
+		Ids:  "v-Ids",
+		Sort: "v-Sort",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -49,7 +52,8 @@ func TestOperationLibraryDownloadMultiple(t *testing.T) {
 	}
 	c, _ = newOperationServer(t, 200, "application/octet-stream", "file bytes")
 	result, err = c.LibraryDownloadMultiple(t.Context(), LibraryID("v-id"), LibraryDownloadMultipleOptions{
-		Ids: "v-Ids",
+		Ids:  "v-Ids",
+		Sort: "v-Sort",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -71,7 +75,8 @@ func TestOperationLibraryDownloadMultiple(t *testing.T) {
 	// a status the operation does not document is an error, with the response
 	c, _ = newOperationServer(t, 418, "text/plain", "no")
 	result, err = c.LibraryDownloadMultiple(t.Context(), LibraryID("v-id"), LibraryDownloadMultipleOptions{
-		Ids: "v-Ids",
+		Ids:  "v-Ids",
+		Sort: "v-Sort",
 	})
 	if client.StatusCode(err) != 418 || result.HttpResponse == nil {
 		t.Errorf("an undocumented status = %v, %+v", err, result.HttpResponse)

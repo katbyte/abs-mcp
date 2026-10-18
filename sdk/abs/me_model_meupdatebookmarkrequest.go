@@ -4,6 +4,6 @@ package abs
 
 // MeUpdateBookmarkRequest is an object the document declares inline.
 type MeUpdateBookmarkRequest struct {
-	Time  float64 `json:"time,omitempty"`
-	Title string  `json:"title,omitempty"`
+	Time  float64 `json:"time"`
+	Title string  `json:"title"`
 }

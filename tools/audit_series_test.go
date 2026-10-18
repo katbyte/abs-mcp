@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // A library set to hide single-book series lists none of them, and a
@@ -98,11 +98,16 @@ func TestSeriesNumbersFarFromTheRest(t *testing.T) {
 
 	f := newFakeABS(t)
 	oneLibrary(f)
+	// a book as a list filtered by its series writes it, and as the series list does
 	ref := func(id, seq string) string {
-		return `{"id":"` + id + `","libraryId":"` + libID + `","mediaType":"book","media":{"metadata":{"title":"` + id + `","series":[{"id":"s1","name":"Series","sequence":"` + seq + `"}]}}}`
+		return `{"id":"` + id + `","libraryId":"` + libID + `","mediaType":"book","media":{"metadata":{"title":"` + id + `","series":{"id":"s1","name":"Series","sequence":"` + seq + `"}}}}`
+	}
+	shelved := func(id, seq string) string {
+		return `{"id":"` + id + `","libraryId":"` + libID + `","mediaType":"book","media":{"metadata":{"title":"` + id + `","seriesName":"Series #` + seq + `"}}}`
 	}
 	books := ref("b1", "1") + "," + ref("b2", "2") + "," + ref("b3", "2019")
-	f.json("GET /api/libraries/"+libID+"/series", `{"results":[{"id":"s1","name":"Series","books":[`+books+`]}],"total":1}`)
+	shelf := shelved("b1", "1") + "," + shelved("b2", "2") + "," + shelved("b3", "2019")
+	f.json("GET /api/libraries/"+libID+"/series", `{"results":[{"id":"s1","name":"Series","books":[`+shelf+`]}],"total":1}`)
 	f.json("GET /api/libraries/"+libID+"/items", `{"results":[`+books+`],"total":3}`)
 	out, err := toolCaller(t, f)("audit_series", nil)
 	if err != nil {
@@ -210,17 +215,18 @@ func TestAuditSeriesCrossReferences(t *testing.T) {
 		series(shining, "The Shining", pick("k1")...),
 		series(exec, "The Executioner and Her Way of Life", pick("m1")...),
 	}, ",")+`],"total":8}`)
-	// the gap sweep asks for each series' items with their numbers; the
-	// sweep for numbering reads the whole shelf
+	// the gap sweep asks for each series' items with their numbers, each
+	// carrying that series alone as the server writes it; the sweep for
+	// numbering reads the whole shelf
 	sequenced := func(id, seriesID, seq string) string {
-		return `{"id":"` + id + `","libraryId":"` + libID + `","mediaType":"book","media":{"metadata":{"series":[{"id":"` + seriesID + `","name":"x","sequence":"` + seq + `"}]}}}`
+		return `{"id":"` + id + `","libraryId":"` + libID + `","mediaType":"book","media":{"metadata":{"series":{"id":"` + seriesID + `","name":"x","sequence":"` + seq + `"}}}}`
 	}
 	filtered := map[string]string{
-		abs.EncodeFilter("series", belgariad): page(sequenced("b1", belgariad, "1"), sequenced("b2", belgariad, "2"), sequenced("b3", belgariad, "3"), sequenced("b5", belgariad, "5")),
-		abs.EncodeFilter("series", wheel):     page(sequenced("w1", wheel, "1"), sequenced("w3", wheel, "3"), sequenced("w6", wheel, "6"), sequenced("w7", wheel, "7")),
-		abs.EncodeFilter("series", theWheel):  page(sequenced("w2", theWheel, "2"), sequenced("w4", theWheel, "4"), sequenced("w5", theWheel, "5")),
-		abs.EncodeFilter("series", witchery):  page(sequenced("v1", witchery, "1"), sequenced("v2", witchery, "2")),
-		abs.EncodeFilter("series", expanse):   page(sequenced("e1", expanse, "1"), sequenced("e2", expanse, "2")),
+		api.ListFilter("series", belgariad): page(sequenced("b1", belgariad, "1"), sequenced("b2", belgariad, "2"), sequenced("b3", belgariad, "3"), sequenced("b5", belgariad, "5")),
+		api.ListFilter("series", wheel):     page(sequenced("w1", wheel, "1"), sequenced("w3", wheel, "3"), sequenced("w6", wheel, "6"), sequenced("w7", wheel, "7")),
+		api.ListFilter("series", theWheel):  page(sequenced("w2", theWheel, "2"), sequenced("w4", theWheel, "4"), sequenced("w5", theWheel, "5")),
+		api.ListFilter("series", witchery):  page(sequenced("v1", witchery, "1"), sequenced("v2", witchery, "2")),
+		api.ListFilter("series", expanse):   page(sequenced("e1", expanse, "1"), sequenced("e2", expanse, "2")),
 	}
 	f.mux.HandleFunc("GET /api/libraries/"+libID+"/items", func(w http.ResponseWriter, r *http.Request) {
 		if body, ok := filtered[r.URL.Query().Get("filter")]; ok {
@@ -462,10 +468,16 @@ func TestOddSeriesName(t *testing.T) {
 func TestAuditSeriesNumbering(t *testing.T) {
 	t.Parallel()
 
+	// a book as the library's list writes it, its series joined into one name
 	book := func(id, title, relPath, series string) string {
-		return `{"id":"` + id + `","libraryId":"` + libID + `","mediaType":"book","relPath":"` + relPath + `","media":{"metadata":{"title":"` + title + `","series":[` + series + `]}}}`
+		return `{"id":"` + id + `","libraryId":"` + libID + `","mediaType":"book","relPath":"` + relPath + `","media":{"metadata":{"title":"` + title + `","seriesName":"` + series + `"}}}`
 	}
-	ref := func(name, seq string) string { return `{"id":"x","name":"` + name + `","sequence":"` + seq + `"}` }
+	ref := func(name, seq string) string {
+		if seq == "" {
+			return name
+		}
+		return name + " #" + seq
+	}
 	f := newFakeABS(t)
 	oneLibrary(f)
 	f.json("GET /api/libraries/"+libID+"/series", `{"results":[],"total":0}`)

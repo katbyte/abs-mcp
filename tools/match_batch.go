@@ -6,10 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/katbyte/go-kt/lock"
 	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -58,8 +57,8 @@ type batchCounts struct {
 
 func candidateOf(s scored) batchCandidate {
 	c := batchCandidate{
-		ASIN: s.Result.ASIN, ISBN: s.Result.ISBN, Title: s.Result.Title, Author: s.Result.Author, Narrator: s.Result.Narrator,
-		Year: s.Result.PublishedYear.String(), Confidence: s.Score.Confidence, Reason: s.Score.Reason,
+		ASIN: s.Result.Asin, ISBN: s.Result.Isbn, Title: s.Result.Title, Author: s.Result.Author, Narrator: s.Result.Narrator,
+		Year: string(s.Result.PublishedYear), Confidence: s.Score.Confidence, Reason: s.Score.Reason,
 	}
 	if s.Result.Duration > 0 {
 		c.Duration = wholeSec(s.Result.Duration * 60)
@@ -76,15 +75,15 @@ func candidateOf(s scored) batchCandidate {
 
 // searchForItem asks the provider about one item, once by its title and, when
 // that finds nothing and the title has a subtitle, once more by the main part.
-func searchForItem(ctx context.Context, client *abs.Client, it *abs.Item, provider string) ([]abs.BookSearchResult, error) {
+func searchForItem(ctx context.Context, gen *api.Client, it *api.LibraryItemMinified, provider string) ([]api.SearchFindBooksAnswer, error) {
 	title, author := strings.TrimSpace(titleNoise.ReplaceAllString(it.Title(), " ")), it.Media.Metadata.AuthorDisplay()
-	results, err := client.SearchBooks(ctx, provider, title, author, it.ID)
+	results, err := searchBooks(ctx, gen, provider, title, author, it.Id)
 	if err != nil {
 		return nil, err
 	}
 	if len(results) == 0 {
 		if parts := titleSplit.Split(title, 2); len(parts) == 2 && len(parts[0]) >= 4 {
-			results, err = client.SearchBooks(ctx, provider, strings.TrimSpace(parts[0]), author, it.ID)
+			results, err = searchBooks(ctx, gen, provider, strings.TrimSpace(parts[0]), author, it.Id)
 			if err != nil {
 				return nil, err
 			}
@@ -99,14 +98,14 @@ func searchForItem(ctx context.Context, client *abs.Client, it *abs.Item, provid
 // in each Audible region and is missing from some, so a book bought from the
 // Canadian store is exact on audible.ca and an edition, or nothing, on the US
 // store.
-func scoreItem(ctx context.Context, client *abs.Client, it *abs.Item, providers []string, tolerance float64, candidates int) (batchRow, error) {
-	row := batchRow{ID: it.ID, Title: it.Title(), Author: it.Media.Metadata.AuthorDisplay(), Path: it.RelPath, Confidence: confNone}
+func scoreItem(ctx context.Context, gen *api.Client, it *api.LibraryItemMinified, providers []string, tolerance float64, candidates int) (batchRow, error) {
+	row := batchRow{ID: string(it.Id), Title: it.Title(), Author: it.Media.Metadata.AuthorDisplay(), Path: it.RelPath, Confidence: confNone}
 	if it.Media.Duration > 0 {
 		row.Duration = wholeSec(it.Media.Duration)
 	}
 	var best []scored
 	for _, provider := range providers {
-		results, err := searchForItem(ctx, client, it, provider)
+		results, err := searchForItem(ctx, gen, it, provider)
 		if err != nil {
 			return row, err
 		}
@@ -159,8 +158,8 @@ type applyResult struct {
 
 // smartRow runs the smart match for one row of a batch: the decisions land on
 // the row, and so does what happened.
-func smartRow(ctx context.Context, client *abs.Client, prov providerConfig, it *abs.Item, provider string, res *applyResult, preview bool) {
-	decisions, r, err := smartApply(ctx, client, it, provider, res.ASIN, res.ISBN, preview)
+func smartRow(ctx context.Context, gen *api.Client, prov providerConfig, it *api.LibraryItemExpanded, provider string, res *applyResult, preview bool) {
+	decisions, r, err := smartApply(ctx, gen, it, provider, res.ASIN, res.ISBN, preview)
 	res.Fields = decisions
 	switch {
 	case err != nil:
@@ -172,7 +171,7 @@ func smartRow(ctx context.Context, client *abs.Client, prov providerConfig, it *
 		if r.LibraryItem == nil {
 			return
 		}
-		if terr := prov.tagProvider(ctx, client, it.ID, tagsAfter(it, r, nil), provider); terr != nil {
+		if terr := prov.tagProvider(ctx, gen, it.Id, tagsAfter(it, r, nil), provider); terr != nil {
 			res.Warning = joinWarnings(res.Warning, "recording the provider tag failed: "+terr.Error())
 		}
 	}
@@ -181,9 +180,9 @@ func smartRow(ctx context.Context, client *abs.Client, prov providerConfig, it *
 // matchRow runs a plain match for one row of a batch, then restores the kept
 // fields and records the store. opts carries the override flags; the
 // provider, asin and isbn come from the row.
-func matchRow(ctx context.Context, client *abs.Client, prov providerConfig, it *abs.Item, provider string, keep []string, opts abs.MatchOptions, res *applyResult) {
-	opts.Provider, opts.ASIN, opts.ISBN = provider, res.ASIN, res.ISBN
-	r, err := client.Match(ctx, it.ID, opts)
+func matchRow(ctx context.Context, gen *api.Client, prov providerConfig, it *api.LibraryItemExpanded, provider string, keep []string, opts api.LibraryItemMatchRequest, res *applyResult) {
+	opts.Provider, opts.Asin, opts.Isbn = provider, res.ASIN, res.ISBN
+	r, err := matchItem(ctx, gen, it.Id, opts)
 	if err != nil {
 		res.Error = err.Error()
 		return
@@ -195,15 +194,15 @@ func matchRow(ctx context.Context, client *abs.Client, prov providerConfig, it *
 	if r.LibraryItem == nil {
 		return
 	}
-	if res.ASIN != "" && !strings.EqualFold(r.LibraryItem.Media.Metadata.ASIN, res.ASIN) {
-		res.Warning = joinWarnings(res.Warning, fmt.Sprintf("the item's asin is %q, not %s; set override_details to replace it", r.LibraryItem.Media.Metadata.ASIN, res.ASIN))
+	if res.ASIN != "" && !strings.EqualFold(r.LibraryItem.Media.Metadata.Asin, res.ASIN) {
+		res.Warning = joinWarnings(res.Warning, fmt.Sprintf("the item's asin is %q, not %s; set override_details to replace it", r.LibraryItem.Media.Metadata.Asin, res.ASIN))
 	}
-	if kerr := restoreKept(ctx, client, it, keep); kerr != nil {
+	if kerr := restoreKept(ctx, gen, it, keep); kerr != nil {
 		res.Error = "matched, but restoring " + strings.Join(keep, ", ") + " failed: " + kerr.Error()
 	} else {
 		res.Kept = keep
 	}
-	if terr := prov.tagProvider(ctx, client, it.ID, tagsAfter(it, r, keep), provider); terr != nil {
+	if terr := prov.tagProvider(ctx, gen, it.Id, tagsAfter(it, r, keep), provider); terr != nil {
 		res.Warning = joinWarnings(res.Warning, "recording the provider tag failed: "+terr.Error())
 	}
 }
@@ -211,7 +210,7 @@ func matchRow(ctx context.Context, client *abs.Client, prov providerConfig, it *
 // rowMatch is how every row of an item_match_apply_batch call is matched.
 type rowMatch struct {
 	keep           []string
-	opts           abs.MatchOptions // the override flags; the provider and ids come from the row
+	opts           api.LibraryItemMatchRequest // the override flags; the provider and ids come from the row
 	smart, preview bool
 }
 
@@ -219,20 +218,20 @@ type rowMatch struct {
 // from the snapshot the kept fields and the provider tag come from to the
 // last write, and let go however the row ends: a hold left behind by a panic
 // would stall every later edit of the book.
-func (r *registry) applyRow(ctx context.Context, itemID, provider string, how rowMatch, res *applyResult) {
-	release := r.locks.By(lock.ID[abs.Item](itemID))
+func (r *registry) applyRow(ctx context.Context, itemID api.LibraryItemID, provider string, how rowMatch, res *applyResult) {
+	release := r.locks.By(itemLocks(itemID)...)
 	defer release()
-	fresh, err := r.client.Item(ctx, itemID)
+	fresh, err := getItem(ctx, r.gen, itemID)
 	switch {
 	case err != nil:
 		res.Error = err.Error()
 	case how.smart:
-		smartRow(ctx, r.client, r.providerConfig(), fresh, provider, res, how.preview)
+		smartRow(ctx, r.gen, r.providerConfig(), fresh, provider, res, how.preview)
 	case how.preview:
 		// a plain match has nothing to decide ahead of time: the row says
 		// which book and which store, and nothing is sent
 	default:
-		matchRow(ctx, r.client, r.providerConfig(), fresh, provider, how.keep, how.opts, res)
+		matchRow(ctx, r.gen, r.providerConfig(), fresh, provider, how.keep, how.opts, res)
 	}
 }
 
@@ -248,7 +247,7 @@ func addCounts(into, add map[string]int) map[string]int {
 }
 
 func registerMatchBatchTools(r *registry) {
-	client := r.client
+	gen := r.gen
 	prov := r.providerConfig()
 
 	type batchIn struct {
@@ -284,7 +283,7 @@ func registerMatchBatchTools(r *registry) {
 		if in.Tolerance < 0 || in.Tolerance > maxDurationTolerance {
 			return nil, batchOut{}, fmt.Errorf("tolerance %g is outside 0 to %g: the editions it tells apart are ten to nineteen percent shorter, and past a tenth they count as the same recording", in.Tolerance, maxDurationTolerance)
 		}
-		lib, err := resolveLibrary(ctx, client, in.Library)
+		lib, err := resolveLibrary(ctx, gen, in.Library)
 		if err != nil {
 			return nil, batchOut{}, err
 		}
@@ -295,17 +294,17 @@ func registerMatchBatchTools(r *registry) {
 		if strings.TrimSpace(filter) == "" {
 			filter = "missing:asin"
 		}
-		encoded, err := buildFilter(ctx, client, lib, filter)
+		encoded, err := buildFilter(ctx, gen, lib, filter)
 		if err != nil {
 			return nil, batchOut{}, err
 		}
-		if err := prov.checkProviders(ctx, client, in.Providers, false); err != nil {
+		if err := prov.checkProviders(ctx, gen, in.Providers, false); err != nil {
 			return nil, batchOut{}, err
 		}
-		providers := prov.providersFor(in.Providers, lib)
+		providers := prov.providersFor(in.Providers, lib.Provider)
 		limit, offset := min(mcpregistry.LimitOr(in.Limit, 20), 50), max(in.Offset, 0)
-		items, total, err := window(offset, limit, func(page int) ([]abs.Item, int, error) {
-			res, ierr := client.Items(ctx, lib.ID, abs.ItemsOptions{Limit: limit, Page: page, Sort: "media.metadata.title", Filter: encoded, Minified: true})
+		items, total, err := window(offset, limit, func(page int) ([]api.LibraryItemMinified, int, error) {
+			res, ierr := record(gen.LibraryGetLibraryItems(ctx, lib.Id, api.LibraryGetLibraryItemsOptions{Limit: new(limit), Page: new(page), Sort: "media.metadata.title", Filter: encoded, Minified: "1"}))
 			if ierr != nil {
 				return nil, 0, ierr
 			}
@@ -318,14 +317,15 @@ func registerMatchBatchTools(r *registry) {
 		out := batchOut{Library: lib.Name, Providers: providers, Filter: filter, Offset: offset, Total: total, Rows: []batchRow{}}
 		for i := range items {
 			it := &items[i]
+			filledMinified(it)
 			if it.IsPodcast() {
 				continue
 			}
-			if prov.markedUnmatchable(it) {
+			if prov.markedUnmatchable(it.Media.Tags) {
 				out.Skipped++
 				continue
 			}
-			row, err := scoreItem(ctx, client, it, prov.providerOrder(it, providers), in.Tolerance, in.Candidates)
+			row, err := scoreItem(ctx, gen, it, prov.providerOrder(it.Media.Tags, providers), in.Tolerance, in.Candidates)
 			if err != nil {
 				return nil, batchOut{}, fmt.Errorf("%s: %w", it.Title(), err)
 			}
@@ -387,16 +387,16 @@ func registerMatchBatchTools(r *registry) {
 		if in.Smart && in.OverrideDetails {
 			return nil, applyBatchOut{}, errors.New("smart and override_details are two answers to the same question; pick one")
 		}
-		if err := prov.checkNamed(ctx, client, in.Providers); err != nil {
+		if err := prov.checkNamed(ctx, gen, in.Providers); err != nil {
 			return nil, applyBatchOut{}, err
 		}
-		how := rowMatch{keep: keep, opts: abs.MatchOptions{OverrideCover: in.OverrideCover, OverrideDetails: in.OverrideDetails}, smart: in.Smart, preview: !in.Confirm}
+		how := rowMatch{keep: keep, opts: api.LibraryItemMatchRequest{OverrideCover: new(in.OverrideCover), OverrideDetails: new(in.OverrideDetails)}, smart: in.Smart, preview: !in.Confirm}
 		out := applyBatchOut{Results: []applyResult{}}
 		for _, m := range in.Matches {
 			res := applyResult{Item: m.Item, ASIN: strings.TrimSpace(m.ASIN), ISBN: strings.TrimSpace(m.ISBN)}
 			if res.ASIN == "" && res.ISBN == "" {
 				res.Error = "no asin or isbn"
-			} else if it, err := resolveItemToChange(ctx, client, "", m.Item); err != nil {
+			} else if it, err := resolveItemToChange(ctx, gen, "", m.Item); err != nil {
 				res.Error = err.Error()
 			} else if it.IsPodcast() {
 				res.Error = errNotBook.Error()
@@ -408,15 +408,15 @@ func registerMatchBatchTools(r *registry) {
 				var err error
 				if provider == "" {
 					var providers []string
-					if providers, err = prov.itemProviders(ctx, client, it, in.Providers); err == nil {
-						provider, err = providerHolding(ctx, client, it, providers, res.ASIN, res.ISBN)
+					if providers, err = prov.itemProviders(ctx, gen, it, in.Providers); err == nil {
+						provider, err = providerHolding(ctx, gen, it.Id, providers, res.ASIN, res.ISBN)
 					}
 				}
 				if err != nil {
 					res.Error = err.Error()
 				} else {
 					res.Provider = provider
-					r.applyRow(ctx, it.ID, provider, how, &res)
+					r.applyRow(ctx, it.Id, provider, how, &res)
 					if in.Smart {
 						out.Counts = addCounts(out.Counts, smartCounts(res.Fields))
 					}

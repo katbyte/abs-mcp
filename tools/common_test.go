@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // The server's search also answers on subtitle, asin and isbn (and older
@@ -196,10 +198,10 @@ func TestFormatting(t *testing.T) {
 			t.Errorf("wholeSec(%v) = %d want %d", secs, got, want)
 		}
 	}
-	if got := fmtDate(1_700_000_000_000); got != "2023-11-14" {
+	if got := fmtDate(at(1_700_000_000_000)); got != "2023-11-14" {
 		t.Errorf("fmtDate = %q", got)
 	}
-	if got := fmtTime(0); got != "" {
+	if got := fmtTime(api.UnixMilli{}); got != "" {
 		t.Errorf("fmtTime(0) = %q", got)
 	}
 	if got := plain("<p>Hi <b>there</b></p>"); got != "Hi there" {

@@ -4,7 +4,7 @@ package abs
 
 // LibraryGetRecentEpisodesAnswer is an object the document declares inline.
 type LibraryGetRecentEpisodesAnswer struct {
-	Episodes []LibraryGetRecentEpisodesAnswerEpisodes `json:"episodes,omitzero"`
-	Limit    float64                                  `json:"limit,omitempty"`
-	Page     float64                                  `json:"page,omitempty"`
+	Episodes []PodcastEpisode `json:"episodes,omitzero"`
+	Limit    int              `json:"limit,omitempty"`
+	Page     int              `json:"page,omitempty"`
 }

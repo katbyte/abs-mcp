@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func registerSendEbookTool(r *registry) {
-	client := r.client
+	gen := r.gen
 
 	type sendIn struct {
 		itemRef
@@ -29,17 +29,17 @@ func registerSendEbookTool(r *registry) {
 		Description: "Email a book's main ebook to an e-reader, such as a Kindle or Kobo address, through the server's mail settings. Without device, lists the e-readers this account can send to. " +
 			"The e-readers and the mail server are set up in the web app's settings, not here. Sends an email.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in sendIn) (*mcp.CallToolResult, sendOut, error) {
-		it, err := resolveItem(ctx, client, in.Library, in.Item)
+		it, err := resolveItem(ctx, gen, in.Library, in.Item)
 		if err != nil {
 			return nil, sendOut{}, err
 		}
 		out := sendOut{Item: it.Title()}
-		devices, err := client.EReaderDevices(ctx)
+		login, err := record(gen.MiscAuthorize(ctx))
 		if err != nil {
 			return nil, sendOut{}, err
 		}
-		names := make([]string, 0, len(devices))
-		for _, d := range devices {
+		names := make([]string, 0, len(login.EreaderDevices))
+		for _, d := range login.EreaderDevices {
 			names = append(names, d.Name)
 		}
 		if in.Device == "" {
@@ -63,7 +63,7 @@ func registerSendEbookTool(r *registry) {
 		case it.Media.EbookFile == nil:
 			return nil, sendOut{}, noMainEbook(it)
 		}
-		if err := client.SendEbookToDevice(ctx, it.ID, device); err != nil {
+		if _, err := gen.EmailSendEBookToDevice(ctx, api.EmailSendEBookToDeviceRequest{LibraryItemId: it.Id, DeviceName: device}); err != nil {
 			return nil, sendOut{}, err
 		}
 		out.Sent, out.Ebook, out.Device = true, mainEbook(it), device
@@ -73,7 +73,7 @@ func registerSendEbookTool(r *registry) {
 
 // noMainEbook says why a book has nothing to send: no ebook at all, or only
 // supplementary ones.
-func noMainEbook(it *abs.Item) error {
+func noMainEbook(it *api.LibraryItemExpanded) error {
 	for _, f := range it.LibraryFiles {
 		if f.FileType == "ebook" {
 			return fmt.Errorf("%q has no main ebook, only supplementary ones: item_edit ebook makes one the main one", it.Title())

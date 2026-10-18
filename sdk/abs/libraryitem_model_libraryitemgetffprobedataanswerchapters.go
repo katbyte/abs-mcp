@@ -6,7 +6,7 @@ package abs
 type LibraryItemGetFFprobeDataAnswerChapters struct {
 	End       float64                                      `json:"end,omitempty"`
 	EndTime   string                                       `json:"end_time,omitempty"`
-	Id        float64                                      `json:"id,omitempty"`
+	Id        int                                          `json:"id,omitempty"`
 	Start     float64                                      `json:"start,omitempty"`
 	StartTime string                                       `json:"start_time,omitempty"`
 	Tags      *LibraryItemGetFFprobeDataAnswerChaptersTags `json:"tags,omitempty"`

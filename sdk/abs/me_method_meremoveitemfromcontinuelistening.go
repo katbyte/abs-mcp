@@ -40,7 +40,7 @@ func (r MeRemoveItemFromContinueListeningResponse) Record() (UserForBrowser, err
 }
 
 // MeRemoveItemFromContinueListening calls GET /api/me/progress/{id}/remove-from-continue-listening.
-func (c Client) MeRemoveItemFromContinueListening(ctx context.Context, id UserID) (result MeRemoveItemFromContinueListeningResponse, err error) {
+func (c Client) MeRemoveItemFromContinueListening(ctx context.Context, id string) (result MeRemoveItemFromContinueListeningResponse, err error) {
 	result.UserForBrowser = &UserForBrowser{}
 	opts := client.RequestOptions{
 		ExpectedStatusCodes: []int{
@@ -48,7 +48,7 @@ func (c Client) MeRemoveItemFromContinueListening(ctx context.Context, id UserID
 		},
 		HTTPMethod: http.MethodGet,
 		Operation:  "MeRemoveItemFromContinueListening",
-		Path:       fmt.Sprintf("/api/me/progress/%s/remove-from-continue-listening", url.PathEscape(string(id))),
+		Path:       fmt.Sprintf("/api/me/progress/%s/remove-from-continue-listening", url.PathEscape(id)),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)

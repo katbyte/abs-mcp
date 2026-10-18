@@ -40,9 +40,10 @@ func (r PlaylistAddItemResponse) Record() (Playlist, error) {
 }
 
 // PlaylistAddItem calls POST /api/playlists/{id}/item.
-func (c Client) PlaylistAddItem(ctx context.Context, id PlaylistID) (result PlaylistAddItemResponse, err error) {
+func (c Client) PlaylistAddItem(ctx context.Context, id PlaylistID, input PlaylistEntry) (result PlaylistAddItemResponse, err error) {
 	result.Playlist = &Playlist{}
 	opts := client.RequestOptions{
+		ContentType: "application/json",
 		ExpectedStatusCodes: []int{
 			http.StatusOK,
 		},
@@ -53,6 +54,10 @@ func (c Client) PlaylistAddItem(ctx context.Context, id PlaylistID) (result Play
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
+		return
+	}
+
+	if err = req.Marshal(input); err != nil {
 		return
 	}
 

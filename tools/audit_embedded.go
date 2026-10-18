@@ -6,7 +6,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/go-kt/pointer"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -19,14 +20,14 @@ const embedBatchSize = 50
 // audits because the minified sweep cannot answer it: the tags live on the
 // audio files, and only the expanded item carries those.
 func registerEmbeddedAudit(r *registry) {
-	client := r.client
+	gen := r.gen
 
 	add(r, readTool, &mcp.Tool{
 		Name: "audit_unembedded",
 		Description: "Find books whose audio files do not carry the library's metadata in their tags: never embedded (no title or artist tag at all), or stale (the tags disagree with the current title, author, narrator, series, genres, year or publisher, because the book was edited or matched after the last embed). " +
 			"This is what says item_embed_metadata is due; run it after a curation pass. It fetches every audio file's tags, so it is slower than the sweeping audits, and audit_all runs it only with deep. Fix with item_embed_metadata.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in auditIn) (*mcp.CallToolResult, auditOut, error) {
-		libs, err := resolveLibraries(ctx, client, in.Library)
+		libs, err := resolveLibraries(ctx, gen, in.Library)
 		if err != nil {
 			return nil, auditOut{}, err
 		}
@@ -34,7 +35,7 @@ func registerEmbeddedAudit(r *registry) {
 		out := auditOut{Check: "unembedded", Findings: []auditFinding{}}
 		limit := auditLimit(in.Limit, 100)
 		for i := range libs {
-			if err := sweepUnembedded(ctx, client, &libs[i], limit, &out); err != nil {
+			if err := sweepUnembedded(ctx, gen, &libs[i], limit, &out); err != nil {
 				return nil, auditOut{}, err
 			}
 		}
@@ -46,19 +47,15 @@ func registerEmbeddedAudit(r *registry) {
 // sweepUnembedded adds a book library's never- or stale-embedded books to
 // out, keeping at most limit of them as findings but counting every one. A
 // podcast library is skipped: nothing embeds into a podcast.
-func sweepUnembedded(ctx context.Context, client *abs.Client, lib *abs.Library, limit int, out *auditOut) error {
+func sweepUnembedded(ctx context.Context, gen *api.Client, lib *api.Library, limit int, out *auditOut) error {
 	if lib.IsPodcast() {
 		return nil
 	}
 	// the cheap sweep picks the candidates: books with audio
-	var ids []string
-	if err := client.ItemsAll(ctx, lib.ID, abs.ItemsOptions{}, func(items []abs.Item) bool {
-		for j := range items {
-			it := &items[j]
-			if it.IsPodcast() || (it.Media.NumAudioFiles == 0 && it.Media.NumTracks == 0) {
-				continue
-			}
-			ids = append(ids, it.ID)
+	var ids []api.LibraryItemID
+	if err := eachItem(ctx, gen, lib.Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+		if !it.IsPodcast() && (it.Media.NumAudioFiles > 0 || it.Media.NumTracks > 0) {
+			ids = append(ids, it.Id)
 		}
 		return true
 	}); err != nil {
@@ -67,7 +64,7 @@ func sweepUnembedded(ctx context.Context, client *abs.Client, lib *abs.Library, 
 
 	// then the expanded shape, a batch at a time, for the tags
 	for chunk := range slices.Chunk(ids, embedBatchSize) {
-		items, err := client.ItemsBatch(ctx, chunk)
+		items, err := itemsBatch(ctx, gen, chunk)
 		if err != nil {
 			return err
 		}
@@ -79,7 +76,7 @@ func sweepUnembedded(ctx context.Context, client *abs.Client, lib *abs.Library, 
 			}
 			out.Found++
 			if len(out.Findings) < limit {
-				out.Findings = append(out.Findings, finding(&items[j], detail))
+				out.Findings = append(out.Findings, findingWhole(&items[j], detail))
 			}
 		}
 	}
@@ -89,7 +86,7 @@ func sweepUnembedded(ctx context.Context, client *abs.Client, lib *abs.Library, 
 
 // checkEmbedded reports whether any of an item's audio files lacks the
 // library's metadata in its tags, and says which files and which fields.
-func checkEmbedded(it *abs.Item) (string, bool) {
+func checkEmbedded(it *api.LibraryItemExpanded) (string, bool) {
 	files := it.Media.AudioFiles
 	if len(files) == 0 {
 		return "", false
@@ -104,7 +101,7 @@ func checkEmbedded(it *abs.Item) (string, bool) {
 			untagged++
 			continue
 		}
-		if mismatches := embedMismatches(&it.Media.Metadata, af); len(mismatches) > 0 {
+		if mismatches := embedMismatches(it.Media.Metadata, af); len(mismatches) > 0 {
 			stale++
 			for _, m := range mismatches {
 				if !slices.Contains(reasons, m) {
@@ -131,9 +128,10 @@ func checkEmbedded(it *abs.Item) (string, bool) {
 // tagsEmpty reports whether a file has none of the tags an embed writes.
 // Track numbers and an encoder name are what a ripper leaves; they do not
 // count.
-func tagsEmpty(af *abs.AudioFile) bool {
-	for _, k := range []string{"tagTitle", "tagAlbum", "tagArtist", "tagAlbumArtist"} {
-		if strings.TrimSpace(af.MetaTags[k]) != "" {
+func tagsEmpty(af *api.AudioFile) bool {
+	tags := pointer.From(af.MetaTags)
+	for _, v := range []string{tags.TagTitle, tags.TagAlbum, tags.TagArtist, tags.TagAlbumArtist} {
+		if strings.TrimSpace(v) != "" {
 			return false
 		}
 	}
@@ -147,40 +145,41 @@ func tagsEmpty(af *abs.AudioFile) bool {
 // item does not have are not expected in the file either, and nor is a
 // publisher in anything but an mp3: the server writes it to an m4b only as
 // the copyright, which its scan does not read back as the publisher.
-func embedMismatches(m *abs.Metadata, af *abs.AudioFile) []string {
-	tag := func(k string) string { return strings.TrimSpace(af.MetaTags[k]) }
+func embedMismatches(m *api.LibraryItemExpandedMediaMetadata, af *api.AudioFile) []string {
+	tags := pointer.From(af.MetaTags)
+	tag := strings.TrimSpace
 	var out []string
 
 	if title := strings.TrimSpace(m.Title); title != "" {
-		if !sameText(tag("tagTitle"), title) && !strings.HasPrefix(strings.ToLower(tag("tagAlbum")), strings.ToLower(title)) {
-			out = append(out, differs("title", tag("tagTitle"), title))
+		if !sameText(tag(tags.TagTitle), title) && !strings.HasPrefix(strings.ToLower(tag(tags.TagAlbum)), strings.ToLower(title)) {
+			out = append(out, differs("title", tag(tags.TagTitle), title))
 		}
 	}
 	if author := m.AuthorDisplay(); author != "" {
-		if !sameText(tag("tagArtist"), author) && !sameText(tag("tagAlbumArtist"), author) {
-			out = append(out, differs("author", tag("tagArtist"), author))
+		if !sameText(tag(tags.TagArtist), author) && !sameText(tag(tags.TagAlbumArtist), author) {
+			out = append(out, differs("author", tag(tags.TagArtist), author))
 		}
 	}
 	if narrator := m.NarratorDisplay(); narrator != "" {
-		if !sameText(tag("tagComposer"), narrator) && !sameText(tag("tagNarrator"), narrator) {
-			out = append(out, differs("narrator", tag("tagComposer"), narrator))
+		if !sameText(tag(tags.TagComposer), narrator) {
+			out = append(out, differs("narrator", tag(tags.TagComposer), narrator))
 		}
 	}
 	if series := m.SeriesDisplay(); len(series) > 0 {
 		name := strings.ToLower(strings.TrimSpace(strings.Split(series[0], " #")[0]))
-		have := strings.ToLower(tag("tagGrouping") + " " + tag("tagSeries"))
+		have := strings.ToLower(tag(tags.TagGrouping) + " " + tag(tags.TagSeries))
 		if name != "" && !strings.Contains(have, name) {
-			out = append(out, differs("series", tag("tagSeries"), series[0]))
+			out = append(out, differs("series", tag(tags.TagSeries), series[0]))
 		}
 	}
-	if len(m.Genres) > 0 && !sameList(tag("tagGenre"), m.Genres) {
-		out = append(out, differs("genres", tag("tagGenre"), strings.Join(m.Genres, "; ")))
+	if len(m.Genres) > 0 && !sameList(tag(tags.TagGenre), m.Genres) {
+		out = append(out, differs("genres", tag(tags.TagGenre), strings.Join(m.Genres, "; ")))
 	}
-	if year := strings.TrimSpace(m.PublishedYear.String()); year != "" && !strings.HasPrefix(tag("tagDate"), year) {
-		out = append(out, differs("year", tag("tagDate"), year))
+	if year := strings.TrimSpace(m.PublishedYear); year != "" && !strings.HasPrefix(tag(tags.TagDate), year) {
+		out = append(out, differs("year", tag(tags.TagDate), year))
 	}
-	if publisher := strings.TrimSpace(m.Publisher); publisher != "" && isMP3(af) && !sameText(tag("tagPublisher"), publisher) {
-		out = append(out, differs("publisher", tag("tagPublisher"), publisher))
+	if publisher := strings.TrimSpace(m.Publisher); publisher != "" && isMP3(af) && !sameText(tag(tags.TagPublisher), publisher) {
+		out = append(out, differs("publisher", tag(tags.TagPublisher), publisher))
 	}
 
 	return out
@@ -202,11 +201,11 @@ func sameText(a, b string) bool {
 // isMP3 reports whether an audio file is an mp3, the one format the server
 // writes a publisher tag into on embed. Its mime type says so, or failing
 // that its extension.
-func isMP3(af *abs.AudioFile) bool {
+func isMP3(af *api.AudioFile) bool {
 	if af.MimeType != "" {
 		return strings.EqualFold(af.MimeType, "audio/mpeg")
 	}
-	return strings.EqualFold(af.Metadata.Ext, ".mp3")
+	return strings.EqualFold(pointer.From(af.Metadata).Ext, ".mp3")
 }
 
 // sameList compares a tag holding several values against a list, as sets.

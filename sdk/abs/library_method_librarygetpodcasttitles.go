@@ -39,16 +39,46 @@ func (r LibraryGetPodcastTitlesResponse) Record() (LibraryGetPodcastTitlesAnswer
 	return *r.Answer, nil
 }
 
+// LibraryGetPodcastTitlesOptions holds the query and header parameters of LibraryGetPodcastTitles.
+type LibraryGetPodcastTitlesOptions struct {
+	Sort string
+}
+
+// ToHeaders returns the header parameters the options set.
+func (o LibraryGetPodcastTitlesOptions) ToHeaders() *client.Headers {
+	out := client.Headers{}
+	return &out
+}
+
+// ToQuery returns the query parameters the options set.
+func (o LibraryGetPodcastTitlesOptions) ToQuery() *client.QueryParams {
+	out := client.QueryParams{}
+	if o.Sort != "" {
+		out.Append("sort", o.Sort)
+	}
+	return &out
+}
+
 // LibraryGetPodcastTitles calls GET /api/libraries/{id}/podcast-titles.
-func (c Client) LibraryGetPodcastTitles(ctx context.Context, id LibraryID) (result LibraryGetPodcastTitlesResponse, err error) {
+func (c Client) LibraryGetPodcastTitles(ctx context.Context, id LibraryID, options ...LibraryGetPodcastTitlesOptions) (result LibraryGetPodcastTitlesResponse, err error) {
+	if len(options) > 1 {
+		err = fmt.Errorf("LibraryGetPodcastTitles takes one options struct at most, not %d", len(options))
+		return
+	}
+	var option LibraryGetPodcastTitlesOptions
+	if len(options) == 1 {
+		option = options[0]
+	}
+
 	result.LibraryGetPodcastTitlesAnswer = &LibraryGetPodcastTitlesAnswer{}
 	opts := client.RequestOptions{
 		ExpectedStatusCodes: []int{
 			http.StatusOK,
 		},
-		HTTPMethod: http.MethodGet,
-		Operation:  "LibraryGetPodcastTitles",
-		Path:       fmt.Sprintf("/api/libraries/%s/podcast-titles", url.PathEscape(string(id))),
+		HTTPMethod:    http.MethodGet,
+		Operation:     "LibraryGetPodcastTitles",
+		OptionsObject: option,
+		Path:          fmt.Sprintf("/api/libraries/%s/podcast-titles", url.PathEscape(string(id))),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)

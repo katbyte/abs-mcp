@@ -78,6 +78,9 @@ func TestSpec(t *testing.T) {
 	if cover.RequestBody == nil || cover.RequestBody.Content["multipart/form-data"].Schema.Properties["cover"].Format != "binary" {
 		t.Errorf("cover upload body: %+v", cover.RequestBody)
 	}
+	if files := doc.Paths["/api/libraries/{id}/files"]["post"].RequestBody; files == nil || !files.Content["multipart/form-data"].Schema.AdditionalProperties || files.Content["multipart/form-data"].Schema.Properties["folder"] == nil {
+		t.Errorf("files upload body: %+v, want a form of any files and a folder", files)
+	}
 	for code, want := range map[string]string{"302": "status 302", "409": "already there", "500": "the server failed", "201": "status 201"} {
 		if got := cover.Responses[code].Description; got != want {
 			t.Errorf("cover %s: %q, want %q", code, got, want)
@@ -130,7 +133,7 @@ func TestSpec(t *testing.T) {
 		t.Errorf("download: %+v, want a file", download.Responses)
 	}
 
-	for _, line := range []string{"Audiobookshelf 9.9.9: 13 routes, 14 operations", "answer a file", "unions stated", "no operation for the union stated for GET /api/libraries/{id}/personalized", "/api/items/{id}/play/{episodeId}", "wrote " + filepath.Join(out, "audiobookshelf-openapi-9.9.9.json")} {
+	for _, line := range []string{"Audiobookshelf 9.9.9: 15 routes, 16 operations", "answer a file", "unions stated", "no operation for the union stated for GET /api/libraries/{id}/personalized", "/api/items/{id}/play/{episodeId}", "wrote " + filepath.Join(out, "audiobookshelf-openapi-9.9.9.json")} {
 		if !strings.Contains(report.String(), line) {
 			t.Errorf("report has no %q:\n%s", line, report.String())
 		}

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -24,7 +24,7 @@ func TestAnnotationsSayWhatAToolCanDo(t *testing.T) {
 	t.Parallel()
 
 	srv := mcp.NewServer(&mcp.Implementation{Name: "t", Version: "0"}, nil)
-	r := &registry{client: newTestClient(t), opts: Options{EnableDelete: true}}
+	r := &registry{gen: newTestClient(t), opts: Options{EnableDelete: true}}
 	queueTools(r)
 	kinds := map[string]string{}
 	for name, tool := range queuedTools(t, r) {
@@ -101,16 +101,16 @@ func TestAPanicInAToolIsAnErrorNotACrash(t *testing.T) {
 		logged strings.Builder
 	)
 	srv := mcp.NewServer(&mcp.Implementation{Name: "t", Version: "0"}, nil)
-	r := &registry{client: newTestClient(t), errorLog: func(format string, args ...any) {
+	r := &registry{gen: newTestClient(t), errorLog: func(format string, args ...any) {
 		mu.Lock()
 		defer mu.Unlock()
 		_, _ = fmt.Fprintf(&logged, format, args...)
 	}}
 	type none struct{}
 	add(r, writeTool, &mcp.Tool{Name: "zzyzx_panic"}, func(context.Context, *mcp.CallToolRequest, none) (*mcp.CallToolResult, none, error) {
-		var found map[string]*abs.Library
+		var found map[string]*api.Library
 
-		return nil, none{}, errors.New(found["9"].ID) // a nil dereference
+		return nil, none{}, errors.New(found["9"].Name) // a nil dereference
 	})
 	add(r, readTool, &mcp.Tool{Name: "zzyzx_fine"}, func(context.Context, *mcp.CallToolRequest, none) (*mcp.CallToolResult, none, error) {
 		return nil, none{}, nil

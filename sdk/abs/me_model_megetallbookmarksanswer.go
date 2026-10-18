@@ -4,5 +4,5 @@ package abs
 
 // MeGetAllBookmarksAnswer is an object the document declares inline.
 type MeGetAllBookmarksAnswer struct {
-	Bookmarks []MeGetAllBookmarksAnswerBookmarks `json:"bookmarks,omitzero"`
+	Bookmarks []AudioBookmark `json:"bookmarks,omitzero"`
 }

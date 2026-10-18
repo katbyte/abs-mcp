@@ -11,12 +11,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
-	"os"
 	"slices"
 	"strings"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/abs-mcp/tools"
 	"github.com/katbyte/go-kt/mcp/acctest"
 )
@@ -29,8 +28,8 @@ import (
 func TestJourneyPlaybackReachesEveryListeningTool(t *testing.T) {
 	requireProviders(t)
 
-	listener := newUser(t, "zzyzx-listener", abs.UserCreate{})
-	client, err := abs.New(os.Getenv("ABS_SERVER"), listener.Token, recorder.Option())
+	listener := newUser(t, "zzyzx-listener", api.UserCreateRequest{})
+	client, err := connect(listener.Token)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,22 +37,22 @@ func TestJourneyPlaybackReachesEveryListeningTool(t *testing.T) {
 	bookID := itemID(t, "Fiction", book)
 	named := map[string]any{"user": listener.Name}
 
-	session, err := client.Play(ctx, bookID, "", abs.PlayRequest{
-		MediaPlayer: "zzyzx-player", SupportedMimeTypes: []string{"audio/mpeg"}, ForceDirectPlay: true,
-		DeviceInfo: map[string]any{"clientName": "Zzyzx Client", "deviceName": "a journey"},
-	})
+	session, err := record(client.LibraryItemStartPlaybackSession(ctx, api.LibraryItemID(bookID), api.LibraryItemStartPlaybackSessionRequest{
+		MediaPlayer: "zzyzx-player", SupportedMimeTypes: []string{"audio/mpeg"}, ForceDirectPlay: new(true),
+		DeviceInfo: &api.LibraryItemStartPlaybackSessionRequestDeviceInfo{ClientName: "Zzyzx Client", DeviceName: "a journey"},
+	}))
 	if err != nil {
 		t.Fatalf("the listener opening a session: %v", err)
 	}
 	closed := false
 	t.Cleanup(func() {
 		if !closed {
-			if err := client.CloseSession(ctx, session.ID, nil); err != nil {
+			if _, err := client.SessionClose(ctx, session.Id, api.SessionCloseRequest{}); err != nil {
 				t.Errorf("closing the session the test left open: %v", err)
 			}
 		}
 	})
-	if err := client.SyncSession(ctx, session.ID, 0.5, 0.5); err != nil {
+	if _, err := client.SessionSync(ctx, session.Id, api.SessionSyncRequest{CurrentTime: 0.5, TimeListened: 0.5}); err != nil {
 		t.Fatalf("syncing: %v", err)
 	}
 
@@ -61,7 +60,7 @@ func TestJourneyPlaybackReachesEveryListeningTool(t *testing.T) {
 		// server_sessions is an admin's view of everyone, with who is listening
 		var open map[string]any
 		for _, s := range acctest.Rows(t, suite.Call(t, "server_sessions", nil)["sessions"], "sessions") {
-			if s["id"] == session.ID {
+			if s["id"] == session.Id {
 				open = s
 			}
 		}
@@ -109,14 +108,14 @@ func TestJourneyPlaybackReachesEveryListeningTool(t *testing.T) {
 		}
 	})
 
-	if err := client.CloseSession(ctx, session.ID, map[string]any{"currentTime": 0.6, "timeListened": 0.1}); err != nil {
+	if _, err := client.SessionClose(ctx, session.Id, api.SessionCloseRequest{CurrentTime: 0.6, TimeListened: 0.1}); err != nil {
 		t.Fatalf("closing: %v", err)
 	}
 	closed = true
 
 	t.Run("after it closes", func(t *testing.T) {
 		for _, s := range acctest.Rows(t, suite.Call(t, "server_sessions", nil)["sessions"], "sessions") {
-			if s["id"] == session.ID {
+			if s["id"] == session.Id {
 				t.Errorf("the closed session is still open: %v", s)
 			}
 		}
@@ -129,7 +128,7 @@ func TestJourneyPlaybackReachesEveryListeningTool(t *testing.T) {
 				continue
 			}
 			s := sessions[0]
-			if s["id"] != session.ID || s["title"] != book || s["user"] != listener.Name || s["listened_s"] == nil || s["started"] == nil {
+			if s["id"] != session.Id || s["title"] != book || s["user"] != listener.Name || s["listened_s"] == nil || s["started"] == nil {
 				t.Errorf("%s: history row = %v, want the session with its user, time and start", who, s)
 			}
 		}
@@ -192,9 +191,8 @@ func TestJourneyRestrictedAccounts(t *testing.T) {
 	racket := itemID(t, "Non-Fiction", "War Is a Racket")
 
 	t.Run("one library", func(t *testing.T) {
-		no := false
-		shelf := newUser(t, "zzyzx-one-library", abs.UserCreate{
-			Permissions:         map[string]bool{"accessAllLibraries": no, "accessAllTags": true, "accessExplicitContent": true},
+		shelf := newUser(t, "zzyzx-one-library", api.UserCreateRequest{
+			Permissions:         &api.UserPermissions{AccessAllLibraries: new(false), AccessAllTags: new(true), AccessExplicitContent: new(true)},
 			LibrariesAccessible: []string{fiction},
 		})
 
@@ -244,9 +242,8 @@ func TestJourneyRestrictedAccounts(t *testing.T) {
 	})
 
 	t.Run("one tag", func(t *testing.T) {
-		no := false
-		tagged := newUser(t, "zzyzx-one-tag", abs.UserCreate{
-			Permissions:      map[string]bool{"accessAllLibraries": true, "accessAllTags": no, "accessExplicitContent": true},
+		tagged := newUser(t, "zzyzx-one-tag", api.UserCreateRequest{
+			Permissions:      &api.UserPermissions{AccessAllLibraries: new(true), AccessAllTags: new(false), AccessExplicitContent: new(true)},
 			ItemTagsSelected: []string{"cyberpunk"},
 		})
 		// Otherland is the only series tagged cyberpunk
@@ -328,11 +325,8 @@ func TestJourneyWritesAnAccountMayNotMake(t *testing.T) {
 
 	fiction, messy, podcastsID := libraryID(t, "Fiction"), libraryID(t, "Messy"), libraryID(t, "Podcasts")
 	no := false
-	account := newUserWith(t, "zzyzx-no-rights", abs.UserCreate{
-		Permissions: map[string]bool{
-			"download": true, "update": no, "delete": no, "upload": no,
-			"accessAllLibraries": no, "accessAllTags": true, "accessExplicitContent": true,
-		},
+	account := newUserWith(t, "zzyzx-no-rights", api.UserCreateRequest{
+		Permissions:         &api.UserPermissions{Download: new(true), Update: &no, Delete: &no, Upload: &no, AccessAllLibraries: &no, AccessAllTags: new(true), AccessExplicitContent: new(true)},
 		LibrariesAccessible: []string{fiction, messy, podcastsID},
 	}, tools.Options{EnableDelete: true})
 
@@ -473,7 +467,7 @@ func TestJourneyAnAdminWithoutDelete(t *testing.T) {
 	s.open(t, 1)
 	id := s.ids(t)[book]
 
-	account := newUserWith(t, "zzyzx-admin-no-delete", abs.UserCreate{Type: "admin"}, tools.Options{EnableDelete: true})
+	account := newUserWith(t, "zzyzx-admin-no-delete", api.UserCreateRequest{Type: "admin"}, tools.Options{EnableDelete: true})
 	for tool, out := range map[string]map[string]any{"user_get": account.call(t, "user_get", nil), "server_info": account.call(t, "server_info", nil)} {
 		if !acctest.IsBool(out["can_delete"], false) || !acctest.BoolOf(out["can_update"]) {
 			t.Errorf("%s = can_delete %v, can_update %v, want an admin that may update and may not delete", tool, out["can_delete"], out["can_update"])

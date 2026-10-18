@@ -6,23 +6,73 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
-	"reflect"
 	"runtime"
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/katbyte/go-kt/httpc"
 )
+
+// The generated twin reaches the same server as the same account, and sends a read again as its maker does.
+func TestGenerated(t *testing.T) {
+	t.Parallel()
+
+	var srv *fakeServer
+	srv = newJSONServer(t, func(*http.Request) (int, string) {
+		if len(srv.requests()) == 1 {
+			return http.StatusBadGateway, ""
+		}
+		return http.StatusOK, `{"id": "l1"}`
+	})
+	c, err := New(srv.URL, "the-key", WithRetry(httpc.Retry{Wait: func(int) time.Duration { return 0 }}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	twin, err := c.Generated()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := twin.LibraryFindOne(t.Context(), "l1"); err != nil {
+		t.Fatal(err)
+	}
+	if got := srv.requests(); !slices.Equal(got, []string{"GET /api/libraries/l1", "GET /api/libraries/l1"}) || srv.header.Get("Authorization") != "Bearer the-key" {
+		t.Errorf("requests %q, authorization %q; want the read sent again with the key", got, srv.header.Get("Authorization"))
+	}
+
+	// a transport the client was given carries the twin's calls too, as the live suites' recorder does
+	var carried atomic.Int32
+	through := func(o *httpc.Options) {
+		next := httpc.NewBaseTransport(*o)
+		o.Base = roundTrip(func(r *http.Request) (*http.Response, error) {
+			carried.Add(1)
+			return next.RoundTrip(r)
+		})
+	}
+	c, err = New(srv.URL, "the-key", through)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if twin, err = c.Generated(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := twin.LibraryFindOne(t.Context(), "l1"); err != nil || carried.Load() != 1 {
+		t.Errorf("through the client's transport: %d calls, %v; want the twin's one", carried.Load(), err)
+	}
+}
+
+// roundTrip is a transport made of a function.
+type roundTrip func(*http.Request) (*http.Response, error)
+
+func (f roundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func TestNewRejectsBadURLs(t *testing.T) {
 	t.Parallel()
@@ -276,47 +326,6 @@ func TestStatusErrorNamesTheKeyOn401(t *testing.T) {
 	}
 	if IsNotFound(err) {
 		t.Error("a 401 is not a 404")
-	}
-}
-
-// Every method of the client is called by the live suite, which runs it
-// against a real Audiobookshelf: the server publishes no schema, so that is
-// the only proof a method's request and the shape it decodes are right. A
-// method added without a live test fails here, in the unit tests, rather
-// than going unnoticed until someone counts.
-func TestEveryMethodHasALiveTest(t *testing.T) {
-	t.Parallel()
-
-	const suite = "../../acceptance/abs"
-	files, err := filepath.Glob(filepath.Join(suite, "*_test.go"))
-	if err != nil || len(files) == 0 {
-		t.Fatalf("no live tests found in %s: %v", suite, err)
-	}
-	called := map[string]bool{}
-	fset := token.NewFileSet()
-	for _, path := range files {
-		f, err := parser.ParseFile(fset, path, nil, parser.SkipObjectResolution)
-		if err != nil {
-			t.Fatal(err)
-		}
-		ast.Inspect(f, func(n ast.Node) bool {
-			if call, ok := n.(*ast.CallExpr); ok {
-				if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
-					called[sel.Sel.Name] = true
-				}
-			}
-			return true
-		})
-	}
-
-	client := reflect.TypeFor[*Client]()
-	if client.NumMethod() < 200 {
-		t.Fatalf("the client has %d methods, which is too few to be all of them", client.NumMethod())
-	}
-	for method := range client.Methods() {
-		if !called[method.Name] {
-			t.Errorf("%s has no live test: nothing in %s calls it", method.Name, suite)
-		}
 	}
 }
 

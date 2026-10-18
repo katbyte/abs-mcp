@@ -33,7 +33,7 @@
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -48,7 +48,7 @@
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -147,7 +147,7 @@
             "Type": "List",
             "NestedItem": {
               "Type": "Reference",
-              "ReferenceName": "EmailSettingsEreaderDevices"
+              "ReferenceName": "EreaderDevice"
             }
           }
         },
@@ -222,43 +222,6 @@
       ]
     },
     {
-      "Name": "EmailSettingsEreaderDevices",
-      "Fields": [
-        {
-          "Name": "AvailabilityOption",
-          "JsonName": "availabilityOption",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Email",
-          "JsonName": "email",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Name",
-          "JsonName": "name",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Users",
-          "JsonName": "users",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "String"
-            }
-          },
-          "Nullable": true
-        }
-      ]
-    },
-    {
       "Name": "EmailUpdateEReaderDevicesAnswer",
       "Fields": [
         {
@@ -268,46 +231,9 @@
             "Type": "List",
             "NestedItem": {
               "Type": "Reference",
-              "ReferenceName": "EmailUpdateEReaderDevicesAnswerEreaderDevices"
+              "ReferenceName": "EreaderDevice"
             }
           }
-        }
-      ]
-    },
-    {
-      "Name": "EmailUpdateEReaderDevicesAnswerEreaderDevices",
-      "Fields": [
-        {
-          "Name": "AvailabilityOption",
-          "JsonName": "availabilityOption",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Email",
-          "JsonName": "email",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Name",
-          "JsonName": "name",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Users",
-          "JsonName": "users",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "String"
-            }
-          },
-          "Nullable": true
         }
       ]
     },
@@ -321,46 +247,9 @@
             "Type": "List",
             "NestedItem": {
               "Type": "Reference",
-              "ReferenceName": "EmailUpdateEReaderDevicesRequestEreaderDevices"
+              "ReferenceName": "EreaderDevice"
             }
           }
-        }
-      ]
-    },
-    {
-      "Name": "EmailUpdateEReaderDevicesRequestEreaderDevices",
-      "Fields": [
-        {
-          "Name": "AvailabilityOption",
-          "JsonName": "availabilityOption",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Email",
-          "JsonName": "email",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Name",
-          "JsonName": "name",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Users",
-          "JsonName": "users",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "String"
-            }
-          },
-          "Nullable": true
         }
       ]
     },

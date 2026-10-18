@@ -12,7 +12,7 @@ type SearchFindPodcastsAnswer struct {
 	Explicit         bool     `json:"explicit"`
 	FeedUrl          string   `json:"feedUrl,omitempty"`
 	Genres           []string `json:"genres,omitzero"`
-	Id               float64  `json:"id,omitempty"`
+	Id               int      `json:"id,omitempty"`
 	PageUrl          string   `json:"pageUrl,omitempty"`
 	ReleaseDate      string   `json:"releaseDate,omitempty"`
 	Title            string   `json:"title,omitempty"`

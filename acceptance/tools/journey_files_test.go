@@ -16,6 +16,7 @@ import (
 	"io"
 	"io/fs"
 	"maps"
+	"mime/multipart"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/abs-mcp/tools"
 	"github.com/katbyte/go-kt/mcp/acctest"
 )
@@ -61,7 +62,7 @@ func newDiskShelf(t *testing.T, name, dir string) *diskShelf {
 	t.Cleanup(func() {
 		if s.id != "" {
 			eventually(t, "deleting the library "+name, func() error {
-				if err := admin.DeleteLibrary(ctx, s.id); err != nil && !isNotFound(err) {
+				if _, err := admin.LibraryDelete(ctx, api.LibraryID(s.id)); err != nil && !isNotFound(err) {
 					return err
 				}
 				return nil
@@ -534,7 +535,7 @@ func TestJourneyAFolderRenamedKeepsItsBook(t *testing.T) {
 			// back through the client here
 			if chapters := suite.Call(t, "item_get", map[string]any{"item": inside})["chapters"]; chapters != nil {
 				t.Logf("with its second file gone, the series copy of Mort still has %v chapters", chapters)
-				if _, err := adminClient(t).SetChapters(ctx, inside, []abs.Chapter{}); err != nil {
+				if _, err := adminClient(t).LibraryItemUpdateMediaChapters(ctx, api.LibraryItemID(inside), api.LibraryItemUpdateMediaChaptersRequest{Chapters: []api.Chapter{}}); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -990,7 +991,19 @@ func TestJourneyASeriesRenamedOnDiskIsPutBackTogether(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := admin.UploadCover(ctx, ids[first], "cover.jpg", bytes.NewReader(picture)); err != nil {
+	var form bytes.Buffer
+	upload := multipart.NewWriter(&form)
+	part, err := upload.CreateFormFile("cover", "cover.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write(picture); err != nil {
+		t.Fatal(err)
+	}
+	if err := upload.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := admin.LibraryItemUploadCover(ctx, api.LibraryItemID(ids[first]), &form, upload.FormDataContentType()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1007,17 +1020,17 @@ func TestJourneyASeriesRenamedOnDiskIsPutBackTogether(t *testing.T) {
 		map[string]any{"item": ids[first]}, map[string]any{"item": ids[second]}, map[string]any{"item": ids[third]},
 	}})
 	t.Cleanup(func() { suite.Call(t, "playlist_delete", map[string]any{"playlist": "Zzyzx Admin Queue"}) })
-	listener := newUser(t, "zzyzx-moved-listener", abs.UserCreate{})
+	listener := newUser(t, "zzyzx-moved-listener", api.UserCreateRequest{})
 	listener.call(t, "user_progress_set", map[string]any{"item": ids[first], "position_s": 5})
 	listener.call(t, "user_bookmark_edit", map[string]any{"item": ids[second], "add_bookmarks": []any{map[string]any{"time_s": 1.5, "title": "Zzyzx Listener Mark"}}})
 	listener.call(t, "playlist_create", map[string]any{"library": s.name, "name": "Zzyzx Listener Queue", "entries": []any{
 		map[string]any{"item": ids[second]}, map[string]any{"item": ids[stays]},
 	}})
-	finished, err := admin.Progress(ctx, ids[first], "")
-	if err != nil || finished == nil || !finished.IsFinished || finished.FinishedAt == 0 {
+	finished, err := record(admin.MeGetMediaProgress2(ctx, api.LibraryItemID(ids[first])))
+	if err != nil || !finished.IsFinished || finished.FinishedAt.IsZero() {
 		t.Fatalf("the admin's progress on the first book before the move = %+v, %v", finished, err)
 	}
-	keysBefore, err := admin.APIKeys(ctx)
+	keysBefore, err := record(admin.ApiKeyGetAll(ctx))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1197,19 +1210,20 @@ func TestJourneyASeriesRenamedOnDiskIsPutBackTogether(t *testing.T) {
 		if titles := valuesIn(t, got["chapter_list"], "chapter_list", "title"); !slices.Equal(titles, []string{"Zzyzx Setting Out", "Zzyzx Coming Home"}) {
 			t.Errorf("the first book's chapters = %v", titles)
 		}
-		body, err := admin.CoverFile(ctx, fresh[first])
+		cover, err := admin.LibraryItemGetCover(ctx, api.LibraryItemID(fresh[first]), api.LibraryItemGetCoverOptions{Raw: "1"})
 		if err != nil {
 			t.Fatal(err)
 		}
+		body, _ := cover.Reader()
 		kept, err := io.ReadAll(body)
 		_ = body.Close()
 		if err != nil || !bytes.Equal(kept, picture) {
 			t.Errorf("the first book's cover is %d bytes (%v), want the %d the old record was given", len(kept), err, len(picture))
 		}
 
-		carried, err := admin.Progress(ctx, fresh[first], "")
-		if err != nil || carried == nil || !carried.IsFinished || carried.FinishedAt != finished.FinishedAt || carried.CurrentTime != finished.CurrentTime {
-			t.Errorf("the admin's progress on the first book = %+v, %v; want finished when it was (%d) and where it was (%v)", carried, err, finished.FinishedAt, finished.CurrentTime)
+		carried, err := record(admin.MeGetMediaProgress2(ctx, api.LibraryItemID(fresh[first])))
+		if err != nil || !carried.IsFinished || !carried.FinishedAt.Equal(finished.FinishedAt.Time) || carried.CurrentTime != finished.CurrentTime {
+			t.Errorf("the admin's progress on the first book = %+v, %v; want finished when it was (%v) and where it was (%v)", carried, err, finished.FinishedAt, finished.CurrentTime)
 		}
 		theirs := object(listener.call(t, "user_progress_get", map[string]any{"item": fresh[first]})["progress"])
 		if theirs == nil || !acctest.IsBool(theirs["finished"], false) || acctest.DecimalOr0(theirs["current_time_s"]) != 5 {
@@ -1243,9 +1257,9 @@ func TestJourneyASeriesRenamedOnDiskIsPutBackTogether(t *testing.T) {
 			t.Errorf("the series holds %v, want the three voyages in order, %v", books, shelf)
 		}
 
-		keysAfter, err := admin.APIKeys(ctx)
-		if err != nil || len(keysAfter) != len(keysBefore) {
-			t.Errorf("%d keys before the merges and %d after (%v): one made to act as the listener was left", len(keysBefore), len(keysAfter), err)
+		keysAfter, err := record(admin.ApiKeyGetAll(ctx))
+		if err != nil || len(keysAfter.ApiKeys) != len(keysBefore.ApiKeys) {
+			t.Errorf("%d keys before the merges and %d after (%v): one made to act as the listener was left", len(keysBefore.ApiKeys), len(keysAfter.ApiKeys), err)
 		}
 	})
 
@@ -1377,7 +1391,7 @@ func TestJourneyFoldersNameTheirBooks(t *testing.T) {
 
 		// filing by series is one collector's way, and a server told to leave
 		// the rule out says nothing of it, here or in audit_all's count
-		other := newUserWith(t, "zzyzx-files-another-way", abs.UserCreate{}, tools.Options{AuditSkip: []string{"path-series"}})
+		other := newUserWith(t, "zzyzx-files-another-way", api.UserCreateRequest{}, tools.Options{AuditSkip: []string{"path-series"}})
 		if got := diskFindingIDs(t, other.call(t, "audit_path", map[string]any{"library": s.name})); len(got) != 0 {
 			t.Errorf("audit_path = %v on a server that leaves the series rule out", got)
 		}

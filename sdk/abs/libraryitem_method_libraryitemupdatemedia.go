@@ -40,7 +40,7 @@ func (r LibraryItemUpdateMediaResponse) Record() (LibraryItemUpdateMediaAnswer, 
 }
 
 // LibraryItemUpdateMedia calls PATCH /api/items/{id}/media.
-func (c Client) LibraryItemUpdateMedia(ctx context.Context, id LibraryItemID, input LibraryItemUpdateMediaRequest) (result LibraryItemUpdateMediaResponse, err error) {
+func (c Client) LibraryItemUpdateMedia(ctx context.Context, id LibraryItemID, input MediaUpdate) (result LibraryItemUpdateMediaResponse, err error) {
 	result.LibraryItemUpdateMediaAnswer = &LibraryItemUpdateMediaAnswer{}
 	opts := client.RequestOptions{
 		ContentType: "application/json",

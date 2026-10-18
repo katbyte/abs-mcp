@@ -48,7 +48,9 @@ class ApiRouter {
     this.router.get('/libraries', LibraryController.findAll.bind(this))
     this.router.get('/libraries/:id', LibraryController.middleware.bind(this), LibraryController.findOne.bind(this))
     this.router.patch('/libraries/:id', LibraryController.middleware.bind(this), LibraryController.update.bind(this))
+    this.router.patch('/libraries/:id/progress', LibraryController.middleware.bind(this), LibraryController.progress.bind(this))
     this.router.post('/libraries/:id/cover', LibraryController.middleware.bind(this), LibraryController.uploadCover.bind(this))
+    this.router.post('/libraries/:id/files', LibraryController.middleware.bind(this), LibraryController.addFiles.bind(this))
     this.router.get('/libraries/:id/raw', LibraryController.middleware.bind(this), LibraryController.raw.bind(this))
     this.router.get('/libraries/:id/label', LibraryController.middleware.bind(this), LibraryController.label.bind(this))
     this.router.get('/libraries/:id/search', LibraryController.middleware.bind(this), LibraryController.search.bind(this))
@@ -104,6 +106,11 @@ class LibraryController {
     res.sendStatus(200)
   }
 
+  async progress(req, res) {
+    await req.library.applyProgress({ ...req.body, libraryId: req.params.id })
+    res.sendStatus(200)
+  }
+
   async uploadCover(req, res) {
     if (!req.files?.cover) return res.status(400).send('no cover')
     if (req.library.isPublic) return res.status(409).send('public')
@@ -125,6 +132,12 @@ class LibraryController {
     res.status(201).end()
   }
 
+  async addFiles(req, res) {
+    if (!req.files || !Object.values(req.files).length) return res.status(400).send('no files')
+    const { folder } = req.body
+    res.json({ folder, count: Object.values(req.files).length })
+  }
+
   raw(req, res) {
     res.json(req.library)
   }
@@ -135,7 +148,7 @@ class LibraryController {
   }
 
   notes(req, res) {
-    const payload = req.body
+    const payload = req.body || {}
     if (!payload.text) return res.sendStatus(400)
     const { mediaItemType } = req.body
     if (!['book', 'podcastEpisode'].includes(mediaItemType)) return res.sendStatus(400)
@@ -175,6 +188,10 @@ class ItemController {
   }
 
   download(req, res) {
+    const {
+      query: { inline }
+    } = req
+    if (inline) res.set('Content-Disposition', 'inline')
     res.download('/tmp/book.m4b')
   }
 }

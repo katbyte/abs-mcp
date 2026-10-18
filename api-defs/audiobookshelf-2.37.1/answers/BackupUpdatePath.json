@@ -1,0 +1,10 @@
+{
+  "operation": "BackupUpdatePath",
+  "method": "PATCH",
+  "path": "/api/backups/path",
+  "sent": [
+    {
+      "path": "/metadata/backups"
+    }
+  ]
+}

@@ -131,7 +131,7 @@ type compareOut struct {
 }
 
 func registerCompareAudio(r *registry) {
-	client := r.client
+	gen := r.gen
 
 	type compareIn struct {
 		itemRef
@@ -152,16 +152,16 @@ func registerCompareAudio(r *registry) {
 		if err != nil {
 			return nil, compareOut{}, err
 		}
-		a, err := resolveItem(ctx, client, in.Library, in.Item)
+		a, err := resolveItem(ctx, gen, in.Library, in.Item)
 		if err != nil {
 			return nil, compareOut{}, err
 		}
-		b, err := resolveItem(ctx, client, in.Library, in.Other)
+		b, err := resolveItem(ctx, gen, in.Library, in.Other)
 		if err != nil {
 			return nil, compareOut{}, err
 		}
-		if a.ID == b.ID {
-			return nil, compareOut{}, fmt.Errorf("item and other are both %q (%s): name two items", a.Title(), a.ID)
+		if a.Id == b.Id {
+			return nil, compareOut{}, fmt.Errorf("item and other are both %q (%s): name two items", a.Title(), a.Id)
 		}
 		bookA, err := audiosample.BookOf(a)
 		if err != nil {
@@ -175,7 +175,7 @@ func registerCompareAudio(r *registry) {
 			return nil, compareOut{}, fmt.Errorf("%q is %s long, too short to compare by ear: %d stretches of %gs would overlap or fall under 10 seconds", a.Title(), fmtDuration(d), cfg.Points, cfg.Stretch)
 		}
 
-		sampler, err := audiosample.New(ctx, client)
+		sampler, err := audiosample.New(ctx, gen)
 		if err != nil {
 			if errors.Is(err, audiosample.ErrNoFFmpeg) {
 				return nil, compareOut{}, errors.New("item_compare_audio needs ffmpeg, which is not installed where abs-mcp runs (not on its PATH): install it there, or run abs-mcp where it is")
@@ -188,8 +188,8 @@ func registerCompareAudio(r *registry) {
 			return nil, compareOut{}, err
 		}
 		out := compareOutOf(res)
-		out.Item = compareSide{ID: a.ID, Title: a.Title(), Author: a.Media.Metadata.AuthorDisplay(), Path: a.RelPath, Duration: wholeSec(bookA.Duration())}
-		out.Other = compareSide{ID: b.ID, Title: b.Title(), Author: b.Media.Metadata.AuthorDisplay(), Path: b.RelPath, Duration: wholeSec(bookB.Duration())}
+		out.Item = compareSide{ID: string(a.Id), Title: a.Title(), Author: a.Media.Metadata.AuthorDisplay(), Path: a.RelPath, Duration: wholeSec(bookA.Duration())}
+		out.Other = compareSide{ID: string(b.Id), Title: b.Title(), Author: b.Media.Metadata.AuthorDisplay(), Path: b.RelPath, Duration: wholeSec(bookB.Duration())}
 		out.BytesRead = sampler.BytesRead()
 
 		return nil, out, nil

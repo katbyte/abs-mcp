@@ -50,8 +50,10 @@ type reqInfo struct {
 	files     []string
 	bodyWhole bool
 	bodyList  bool // the body is used as a list, req.body.map(...) or for (const x of req.body)
-	attached  map[string]*jsType
-	reached   []reqUse
+	// files are uploaded under any name, Object.values(req.files), which the route takes as a form like files with names
+	filesWhole bool
+	attached   map[string]*jsType
+	reached    []reqUse
 }
 
 // reqUse is a function given the request, or its query, body or files on their own, under the name it gives it, read afterwards for
@@ -139,11 +141,24 @@ func readRequest(use reqUse, req *reqInfo) {
 	reads := map[string]string{}
 	lists := map[string][]string{}
 
+	// bindPart adds the names a pattern takes out of one part of the request, const { limit, page } = req.query
+	bindPart := func(obj *js.BindingObject, part string) {
+		for _, item := range obj.List {
+			name := propertyName(item.Key)
+			v, named := item.Value.Binding.(*js.Var)
+			if name == "" && named {
+				name = string(v.Name())
+			}
+			add(part, name)
+			if named && name != "" {
+				reads[string(v.Name())] = part + " " + name
+			}
+		}
+	}
+
 	// readOf is the "part name" x reads, through a default given with || or ??, or "" for none
 	readOf := func(x js.IExpr) string {
-		if b, ok := x.(*js.BinaryExpr); ok && (b.Op == js.OrToken || b.Op == js.NullishToken) {
-			x = b.X
-		}
+		x = withoutDefault(x)
 		if v, ok := x.(*js.Var); ok {
 			return reads[string(v.Name())]
 		}
@@ -201,13 +216,21 @@ func readRequest(use reqUse, req *reqInfo) {
 				req.bodyWhole = true
 			}
 
+		case *js.ObjectExpr:
+			// { ...req.body, libraryItemId }: every field is handed on
+			for _, p := range n.List {
+				if p.Spread && from(p.Value, "body") {
+					req.bodyWhole = true
+				}
+			}
+
 		case *js.BindingElement:
 			if v, ok := n.Binding.(*js.Var); ok {
 				if n.Default == nil {
 					return
 				}
 				for _, part := range []string{"query", "body"} {
-					if from(n.Default, part) {
+					if from(withoutDefault(n.Default), part) {
 						aliases[string(v.Name())] = part
 					}
 				}
@@ -225,17 +248,17 @@ func readRequest(use reqUse, req *reqInfo) {
 				return
 			}
 			for _, part := range []string{"query", "body", "files"} {
-				if from(n.Default, part) {
-					for _, item := range obj.List {
-						name := propertyName(item.Key)
-						v, named := item.Value.Binding.(*js.Var)
-						if name == "" && named {
-							name = string(v.Name())
-						}
-						add(part, name)
-						if named && name != "" {
-							reads[string(v.Name())] = part + " " + name
-						}
+				if from(withoutDefault(n.Default), part) {
+					bindPart(obj, part)
+				}
+			}
+
+			// const { query: { width, raw } } = req: parts taken out of the request whole, each then taken apart
+			if use.part == "" && identName(withoutDefault(n.Default)) == use.name {
+				for _, item := range obj.List {
+					inner, ok := item.Value.Binding.(*js.BindingObject)
+					if part := propertyName(item.Key); ok && slices.Contains([]string{"query", "body", "files"}, part) {
+						bindPart(inner, part)
 					}
 				}
 			}
@@ -244,6 +267,9 @@ func readRequest(use reqUse, req *reqInfo) {
 			for _, a := range n.Args.List {
 				if from(a.Value, "body") {
 					req.bodyWhole = true
+				}
+				if from(a.Value, "files") {
+					req.filesWhole = true
 				}
 			}
 
@@ -314,6 +340,15 @@ func textList(x js.IExpr) ([]string, bool) {
 	}
 
 	return out, true
+}
+
+// withoutDefault is x without the default it is given, req.body for req.body || {} or req.query.sort ?? 'title'.
+func withoutDefault(x js.IExpr) js.IExpr {
+	if b, ok := x.(*js.BinaryExpr); ok && (b.Op == js.OrToken || b.Op == js.NullishToken) {
+		return b.X
+	}
+
+	return x
 }
 
 // listMembers are what a list has of its own, which a body used as a list is read by and which are not fields of it.

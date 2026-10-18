@@ -1,16 +1,20 @@
 package tools
 
 import (
+	"bytes"
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
+	"mime/multipart"
 	"path"
 	"slices"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/go-kt/pointer"
 )
 
 // The files inside a book: its audio tracks in play order, which of its
@@ -32,8 +36,8 @@ const trackEdge = 0.5
 // fileNamed finds the file a caller named: by its path in the item's folder,
 // or by its filename where no other file shares it (a disc folder can hold
 // "01.mp3" twice).
-func fileNamed(what, name string, files []abs.FileMetadata) (int, error) {
-	if i := slices.IndexFunc(files, func(f abs.FileMetadata) bool { return f.RelPath == name }); i >= 0 {
+func fileNamed(what, name string, files []api.FileMetadata) (int, error) {
+	if i := slices.IndexFunc(files, func(f api.FileMetadata) bool { return f.RelPath == name }); i >= 0 {
 		return i, nil
 	}
 	var hits []int
@@ -57,7 +61,7 @@ func fileNamed(what, name string, files []abs.FileMetadata) (int, error) {
 }
 
 // fileList names files for an error, by path, the first twenty.
-func fileList(files []abs.FileMetadata) string {
+func fileList(files []api.FileMetadata) string {
 	if len(files) == 0 {
 		return "none"
 	}
@@ -73,9 +77,9 @@ func fileList(files []abs.FileMetadata) string {
 
 // playOrder is a book's audio files as they play: the ones not excluded, by
 // index.
-func playOrder(files []abs.AudioFile) []abs.AudioFile {
-	out := slices.DeleteFunc(slices.Clone(files), func(af abs.AudioFile) bool { return af.Exclude })
-	slices.SortStableFunc(out, func(a, b abs.AudioFile) int { return cmp.Compare(a.Index, b.Index) })
+func playOrder(files []api.AudioFile) []api.AudioFile {
+	out := slices.DeleteFunc(slices.Clone(files), func(af api.AudioFile) bool { return af.Exclude })
+	slices.SortStableFunc(out, func(a, b api.AudioFile) int { return cmp.Compare(a.Index, b.Index) })
 	return out
 }
 
@@ -83,16 +87,16 @@ func playOrder(files []abs.AudioFile) []abs.AudioFile {
 // the order named: every audio file of the book, each keeping whether it is
 // excluded. It refuses a list that leaves a file out, because the server
 // would drop that file from the book, and one that names a file twice.
-func trackOrder(it *abs.Item, names []string) ([]abs.TrackOrder, []abs.AudioFile, error) {
+func trackOrder(it *api.LibraryItemExpanded, names []string) ([]api.LibraryItemUpdateTracksRequestOrderedFileData, []api.AudioFile, error) {
 	files := it.Media.AudioFiles
-	metas := make([]abs.FileMetadata, len(files))
+	metas := make([]api.FileMetadata, len(files))
 	for i := range files {
-		metas[i] = files[i].Metadata
+		metas[i] = pointer.From(files[i].Metadata)
 	}
 
 	listed := make([]bool, len(files))
-	order := make([]abs.TrackOrder, 0, len(names))
-	after := make([]abs.AudioFile, 0, len(names))
+	order := make([]api.LibraryItemUpdateTracksRequestOrderedFileData, 0, len(names))
+	after := make([]api.AudioFile, 0, len(names))
 	for _, name := range names {
 		i, err := fileNamed("audio file", name, metas)
 		if err != nil {
@@ -102,11 +106,11 @@ func trackOrder(it *abs.Item, names []string) ([]abs.TrackOrder, []abs.AudioFile
 			return nil, nil, fmt.Errorf("tracks lists %q twice", cmp.Or(metas[i].RelPath, metas[i].Filename))
 		}
 		listed[i] = true
-		order = append(order, abs.TrackOrder{Ino: files[i].Ino, Exclude: files[i].Exclude})
+		order = append(order, api.LibraryItemUpdateTracksRequestOrderedFileData{Ino: files[i].Ino, Exclude: new(files[i].Exclude)})
 		after = append(after, files[i])
 	}
 
-	var left []abs.FileMetadata
+	var left []api.FileMetadata
 	for i := range files {
 		if !listed[i] {
 			left = append(left, metas[i])
@@ -120,27 +124,28 @@ func trackOrder(it *abs.Item, names []string) ([]abs.TrackOrder, []abs.AudioFile
 }
 
 // trackNames names files in order by their path in the item's folder.
-func trackNames(files []abs.AudioFile) []string {
+func trackNames(files []api.AudioFile) []string {
 	out := make([]string, 0, len(files))
 	for _, f := range files {
-		out = append(out, cmp.Or(f.Metadata.RelPath, f.Metadata.Filename))
+		meta := pointer.From(f.Metadata)
+		out = append(out, cmp.Or(meta.RelPath, meta.Filename))
 	}
 	return out
 }
 
 // sameTracks reports whether two play orders play the same files in the same
 // order.
-func sameTracks(a, b []abs.AudioFile) bool {
-	return slices.EqualFunc(a, b, func(x, y abs.AudioFile) bool { return x.Ino == y.Ino })
+func sameTracks(a, b []api.AudioFile) bool {
+	return slices.EqualFunc(a, b, func(x, y api.AudioFile) bool { return x.Ino == y.Ino })
 }
 
 // chaptersMoved moves each chapter with the track it sits inside, keeping its
 // title and its place within the track. ok is false when a chapter runs
 // across two tracks or lies outside the audio: chapters not cut along the
 // files cannot follow them. before and after are the files in play order.
-func chaptersMoved(chapters []abs.Chapter, before, after []abs.AudioFile) ([]abs.Chapter, bool) {
+func chaptersMoved(chapters []api.Chapter, before, after []api.AudioFile) ([]api.Chapter, bool) {
 	type span struct{ start, length float64 }
-	offsets := func(files []abs.AudioFile) map[string]span {
+	offsets := func(files []api.AudioFile) map[string]span {
 		out := map[string]span{}
 		at := 0.0
 		for _, f := range files {
@@ -152,12 +157,12 @@ func chaptersMoved(chapters []abs.Chapter, before, after []abs.AudioFile) ([]abs
 	was, now := offsets(before), offsets(after)
 
 	type placed struct {
-		ch    abs.Chapter
+		ch    api.Chapter
 		order int
 	}
 	moved := make([]placed, 0, len(chapters))
 	for n, ch := range chapters {
-		home := slices.IndexFunc(before, func(f abs.AudioFile) bool {
+		home := slices.IndexFunc(before, func(f api.AudioFile) bool {
 			s := was[f.Ino]
 			return s.length > 0 && ch.Start >= s.start-trackEdge && ch.Start < s.start+s.length && ch.End <= s.start+s.length+trackEdge
 		})
@@ -173,9 +178,9 @@ func chaptersMoved(chapters []abs.Chapter, before, after []abs.AudioFile) ([]abs
 		return cmp.Or(cmp.Compare(a.ch.Start, b.ch.Start), cmp.Compare(a.order, b.order))
 	})
 
-	out := make([]abs.Chapter, len(moved))
+	out := make([]api.Chapter, len(moved))
 	for i, p := range moved {
-		p.ch.ID = i
+		p.ch.Id = i
 		out[i] = p.ch
 	}
 	return out, true
@@ -184,8 +189,8 @@ func chaptersMoved(chapters []abs.Chapter, before, after []abs.AudioFile) ([]abs
 // ebookFlip is the ebook file the ebook route has to be sent for name to be
 // the book's main ebook, or for none to be when name is "none"; nil when that
 // is already so. main is what the main ebook will then be.
-func ebookFlip(it *abs.Item, name string) (flip *abs.LibraryFile, main string, err error) {
-	var ebooks []abs.LibraryFile
+func ebookFlip(it *api.LibraryItemExpanded, name string) (flip *api.LibraryFile, main string, err error) {
+	var ebooks []api.LibraryFile
 	for _, f := range it.LibraryFiles {
 		if f.FileType == "ebook" {
 			ebooks = append(ebooks, f)
@@ -195,7 +200,7 @@ func ebookFlip(it *abs.Item, name string) (flip *abs.LibraryFile, main string, e
 	if ef := it.Media.EbookFile; ef != nil {
 		// the route is given a file of the folder's, and the main ebook is
 		// only flipped back to supplementary through its own
-		if current = slices.IndexFunc(ebooks, func(f abs.LibraryFile) bool { return f.Ino == ef.Ino }); current < 0 {
+		if current = slices.IndexFunc(ebooks, func(f api.LibraryFile) bool { return f.Ino == ef.Ino }); current < 0 {
 			return nil, "", fmt.Errorf("%q's main ebook %q is not among the files in its folder; item_rescan it first", it.Title(), mainEbook(it))
 		}
 	}
@@ -210,9 +215,9 @@ func ebookFlip(it *abs.Item, name string) (flip *abs.LibraryFile, main string, e
 	if len(ebooks) == 0 {
 		return nil, "", fmt.Errorf("%q has no ebook files", it.Title())
 	}
-	metas := make([]abs.FileMetadata, len(ebooks))
+	metas := make([]api.FileMetadata, len(ebooks))
 	for i := range ebooks {
-		metas[i] = ebooks[i].Metadata
+		metas[i] = pointer.From(ebooks[i].Metadata)
 	}
 	i, err := fileNamed("ebook file", name, metas)
 	if err != nil {
@@ -226,17 +231,21 @@ func ebookFlip(it *abs.Item, name string) (flip *abs.LibraryFile, main string, e
 }
 
 // mainEbook names a book's main ebook by its path in the folder, or none.
-func mainEbook(it *abs.Item) string {
+func mainEbook(it *api.LibraryItemExpanded) string {
 	ef := it.Media.EbookFile
 	if ef == nil {
 		return "none"
 	}
+	if ef.Metadata == nil {
+		return ef.Ino
+	}
+
 	return cmp.Or(ef.Metadata.RelPath, ef.Metadata.Filename, ef.Ino)
 }
 
 // subfolderPath is a file's path in the item's folder when that says more
 // than its name: the file is in a folder of its own.
-func subfolderPath(f abs.FileMetadata) string {
+func subfolderPath(f api.FileMetadata) string {
 	if f.RelPath == f.Filename {
 		return ""
 	}
@@ -249,27 +258,27 @@ func subfolderPath(f abs.FileMetadata) string {
 // corrects it afterwards: a scan rebuilds the audio only when the files on
 // disk and on the record differ in number, and after the delete they agree.
 // The cover is refused because the server keeps pointing at it.
-func fileToDelete(it *abs.Item, name string) (*abs.LibraryFile, error) {
+func fileToDelete(it *api.LibraryItemExpanded, name string) (*api.LibraryFile, error) {
 	switch {
 	case it.IsPodcast():
 		return nil, errors.New("a podcast's files are its episodes: podcast_episode_delete takes one out")
-	case it.IsFile:
+	case pointer.From(it.IsFile):
 		return nil, fmt.Errorf("%q is a single file, not a folder of them: item_delete it without file", it.Title())
 	}
-	metas := make([]abs.FileMetadata, len(it.LibraryFiles))
+	metas := make([]api.FileMetadata, len(it.LibraryFiles))
 	for i := range it.LibraryFiles {
-		metas[i] = it.LibraryFiles[i].Metadata
+		metas[i] = pointer.From(it.LibraryFiles[i].Metadata)
 	}
 	i, err := fileNamed("file", name, metas)
 	if err != nil {
 		return nil, err
 	}
 	f := &it.LibraryFiles[i]
-	rel := cmp.Or(f.Metadata.RelPath, f.Metadata.Filename)
+	rel := cmp.Or(metas[i].RelPath, metas[i].Filename)
 	switch {
-	case f.FileType == "audio" || slices.ContainsFunc(it.Media.AudioFiles, func(af abs.AudioFile) bool { return af.Ino == f.Ino }):
+	case f.FileType == "audio" || slices.ContainsFunc(it.Media.AudioFiles, func(af api.AudioFile) bool { return af.Ino == f.Ino }):
 		return nil, fmt.Errorf("%q is an audio file: the server would take it out of the book but leave the book's length as it was, and no scan corrects that afterwards. Take it out of the folder on disk, then item_rescan the book, which does", rel)
-	case it.Media.CoverPath != "" && it.Media.CoverPath == f.Metadata.Path:
+	case it.Media.CoverPath != "" && it.Media.CoverPath == metas[i].Path:
 		return nil, fmt.Errorf("%q is the book's cover, and the server would go on pointing at it: item_cover_edit another cover, or remove, first", rel)
 	}
 	return f, nil
@@ -280,28 +289,29 @@ func fileToDelete(it *abs.Item, name string) (*abs.LibraryFile, error) {
 // takes only a file it already holds for the item (Audiobookshelf 2.37.0 on;
 // before, any image in the folder), so one put in the folder since the last
 // scan is scanned in first.
-func coverFile(ctx context.Context, client *abs.Client, it *abs.Item, name string) (*abs.LibraryFile, error) {
-	held := func(it *abs.Item) bool {
-		return slices.ContainsFunc(it.LibraryFiles, func(f abs.LibraryFile) bool {
-			return f.Metadata.Path == name || f.Metadata.RelPath == name || f.Metadata.Filename == name
+func coverFile(ctx context.Context, gen *api.Client, it *api.LibraryItemExpanded, name string) (*api.LibraryFile, error) {
+	held := func(it *api.LibraryItemExpanded) bool {
+		return slices.ContainsFunc(it.LibraryFiles, func(f api.LibraryFile) bool {
+			meta := pointer.From(f.Metadata)
+			return meta.Path == name || meta.RelPath == name || meta.Filename == name
 		})
 	}
 	if !held(it) {
-		if _, err := client.ScanItem(ctx, it.ID); err != nil {
+		if _, err := gen.LibraryItemScan(ctx, it.Id); err != nil {
 			return nil, fmt.Errorf("%q has no file %q, and the rescan that would find one new to its folder failed: %w", it.Title(), name, err)
 		}
-		after, err := client.Item(ctx, it.ID)
+		after, err := getItem(ctx, gen, it.Id)
 		if err != nil {
 			return nil, fmt.Errorf("%q was rescanned to find %q, but reading it back failed: %w", it.Title(), name, err)
 		}
 		it = after
 	}
 
-	metas := make([]abs.FileMetadata, len(it.LibraryFiles))
+	metas := make([]api.FileMetadata, len(it.LibraryFiles))
 	for i := range it.LibraryFiles {
-		metas[i] = it.LibraryFiles[i].Metadata
+		metas[i] = pointer.From(it.LibraryFiles[i].Metadata)
 	}
-	i := slices.IndexFunc(metas, func(m abs.FileMetadata) bool { return m.Path == name })
+	i := slices.IndexFunc(metas, func(m api.FileMetadata) bool { return m.Path == name })
 	if i < 0 {
 		var err error
 		if i, err = fileNamed("file", name, metas); err != nil {
@@ -310,7 +320,7 @@ func coverFile(ctx context.Context, client *abs.Client, it *abs.Item, name strin
 	}
 	f := &it.LibraryFiles[i]
 	if f.FileType != "image" {
-		return nil, fmt.Errorf("%q is not an image: the server lists it as %s", cmp.Or(f.Metadata.RelPath, f.Metadata.Filename), cmp.Or(f.FileType, "unknown"))
+		return nil, fmt.Errorf("%q is not an image: the server lists it as %s", cmp.Or(metas[i].RelPath, metas[i].Filename), cmp.Or(f.FileType, "unknown"))
 	}
 	return f, nil
 }
@@ -320,16 +330,16 @@ func coverFile(ctx context.Context, client *abs.Client, it *abs.Item, name strin
 // it from disk fails. The path check answers exists for a missing path inside
 // an item's folder too, naming the item, so only exists with no item named is
 // a file still there.
-func fileGone(ctx context.Context, client *abs.Client, lib *abs.Library, it *abs.Item, f *abs.LibraryFile) (bool, error) {
-	i := slices.IndexFunc(lib.Folders, func(fo abs.Folder) bool { return fo.ID == it.FolderID })
+func fileGone(ctx context.Context, gen *api.Client, lib *api.LibraryFindOneAnswer, it *api.LibraryItemExpanded, f *api.LibraryFile) (bool, error) {
+	i := slices.IndexFunc(lib.Folders, func(fo api.LibraryFolder) bool { return fo.Id == it.FolderId })
 	if i < 0 {
-		return false, fmt.Errorf("the library %q has no folder %s, which %q is in", lib.Name, it.FolderID, it.Title())
+		return false, fmt.Errorf("the library %q has no folder %s, which %q is in", lib.Name, it.FolderId, it.Title())
 	}
-	exists, holder, err := client.PathExists(ctx, lib.Folders[i].FullPath, path.Join(it.RelPath, f.Metadata.RelPath))
+	got, err := record(gen.FileSystemCheckPathExists(ctx, api.FileSystemCheckPathExistsRequest{FolderPath: lib.Folders[i].FullPath, Directory: path.Join(it.RelPath, pointer.From(f.Metadata).RelPath)}))
 	if err != nil {
 		return false, err
 	}
-	return !exists || holder != "", nil
+	return !got.Exists || got.LibraryItemTitle != "", nil
 }
 
 // m4bPlan is what merging a book into one m4b does: the server encodes the
@@ -354,22 +364,22 @@ const (
 // The server always encodes, at 128k stereo unless told otherwise, so the
 // book's own bitrate and channels are the default: a mono 64k book would
 // come out twice the size, and a better one worse.
-func planM4B(it *abs.Item, kbps, channels int) (*m4bPlan, error) {
+func planM4B(it *api.LibraryItemExpanded, kbps, channels int) (*m4bPlan, error) {
 	play := playOrder(it.Media.AudioFiles)
 	switch {
 	case it.IsPodcast():
 		return nil, errNotBook
-	case it.IsFile:
+	case pointer.From(it.IsFile):
 		return nil, fmt.Errorf("%q is one file at the library root: merging names the m4b after it, so the file the book is changes and the book loses its record and everyone's progress on it. Put it in a folder of its own first", it.Title())
 	case len(play) == 0:
 		return nil, fmt.Errorf("%q has no audio that plays", it.Title())
-	case len(play) == 1 && strings.EqualFold(path.Ext(play[0].Metadata.Filename), ".m4b"):
-		return nil, fmt.Errorf("%q is already one m4b, %q", it.Title(), play[0].Metadata.Filename)
+	case len(play) == 1 && strings.EqualFold(path.Ext(pointer.From(play[0].Metadata).Filename), ".m4b"):
+		return nil, fmt.Errorf("%q is already one m4b, %q", it.Title(), pointer.From(play[0].Metadata).Filename)
 	}
 
-	plan := &m4bPlan{Files: trackNames(play), Into: path.Base(it.Path) + ".m4b", Originals: "the server's cache for the book, metadata/cache/items/" + it.ID}
+	plan := &m4bPlan{Files: trackNames(play), Into: path.Base(it.Path) + ".m4b", Originals: "the server's cache for the book, metadata/cache/items/" + string(it.Id)}
 	for _, af := range play {
-		plan.Bitrate = max(plan.Bitrate, int((af.BitRate+999)/1000))
+		plan.Bitrate = max(plan.Bitrate, (af.BitRate+999)/1000)
 		plan.Channels = max(plan.Channels, af.Channels)
 	}
 	if kbps > 0 {
@@ -388,14 +398,15 @@ func planM4B(it *abs.Item, kbps, channels int) (*m4bPlan, error) {
 	// the server renames the merged file into place over whatever is there
 	for _, af := range it.Media.AudioFiles {
 		if af.Exclude {
-			plan.Left = append(plan.Left, cmp.Or(af.Metadata.RelPath, af.Metadata.Filename))
+			meta := pointer.From(af.Metadata)
+			plan.Left = append(plan.Left, cmp.Or(meta.RelPath, meta.Filename))
 		}
 	}
 	merged := func(ino string) bool {
-		return slices.ContainsFunc(play, func(af abs.AudioFile) bool { return af.Ino == ino })
+		return slices.ContainsFunc(play, func(af api.AudioFile) bool { return af.Ino == ino })
 	}
 	for _, f := range it.LibraryFiles {
-		if f.Metadata.RelPath == plan.Into && !merged(f.Ino) {
+		if pointer.From(f.Metadata).RelPath == plan.Into && !merged(f.Ino) {
 			return nil, fmt.Errorf("the folder already holds %q, which the merge would overwrite: move it or rename it first", plan.Into)
 		}
 	}
@@ -405,9 +416,9 @@ func planM4B(it *abs.Item, kbps, channels int) (*m4bPlan, error) {
 // mergedInto reports whether a book now plays the one m4b a merge made, at
 // the length it had before: an encode can pad or trim its start by a frame,
 // so within a second or half a percent.
-func mergedInto(it *abs.Item, into string, before float64) error {
+func mergedInto(it *api.LibraryItemExpanded, into string, before float64) error {
 	play := playOrder(it.Media.AudioFiles)
-	if len(play) != 1 || play[0].Metadata.RelPath != into {
+	if len(play) != 1 || pointer.From(play[0].Metadata).RelPath != into {
 		return fmt.Errorf("it plays %s, not %q", strings.Join(trackNames(play), ", "), into)
 	}
 	if d := math.Abs(play[0].Duration - before); d > max(1, before*0.005) {
@@ -417,8 +428,90 @@ func mergedInto(it *abs.Item, into string, before float64) error {
 }
 
 // mergeRunning is the server's m4b merge of an item still in its task list.
-func mergeRunning(tasks []abs.Task, itemID string) bool {
-	return slices.ContainsFunc(tasks, func(t abs.Task) bool {
-		return t.Action == "encode-m4b" && !t.IsFinished && t.Data["libraryItemId"] == itemID
+func mergeRunning(tasks []api.MiscGetTasksAnswerTasks, itemID api.LibraryItemID) bool {
+	return slices.ContainsFunc(tasks, func(t api.MiscGetTasksAnswerTasks) bool {
+		return t.Action == "encode-m4b" && !t.IsFinished && t.Data != nil && t.Data.LibraryItemId == itemID
 	})
+}
+
+// embedPending is whether the server is tagging an item's files, or has the item waiting to be: it lists a running embed as a task and a
+// waiting one in its queue.
+func embedPending(ctx context.Context, gen *api.Client, itemID api.LibraryItemID) (bool, error) {
+	got, err := record(gen.MiscGetTasks(ctx, api.MiscGetTasksOptions{Include: "queue"}))
+	if err != nil {
+		return false, err
+	}
+	for _, t := range got.Tasks {
+		if t.Action == "embed-metadata" && !t.IsFinished && t.Data != nil && t.Data.LibraryItemId == itemID {
+			return true, nil
+		}
+	}
+	for _, q := range pointer.From(got.QueuedTaskData).EmbedMetadata {
+		if q.LibraryItemId == itemID {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// serverTasks are the tasks the server is running, or ran and still lists.
+func serverTasks(ctx context.Context, gen *api.Client) ([]api.MiscGetTasksAnswerTasks, error) {
+	got, err := record(gen.MiscGetTasks(ctx))
+	if err != nil {
+		return nil, err
+	}
+
+	return got.Tasks, nil
+}
+
+// storeChapters are Audible's chapters for an asin in a region, as a book's chapters. A failure at Audible is the server's own word for it, in
+// an answer that is otherwise a success, and is an error here rather than no chapters.
+func storeChapters(ctx context.Context, gen *api.Client, asin, region string) ([]api.Chapter, error) {
+	got, err := record(gen.SearchFindChapters(ctx, api.SearchFindChaptersOptions{Asin: asin, Region: region}))
+	if err != nil {
+		return nil, err
+	}
+	if got.Error != "" {
+		return nil, fmt.Errorf("GET /api/search/chapters: %s", got.Error)
+	}
+
+	out := make([]api.Chapter, 0, len(got.Chapters))
+	for i, ch := range got.Chapters {
+		start := float64(ch.StartOffsetMs) / 1000
+		out = append(out, api.Chapter{Id: i, Start: start, End: start + float64(ch.LengthMs)/1000, Title: ch.Title})
+	}
+
+	return out, nil
+}
+
+// coverFromURL has the server fetch an image from a url as an item's cover. The route takes an upload or a url, and the url goes as JSON.
+func coverFromURL(ctx context.Context, gen *api.Client, id api.LibraryItemID, url string) error {
+	body, err := json.Marshal(map[string]string{"url": url})
+	if err != nil {
+		return err
+	}
+	_, err = gen.LibraryItemUploadCover(ctx, id, bytes.NewReader(body), "application/json")
+
+	return err
+}
+
+// coverUpload sets an item's cover from a picture sent with the call, as a form's file: the server goes by the file name's extension, so it
+// has to be an image's.
+func coverUpload(ctx context.Context, gen *api.Client, id api.LibraryItemID, filename string, picture []byte) error {
+	var body bytes.Buffer
+	form := multipart.NewWriter(&body)
+	part, err := form.CreateFormFile("cover", filename)
+	if err != nil {
+		return err
+	}
+	if _, err := part.Write(picture); err != nil {
+		return err
+	}
+	if err := form.Close(); err != nil {
+		return err
+	}
+	_, err = gen.LibraryItemUploadCover(ctx, id, &body, form.FormDataContentType())
+
+	return err
 }

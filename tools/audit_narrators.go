@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -43,8 +43,8 @@ func newRoleCounts() *roleCounts {
 	}
 }
 
-func (c *roleCounts) add(it *abs.Item) {
-	ref := roleItem{ID: it.ID, Title: it.Media.Metadata.Title}
+func (c *roleCounts) add(b namedBook) {
+	ref := roleItem{ID: string(b.Id), Title: b.Media.Metadata.Title}
 	note := func(into map[string]map[string]roleItem, names []string) {
 		for _, name := range names {
 			name = strings.TrimSpace(name)
@@ -58,11 +58,11 @@ func (c *roleCounts) add(it *abs.Item) {
 			if into[k] == nil {
 				into[k] = map[string]roleItem{}
 			}
-			into[k][it.ID] = ref
+			into[k][ref.ID] = ref
 		}
 	}
-	note(c.author, valuesOf("authors", it))
-	note(c.narrator, valuesOf("narrators", it))
+	note(c.author, b.values("authors"))
+	note(c.narrator, b.values("narrators"))
 }
 
 type roleFinding struct {
@@ -123,7 +123,7 @@ func sortRoleItems(items []roleItem) {
 }
 
 func registerNarratorAudit(r *registry) {
-	client := r.client
+	gen := r.gen
 
 	type rolesIn struct {
 		Library string `json:"library,omitempty" jsonschema:"library name or id; default every library"`
@@ -140,31 +140,29 @@ func registerNarratorAudit(r *registry) {
 		Description: "Everything wrong with the narrator field. Roles: names that are an author on some books and a narrator on others (an author reading their own book is not reported); one volume written and the rest of the series read is the author and narrator fields swapped on import, one book written and many read is a narrator credited as co-author - fix with item_edit, then author_delete the record if it is left with no books. " +
 			"Names: the same value spelled several ways, a wrapper an importer left on ('Read by Jim Dale', 'Narrator....Jim Dale'), one name that is another cut short or without its initials ('Fajer Al' and 'Fajer Al-Kaisi'), two names a typo apart (read both: it can be two people), two names in one value, and leftovers such as 'Ph.D.' - fix with metadata_rename field=narrators, or item_edit for a split.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in rolesIn) (*mcp.CallToolResult, rolesOut, error) {
-		libs, err := resolveLibraries(ctx, client, in.Library)
+		libs, err := resolveLibraries(ctx, gen, in.Library)
 		if err != nil {
 			return nil, rolesOut{}, err
 		}
 		roles := newRoleCounts()
 		names := newSpellingCounts([]string{"narrators"})
 		out := rolesOut{Roles: []roleFinding{}, Names: []vocabGroup{}}
-		read := func(it *abs.Item) {
-			roles.add(it)
-			names.add(it)
+		read := func(b namedBook) {
+			roles.add(b)
+			names.add(b)
 		}
 		var people joinedNames // a name with a comma in it is not two names
 		for i := range libs {
-			if err := client.ItemsAll(ctx, libs[i].ID, abs.ItemsOptions{}, func(items []abs.Item) bool {
-				for j := range items {
-					out.Scanned++
-					if !people.hold(&items[j]) {
-						read(&items[j])
-					}
+			if err := eachItem(ctx, gen, libs[i].Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+				out.Scanned++
+				if !people.hold(it) {
+					read(namedBook{LibraryItemMinified: it})
 				}
 				return true
 			}); err != nil {
 				return nil, rolesOut{}, err
 			}
-			if err := people.resolve(ctx, client, libs[i].ID, read); err != nil {
+			if err := people.resolve(ctx, gen, libs[i].Id, read); err != nil {
 				return nil, rolesOut{}, err
 			}
 		}

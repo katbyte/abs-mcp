@@ -4,24 +4,24 @@ package abs
 
 // LibraryItem is the "LibraryItem" schema.
 type LibraryItem struct {
-	AddedAt          UnixMilli                 `json:"addedAt,omitzero"`
-	BirthtimeMs      UnixMilli                 `json:"birthtimeMs,omitzero"`
-	CtimeMs          UnixMilli                 `json:"ctimeMs,omitzero"`
-	FolderId         FolderID                  `json:"folderId,omitempty"`
-	Id               LibraryItemID             `json:"id,omitempty"`
-	Ino              string                    `json:"ino,omitempty"`
-	IsFile           *bool                     `json:"isFile,omitempty"`
-	IsInvalid        bool                      `json:"isInvalid"`
-	IsMissing        bool                      `json:"isMissing"`
-	LastScan         UnixMilli                 `json:"lastScan,omitzero"`
-	LibraryFiles     []LibraryItemLibraryFiles `json:"libraryFiles,omitzero"`
-	LibraryId        LibraryID                 `json:"libraryId,omitempty"`
-	Media            *LibraryItemMedia         `json:"media,omitempty"`
-	MediaType        string                    `json:"mediaType,omitempty"`
-	MtimeMs          UnixMilli                 `json:"mtimeMs,omitzero"`
-	OldLibraryItemId any                       `json:"oldLibraryItemId,omitempty"`
-	Path             string                    `json:"path,omitempty"`
-	RelPath          string                    `json:"relPath,omitempty"`
-	ScanVersion      string                    `json:"scanVersion,omitempty"`
-	UpdatedAt        UnixMilli                 `json:"updatedAt,omitzero"`
+	AddedAt          UnixMilli         `json:"addedAt,omitzero"`
+	BirthtimeMs      UnixMilli         `json:"birthtimeMs,omitzero"`
+	CtimeMs          UnixMilli         `json:"ctimeMs,omitzero"`
+	FolderId         FolderID          `json:"folderId,omitempty"`
+	Id               LibraryItemID     `json:"id,omitempty"`
+	Ino              string            `json:"ino,omitempty"`
+	IsFile           *bool             `json:"isFile,omitempty"`
+	IsInvalid        bool              `json:"isInvalid"`
+	IsMissing        bool              `json:"isMissing"`
+	LastScan         UnixMilli         `json:"lastScan,omitzero"`
+	LibraryFiles     []LibraryFile     `json:"libraryFiles,omitzero"`
+	LibraryId        LibraryID         `json:"libraryId,omitempty"`
+	Media            *LibraryItemMedia `json:"media,omitempty"`
+	MediaType        string            `json:"mediaType,omitempty"`
+	MtimeMs          UnixMilli         `json:"mtimeMs,omitzero"`
+	OldLibraryItemId any               `json:"oldLibraryItemId,omitempty"`
+	Path             string            `json:"path,omitempty"`
+	RelPath          string            `json:"relPath,omitempty"`
+	ScanVersion      string            `json:"scanVersion,omitempty"`
+	UpdatedAt        UnixMilli         `json:"updatedAt,omitzero"`
 }

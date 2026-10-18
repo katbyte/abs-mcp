@@ -3,21 +3,21 @@ package tools
 import (
 	"testing"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 func TestSummariseItem(t *testing.T) {
 	t.Parallel()
 
-	it := &abs.Item{
-		ID: "i1", MediaType: "book", RelPath: "Frank Herbert/Dune", AddedAt: 1_700_000_000_000, Size: 500 << 20,
-		Media: abs.Media{
-			Metadata:  abs.Metadata{Title: "Dune", AuthorName: "Frank Herbert", NarratorName: "Scott Brick", SeriesName: "Dune #1", PublishedYear: "1965", ASIN: "B0"},
+	it := &api.LibraryItemExpanded{
+		Id: "i1", MediaType: "book", RelPath: "Frank Herbert/Dune", AddedAt: at(1_700_000_000_000), Size: 500 << 20,
+		Media: &api.LibraryItemExpandedMedia{
+			Metadata:  &api.LibraryItemExpandedMediaMetadata{Title: "Dune", AuthorName: "Frank Herbert", NarratorName: "Scott Brick", SeriesName: "Dune #1", PublishedYear: "1965", Asin: "B0"},
 			CoverPath: "/x/cover.jpg", Duration: 75_000.4, NumTracks: 3, NumChapters: 40, Tags: []string{"sf"},
 		},
-		UserMediaProgress: &abs.MediaProgress{Progress: 0.5, CurrentTime: 37_500, ID: "p1"},
+		UserMediaProgress: &api.MediaProgress{Progress: 0.5, CurrentTime: 37_500, Id: "p1"},
 	}
-	s := summarize(it)
+	s := summarizeWhole(it)
 	if s.Title != "Dune" || s.Author != "Frank Herbert" || s.Narrator != "Scott Brick" || s.Year != "1965" {
 		t.Errorf("summary = %+v", s)
 	}
@@ -44,9 +44,9 @@ func TestProgressOf(t *testing.T) {
 		t.Errorf("progressOf(nil) = %v, want nil", got)
 	}
 
-	got := progressOf(&abs.MediaProgress{
-		ID: "p1", Progress: 0.256, CurrentTime: 3725.6, IsFinished: false,
-		LastUpdate: 1_700_000_000_000, HideFromContinueListening: true,
+	got := progressOf(&api.MediaProgress{
+		Id: "p1", Progress: 0.256, CurrentTime: 3725.6, IsFinished: false,
+		LastUpdate: at(1_700_000_000_000), HideFromContinueListening: true,
 	})
 	if got == nil {
 		t.Fatal("progressOf returned nil for a real record")

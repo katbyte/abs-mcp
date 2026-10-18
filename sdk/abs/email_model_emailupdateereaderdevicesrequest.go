@@ -4,5 +4,5 @@ package abs
 
 // EmailUpdateEReaderDevicesRequest is an object the document declares inline.
 type EmailUpdateEReaderDevicesRequest struct {
-	EreaderDevices []EmailUpdateEReaderDevicesRequestEreaderDevices `json:"ereaderDevices,omitzero"`
+	EreaderDevices []EreaderDevice `json:"ereaderDevices,omitzero"`
 }

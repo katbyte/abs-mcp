@@ -36,13 +36,34 @@ var services = []config.Service{{
 	Pagings: []config.Paging{{Start: "page", Limit: "itemsPerPage", Items: "sessions", Total: "total", ByPage: true, FirstPage: new(0)}},
 	// a value of several kinds, such as a library's shelves, is a type that hands over the kind asked for, checked against the field that names it
 	TypedUnions: true,
+	// an answer of plain text, such as the OK of a delete, is read and handed back as text, so a caller that only checks the error leaves no
+	// connection open; files stay for the caller to read
+	TextAnswers: true,
+	// the fields an edit sends empty to clear, which a pointer tells from one left as it is
+	KeepNull: keepNull,
+	// a field the document requires is sent even when it is zero, as the server refuses a share made without its expiry, 0 for none
+	SendRequired: true,
 }}
+
+// keepNull are the fields of the edits the tools make where empty or zero is a value rather than no change: an author's description and asin,
+// and every text field of an item's metadata, cleared when sent empty; a progress's position, cleared by 0; and a podcast's episodes to keep
+// and to fetch a check, all of them at 0.
+var keepNull = []string{
+	"AuthorUpdateRequest.asin", "AuthorUpdateRequest.description",
+	"ProgressUpdatePayload.currentTime", "ProgressUpdatePayload.duration", "ProgressUpdatePayload.ebookLocation", "ProgressUpdatePayload.ebookProgress", "ProgressUpdatePayload.progress",
+	"MediaUpdate.maxEpisodesToKeep", "MediaUpdate.maxNewEpisodesToDownload",
+	"MediaUpdateMetadata.asin", "MediaUpdateMetadata.author", "MediaUpdateMetadata.description", "MediaUpdateMetadata.feedUrl", "MediaUpdateMetadata.imageUrl", "MediaUpdateMetadata.isbn", "MediaUpdateMetadata.itunesId",
+	"MediaUpdateMetadata.language", "MediaUpdateMetadata.publishedDate", "MediaUpdateMetadata.publishedYear", "MediaUpdateMetadata.publisher", "MediaUpdateMetadata.releaseDate", "MediaUpdateMetadata.subtitle", "MediaUpdateMetadata.title", "MediaUpdateMetadata.type",
+}
 
 // fixes say what the document spec writes cannot: the source holds the value as a number and the server means a date by it.
 var fixes = []workarounds.Workaround{
 	// a record's times, a file's times and a progress's last update are milliseconds since 1970, read as the dates they are
-	workarounds.UndeclaredUnixDates(workarounds.About{Name: "audiobookshelf-unix-dates", Service: serviceName, Bug: "times are written as milliseconds since 1970, which the source holds as plain numbers"}, "milliseconds", "addedAt", "birthtimeMs", "createdAt", "ctimeMs", "entityUpdatedAt", "finishedAt", "lastEpisodeCheck", "lastScan", "lastSeen", "lastUpdate", "loadedAt", "mtimeMs", "progressLastUpdate", "publishedAt", "startedAt", "updatedAt"),
+	workarounds.UndeclaredUnixDates(workarounds.About{Name: "audiobookshelf-unix-dates", Service: serviceName, Bug: "times are written as milliseconds since 1970, which the source holds as plain numbers"}, "milliseconds", unixTimes...),
 }
+
+// unixTimes are the fields Audiobookshelf writes a time in as milliseconds since 1970, which the generated client reads as dates.
+var unixTimes = []string{"addedAt", "birthtimeMs", "createdAt", "ctimeMs", "entityUpdatedAt", "finishedAt", "lastEpisodeCheck", "lastScan", "lastSeen", "lastUpdate", "loadedAt", "mtimeMs", "progressLastUpdate", "publishedAt", "startedAt", "updatedAt"}
 
 // generation is what sdk/abs is generated from.
 func generation() pandorest.Config {
@@ -52,71 +73,72 @@ func generation() pandorest.Config {
 // absIDs are the kinds of id that get a type of their own, so one passed where another belongs does not compile. Every id is text.
 var absIDs = []config.ID{
 	{Name: "LibraryID", Of: []string{"Library"}, Names: []string{"libraryId", "userDefaultLibraryId"}, Except: untypedIDs("libraryId")},
-	// a collection takes its books, and a feed is opened on a book, by the book's library item id; a book or a show is read and changed by it
-	// under /api/items and /api/tools/item, whose answers are built route by route and name no record to find it by
-	{Name: "LibraryItemID", Of: []string{"LibraryItem", "LibraryItemExpanded", "LibraryItemMinified"}, Names: []string{"libraryItemId", "libraryItemIds"}, In: append([]string{"DELETE /api/collections/{id}/book/{bookId} bookId", "POST /api/feeds/item/{itemId}/open itemId"}, pathIDs("id", itemRoutes...)...), Except: untypedIDs("libraryItemId", "libraryItemIds")},
-	{Name: "AuthorID", Of: []string{"Author"}, Names: []string{"authorId"}},
+	// a collection takes its books, a feed is opened on a book, and the tools work on a book, by the book's library item id
+	{Name: "LibraryItemID", Of: []string{"LibraryItem", "LibraryItemExpanded", "LibraryItemMinified", "ListeningStatsItem"}, Names: []string{"libraryItemId", "libraryItemIds"}, In: slices.Concat([]string{"DELETE /api/collections/{id}/book/{bookId} bookId", "POST /api/feeds/item/{itemId}/open itemId"}, pathIDs(itemRoutes...), pathIDs(meItemRoutes...)), Except: untypedIDs("libraryItemId", "libraryItemIds")},
+	{Name: "AuthorID", Of: []string{"Author", "AuthorMinimal"}, Names: []string{"authorId"}},
 	// a library's series are under the library's own id
-	{Name: "SeriesID", Of: []string{"Series"}, Names: []string{"seriesId"}, Except: []string{"GET /api/libraries/{id}/series/{seriesId} id"}},
+	{Name: "SeriesID", Of: []string{"Series", "SeriesMinimal"}, Names: []string{"seriesId"}, In: pathIDs(meSeriesRoutes...), Except: []string{"GET /api/libraries/{id}/series/{seriesId} id"}},
 	{Name: "CollectionID", Of: []string{"Collection"}, Names: []string{"collectionId"}},
 	{Name: "PlaylistID", Of: []string{"Playlist"}, Names: []string{"playlistId"}},
 	// a podcast's episodes are under the podcast's library item id
 	{Name: "EpisodeID", Of: []string{"PodcastEpisode"}, Names: []string{"episodeId"}, Except: append([]string{"DELETE /api/podcasts/{id}/episode/{episodeId} id", "GET /api/podcasts/{id}/episode/{episodeId} id", "PATCH /api/podcasts/{id}/episode/{episodeId} id"}, untypedIDs("episodeId")...)},
 	{Name: "FeedID", Of: []string{"Feed", "FeedMinified"}, Names: []string{"feedId"}},
 	{Name: "FolderID", Of: []string{"LibraryFolder"}, Names: []string{"folderId"}},
-	{Name: "UserID", Of: []string{"UserForBrowser"}, Names: []string{"userId", "createdByUserId"}, Except: untypedIDs("userId")},
+	// the account's own routes are under /api/me, which answers the user, but their {id} is something of the user's: a book, a series, a
+	// progress record or a session
+	{Name: "UserID", Of: []string{"UserForBrowser", "PlaybackSessionUser"}, Names: []string{"userId", "createdByUserId"}, Except: slices.Concat(untypedIDs("userId"), pathIDs(meItemRoutes...), pathIDs(meSeriesRoutes...), pathIDs(meOwnRoutes...))},
 	{Name: "APIKeyID", Of: []string{"ApiKeyRecord"}},
 	{Name: "ProviderID", Of: []string{"CustomMetadataProviderRecord"}},
 }
 
-// itemRoutes are the routes that take a book or a show by its library item id as {id}, other than the one whose answer names the item.
+// itemRoutes are the routes under /api/tools/item that take a book by its library item id as {id}, whose answers name no record to find it by.
 var itemRoutes = []string{
-	"DELETE /api/items/{id}",
-	"GET /api/items/{id}",
-	"POST /api/items/{id}/chapters",
-	"DELETE /api/items/{id}/cover",
-	"GET /api/items/{id}/cover",
-	"PATCH /api/items/{id}/cover",
-	"POST /api/items/{id}/cover",
-	"GET /api/items/{id}/download",
-	"GET /api/items/{id}/ebook",
-	"GET /api/items/{id}/ebook/{fileid}",
-	"PATCH /api/items/{id}/ebook/{fileid}/status",
-	"GET /api/items/{id}/ffprobe/{fileid}",
-	"DELETE /api/items/{id}/file/{fileid}",
-	"GET /api/items/{id}/file/{fileid}",
-	"GET /api/items/{id}/file/{fileid}/download",
-	"POST /api/items/{id}/match",
-	"PATCH /api/items/{id}/media",
-	"GET /api/items/{id}/metadata-object",
-	"POST /api/items/{id}/play",
-	"POST /api/items/{id}/play/{episodeId}",
-	"POST /api/items/{id}/scan",
 	"POST /api/tools/item/{id}/embed-metadata",
 	"DELETE /api/tools/item/{id}/encode-m4b",
 	"POST /api/tools/item/{id}/encode-m4b",
 }
 
-// pathIDs are the places of one path parameter in each of the routes, in the form an id kind's In takes.
-func pathIDs(param string, routes ...string) []string {
+// meItemRoutes take a book by its library item id as {id}, meSeriesRoutes a series by its id, and meOwnRoutes a progress record or a
+// session of the account's own by its id, which no kind claims.
+var (
+	meItemRoutes = []string{
+		"POST /api/me/item/{id}/bookmark",
+		"PATCH /api/me/item/{id}/bookmark",
+		"DELETE /api/me/item/{id}/bookmark/{time}",
+		"GET /api/me/progress/{id}",
+		"GET /api/me/progress/{id}/{episodeId}",
+	}
+	meSeriesRoutes = []string{
+		"GET /api/me/series/{id}/readd-to-continue-listening",
+		"GET /api/me/series/{id}/remove-from-continue-listening",
+	}
+	meOwnRoutes = []string{
+		"DELETE /api/me/progress/{id}",
+		"GET /api/me/progress/{id}/remove-from-continue-listening",
+		"DELETE /api/me/sessions/{id}",
+	}
+)
+
+// pathIDs are the places of each route's {id}, in the form an id kind's In takes.
+func pathIDs(routes ...string) []string {
 	out := make([]string, 0, len(routes))
 	for _, r := range routes {
-		out = append(out, r+" "+param)
+		out = append(out, r+" id")
 	}
 
 	return out
 }
 
 // untypedByScan are the places an id is read or written that neither the source nor the answers the live suites saved can type, as the suites
-// never do what fills them: move a key to another user, collapse series, play a podcast episode, or sync a session played offline. pandorest
-// types no id that has no type, so each is left out of its kind until it has one. A share's session is never given a user or an episode, so its
-// two are always empty.
+// never do what fills them: move a key to another user, collapse series, play a podcast episode, or sync a session played offline; and a
+// playlist's library and owner, which its update reads only to refuse. pandorest types no id that has no type, so each is left out of its kind
+// until it has one.
 var untypedByScan = []string{
 	"ApiKeyUpdateRequest .userId",
 	"LibraryItemMinifiedCollapsedSeries .libraryItemIds",
 	"PlaybackSessionForClient .episodeId",
-	"SessionGetOpenSessionsAnswerShareSessions .episodeId",
-	"SessionGetOpenSessionsAnswerShareSessions .userId",
+	"PlaylistUpdateRequest .libraryId",
+	"PlaylistUpdateRequest .userId",
 	"SessionSyncLocalRequest .episodeId",
 	"SessionSyncLocalRequest .libraryId",
 	"SessionSyncLocalRequest .libraryItemId",

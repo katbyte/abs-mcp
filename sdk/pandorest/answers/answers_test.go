@@ -26,7 +26,7 @@ const fakeDocument = `{"paths": {
   "/api/shelves": {"get": {"operationId": "LibraryGetShelves"}}
 }, "components": {"schemas": {"Shelf": {"oneOf": [], "discriminator": {"propertyName": "type"}}}}}`
 
-// fakeServer answers as Audiobookshelf would, with what each test asks of it in answers, by path.
+// fakeServer answers as Audiobookshelf would, with what each test asks of it in answers, by path: JSON, or text for an answer that is not.
 func fakeServer(t *testing.T, answers map[string]string) *httptest.Server {
 	t.Helper()
 
@@ -40,7 +40,10 @@ func fakeServer(t *testing.T, answers map[string]string) *httptest.Server {
 			http.NotFound(w, r)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		if strings.HasPrefix(body, "{") || strings.HasPrefix(body, "[") {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		}
 		_, _ = io.WriteString(w, body)
 	}))
 	t.Cleanup(srv.Close)
@@ -382,5 +385,29 @@ func TestRecorderKeepsAKind(t *testing.T) {
 	authors := object(t, list(t, kept[1])[0])
 	if authors["type"] != "authors" || authors["id"] != nil {
 		t.Errorf("a shelf of a later answer kept as %v, want its new part with its type", authors)
+	}
+}
+
+// What was sent is kept when the answer is not JSON, and the answer is left as it came.
+func TestRecorderKeepsWhatWasSentToATextAnswer(t *testing.T) {
+	t.Parallel()
+
+	srv := fakeServer(t, map[string]string{"/api/libraries": "OK"})
+	root := fakeRoot(t)
+
+	rec, err := Open(t.Context(), srv.URL, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := call(t, recording(rec), http.MethodPost, srv.URL+"/api/libraries", `{"name": "Books"}`); got != "OK" {
+		t.Errorf("the caller was answered %q, want the text as sent", got)
+	}
+	if err := rec.Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	f := readFile(t, root, "LibraryCreate")
+	if len(f.Sent) != 1 || object(t, f.Sent[0])["name"] != "Books" || len(f.Answers) != 0 {
+		t.Errorf("file: %+v, want what was sent and no answer", f)
 	}
 }

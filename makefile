@@ -187,7 +187,7 @@ depscheck: ## Check that go.mod/go.sum and vendor/ are in sync
 test: build ## Run the unit tests, with the race detector
 	go test -race ./... -timeout ${TEST_TIMEOUT}
 
-test-sdk: ## Run the SDK tests (sdk/abs-byhand shapes) against an already-running server
+test-sdk: ## Run the SDK tests (sdk/abs writes and the read sweep) against an already-running server
 	@[ -n "${ABS_SERVER}" ] && [ -n "${ABS_TOKEN}" ] || \
 		(echo 'ABS_SERVER and ABS_TOKEN must be set; or use "make testacc"'; exit 1)
 	go test -tags acceptance -count=1 ./acceptance/abs/... -timeout ${TEST_TIMEOUT} -v

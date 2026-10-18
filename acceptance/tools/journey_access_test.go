@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/abs-mcp/tools"
 	"github.com/katbyte/go-kt/mcp/acctest"
 )
@@ -72,9 +72,8 @@ func TestJourneyAnExplicitBookKeptFromAnAccount(t *testing.T) {
 		t.Fatal("item_get does not read the book back as explicit")
 	}
 
-	no := false
-	listener := newUser(t, "zzyzx-no-explicit", abs.UserCreate{
-		Permissions: map[string]bool{"accessAllLibraries": true, "accessAllTags": true, "accessExplicitContent": no},
+	listener := newUser(t, "zzyzx-no-explicit", api.UserCreateRequest{
+		Permissions: &api.UserPermissions{AccessAllLibraries: new(true), AccessAllTags: new(true), AccessExplicitContent: new(false)},
 	})
 	for who, u := range map[string]map[string]any{"self": listener.call(t, "user_get", nil), "admin": suite.Call(t, "user_get", map[string]any{"user": listener.Name})} {
 		if explicit, ok := u["explicit"].(bool); !ok || explicit {
@@ -185,9 +184,8 @@ func TestJourneyATagLimitedListenersOwnQueue(t *testing.T) {
 		t.Skip(suite.NotReady)
 	}
 
-	no := false
-	listener := newUser(t, "zzyzx-tag-queue", abs.UserCreate{
-		Permissions:      map[string]bool{"accessAllLibraries": true, "accessAllTags": no, "accessExplicitContent": true},
+	listener := newUser(t, "zzyzx-tag-queue", api.UserCreateRequest{
+		Permissions:      &api.UserPermissions{AccessAllLibraries: new(true), AccessAllTags: new(false), AccessExplicitContent: new(true)},
 		ItemTagsSelected: []string{"cyberpunk"},
 	})
 	hidden := itemID(t, "Fiction", "Foundation")
@@ -320,7 +318,7 @@ func TestJourneyListsDeletedAndReadBack(t *testing.T) {
 	})
 
 	t.Run("a session without the delete tools", func(t *testing.T) {
-		keeper := newUserWith(t, "zzyzx-no-deletes", abs.UserCreate{}, tools.Options{})
+		keeper := newUserWith(t, "zzyzx-no-deletes", api.UserCreateRequest{}, tools.Options{})
 		listed, err := keeper.suite.Session.ListTools(ctx, nil)
 		if err != nil {
 			t.Fatal(err)
@@ -336,13 +334,13 @@ func TestJourneyListsDeletedAndReadBack(t *testing.T) {
 
 		const queue = "Zzyzx Kept Queue"
 		made := acctest.Str(keeper.call(t, "playlist_create", map[string]any{"library": "Fiction", "name": queue, "entries": []any{map[string]any{"item": "Foundation"}, map[string]any{"item": "Second Foundation"}}})["id"])
-		own, err := abs.New(os.Getenv("ABS_SERVER"), keeper.Token, recorder.Option())
+		own, err := connect(keeper.Token)
 		if err != nil {
 			t.Fatal(err)
 		}
 		// the account's own key, while it still has one: an admin may not
 		// delete someone else's playlist
-		t.Cleanup(func() { _ = own.DeletePlaylist(ctx, made) })
+		t.Cleanup(func() { _, _ = own.PlaylistDelete(ctx, api.PlaylistID(made)) })
 
 		// taking one of two out is an edit, and is allowed
 		if out := keeper.call(t, "playlist_edit", map[string]any{"playlist": queue, "remove_entries": []any{map[string]any{"item": "Foundation"}}}); acctest.Num(t, out["entries"], "entries") != 1 {
@@ -378,21 +376,21 @@ func accessUUID(t *testing.T) string {
 }
 
 // accessListen plays a book as an app does: open a session, sync, close.
-func accessListen(t *testing.T, client *abs.Client, itemID string) string {
+func accessListen(t *testing.T, client *api.Client, itemID string) string {
 	t.Helper()
 
-	s, err := client.Play(ctx, itemID, "", abs.PlayRequest{MediaPlayer: "zzyzx-player", SupportedMimeTypes: []string{"audio/mpeg"}, ForceDirectPlay: true})
+	s, err := record(client.LibraryItemStartPlaybackSession(ctx, api.LibraryItemID(itemID), api.LibraryItemStartPlaybackSessionRequest{MediaPlayer: "zzyzx-player", SupportedMimeTypes: []string{"audio/mpeg"}, ForceDirectPlay: new(true)}))
 	if err != nil {
 		t.Fatalf("opening a session: %v", err)
 	}
-	if err := client.SyncSession(ctx, s.ID, 0.2, 0.2); err != nil {
+	if _, err := client.SessionSync(ctx, s.Id, api.SessionSyncRequest{CurrentTime: 0.2, TimeListened: 0.2}); err != nil {
 		t.Fatalf("syncing: %v", err)
 	}
-	if err := client.CloseSession(ctx, s.ID, map[string]any{"currentTime": 0.3, "timeListened": 0.1}); err != nil {
+	if _, err := client.SessionClose(ctx, s.Id, api.SessionCloseRequest{CurrentTime: 0.3, TimeListened: 0.1}); err != nil {
 		t.Fatalf("closing: %v", err)
 	}
 
-	return s.ID
+	return s.Id
 }
 
 // accessYear is a year in review with its top lists in name order: the
@@ -434,8 +432,8 @@ func TestJourneyAListenersOwnListeningReadBack(t *testing.T) {
 		t.Skip(suite.NotReady)
 	}
 
-	listener := newUser(t, "zzyzx-own-listening", abs.UserCreate{})
-	client, err := abs.New(os.Getenv("ABS_SERVER"), listener.Token, recorder.Option())
+	listener := newUser(t, "zzyzx-own-listening", api.UserCreateRequest{})
+	client, err := connect(listener.Token)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -454,12 +452,12 @@ func TestJourneyAListenersOwnListeningReadBack(t *testing.T) {
 	// recorded offline long ago, uploaded now
 	old := time.Now().Add(-100 * 24 * time.Hour)
 	offline := accessUUID(t)
-	if err := client.SyncLocalSession(ctx, map[string]any{
-		"id": offline, "libraryId": libraryID(t, "Fiction"), "libraryItemId": firstID, "mediaType": "book",
-		"displayTitle": first, "displayAuthor": "James S. A. Corey", "duration": 1, "playMethod": 3, "mediaPlayer": "zzyzx-offline",
-		"timeListening": 0.4, "startTime": 0, "currentTime": 0.4,
-		"date": old.Format("2006-01-02"), "dayOfWeek": old.Weekday().String(),
-		"startedAt": old.UnixMilli(), "updatedAt": old.Add(time.Minute).UnixMilli(),
+	if _, err := client.SessionSyncLocal(ctx, api.SessionSyncLocalRequest{
+		Id: offline, LibraryId: libraryID(t, "Fiction"), LibraryItemId: firstID, MediaType: "book",
+		DisplayTitle: first, DisplayAuthor: "James S. A. Corey", Duration: 1, PlayMethod: 3, MediaPlayer: "zzyzx-offline",
+		TimeListening: 0.4, StartTime: 0, CurrentTime: 0.4,
+		Date: old.Format("2006-01-02"), DayOfWeek: old.Weekday().String(),
+		StartedAt: api.UnixMilli{Time: old}, UpdatedAt: api.UnixMilli{Time: old.Add(time.Minute)},
 	}); err != nil {
 		t.Fatalf("uploading an offline session: %v", err)
 	}
@@ -637,7 +635,7 @@ func accessLongBook(t *testing.T) (library, title, id string) {
 	libID := acctest.Str(made["id"])
 	t.Cleanup(func() {
 		eventually(t, "deleting the long shelf", func() error {
-			if err := admin.DeleteLibrary(ctx, libID); err != nil && !isNotFound(err) {
+			if _, err := admin.LibraryDelete(ctx, api.LibraryID(libID)); err != nil && !isNotFound(err) {
 				return err
 			}
 			return nil
@@ -676,7 +674,7 @@ func TestJourneyABackupReadBack(t *testing.T) {
 		t.Fatal("server_backup_create named no backup")
 	}
 	t.Cleanup(func() {
-		eventually(t, "deleting the backup", func() error { _, err := admin.DeleteBackup(ctx, id); return err })
+		eventually(t, "deleting the backup", func() error { _, err := admin.BackupDelete(ctx, id); return err })
 	})
 
 	listed := suite.Call(t, "server_backups", nil)

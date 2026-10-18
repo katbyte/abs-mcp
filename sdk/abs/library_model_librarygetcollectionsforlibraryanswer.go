@@ -6,9 +6,9 @@ package abs
 type LibraryGetCollectionsForLibraryAnswer struct {
 	FilterBy string       `json:"filterBy,omitempty"`
 	Include  string       `json:"include,omitempty"`
-	Limit    float64      `json:"limit,omitempty"`
+	Limit    int          `json:"limit,omitempty"`
 	Minified bool         `json:"minified"`
-	Page     float64      `json:"page,omitempty"`
+	Page     int          `json:"page,omitempty"`
 	Results  []Collection `json:"results,omitzero"`
 	SortBy   string       `json:"sortBy,omitempty"`
 	SortDesc bool         `json:"sortDesc"`

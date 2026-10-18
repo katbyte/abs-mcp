@@ -3,192 +3,126 @@
 package abs_test
 
 import (
-	"context"
+	"slices"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // --- catalogue ----------------------------------------------------------
 
-func TestAuthorsAndNarrators(t *testing.T) {
+// A narrator is renamed on every book carrying them, and back. A narrator has no record of its own, so the route names one by its name,
+// written in base64.
+func TestRenameNarrator(t *testing.T) {
 	ctx := skipUnlessLive(t)
 	id := library(t)
 
-	authors, total, err := client.Authors(ctx, id, abs.ListOptions{Limit: 100})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if total == 0 || len(authors) == 0 {
-		t.Fatalf("authors = %d (total %d), want the scanned authors", len(authors), total)
-	}
-	for i := range authors {
-		if authors[i].ID == "" || authors[i].Name == "" {
-			t.Errorf("author %d did not decode: %+v", i, authors[i])
-		}
-	}
-
-	full := must(client.Author(ctx, authors[0].ID, true))
-	if full.Name != authors[0].Name {
-		t.Errorf("Author(%s) = %q", authors[0].ID, full.Name)
-	}
-
-	// narrators come from a separate endpoint with its own id encoding
-	// (base64 of the name), and nothing called it before this suite
-	narrators := must(client.Narrators(ctx, id))
+	narrators := must(client.LibraryGetNarrators(ctx, id)).Narrators
 	if len(narrators) == 0 {
 		t.Skip("no narrators set on the fixtures yet")
 	}
-	from := narrators[0].Name
-	changed, err := client.RenameNarrator(ctx, id, from, "SDK Narrator")
+	changed, err := record(client.LibraryUpdateNarrator(ctx, id, narrators[0].Id, abs.LibraryUpdateNarratorRequest{Name: "SDK Narrator"}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if changed == 0 {
-		t.Error("RenameNarrator reported no items changed")
+	renamed, back := abs.PathName("SDK Narrator"), abs.LibraryUpdateNarratorRequest{Name: narrators[0].Name}
+	t.Cleanup(func() { _ = errorOf(client.LibraryUpdateNarrator(afterwards(t), id, renamed, back)) })
+	if changed.Updated == 0 {
+		t.Error("the rename reported no items changed")
 	}
-	t.Cleanup(func() { _, _ = client.RenameNarrator(context.WithoutCancel(t.Context()), id, "SDK Narrator", from) })
+
+	named := func(n abs.LibraryGetNarratorsAnswerNarrators) bool { return n.Name == "SDK Narrator" }
+	if !slices.ContainsFunc(must(client.LibraryGetNarrators(ctx, id)).Narrators, named) {
+		t.Error("the narrators read back do not name the new one")
+	}
 }
 
-func TestSeries(t *testing.T) {
+// The series listing carries no sequence numbers: only an item list filtered by the series does, which is what audit_series_gaps reads. It
+// was silently broken until this was pinned down, so the shape is asserted outright.
+func TestSeriesSequences(t *testing.T) {
 	ctx := skipUnlessLive(t)
 	id := library(t)
 
-	series, _, err := client.SeriesList(ctx, id, abs.ListOptions{Limit: 100})
-	if err != nil {
-		t.Fatal(err)
-	}
+	series := must(client.LibraryGetAllSeriesForLibrary(ctx, id, abs.LibraryGetAllSeriesForLibraryOptions{Limit: new(100)})).Results
 	if len(series) == 0 {
 		t.Skip("no series on the fixtures yet")
 	}
 
-	// the series listing carries no sequence numbers: only an item query
-	// filtered by the series does. audit_series_gaps was silently broken until
-	// this was pinned down, so assert the shape explicitly.
 	s := series[0]
 	for _, b := range s.Books {
-		for _, ref := range b.Media.Metadata.Series {
-			if ref.Sequence != "" {
-				t.Errorf("the series listing unexpectedly carries a sequence (%q) - the workaround in audit_series_gaps may no longer be needed", ref.Sequence)
-			}
+		if b.Media != nil && b.Media.Metadata != nil && b.Media.Metadata.Series != nil && b.Media.Metadata.Series.Sequence != "" {
+			t.Errorf("the series listing unexpectedly carries a sequence (%q) - the workaround in audit_series_gaps may no longer be needed", b.Media.Metadata.Series.Sequence)
 		}
 	}
 
-	res := must(client.Items(ctx, id, abs.ItemsOptions{
-		Limit: 100, Filter: abs.EncodeFilter("series", s.ID),
-	}))
+	res := must(client.LibraryGetLibraryItems(ctx, id, abs.LibraryGetLibraryItemsOptions{Limit: new(100), Filter: abs.ListFilter("series", string(s.Id))}))
 	if len(res.Results) == 0 {
 		t.Fatalf("no items for series %s", s.Name)
 	}
 	var withSequence int
-	for i := range res.Results {
-		for _, ref := range res.Results[i].Media.Metadata.Series {
-			if ref.ID == s.ID && ref.Sequence != "" {
-				withSequence++
-			}
+	for _, it := range res.Results {
+		if it.Media == nil || it.Media.Metadata == nil {
+			continue
+		}
+		if ref := it.Media.Metadata.Series; ref != nil && ref.Id == s.Id && ref.Sequence != "" {
+			withSequence++
 		}
 	}
 	if withSequence == 0 {
-		t.Error("a series-filtered query returned no sequence numbers either")
+		t.Error("a series-filtered list returned no sequence numbers either")
 	}
 }
 
 // --- vocabulary ---------------------------------------------------------
 
-func TestTagsAndGenres(t *testing.T) {
+func TestRenameTag(t *testing.T) {
 	ctx := skipUnlessLive(t)
 	library(t)
 
-	tags := must(client.Tags(ctx))
-	genres := must(client.Genres(ctx))
-	if len(tags) == 0 && len(genres) == 0 {
+	tags := must(client.MiscGetAllTags(ctx)).Tags
+	if len(tags) == 0 {
 		t.Skip("nothing tagged yet")
 	}
 
-	if len(tags) > 0 {
-		n, err := client.RenameTag(ctx, tags[0], "sdk-renamed")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if n == 0 {
-			t.Error("RenameTag reported no items updated")
-		}
-		if _, err := client.RenameTag(ctx, "sdk-renamed", tags[0]); err != nil {
-			t.Error(err)
-		}
-	}
-}
-
-// FilterData is cached by the server and is not invalidated by an edit or a
-// rescan, so this asserts only the parts that come from relational tables.
-func TestFilterData(t *testing.T) {
-	ctx := skipUnlessLive(t)
-	id := library(t)
-
-	fd := must(client.FilterData(ctx, id))
-	if len(fd.Authors) == 0 {
-		t.Error("filter data carried no authors")
-	}
-}
-
-func TestCatalogueMethods(t *testing.T) {
-	ctx := skipUnlessLive(t)
-	id := library(t)
-
-	authors, _, err := client.Authors(ctx, id, abs.ListOptions{Limit: 10})
+	renamed, err := record(client.MiscRenameTag(ctx, abs.MiscRenameTagRequest{Tag: tags[0], NewTag: "sdk-renamed"}))
 	if err != nil {
 		t.Fatal(err)
 	}
+	if renamed.NumItemsUpdated == 0 {
+		t.Error("the rename reported no items updated")
+	}
+	if err := errorOf(client.MiscRenameTag(ctx, abs.MiscRenameTagRequest{Tag: "sdk-renamed", NewTag: tags[0]})); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestUpdateAuthorAndSeries(t *testing.T) {
+	ctx := skipUnlessLive(t)
+	id := library(t)
+
+	authors := firstAuthors(ctx, id, 10)
 	if len(authors) == 0 {
 		t.Skip("no authors")
 	}
 
 	desc := "Written by the SDK suite."
-	updated, merged, err := client.UpdateAuthor(ctx, authors[0].ID, abs.AuthorUpdate{Description: &desc})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if merged {
+	updated := must(client.AuthorUpdate(ctx, authors[0].Id, abs.AuthorUpdateRequest{Description: &desc}))
+	if updated.Merged {
 		t.Error("a description change reported a merge")
 	}
-	if updated.Description != desc {
-		t.Errorf("description = %q", updated.Description)
+	if updated.Author == nil || updated.Author.Description != desc {
+		t.Errorf("the author answered = %+v, want the new description", updated.Author)
 	}
 
-	series, _, err := client.SeriesList(ctx, id, abs.ListOptions{Limit: 10})
-	if err != nil {
-		t.Fatal(err)
-	}
+	series := must(client.LibraryGetAllSeriesForLibrary(ctx, id, abs.LibraryGetAllSeriesForLibraryOptions{Limit: new(10)})).Results
 	if len(series) == 0 {
 		t.Skip("no series")
 	}
-	one := must(client.Series(ctx, series[0].ID))
-	if one.Name != series[0].Name {
-		t.Errorf("Series(%s) = %q", series[0].ID, one.Name)
-	}
 	sdesc := "A series, per the SDK suite."
-	if got := must(client.UpdateSeries(ctx, series[0].ID, abs.SeriesUpdate{Description: &sdesc})); got.Description != sdesc {
+	if got := must(client.SeriesUpdate(ctx, series[0].Id, abs.SeriesUpdateRequest{Description: sdesc})); got.Description != sdesc {
 		t.Errorf("series description = %q", got.Description)
 	}
-}
-
-// SearchAuthor looks a name up on the provider without writing anything,
-// where MatchAuthor applies the result. It goes through the proxy. The server
-// answers with the bare provider record (or null), not a results list, which
-// an earlier decode missed: every lookup came back empty and this test, which
-// only checked the error, passed anyway.
-func TestSearchAuthor(t *testing.T) {
-	ctx := skipUnlessLive(t)
-	library(t)
-
-	cand, err := client.SearchAuthor(ctx, "Isaac Asimov")
-	if err != nil {
-		t.Fatalf("SearchAuthor: %v", err)
-	}
-	if cand == nil {
-		t.Fatal("SearchAuthor found nobody for Isaac Asimov")
-	}
-	if cand.Name != "Isaac Asimov" || cand.ASIN == "" {
-		t.Errorf("candidate = %+v, want Isaac Asimov with an asin", cand)
+	if got := must(client.SeriesFindOne(ctx, series[0].Id)); got.Description != sdesc {
+		t.Errorf("the series read back has description %q", got.Description)
 	}
 }

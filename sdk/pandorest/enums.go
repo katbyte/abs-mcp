@@ -67,6 +67,7 @@ func nameEnums(doc *document, names []enumName) error {
 			walk(s.Properties[f], where+"."+f)
 		}
 		walk(s.Items, where+"[]")
+		walk(s.Values, where+"{}")
 		for _, o := range s.OneOf {
 			walk(o, where)
 		}

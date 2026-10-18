@@ -3,7 +3,7 @@ package tools
 import (
 	"github.com/katbyte/go-kt/lock"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // The calls of one turn are kept from undoing each other with go-kt's locks.
@@ -23,12 +23,12 @@ import (
 // set is one server's as one account, so the name needs no more than this.
 const bookmarksLock = "bookmarks"
 
-// itemLocks are the items with these ids, for an edit of several that has
-// not fetched them yet: all are locked in one call.
-func itemLocks(ids ...string) []lock.Thing {
+// itemLocks are the items with these ids, all locked in one call. Every edit of an item locks it by id this way, so one holds back another
+// whichever form of the item each has in hand.
+func itemLocks[ID ~string](ids ...ID) []lock.Thing {
 	things := make([]lock.Thing, 0, len(ids))
 	for _, id := range ids {
-		things = append(things, lock.ID[abs.Item](id))
+		things = append(things, lock.ID[api.LibraryItemExpanded](string(id)))
 	}
 
 	return things

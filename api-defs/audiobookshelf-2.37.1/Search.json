@@ -221,6 +221,27 @@
   ],
   "Models": [
     {
+      "Name": "ProviderOption",
+      "SchemaName": "ProviderOption",
+      "Fields": [
+        {
+          "Name": "Text",
+          "JsonName": "text",
+          "Type": {
+            "Type": "String"
+          },
+          "Nullable": true
+        },
+        {
+          "Name": "Value",
+          "JsonName": "value",
+          "Type": {
+            "Type": "String"
+          }
+        }
+      ]
+    },
+    {
       "Name": "SearchFindAuthorAnswer",
       "Fields": [
         {
@@ -371,7 +392,8 @@
           "Name": "PublishedYear",
           "JsonName": "publishedYear",
           "Type": {
-            "Type": "String"
+            "Type": "Named",
+            "GoType": "TextOrNumber"
           },
           "Nullable": true
         },
@@ -667,7 +689,7 @@
           "Name": "Id",
           "JsonName": "id",
           "Type": {
-            "Type": "Double"
+            "Type": "Integer"
           }
         },
         {
@@ -723,7 +745,7 @@
             "Type": "List",
             "NestedItem": {
               "Type": "Reference",
-              "ReferenceName": "SearchGetAllProvidersAnswerProvidersBooks"
+              "ReferenceName": "ProviderOption"
             }
           }
         },
@@ -734,7 +756,7 @@
             "Type": "List",
             "NestedItem": {
               "Type": "Reference",
-              "ReferenceName": "SearchGetAllProvidersAnswerProvidersBooksCovers"
+              "ReferenceName": "ProviderOption"
             }
           }
         },
@@ -745,68 +767,8 @@
             "Type": "List",
             "NestedItem": {
               "Type": "Reference",
-              "ReferenceName": "SearchGetAllProvidersAnswerProvidersPodcasts"
+              "ReferenceName": "ProviderOption"
             }
-          }
-        }
-      ]
-    },
-    {
-      "Name": "SearchGetAllProvidersAnswerProvidersBooks",
-      "Fields": [
-        {
-          "Name": "Text",
-          "JsonName": "text",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Value",
-          "JsonName": "value",
-          "Type": {
-            "Type": "String"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "SearchGetAllProvidersAnswerProvidersBooksCovers",
-      "Fields": [
-        {
-          "Name": "Text",
-          "JsonName": "text",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Value",
-          "JsonName": "value",
-          "Type": {
-            "Type": "String"
-          }
-        }
-      ]
-    },
-    {
-      "Name": "SearchGetAllProvidersAnswerProvidersPodcasts",
-      "Fields": [
-        {
-          "Name": "Text",
-          "JsonName": "text",
-          "Type": {
-            "Type": "String"
-          },
-          "Nullable": true
-        },
-        {
-          "Name": "Value",
-          "JsonName": "value",
-          "Type": {
-            "Type": "String"
           }
         }
       ]

@@ -4,7 +4,7 @@ package abs
 
 // PodcastGetPodcastFeedAnswerPodcast is an object the document declares inline.
 type PodcastGetPodcastFeedAnswerPodcast struct {
-	Episodes    []PodcastGetPodcastFeedAnswerPodcastEpisodes `json:"episodes,omitzero"`
-	Metadata    *PodcastGetPodcastFeedAnswerPodcastMetadata  `json:"metadata,omitempty"`
-	NumEpisodes int                                          `json:"numEpisodes,omitempty"`
+	Episodes    []RssPodcastEpisode                         `json:"episodes,omitzero"`
+	Metadata    *PodcastGetPodcastFeedAnswerPodcastMetadata `json:"metadata,omitempty"`
+	NumEpisodes int                                         `json:"numEpisodes,omitempty"`
 }

@@ -19,7 +19,9 @@ import (
 	"strings"
 	"time"
 
+	gen "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/httpc"
+	"github.com/katbyte/pandorest/client"
 )
 
 const (
@@ -46,6 +48,11 @@ type Client struct {
 	// would cut an audiobook off part way. Only the wait for the server to
 	// start answering is bounded; the caller's context bounds the rest.
 	files *httpc.Client
+	// log, retry and base are what the client was made with, for its generated twin (see Generated): a transport of the caller's own, such
+	// as the live suites' recorder, carries the twin's calls too
+	log   httpc.Logger
+	retry httpc.Retry
+	base  http.RoundTripper
 }
 
 // Option changes how a client is made: it is handed the options of the HTTP
@@ -101,7 +108,18 @@ func New(baseURL, token string, opts ...Option) (*Client, error) {
 	calls.Timeout = requestWait
 	calls.CheckRedirect, files.CheckRedirect = httpc.RefuseRedirects(redirectAdvice), httpc.RefuseRedirects(redirectAdvice)
 
-	return &Client{baseURL: strings.TrimRight(baseURL, "/"), token: token, http: calls, files: files}, nil
+	return &Client{baseURL: strings.TrimRight(baseURL, "/"), token: token, http: calls, files: files, log: o.Log, retry: o.Retry, base: o.Base}, nil
+}
+
+// Generated is the client generated from the API document for the same server and account, logged and retried the same way, with any
+// further options of the base client, for the code moving onto it while both clients exist.
+func (c *Client) Generated(opts ...client.Option) (*gen.Client, error) {
+	own := []client.Option{client.WithLog(c.log), client.WithRetry(c.retry)}
+	if c.base != nil {
+		own = append(own, client.WithTransport(c.base))
+	}
+
+	return gen.New(c.baseURL, c.token, append(own, opts...)...)
 }
 
 // As is the same client acting as another account: the same server, reached

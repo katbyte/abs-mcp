@@ -1,0 +1,16 @@
+{
+  "operation": "MeCreateUpdateMediaProgress",
+  "method": "PATCH",
+  "path": "/api/me/progress/{libraryItemId}/{episodeId}",
+  "sent": [
+    {
+      "currentTime": 30,
+      "duration": 3600
+    },
+    {
+      "currentTime": 0.5159185,
+      "duration": 1.031837,
+      "progress": 0.5
+    }
+  ]
+}

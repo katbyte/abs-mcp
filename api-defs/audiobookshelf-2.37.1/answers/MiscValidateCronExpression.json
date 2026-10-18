@@ -1,0 +1,10 @@
+{
+  "operation": "MiscValidateCronExpression",
+  "method": "POST",
+  "path": "/api/validate-cron",
+  "sent": [
+    {
+      "expression": "0 0 * * *"
+    }
+  ]
+}

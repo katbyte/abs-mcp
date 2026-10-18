@@ -4,5 +4,5 @@ package abs
 
 // MeGetAllLibraryItemsInProgressAnswer is an object the document declares inline.
 type MeGetAllLibraryItemsInProgressAnswer struct {
-	LibraryItems []MeGetAllLibraryItemsInProgressAnswerLibraryItems `json:"libraryItems,omitzero"`
+	LibraryItems []LibraryItemMinified `json:"libraryItems,omitzero"`
 }

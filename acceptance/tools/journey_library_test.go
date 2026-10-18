@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/mcp/acctest"
 )
 
@@ -56,7 +56,7 @@ func TestJourneyLibraryLife(t *testing.T) {
 	t.Cleanup(func() {
 		if libID != "" {
 			eventually(t, "deleting the scratch library", func() error {
-				if err := admin.DeleteLibrary(ctx, libID); err != nil && !isNotFound(err) {
+				if _, err := admin.LibraryDelete(ctx, api.LibraryID(libID)); err != nil && !isNotFound(err) {
 					return err
 				}
 				return nil
@@ -165,7 +165,7 @@ func TestJourneyLibraryLife(t *testing.T) {
 	t.Run("deleted", func(t *testing.T) {
 		// there is no tool for this: deleting a library is the one step a
 		// session is not trusted with
-		if err := admin.DeleteLibrary(ctx, libID); err != nil {
+		if _, err := admin.LibraryDelete(ctx, api.LibraryID(libID)); err != nil {
 			t.Fatal(err)
 		}
 		for _, l := range acctest.Rows(t, suite.Call(t, "library_list", nil)["libraries"], "libraries") {
@@ -181,4 +181,4 @@ func TestJourneyLibraryLife(t *testing.T) {
 }
 
 // isNotFound reports whether an SDK error is the server's 404.
-func isNotFound(err error) bool { return abs.IsNotFound(err) }
+func isNotFound(err error) bool { return api.IsNotFound(err) }

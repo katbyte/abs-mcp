@@ -86,7 +86,15 @@ func TestAnalyze(t *testing.T) {
 		}
 	})
 
-	t.Run("a body read through a name it is given, and looped over", func(t *testing.T) {
+	t.Run("a body spread into a record a method is given", func(t *testing.T) {
+		t.Parallel()
+
+		if r := routes["patch /api/libraries/:id/progress"]; !r.req.bodyWhole {
+			t.Errorf("body: %q, whole %v, want every field handed on", r.req.body, r.req.bodyWhole)
+		}
+	})
+
+	t.Run("a body read through a name it is given with a default, and looped over", func(t *testing.T) {
 		t.Parallel()
 
 		r := routes["post /api/libraries/:id/notes"]
@@ -164,6 +172,23 @@ func TestAnalyze(t *testing.T) {
 
 		if r := routes["get /api/items/:id/download"]; !r.ans.file {
 			t.Errorf("answer: %+v, want a file", r.ans)
+		}
+	})
+
+	t.Run("an upload of files by any name", func(t *testing.T) {
+		t.Parallel()
+
+		r := routes["post /api/libraries/:id/files"]
+		if !r.req.filesWhole || len(r.req.files) != 0 || !slices.Equal(r.req.body, []string{"folder"}) {
+			t.Errorf("request: %+v, want files of any name and a folder", r.req)
+		}
+	})
+
+	t.Run("a query taken apart from the request whole", func(t *testing.T) {
+		t.Parallel()
+
+		if r := routes["get /api/items/:id/download"]; !slices.Equal(r.req.query, []string{"inline"}) {
+			t.Errorf("query: %q, want inline, read only in a condition", r.req.query)
 		}
 	})
 

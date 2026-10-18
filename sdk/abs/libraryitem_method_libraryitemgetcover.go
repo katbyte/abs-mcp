@@ -82,6 +82,7 @@ func (r LibraryItemGetCoverResponse) Bytes(max int64) ([]byte, error) {
 type LibraryItemGetCoverOptions struct {
 	Format string
 	Height string
+	Raw    string
 	Ts     string
 	Width  string
 }
@@ -100,6 +101,9 @@ func (o LibraryItemGetCoverOptions) ToQuery() *client.QueryParams {
 	}
 	if o.Height != "" {
 		out.Append("height", o.Height)
+	}
+	if o.Raw != "" {
+		out.Append("raw", o.Raw)
 	}
 	if o.Ts != "" {
 		out.Append("ts", o.Ts)

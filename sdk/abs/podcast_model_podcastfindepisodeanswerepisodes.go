@@ -4,5 +4,5 @@ package abs
 
 // PodcastFindEpisodeAnswerEpisodes is an object the document declares inline.
 type PodcastFindEpisodeAnswerEpisodes struct {
-	Episode *PodcastFindEpisodeAnswerEpisodesEpisode `json:"episode,omitempty"`
+	Episode *RssPodcastEpisode `json:"episode,omitempty"`
 }

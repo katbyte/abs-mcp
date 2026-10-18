@@ -2,7 +2,7 @@
 
 package abs
 
-// PodcastEpisodeEnclosure is an object the document declares inline.
+// PodcastEpisodeEnclosure is the "PodcastEpisodeEnclosure" schema.
 type PodcastEpisodeEnclosure struct {
 	Length string `json:"length,omitempty"`
 	Type   string `json:"type,omitempty"`

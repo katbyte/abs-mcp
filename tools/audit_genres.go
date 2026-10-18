@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -132,12 +132,12 @@ func note(into map[string]*genreUse, value string, ref genreRef) {
 	}
 }
 
-func (c *genresCollector) add(it *abs.Item) {
+func (c *genresCollector) add(it *api.LibraryItemMinified) {
 	if it.IsPodcast() {
 		return
 	}
 	c.books++
-	ref := genreRef{ID: it.ID, Title: it.Title()}
+	ref := genreRef{ID: string(it.Id), Title: it.Title()}
 	named := 0
 	for _, g := range it.Media.Metadata.Genres {
 		if g = strings.TrimSpace(g); g == "" {
@@ -266,7 +266,7 @@ func quote(s string) string {
 }
 
 func registerGenresAudit(r *registry) {
-	client := r.client
+	gen := r.gen
 
 	type genresIn struct {
 		Library  string `json:"library,omitempty"   jsonschema:"library name or id; default every book library"`
@@ -280,7 +280,7 @@ func registerGenresAudit(r *registry) {
 			"genres carried by fewer books than min_items, which belong in tags; tags that repeat one of the same book's genres; books with no genre; and marker tags, listed but not judged. " +
 			"Every finding carries the metadata_rename call that fixes it: remove drops a value (it only previews which books carry it until confirm=true, which the suggestion includes), to merges, to_field moves a value between genres and tags, and a compound value's suggest is passed as split. Spelling variants are audit_spelling's.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in genresIn) (*mcp.CallToolResult, genresOut, error) {
-		libs, err := resolveLibraries(ctx, client, in.Library)
+		libs, err := resolveLibraries(ctx, gen, in.Library)
 		if err != nil {
 			return nil, genresOut{}, err
 		}
@@ -290,10 +290,8 @@ func registerGenresAudit(r *registry) {
 			if libs[i].IsPodcast() {
 				continue
 			}
-			if err := client.ItemsAll(ctx, libs[i].ID, abs.ItemsOptions{}, func(items []abs.Item) bool {
-				for j := range items {
-					c.add(&items[j])
-				}
+			if err := eachItem(ctx, gen, libs[i].Id, api.LibraryGetLibraryItemsOptions{}, func(it *api.LibraryItemMinified) bool {
+				c.add(it)
 				return true
 			}); err != nil {
 				return nil, genresOut{}, err

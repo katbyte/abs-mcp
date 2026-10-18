@@ -3,7 +3,6 @@
 package abs
 
 import (
-	"bytes"
 	"net/http"
 	"strings"
 	"testing"
@@ -14,7 +13,7 @@ import (
 func TestOperationApiKeyDelete(t *testing.T) {
 	t.Parallel()
 
-	c, s := newOperationServer(t, 200, "text/plain", "file bytes")
+	c, s := newOperationServer(t, 200, "application/json", "some text, as sent\n")
 	result, err := c.ApiKeyDelete(t.Context(), "p/id")
 	if err != nil {
 		t.Fatal(err)
@@ -28,37 +27,8 @@ func TestOperationApiKeyDelete(t *testing.T) {
 	if result.HttpResponse == nil || result.HttpResponse.StatusCode != 200 {
 		t.Fatalf("HttpResponse = %+v", result.HttpResponse)
 	}
-	if _, contentType := result.Reader(); contentType == "" || result.ContentLength() != 10 || result.Filename() != "answer.bin" {
-		t.Errorf("Reader = %q, length %d, filename %q", contentType, result.ContentLength(), result.Filename())
-	}
-	if data, err := result.Bytes(9); err == nil || string(data) != "" {
-		t.Errorf("Bytes over the size = %q, %v", data, err)
-	}
-	c, _ = newOperationServer(t, 200, "text/plain", "file bytes")
-	result, err = c.ApiKeyDelete(t.Context(), "p/id")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if data, err := result.Bytes(10); err != nil || string(data) != "file bytes" {
-		t.Errorf("Bytes = %q, %v", data, err)
-	}
-	c, _ = newOperationServer(t, 200, "text/plain", "file bytes")
-	result, err = c.ApiKeyDelete(t.Context(), "p/id")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var streamed bytes.Buffer
-	if _, err := result.WriteTo(&streamed); err != nil || streamed.String() != "file bytes" {
-		t.Errorf("WriteTo = %v, %q", err, streamed.String())
-	}
-	if _, err := result.WriteTo(&streamed); err == nil {
-		t.Error("WriteTo on a spent body succeeded")
-	}
-	if _, err := (ApiKeyDeleteResponse{}).WriteTo(&streamed); err == nil {
-		t.Error("WriteTo with no answer succeeded")
-	}
-	if body, contentType := (ApiKeyDeleteResponse{}).Reader(); body == nil || contentType != "" || body.Close() != nil {
-		t.Error("Reader with no answer is not safely empty")
+	if result.Answer == nil || *result.Answer != "some text, as sent\n" {
+		t.Errorf("the text was not held as it was sent: %v", result.Answer)
 	}
 
 	// a status the operation does not document is an error, with the response

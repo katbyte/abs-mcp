@@ -35,6 +35,7 @@ type jsType struct {
 	nullable bool      // it may also be null
 	elem     *jsType   // a list's elements
 	props    []prop    // a record's fields, in the order written
+	values   *jsType   // a map keyed by data, such as ids or days: what each key holds, from stats.days[day] = time
 	open     bool      // a record with fields the scan could not see, from a spread it could not follow
 	name     string    // the schema a record is written as, such as LibraryItemExpanded
 	class    *jsClass  // a class, or the class of an instance
@@ -46,6 +47,8 @@ type jsType struct {
 	ctorArgs []*jsType // what an instance was made with, for the fields its constructor sets from them
 	literals []string  // the strings a value is seen to take, such as a mediaType's 'book' and 'podcast'
 	written  bool      // a whole number written out in the source, such as the 0 of total = 0, which says nothing of what else the value takes
+	spreadOf string    // the record an object written in place spreads and adds to, whose name a record-writing method's own replaces
+	writer   string    // the class whose record-writing method wrote the record, such as LibraryItem for LibraryItemExpanded
 }
 
 type prop struct {
@@ -84,6 +87,36 @@ func (t *jsType) field(name string) *jsType {
 	for _, p := range t.props {
 		if p.name == name {
 			return p.typ
+		}
+	}
+
+	return nil
+}
+
+// withValues is the record as a map keyed by data whose keys hold ft, written as {} and filled a key at a time; a record with fields of its own
+// is left as it is, as the key is then a field the scan cannot name.
+func (t *jsType) withValues(ft *jsType) *jsType {
+	if t.kind != objectKind || len(t.props) > 0 || t.open {
+		return t
+	}
+
+	out := *t
+	out.values = merge(t.values, ft)
+
+	return &out
+}
+
+// keyedField is what a field written as field[key] = value holds then: a list holds the value as an item, and a record written as {} is a map
+// of it. nil for anything else, a field the scan cannot follow.
+func keyedField(field, value *jsType) *jsType {
+	switch {
+	case field == nil:
+		return nil
+	case field.kind == arrayKind:
+		return listOf(value)
+	case field.kind == objectKind:
+		if out := field.withValues(value); out != field {
+			return out
 		}
 	}
 
@@ -183,15 +216,18 @@ func mergeKinds(a, b *jsType) *jsType {
 			return listOf(merge(a.elem, b.elem))
 
 		case objectKind:
-			out := &jsType{kind: objectKind, open: a.open || b.open}
-			if a.name == b.name {
-				out.name = a.name
+			out := &jsType{kind: objectKind, open: a.open || b.open, name: fuller(a, b)}
+			if a.writer == b.writer {
+				out.writer = a.writer
 			}
 			for _, p := range a.props {
 				out = out.withField(p.name, p.typ)
 			}
 			for _, p := range b.props {
 				out = out.withField(p.name, p.typ)
+			}
+			if a.values != nil || b.values != nil {
+				out.values = merge(a.values, b.values)
 			}
 			return out
 
@@ -243,6 +279,38 @@ func mergeKinds(a, b *jsType) *jsType {
 	return out
 }
 
+// fuller is the name two records merged keep: their own when they are one record, and when they are two ways one class writes itself, such as
+// LibraryItemMinified and LibraryItemExpanded, the name of the one holding every field of the other, as a value that may be either is the
+// fuller one with fields that are not always sent. "" otherwise.
+func fuller(a, b *jsType) string {
+	if a.name == b.name {
+		return a.name
+	}
+	if !recordName(a.name) || !recordName(b.name) || a.writer == "" || a.writer != b.writer {
+		return ""
+	}
+
+	if holds(a, b) {
+		return a.name
+	}
+	if holds(b, a) {
+		return b.name
+	}
+
+	return ""
+}
+
+// holds is whether record a has every field of record b.
+func holds(a, b *jsType) bool {
+	for _, p := range b.props {
+		if a.field(p.name) == nil {
+			return false
+		}
+	}
+
+	return true
+}
+
 func addKind(list []*jsType, t *jsType) []*jsType {
 	for i, m := range list {
 		if m.kind == t.kind && (m.kind != instanceKind && m.kind != classKind || m.class == t.class) {
@@ -286,10 +354,12 @@ type binding struct {
 	done   bool
 }
 
-// fieldSet is one name.field = value or name.field += value, or with no field one name.push(value).
+// fieldSet is one name.field = value or name.field += value, or with no field one name.push(value); keyed, one name.field[key] = value, or
+// with no field name[key] = value.
 type fieldSet struct {
 	field  string
 	value  js.IExpr
+	keyed  bool
 	spread bool
 	op     js.TokenType  // for name.field += value, the operator; 0 for =
 	in     func() *scope // for one written in a callback, the callback's scope; nil for the function's own
@@ -311,8 +381,15 @@ func (fs fieldSet) scope(name string, home *scope) *scope {
 	return in
 }
 
-// fieldSets are what x does to a name's fields or items, and the name: name.field = value, name.field += value, name.push(value).
+// fieldSets are what x does to a name's fields or items, and the name: name.field = value, name.field += value, name.push(value), and a key
+// that is data, name.field[key] = value or name[key] = value.
 func fieldSets(x js.IExpr) (string, []fieldSet) {
+	if set, ok := x.(*js.BinaryExpr); ok && (set.Op == js.EqToken || compound(set.Op)) {
+		if at, ok := set.X.(*js.IndexExpr); ok {
+			return keyedSet(at, set)
+		}
+	}
+
 	switch x := x.(type) {
 	case *js.CallExpr:
 		dot, ok := x.X.(*js.DotExpr)
@@ -348,6 +425,33 @@ func fieldSets(x js.IExpr) (string, []fieldSet) {
 			fs.op = x.Op
 		}
 
+		return string(v.Name()), []fieldSet{fs}
+	}
+
+	return "", nil
+}
+
+// keyedSet is name[key] = value or name.field[key] = value, where the key is data such as an id or a day; a key written out, such as
+// name['title'], is a field like any other, and a list's index is not a key.
+func keyedSet(at *js.IndexExpr, set *js.BinaryExpr) (string, []fieldSet) {
+	if lit, ok := at.Y.(*js.LiteralExpr); ok && lit.TokenType == js.StringToken {
+		return "", nil
+	}
+
+	fs := fieldSet{value: set.Y, keyed: true}
+	if set.Op != js.EqToken {
+		fs.op = set.Op
+	}
+
+	switch on := at.X.(type) {
+	case *js.Var:
+		return string(on.Name()), []fieldSet{fs}
+	case *js.DotExpr:
+		v, ok := on.X.(*js.Var)
+		if !ok {
+			return "", nil
+		}
+		fs.field = identName(on.Y)
 		return string(v.Name()), []fieldSet{fs}
 	}
 
@@ -399,6 +503,20 @@ func outerSets(e *evaluator, call *js.CallExpr, arg js.IExpr, home *scope, paren
 					home.sets[n] = append(home.sets[n], sets...)
 				}
 
+				// total += s.time adds to the total outside, unless the function declares a total of its own
+				if set, ok := x.(*js.BinaryExpr); ok && compound(set.Op) {
+					if to, ok := set.X.(*js.Var); ok {
+						name, value, op := string(to.Name()), set.Y, set.Op
+						owner := home.owner(name)
+						owner.bind(name, func() *jsType {
+							if sc := in(); sc.owner(name) == owner {
+								return compoundType(e.eval(value, sc), op)
+							}
+							return nil
+						})
+					}
+				}
+
 				if c, ok := x.(*js.CallExpr); ok {
 					for _, a := range c.Args.List {
 						outerSets(e, c, a.Value, home, in)
@@ -425,7 +543,23 @@ func (s *scope) bind(name string, init func() *jsType) {
 		b = &binding{}
 		s.vars[name] = b
 	}
+	// a value added after the name was worked out, by a callback run later, is worked out again with the rest
+	if b.done {
+		was := b.typ
+		b.inits, b.done = []func() *jsType{func() *jsType { return was }}, false
+	}
 	b.inits = append(b.inits, init)
+}
+
+// owner is the scope a name is declared in, from s outwards, or s when none declares it.
+func (s *scope) owner(name string) *scope {
+	for sc := s; sc != nil; sc = sc.parent {
+		if _, ok := sc.vars[name]; ok {
+			return sc
+		}
+	}
+
+	return s
 }
 
 func (s *scope) bindType(name string, t *jsType) {
@@ -702,6 +836,9 @@ func (e *evaluator) exports(f *jsFile) *jsType {
 
 func (e *evaluator) object(x *js.ObjectExpr, s *scope) *jsType {
 	out := &jsType{kind: objectKind}
+	// what is spread in, and the fields written beside it
+	var spread []*jsType
+	var added []string
 	for _, p := range x.List {
 		if p.Spread {
 			t := e.eval(p.Value, s)
@@ -715,6 +852,7 @@ func (e *evaluator) object(x *js.ObjectExpr, s *scope) *jsType {
 			default:
 				out.open = true
 			}
+			spread = append(spread, t)
 			continue
 		}
 
@@ -739,9 +877,21 @@ func (e *evaluator) object(x *js.ObjectExpr, s *scope) *jsType {
 		}
 
 		out = out.withField(name, e.eval(p.Value, s))
+		added = append(added, name)
+	}
+
+	// { ...session.toJSON(), user }: one record spread with fields of its own added is that record, the fields some of its answers carry. One
+	// that writes over a field the record has is another way of writing it, as toOldJSONExpanded writes { ...this.toOldJSONMinified(), media }.
+	if len(spread) == 1 && recordName(spread[0].name) && !slices.ContainsFunc(added, func(n string) bool { return spread[0].field(n) != nil }) {
+		out.name, out.spreadOf, out.writer = spread[0].name, spread[0].name, spread[0].writer
 	}
 
 	return out
+}
+
+// recordName is whether a name is a record's the document writes once and refers to, rather than a part of the request or none.
+func recordName(name string) bool {
+	return name != "" && !strings.Contains(name, ".") && name != "models"
 }
 
 func (e *evaluator) unary(x *js.UnaryExpr, s *scope) *jsType {
@@ -982,12 +1132,12 @@ func (e *evaluator) invoke(fn *jsFunc, args []*jsType) *jsType {
 
 	t := e.run(fn.body, s)
 
-	// a record written by a method such as toOldJSONExpanded is named for its class and the method
-	if t != nil && t.kind == objectKind && t.name == "" {
+	// a record written by a method such as toOldJSONExpanded is named for its class and the method, whatever record it spreads
+	if t != nil && t.kind == objectKind && (t.name == "" || t.name == t.spreadOf) {
 		if class, method, ok := strings.Cut(fn.name, "."); ok {
 			if n := jsonName(class, method); n != "" {
 				named := *t
-				named.name = n
+				named.name, named.spreadOf, named.writer = n, "", class
 				t = &named
 			}
 		}
@@ -1144,10 +1294,10 @@ func declare(e *evaluator, body []js.IStmt, s *scope) {
 					return
 				}
 
-				// total += x: the total takes the type of what is added
+				// total += x: the total takes the type of what is added, where the total is declared, which is outside a callback adding to it
 				if to, ok := set.X.(*js.Var); ok && compound(set.Op) {
-					value, op := set.Y, set.Op
-					s.bind(string(to.Name()), func() *jsType { return compoundType(e.eval(value, s), op) })
+					name, value, op := string(to.Name()), set.Y, set.Op
+					s.owner(name).bind(name, func() *jsType { return compoundType(e.eval(value, s), op) })
 					return
 				}
 
@@ -1203,7 +1353,7 @@ func declare(e *evaluator, body []js.IStmt, s *scope) {
 				t = merge(t, init())
 			}
 			// a name pushed onto is a list, whatever the scan made of its value
-			if t != nil && t.kind == unknownKind && slices.ContainsFunc(sets, func(fs fieldSet) bool { return fs.field == "" }) {
+			if t != nil && t.kind == unknownKind && slices.ContainsFunc(sets, func(fs fieldSet) bool { return fs.field == "" && !fs.keyed }) {
 				t = listOf(unknown)
 			}
 			if t != nil && t.kind == arrayKind {
@@ -1214,6 +1364,9 @@ func declare(e *evaluator, body []js.IStmt, s *scope) {
 						continue
 					}
 					v := e.eval(fs.value, in)
+					if fs.op != 0 {
+						v = compoundType(v, fs.op)
+					}
 					if fs.spread && v.kind == arrayKind {
 						v = v.elem
 					}
@@ -1241,12 +1394,22 @@ func declare(e *evaluator, body []js.IStmt, s *scope) {
 			}
 			for _, fs := range sets {
 				in := fs.scope(n, s)
-				if fs.field == "" || in == nil {
+				if fs.field == "" && !fs.keyed || in == nil {
 					continue
 				}
 				ft := e.eval(fs.value, in)
 				if fs.op != 0 {
 					ft = compoundType(ft, fs.op)
+				}
+				if fs.keyed {
+					if fs.field == "" {
+						t = t.withValues(ft)
+						continue
+					}
+					ft = keyedField(t.field(fs.field), ft)
+					if ft == nil {
+						continue
+					}
 				}
 				if t.name != "" {
 					e.extra[t.name] = appendProp(e.extra[t.name], fs.field, ft)

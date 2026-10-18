@@ -5,7 +5,7 @@ package abs
 import (
 	"encoding/json"
 	"net/http"
-	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/katbyte/pandorest/client"
@@ -14,13 +14,16 @@ import (
 func TestOperationMeUpdatePassword(t *testing.T) {
 	t.Parallel()
 
-	c, s := newOperationServer(t, 200, "application/json", "{}")
+	c, s := newOperationServer(t, 200, "application/json", "some text, as sent\n")
 	result, err := c.MeUpdatePassword(t.Context(), MeUpdatePasswordRequest{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	r, body := s.only(t)
 	expectRequest(t, r, http.MethodPatch, "/api/me/password")
+	if got := r.Header.Get("Accept"); !strings.HasPrefix(got, "text/plain") {
+		t.Errorf("Accept = %q, want text/plain asked for first", got)
+	}
 	if got := r.Header.Get("Content-Type"); got != "application/json" {
 		t.Errorf("Content-Type = %q, want %q", got, "application/json")
 	}
@@ -33,21 +36,8 @@ func TestOperationMeUpdatePassword(t *testing.T) {
 	if result.HttpResponse == nil || result.HttpResponse.StatusCode != 200 {
 		t.Fatalf("HttpResponse = %+v", result.HttpResponse)
 	}
-	if result.Answer == nil || !result.Answered() {
-		t.Error("the answer was not decoded")
-	}
-	if result.MeUpdatePasswordAnswer != result.Answer {
-		t.Error("the embedded answer is not the answer")
-	}
-	if record, err := result.Record(); err != nil || !reflect.DeepEqual(record, *result.Answer) {
-		t.Errorf("Record = %+v, %v", record, err)
-	}
-
-	// an answer that does not decode is an error, with the response
-	c, _ = newOperationServer(t, 200, "application/json", "<html>")
-	result, err = c.MeUpdatePassword(t.Context(), MeUpdatePasswordRequest{})
-	if err == nil || client.StatusCode(err) != 0 || result.HttpResponse == nil {
-		t.Errorf("an answer that does not decode = %v", err)
+	if result.Answer == nil || *result.Answer != "some text, as sent\n" {
+		t.Errorf("the text was not held as it was sent: %v", result.Answer)
 	}
 
 	// a status the operation does not document is an error, with the response

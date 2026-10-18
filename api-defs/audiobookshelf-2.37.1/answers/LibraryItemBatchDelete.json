@@ -1,0 +1,12 @@
+{
+  "operation": "LibraryItemBatchDelete",
+  "method": "POST",
+  "path": "/api/items/batch/delete",
+  "sent": [
+    {
+      "libraryItemIds": [
+        "af7eb74c-0a30-42b7-98e7-b13548a44474"
+      ]
+    }
+  ]
+}

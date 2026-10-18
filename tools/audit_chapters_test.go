@@ -6,19 +6,19 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // chaptered is a whole book with its chapters, each running to the next's
 // start and the last to end.
-func chaptered(duration float64, starts ...float64) *abs.Item {
-	it := &abs.Item{ID: "b1", MediaType: "book", RelPath: "A/Book", Media: abs.Media{Duration: duration, Metadata: abs.Metadata{Title: "Book"}}}
+func chaptered(duration float64, starts ...float64) *api.LibraryItemExpanded {
+	it := &api.LibraryItemExpanded{Id: "b1", MediaType: "book", RelPath: "A/Book", Media: &api.LibraryItemExpandedMedia{Duration: duration, Metadata: &api.LibraryItemExpandedMediaMetadata{Title: "Book"}}}
 	for i, s := range starts {
 		end := duration
 		if i+1 < len(starts) {
 			end = starts[i+1]
 		}
-		it.Media.Chapters = append(it.Media.Chapters, abs.Chapter{ID: i, Title: "C" + string(rune('1'+i)), Start: s, End: end})
+		it.Media.Chapters = append(it.Media.Chapters, api.Chapter{Id: i, Title: "C" + string(rune('1'+i)), Start: s, End: end})
 	}
 	return it
 }
@@ -29,14 +29,14 @@ func chaptered(duration float64, starts ...float64) *abs.Item {
 func TestChapterProblems(t *testing.T) {
 	t.Parallel()
 
-	withEnd := func(it *abs.Item, i int, end float64) *abs.Item {
+	withEnd := func(it *api.LibraryItemExpanded, i int, end float64) *api.LibraryItemExpanded {
 		it.Media.Chapters[i].End = end
 		return it
 	}
 	const tenHours = 36000
 	for _, tc := range []struct {
 		name   string
-		it     *abs.Item
+		it     *api.LibraryItemExpanded
 		want   []string
 		detail string // of the first row
 	}{
@@ -83,13 +83,13 @@ func TestChapterProblems(t *testing.T) {
 		{"one chapter over a short book", chaptered(3600, 0), nil, ""},
 		{"one chapter over part of a long book", withEnd(chaptered(9000, 0), 0, 3000), []string{"short", "single"}, ""},
 		{"no chapters", chaptered(9000), nil, ""},
-		{"a podcast", &abs.Item{MediaType: "podcast", Media: abs.Media{Duration: 60, Chapters: []abs.Chapter{{Start: 120, End: 180}}}}, nil, ""},
+		{"a podcast", &api.LibraryItemExpanded{MediaType: "podcast", Media: &api.LibraryItemExpandedMedia{Duration: 60, Chapters: []api.Chapter{{Start: 120, End: 180}}}}, nil, ""},
 	} {
 		rows := chapterProblems(tc.it)
 		var got []string
 		for _, r := range rows {
 			got = append(got, r.Problem)
-			if r.Fix == "" || r.ID != tc.it.ID || r.Path != tc.it.RelPath {
+			if r.Fix == "" || r.ID != string(tc.it.Id) || r.Path != tc.it.RelPath {
 				t.Errorf("%s: row %+v has no fix, or not the book's id and path", tc.name, r)
 			}
 		}
@@ -202,13 +202,13 @@ func TestAuditChaptersFetchesOnlyChapteredBooks(t *testing.T) {
 func TestItemChaptersSetFit(t *testing.T) {
 	t.Parallel()
 
-	sent := func(f *fakeABS) []abs.Chapter {
+	sent := func(f *fakeABS) []api.Chapter {
 		t.Helper()
 		reqs := f.requests("/api/items/" + itemID + "/chapters")
 		if len(reqs) == 0 {
 			return nil
 		}
-		var body struct{ Chapters []abs.Chapter }
+		var body struct{ Chapters []api.Chapter }
 		if err := json.Unmarshal([]byte(reqs[len(reqs)-1].Body), &body); err != nil {
 			t.Fatal(err)
 		}
@@ -227,9 +227,13 @@ func TestItemChaptersSetFit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []abs.Chapter{{ID: 0, Title: "One", Start: 0, End: 1500}, {ID: 1, Title: "Two", Start: 1500, End: 3000}}
+	want := []api.Chapter{{Id: 0, Title: "One", Start: 0, End: 1500}, {Id: 1, Title: "Two", Start: 1500, End: 3000}}
 	if got := sent(f); !slices.Equal(got, want) {
 		t.Errorf("sent %+v, want %+v", got, want)
+	}
+	// the server refuses a chapter without a start, and the first starts at 0
+	if body := f.requests("/api/items/" + itemID + "/chapters")[0].Body; !strings.Contains(body, `"start":0,`) {
+		t.Errorf("sent %s, want the first chapter's start of 0 written out", body)
 	}
 	if num(t, out["chapters"]) != 2 || num(t, out["dropped"]) != 1 || num(t, out["end_s"]) != 3000 || !boolOf(t, out["updated"]) {
 		t.Errorf("out = %v, want 2 chapters, 1 dropped, ending at 3000s", out)

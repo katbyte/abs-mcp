@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -8,9 +9,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/abs-mcp/tools"
 	"github.com/katbyte/go-kt/clog"
+	"github.com/katbyte/pandorest/client"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -144,8 +146,16 @@ func GetFlags() *FlagData {
 	return &f
 }
 
-func (f *FlagData) NewClient() (*abs.Client, error) {
-	return abs.New(f.Server, f.Token, abs.WithLog(clog.Log))
+// NewClient is the client for the configured server and key, logging what it sends, or which setting is missing.
+func (f *FlagData) NewClient() (*api.Client, error) {
+	switch {
+	case f.Server == "":
+		return nil, errors.New("server URL is required (--server / ABS_SERVER)")
+	case f.Token == "":
+		return nil, errors.New("API key is required (--token / ABS_TOKEN)")
+	}
+
+	return api.New(f.Server, f.Token, client.WithLog(clog.Log))
 }
 
 // DefaultToolsets is what the binary registers when neither --toolsets nor

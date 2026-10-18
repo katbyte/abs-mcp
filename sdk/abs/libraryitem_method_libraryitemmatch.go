@@ -40,9 +40,10 @@ func (r LibraryItemMatchResponse) Record() (LibraryItemMatchAnswer, error) {
 }
 
 // LibraryItemMatch calls POST /api/items/{id}/match.
-func (c Client) LibraryItemMatch(ctx context.Context, id LibraryItemID) (result LibraryItemMatchResponse, err error) {
+func (c Client) LibraryItemMatch(ctx context.Context, id LibraryItemID, input LibraryItemMatchRequest) (result LibraryItemMatchResponse, err error) {
 	result.LibraryItemMatchAnswer = &LibraryItemMatchAnswer{}
 	opts := client.RequestOptions{
+		ContentType: "application/json",
 		ExpectedStatusCodes: []int{
 			http.StatusOK,
 		},
@@ -53,6 +54,10 @@ func (c Client) LibraryItemMatch(ctx context.Context, id LibraryItemID) (result 
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
+		return
+	}
+
+	if err = req.Marshal(input); err != nil {
 		return
 	}
 

@@ -37,6 +37,9 @@ func shape(t *jsType) string {
 			fields = append(fields, p.name)
 		}
 		out += "{" + strings.Join(fields, ",") + "}"
+		if t.values != nil {
+			out += " of " + shape(t.values)
+		}
 	default:
 	}
 	if t.nullable && t.kind != nullKind {
@@ -144,19 +147,31 @@ func TestEval(t *testing.T) {
 		`(() => { let x = 0; x = unknownCall(); return x })()`: "number",
 
 		// totals and lists built up a step at a time
-		`(() => { let t = 0; t += 1.5; return t })()`:                                      "number",
-		`(() => { let t = 0; t += 1; return t })()`:                                        "integer",
-		`(() => { let s = ''; s += 'a'; return s })()`:                                     "string",
-		`(() => { const o = { t: 0 }; o.t += 1.5; return o })().t`:                         "number",
-		`(() => { const o = { t: 0 }; [1.5].forEach((n) => { o.t += n }); return o })().t`: "number",
-		`(() => { const o = { t: 0 }; [1].forEach((o) => { o.t += 1.5 }); return o })().t`: "integer",
-		`(() => { const a = []; [1].forEach((n) => { a.push('x') }); return a })()`:        "list of string",
-		`(() => { const a = unknownCall(); a.push(1); return a })()`:                       "list of integer",
-		`(() => { const a = []; a.push(1); return a })()`:                                  "list of integer",
-		`(() => { let a = [1]; a = a.map((n) => 'x'); return a })()`:                       "list of string",
-		`(() => { let a = [1]; a = unknownCall(a); return a })()`:                          "list of integer",
+		`(() => { let t = 0; t += 1.5; return t })()`:                                                       "number",
+		`(() => { let t = 0; t += 1; return t })()`:                                                         "integer",
+		`(() => { let s = ''; s += 'a'; return s })()`:                                                      "string",
+		`(() => { const o = { t: 0 }; o.t += 1.5; return o })().t`:                                          "number",
+		`(() => { const o = { t: 0 }; [1.5].forEach((n) => { o.t += n }); return o })().t`:                  "number",
+		`(() => { const o = { t: 0 }; [1].forEach((o) => { o.t += 1.5 }); return o })().t`:                  "integer",
+		`(() => { let t = 0; [1.5].forEach((n) => { t += n }); return t })()`:                               "number",
+		`(() => { let t = 0; return [1.5].map((n) => { const x = { at: t }; t += n; return x }) })()[0].at`: "number",
+		`(() => { let t = 0; [1.5].forEach((t) => { t += 1 }); return t })()`:                               "integer",
+		`(() => { const a = []; [1].forEach((n) => { a.push('x') }); return a })()`:                         "list of string",
+		`(() => { const a = unknownCall(); a.push(1); return a })()`:                                        "list of integer",
+		`(() => { const a = []; a.push(1); return a })()`:                                                   "list of integer",
+		`(() => { let a = [1]; a = a.map((n) => 'x'); return a })()`:                                        "list of string",
+		`(() => { let a = [1]; a = unknownCall(a); return a })()`:                                           "list of integer",
 		`unknownCall().length`: "integer",
 		`new (class { constructor() { this.t = 0 } add(n) { this.t += parseFloat(n) } })().t`: "number",
+
+		// maps keyed by data, filled a key at a time, as listening time by day is; a key written out is a field, a list's index adds an item, and
+		// a record with fields of its own written by a key the scan cannot name stays the record
+		`(() => { const o = { days: {} }; [1].forEach((s) => { if (!o.days[s]) o.days[s] = 0; o.days[s] += 1.5 }); return o })().days`: "record{} of number",
+		`(() => { const o = { items: {} }; [1].forEach((s) => { o.items[s] = { id: s, t: 1 } }); return o })().items`:                  "record{} of record{id,t}",
+		`(() => { const m = {}; m[unknownCall()] = 'a'; return m })()`:                                                                 "record{} of string",
+		`(() => { const o = { a: [] }; o.a[0] = 'x'; return o })().a`:                                                                  "list of string",
+		`(() => { const o = { n: 1 }; o[unknownCall()] = 'x'; return o })()`:                                                           "record{n}",
+		`(() => { const o = {}; o['title'] = 'x'; return o })()`:                                                                       "record{}",
 	}
 	for src, want := range cases {
 		if got := shape(evalJS(t, "module.exports = "+src)); got != want {
@@ -228,6 +243,34 @@ func TestJSONName(t *testing.T) {
 	for in, want := range cases {
 		if got := jsonName(in[0], in[1]); got != want {
 			t.Errorf("jsonName(%q, %q) = %q, want %q", in[0], in[1], got, want)
+		}
+	}
+}
+
+// A record keeps its name where the scan can tell it is still that record: spread with fields of its own added, or one of two forms its class
+// writes when the other holds every field of it.
+func TestRecordNames(t *testing.T) {
+	t.Parallel()
+
+	class := `class Item {
+  toOldJSON() { return { id: 'a', title: 't' } }
+  toOldJSONExpanded() { return { ...this.toOldJSON(), size: 1 } }
+  toOldJSONMinified() { return { id: 'a' } }
+}
+const item = new Item()
+module.exports = `
+	for src, want := range map[string]string{
+		`item.toOldJSON()`:                                              "Item",
+		`({ ...item.toOldJSON(), user: 'u' })`:                          "Item",
+		`({ ...item.toOldJSON(), title: 2 })`:                           "",
+		`item.toOldJSONExpanded()`:                                      "ItemExpanded",
+		`item.id ? item.toOldJSON() : item.toOldJSONExpanded()`:         "ItemExpanded",
+		`item.id ? item.toOldJSONMinified() : item.toOldJSON()`:         "Item",
+		`item.id ? item.toOldJSON() : { id: 'b', title: 'c', size: 2 }`: "",
+		`({ ...item.toOldJSON(), ...{ more: 1 } })`:                     "",
+	} {
+		if got := evalJS(t, class+src); got.name != want {
+			t.Errorf("%s: named %q, want %q", src, got.name, want)
 		}
 	}
 }

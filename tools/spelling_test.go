@@ -10,8 +10,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
 )
 
 // A remove drops a value from every item that carries it, server-wide for a
@@ -252,41 +250,6 @@ func TestAuditSpellingCountsUnrecognisedLanguages(t *testing.T) {
 		if str(t, row["audit"]) == "audit_spelling" && num(t, row["found"]) != 2 {
 			t.Errorf("audit_all counts %v, audit_spelling 2", row["found"])
 		}
-	}
-}
-
-// valuesOf is what the audit_spelling sweep reads; both item shapes have to
-// yield the same values.
-func TestValuesOfHandlesBothShapes(t *testing.T) {
-	t.Parallel()
-
-	expanded := &abs.Item{Media: abs.Media{Metadata: abs.Metadata{
-		Narrators: []string{"Jim Dale", "Kate Reading"},
-		Authors:   []abs.NameRef{{Name: "A"}, {Name: "B"}},
-		Language:  "English", Publisher: "Bantam", Genres: []string{"SF"},
-	}, Tags: []string{"x"}}}
-	minified := &abs.Item{Media: abs.Media{Metadata: abs.Metadata{
-		NarratorName: "Jim Dale, Kate Reading", AuthorName: "A, B",
-		Language: "English", Publisher: "Bantam", Genres: []string{"SF"},
-	}, Tags: []string{"x"}}}
-
-	for _, field := range vocabFields {
-		a, b := valuesOf(field, expanded), valuesOf(field, minified)
-		for i := range a {
-			a[i] = strings.TrimSpace(a[i])
-		}
-		for i := range b {
-			b[i] = strings.TrimSpace(b[i])
-		}
-		if !slices.Equal(a, b) {
-			t.Errorf("%s: expanded %v, minified %v", field, a, b)
-		}
-		if len(a) == 0 {
-			t.Errorf("%s: nothing read", field)
-		}
-	}
-	if got := valuesOf("nope", expanded); got != nil {
-		t.Errorf("unknown field gave %v", got)
 	}
 }
 

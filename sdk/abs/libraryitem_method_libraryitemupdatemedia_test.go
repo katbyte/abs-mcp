@@ -15,7 +15,7 @@ func TestOperationLibraryItemUpdateMedia(t *testing.T) {
 	t.Parallel()
 
 	c, s := newOperationServer(t, 200, "application/json", "{}")
-	result, err := c.LibraryItemUpdateMedia(t.Context(), LibraryItemID("v-id"), LibraryItemUpdateMediaRequest{})
+	result, err := c.LibraryItemUpdateMedia(t.Context(), LibraryItemID("v-id"), MediaUpdate{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,14 +45,14 @@ func TestOperationLibraryItemUpdateMedia(t *testing.T) {
 
 	// an answer that does not decode is an error, with the response
 	c, _ = newOperationServer(t, 200, "application/json", "<html>")
-	result, err = c.LibraryItemUpdateMedia(t.Context(), LibraryItemID("v-id"), LibraryItemUpdateMediaRequest{})
+	result, err = c.LibraryItemUpdateMedia(t.Context(), LibraryItemID("v-id"), MediaUpdate{})
 	if err == nil || client.StatusCode(err) != 0 || result.HttpResponse == nil {
 		t.Errorf("an answer that does not decode = %v", err)
 	}
 
 	// a status the operation does not document is an error, with the response
 	c, _ = newOperationServer(t, 418, "text/plain", "no")
-	result, err = c.LibraryItemUpdateMedia(t.Context(), LibraryItemID("v-id"), LibraryItemUpdateMediaRequest{})
+	result, err = c.LibraryItemUpdateMedia(t.Context(), LibraryItemID("v-id"), MediaUpdate{})
 	if client.StatusCode(err) != 418 || result.HttpResponse == nil {
 		t.Errorf("an undocumented status = %v, %+v", err, result.HttpResponse)
 	}

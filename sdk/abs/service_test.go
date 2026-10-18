@@ -71,4 +71,31 @@ func TestNote(t *testing.T) {
 	if got := note(client.Failure{StatusCode: http.StatusNotFound, Credentialed: true}); got != "" {
 		t.Errorf("a 404 = %q, want nothing", got)
 	}
+	if got := note(client.Failure{StatusCode: http.StatusForbidden, Credentialed: true}); !strings.Contains(got, "admin account") {
+		t.Errorf("a 403 = %q, want that the key's user lacks permission", got)
+	}
+}
+
+// What the tools ask of a refusal: whether the thing is not there, and whether the key may not do it.
+func TestIsNotFoundAndIsForbidden(t *testing.T) {
+	t.Parallel()
+
+	status := http.StatusNotFound
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(status) }))
+	t.Cleanup(srv.Close)
+	c, err := New(srv.URL, "the-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for code, want := range map[int][2]bool{http.StatusNotFound: {true, false}, http.StatusForbidden: {false, true}, http.StatusUnauthorized: {false, true}, http.StatusBadRequest: {false, false}} {
+		status = code
+		_, err := c.LibraryFindOne(t.Context(), "l1")
+		if got := [2]bool{IsNotFound(err), IsForbidden(err)}; got != want {
+			t.Errorf("a %d: not found %v, forbidden %v; want %v", code, got[0], got[1], want)
+		}
+	}
+	if IsNotFound(nil) || IsForbidden(nil) {
+		t.Error("no error is neither")
+	}
 }

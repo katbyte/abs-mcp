@@ -4,6 +4,6 @@ package abs
 
 // LibrarySearchAnswerSeries is an object the document declares inline.
 type LibrarySearchAnswerSeries struct {
-	Books  []LibrarySearchAnswerSeriesBooks `json:"books,omitzero"`
-	Series *Series                          `json:"series,omitempty"`
+	Books  []LibraryItem `json:"books,omitzero"`
+	Series *Series       `json:"series,omitempty"`
 }

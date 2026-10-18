@@ -14,7 +14,7 @@ package tools
 import (
 	"slices"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/lock"
 	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -142,8 +142,9 @@ const (
 // registry's work (tools), so the allow and deny patterns are checked
 // against every tool before any is registered.
 type registry struct {
-	client *abs.Client
-	opts   Options
+	// gen is the client for the server and account the tools serve, generated from the API document
+	gen  *api.Client
+	opts Options
 	// tools holds every tool queued, made when the first is (see queued)
 	tools *mcpregistry.Registry
 	// locks keep the calls of one turn from undoing each other (see
@@ -204,13 +205,13 @@ func add[In, Out any](r *registry, kind mcpregistry.Kind, t *mcp.Tool, h mcp.Too
 // queuedFor is every tool queued for these options, with the options made
 // the server's own: registration never calls the client, only the handlers
 // do.
-func queuedFor(client *abs.Client, opts Options) (*registry, error) {
+func queuedFor(gen *api.Client, opts Options) (*registry, error) {
 	opts.Providers = slices.Clone(opts.Providers) // the server's own, whatever the caller does with its slice
 	var err error
 	if opts.AuditSkip, err = auditSkips(opts.AuditSkip); err != nil {
 		return nil, err
 	}
-	r := &registry{client: client, opts: opts}
+	r := &registry{gen: gen, opts: opts}
 	queueTools(r)
 
 	return r, nil
@@ -219,8 +220,8 @@ func queuedFor(client *abs.Client, opts Options) (*registry, error) {
 // RegisterAll adds every tool permitted by opts to the MCP server and returns
 // the names registered. It fails when an allow/deny pattern matches no tool,
 // so a typo cannot silently hide one.
-func RegisterAll(server *mcp.Server, client *abs.Client, opts Options) ([]string, error) {
-	r, err := queuedFor(client, opts)
+func RegisterAll(server *mcp.Server, gen *api.Client, opts Options) ([]string, error) {
+	r, err := queuedFor(gen, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -281,12 +282,12 @@ type ToolInfo = mcpregistry.Info
 // described is every tool queued with no server behind it, for the answers
 // that need none.
 func described(opts Options) (*registry, error) {
-	client, err := abs.New("https://describe.invalid", "describe")
+	gen, err := api.New("https://describe.invalid", "describe")
 	if err != nil {
 		return nil, err
 	}
 
-	return queuedFor(client, opts)
+	return queuedFor(gen, opts)
 }
 
 // Describe lists the tools opts would register, for `abs-mcp tools`. It needs

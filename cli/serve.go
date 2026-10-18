@@ -29,7 +29,7 @@ lets anyone who can reach the port use every tool, say so with --allow-no-auth
 			cmd.SilenceUsage = true
 
 			f := GetFlags()
-			client, err := f.NewClient()
+			gen, err := f.NewClient()
 			if err != nil {
 				return err
 			}
@@ -40,7 +40,7 @@ lets anyone who can reach the port use every tool, say so with --allow-no-auth
 				Version: version.Version,
 			}, nil)
 
-			registered, err := tools.RegisterAll(srv, client, f.ToolOptions())
+			registered, err := tools.RegisterAll(srv, gen, f.ToolOptions())
 			if err != nil {
 				return err
 			}

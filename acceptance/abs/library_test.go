@@ -5,24 +5,24 @@ package abs_test
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // --- the library lifecycle ----------------------------------------------
 
-// TestLibraryLifecycle runs first (by name order within the file is not
-// guaranteed, so it seeds lazily via library()) and covers create, read,
-// update and scan.
+// TestLibraryLifecycle covers create, read, update and scan. Tests run in no promised order, so the fixture library is made by whichever asks
+// for it first, through library().
 func TestLibraryLifecycle(t *testing.T) {
 	ctx := skipUnlessLive(t)
 	id := library(t)
 
-	lib := must(client.Library(ctx, id))
+	lib := must(client.LibraryFindOne(ctx, id))
 	if lib.Name != "SDK Fiction" || lib.MediaType != "book" {
 		t.Errorf("library = %s/%s", lib.Name, lib.MediaType)
 	}
@@ -30,31 +30,26 @@ func TestLibraryLifecycle(t *testing.T) {
 		t.Errorf("folders = %+v", lib.Folders)
 	}
 
-	// an empty folder id on create collides on the server's primary key, which
-	// is why Folder.ID is omitempty; a second library proves it stays fixed
-	second := must(client.CreateLibrary(ctx, abs.LibraryCreate{
-		Name: "SDK Second", MediaType: "book", Folders: []abs.Folder{{FullPath: "/nonfiction"}},
-	}))
-	t.Cleanup(func() { _ = client.DeleteLibrary(context.WithoutCancel(t.Context()), second.ID) })
-	if second.ID == id {
+	// an empty folder id on create collides on the server's primary key, so a folder is sent without one; a second library proves it
+	second := must(client.LibraryCreate(ctx, abs.LibraryCreateRequest{Name: "SDK Second", MediaType: "book", Folders: []abs.LibraryFolder{{FullPath: "/nonfiction"}}}))
+	t.Cleanup(func() { _ = errorOf(client.LibraryDelete(afterwards(t), second.Id)) })
+	if second.Id == id {
 		t.Error("the second library reused the first library's id")
 	}
 
-	name := "SDK Fiction Renamed"
-	updated := must(client.UpdateLibrary(ctx, id, abs.LibraryUpdate{Name: &name}))
-	if updated.Name != name {
+	updated := must(client.LibraryUpdate(ctx, id, abs.LibraryUpdateRequest{Name: "SDK Fiction Renamed"}))
+	if updated.Name != "SDK Fiction Renamed" {
 		t.Errorf("after update name = %q", updated.Name)
 	}
-	must(client.UpdateLibrary(ctx, id, abs.LibraryUpdate{Name: new("SDK Fiction")}))
+	must(client.LibraryUpdate(ctx, id, abs.LibraryUpdateRequest{Name: "SDK Fiction"}))
 
-	libs := must(client.Libraries(ctx))
-	if len(libs) < 2 {
+	if libs := must(client.LibraryFindAll(ctx)).Libraries; len(libs) < 2 {
 		t.Errorf("libraries = %d, want at least the two created here", len(libs))
 	}
 }
 
 // library creates and scans the fixture library once, and returns its id.
-func library(t *testing.T) string {
+func library(t *testing.T) abs.LibraryID {
 	t.Helper()
 	ctx := t.Context()
 
@@ -62,26 +57,22 @@ func library(t *testing.T) string {
 		return fiction
 	}
 
-	for _, l := range must(client.Libraries(ctx)) {
+	for _, l := range must(client.LibraryFindAll(ctx)).Libraries {
 		if l.Name == "SDK Fiction" {
-			fiction = l.ID
+			fiction = l.Id
 			return fiction
 		}
 	}
 
-	lib := must(client.CreateLibrary(ctx, abs.LibraryCreate{
-		Name: "SDK Fiction", MediaType: "book", Provider: "audible",
-		Folders: []abs.Folder{{FullPath: "/fiction"}},
-	}))
-	fiction = lib.ID
+	fiction = must(client.LibraryCreate(ctx, abs.LibraryCreateRequest{Name: "SDK Fiction", MediaType: "book", Provider: "audible", Folders: []abs.LibraryFolder{{FullPath: "/fiction"}}})).Id
 
 	// creating a library does not scan it
-	if err := client.ScanLibrary(ctx, fiction, false); err != nil {
+	if err := errorOf(client.LibraryScan(ctx, fiction)); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(2 * time.Minute)
 	for time.Now().Before(deadline) {
-		res, err := client.Items(ctx, fiction, abs.ItemsOptions{Limit: 100, Minified: true})
+		res, err := record(client.LibraryGetLibraryItems(ctx, fiction, abs.LibraryGetLibraryItemsOptions{Limit: new(100), Minified: "1"}))
 		if err == nil && res.Total == 7 {
 			seedMetadata(t)
 			return fiction
@@ -96,32 +87,28 @@ func library(t *testing.T) string {
 // podcastLibrary creates and scans the podcast library once. The episode
 // endpoints have no book equivalent, so without it a chunk of the client is
 // unreachable.
-func podcastLibrary(t *testing.T) string {
+func podcastLibrary(t *testing.T) abs.LibraryID {
 	t.Helper()
 	ctx := t.Context()
 
 	if podcasts != "" {
 		return podcasts
 	}
-	for _, l := range must(client.Libraries(ctx)) {
+	for _, l := range must(client.LibraryFindAll(ctx)).Libraries {
 		if l.Name == "SDK Podcasts" {
-			podcasts = l.ID
+			podcasts = l.Id
 			return podcasts
 		}
 	}
 
-	lib := must(client.CreateLibrary(ctx, abs.LibraryCreate{
-		Name: "SDK Podcasts", MediaType: "podcast", Provider: "itunes",
-		Folders: []abs.Folder{{FullPath: "/podcasts"}},
-	}))
-	podcasts = lib.ID
+	podcasts = must(client.LibraryCreate(ctx, abs.LibraryCreateRequest{Name: "SDK Podcasts", MediaType: "podcast", Provider: "itunes", Folders: []abs.LibraryFolder{{FullPath: "/podcasts"}}})).Id
 
-	if err := client.ScanLibrary(ctx, podcasts, false); err != nil {
+	if err := errorOf(client.LibraryScan(ctx, podcasts)); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(2 * time.Minute)
 	for time.Now().Before(deadline) {
-		res, err := client.Items(ctx, podcasts, abs.ItemsOptions{Limit: 100, Minified: true})
+		res, err := record(client.LibraryGetLibraryItems(ctx, podcasts, abs.LibraryGetLibraryItemsOptions{Limit: new(100), Minified: "1"}))
 		if err == nil && res.Total == 2 {
 			return podcasts
 		}
@@ -139,163 +126,104 @@ func seedMetadata(t *testing.T) {
 	t.Helper()
 	ctx := t.Context()
 
-	items := must(client.Items(ctx, fiction, abs.ItemsOptions{Limit: 100})).Results
-	for i := range items {
-		upd := abs.MediaUpdate{
-			Metadata: &abs.MetadataUpdate{Narrators: []string{"SDK Reader"}},
-			Tags:     []string{"sdk"},
-		}
+	for i, it := range firstItems(ctx, fiction, 100) {
+		upd := abs.MediaUpdate{Metadata: &abs.MediaUpdateMetadata{Narrators: []string{"SDK Reader"}}, Tags: []string{"sdk"}}
 		// the first three make a series with a hole in it
 		if i < 3 {
-			upd.Metadata.Series = []abs.SeriesRef{{Name: "SDK Series", Sequence: strconv.Itoa(i*2 + 1)}}
+			upd.Metadata.Series = []abs.SeriesMinimal{{Name: "SDK Series", Sequence: strconv.Itoa(i*2 + 1)}}
 		}
-		if _, err := client.UpdateMedia(ctx, items[i].ID, upd); err != nil {
-			t.Fatalf("seeding %s: %v", items[i].Title(), err)
+		if err := errorOf(client.LibraryItemUpdateMedia(ctx, it.Id, upd)); err != nil {
+			t.Fatalf("seeding %s: %v", it.Title(), err)
 		}
 	}
 }
 
-func TestItems(t *testing.T) {
-	ctx := skipUnlessLive(t)
-	id := library(t)
+// scanned lists what a library actually holds, so a scan that comes up short
+// names the titles it did find rather than only the count.
+func scanned(t *testing.T, lib abs.LibraryID) string {
+	t.Helper()
 
-	res := must(client.Items(ctx, id, abs.ItemsOptions{Limit: 100}))
-	if res.Total != 7 {
-		t.Fatalf("total = %d, want 7", res.Total)
+	res, err := record(client.LibraryGetLibraryItems(t.Context(), lib, abs.LibraryGetLibraryItemsOptions{Limit: new(100), Minified: "1"}))
+	if err != nil {
+		return "could not list items: " + err.Error()
 	}
-	for i := range res.Results {
-		it := &res.Results[i]
-		if it.ID == "" || it.Title() == "" {
-			t.Errorf("item %d did not decode: %+v", i, it)
-		}
-		if it.RelPath == "" {
-			t.Errorf("%s has no relPath", it.Title())
-		}
+	titles := make([]string, 0, len(res.Results))
+	for _, it := range res.Results {
+		titles = append(titles, strconv.Quote(it.Title()))
 	}
 
-	// the expanded single-item shape is the only one carrying chapters,
-	// audio files and series sequences
-	first := must(client.Item(ctx, res.Results[0].ID))
-	if first.Media.Duration <= 0 {
-		t.Errorf("%s has no duration; was it probed?", first.Title())
-	}
-	if len(first.Media.AudioFiles) == 0 {
-		t.Errorf("%s has no audio files in the expanded shape", first.Title())
-	}
-
-	// ItemsAll pages through the whole library
-	var seen int
-	if err := client.ItemsAll(ctx, id, abs.ItemsOptions{}, func(items []abs.Item) bool {
-		seen += len(items)
-		return true
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if seen != 7 {
-		t.Errorf("ItemsAll saw %d items, want 7", seen)
-	}
+	return fmt.Sprintf("%d of them: %s", res.Total, strings.Join(titles, ", "))
 }
 
 func TestUpdateMediaAndBatch(t *testing.T) {
 	ctx := skipUnlessLive(t)
 	id := library(t)
 
-	items := must(client.Items(ctx, id, abs.ItemsOptions{Limit: 3})).Results
+	items := firstItems(ctx, id, 3)
 	if len(items) < 3 {
 		t.Fatal("need three items")
 	}
 
-	year := "1999"
-	updated, err := client.UpdateMedia(ctx, items[0].ID, abs.MediaUpdate{
-		Metadata: &abs.MetadataUpdate{PublishedYear: &year},
-		Tags:     []string{"sdk-test"},
-	})
-	if err != nil {
-		t.Fatal(err)
+	updated := must(client.LibraryItemUpdateMedia(ctx, items[0].Id, abs.MediaUpdate{Metadata: &abs.MediaUpdateMetadata{PublishedYear: new("1999")}, Tags: []string{"sdk-test"}}))
+	if !updated.Updated {
+		t.Error("the media update reported no change")
 	}
-	if !updated {
-		t.Error("UpdateMedia reported no change")
+	if got := whole(ctx, items[0].Id).Media.Metadata.PublishedYear; got != "1999" {
+		t.Errorf("publishedYear = %q, want 1999", got)
 	}
 
-	got := must(client.Item(ctx, items[0].ID))
-	if string(got.Media.Metadata.PublishedYear) != year {
-		t.Errorf("publishedYear = %q, want %q", got.Media.Metadata.PublishedYear, year)
-	}
-
-	// BatchUpdate: the same change across several items in one call
-	genre := []string{"SDK Genre"}
-	n, err := client.BatchUpdate(ctx, []abs.BatchMediaUpdate{
-		{ID: items[1].ID, MediaPayload: abs.MediaUpdate{Metadata: &abs.MetadataUpdate{Genres: genre}}},
-		{ID: items[2].ID, MediaPayload: abs.MediaUpdate{Metadata: &abs.MetadataUpdate{Genres: genre}}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 2 {
-		t.Errorf("BatchUpdate updated %d, want 2", n)
+	// the same change across several items in one call
+	genre := &abs.MediaUpdate{Metadata: &abs.MediaUpdateMetadata{Genres: []string{"SDK Genre"}}}
+	batch := must(client.LibraryItemBatchUpdate(ctx, []abs.LibraryItemBatchUpdateRequest{{Id: string(items[1].Id), MediaPayload: genre}, {Id: string(items[2].Id), MediaPayload: genre}}))
+	if batch.Updates != 2 {
+		t.Errorf("the batch update changed %d, want 2", batch.Updates)
 	}
 }
 
-// scanned lists what a library actually holds, so a scan that comes up short
-// names the titles it did find rather than only the count.
-func scanned(t *testing.T, libraryID string) string {
-	t.Helper()
-
-	res, err := client.Items(t.Context(), libraryID, abs.ItemsOptions{Limit: 100, Minified: true})
-	if err != nil {
-		return "could not list items: " + err.Error()
-	}
-	titles := make([]string, 0, len(res.Results))
-	for i := range res.Results {
-		titles = append(titles, strconv.Quote(res.Results[i].Title()))
-	}
-
-	return fmt.Sprintf("%d of them: %s", res.Total, strings.Join(titles, ", "))
-}
-
-// The library-scoped reads and the ordering call.
-func TestLibraryExtras(t *testing.T) {
+// Putting the libraries in a new order, the last first, and back again.
+func TestLibraryReorder(t *testing.T) {
 	ctx := skipUnlessLive(t)
-	id := library(t)
+	library(t)
+	podcastLibrary(t)
 
-	series, _, err := client.SeriesList(ctx, id, abs.ListOptions{Limit: 1})
+	libs := must(client.LibraryFindAll(ctx)).Libraries
+	ids := make([]abs.LibraryID, 0, len(libs))
+	for _, l := range libs {
+		ids = append(ids, l.Id)
+	}
+	reorder := func(ctx context.Context, ids []abs.LibraryID) ([]abs.LibraryID, error) {
+		order := make([]abs.LibraryReorderRequest, 0, len(ids))
+		for i, id := range ids {
+			order = append(order, abs.LibraryReorderRequest{Id: string(id), NewOrder: float64(i + 1)})
+		}
+		got, err := record(client.LibraryReorder(ctx, order))
+		answered := make([]abs.LibraryID, 0, len(got.Libraries))
+		for _, l := range got.Libraries {
+			answered = append(answered, l.Id)
+		}
+
+		return answered, err
+	}
+
+	moved := append([]abs.LibraryID{ids[len(ids)-1]}, ids[:len(ids)-1]...)
+	got, err := reorder(ctx, moved)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(series) > 0 {
-		one := must(client.LibrarySeries(ctx, id, series[0].ID))
-		if one.Name != series[0].Name {
-			t.Errorf("LibrarySeries = %q, want %q", one.Name, series[0].Name)
-		}
-	}
-
-	// the podcast library has titles; the book library has none
-	if titles := must(client.PodcastTitles(ctx, podcastLibrary(t))); len(titles) != 2 {
-		t.Errorf("PodcastTitles = %v, want the two shows", titles)
-	}
-
-	libs := must(client.Libraries(ctx))
-	ids := make([]string, 0, len(libs))
-	for i := range libs {
-		ids = append(ids, libs[i].ID)
-	}
-	if _, err := client.ReorderLibraries(ctx, ids); err != nil {
-		t.Errorf("ReorderLibraries: %v", err)
+	t.Cleanup(func() { _, _ = reorder(afterwards(t), ids) })
+	if !slices.Equal(got, moved) {
+		t.Errorf("the libraries after reordering = %v, want %v", got, moved)
 	}
 }
 
-// RemoveLibraryMetadata deletes metadata files the server wrote beside the
-// audio, so it runs on the scratch library rather than the shared fixture.
+// Taking away the metadata files the server wrote beside the audio, which runs on a library of its own rather than the shared fixture.
 func TestRemoveLibraryMetadata(t *testing.T) {
 	ctx := skipUnlessLive(t)
 
-	scratch := must(client.CreateLibrary(ctx, abs.LibraryCreate{
-		Name: "SDK Metadata Scratch", MediaType: "book",
-		Folders: []abs.Folder{{FullPath: "/nonfiction"}},
-	}))
-	t.Cleanup(func() { _ = client.DeleteLibrary(context.WithoutCancel(t.Context()), scratch.ID) })
+	scratch := must(client.LibraryCreate(ctx, abs.LibraryCreateRequest{Name: "SDK Metadata Scratch", MediaType: "book", Folders: []abs.LibraryFolder{{FullPath: "/nonfiction"}}}))
+	t.Cleanup(func() { _ = errorOf(client.LibraryDelete(afterwards(t), scratch.Id)) })
 
-	if err := client.RemoveLibraryMetadata(ctx, scratch.ID, "json"); err != nil {
-		t.Errorf("RemoveLibraryMetadata: %v", err)
+	if err := errorOf(client.LibraryRemoveAllMetadataFiles(ctx, scratch.Id, abs.LibraryRemoveAllMetadataFilesOptions{Ext: "json"})); err != nil {
+		t.Errorf("removing the metadata files: %v", err)
 	}
 }

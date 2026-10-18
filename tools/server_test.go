@@ -224,6 +224,23 @@ func TestServerSizesInBytes(t *testing.T) {
 	wantAbsent(t, "server_backups", out, "backups.0.size_mb")
 }
 
+// Before the day's first line the server answers the log as empty text, which is an empty log, not a failure.
+func TestServerTasksLogBeforeTheFirstLine(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeABS(t)
+	f.json("GET /api/tasks", `{"tasks":[]}`)
+	f.json("GET /api/logger-data", `{"currentDailyLogs":""}`)
+
+	out, err := toolCaller(t, f)("server_tasks", map[string]any{"log": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out["log"] != nil || out["log_matched"] != nil {
+		t.Errorf("log = %v, matched %v; want neither", out["log"], out["log_matched"])
+	}
+}
+
 // log adds today's server log, newest first, from warnings up unless level
 // says otherwise, narrowed by match and cut at limit; the log's options are
 // refused without it.

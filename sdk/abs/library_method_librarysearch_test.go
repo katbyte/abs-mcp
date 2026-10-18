@@ -17,6 +17,7 @@ func TestOperationLibrarySearch(t *testing.T) {
 	result, err := c.LibrarySearch(t.Context(), LibraryID("v-id"), LibrarySearchOptions{
 		Limit: new(7),
 		Q:     "v-Q",
+		Sort:  "v-Sort",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -26,6 +27,7 @@ func TestOperationLibrarySearch(t *testing.T) {
 	expectRequest(t, r, http.MethodGet, "/api/libraries/v-id/search")
 	expectQuery(t, r, "limit", "7")
 	expectQuery(t, r, "q", "v-Q")
+	expectQuery(t, r, "sort", "v-Sort")
 	if result.HttpResponse == nil || result.HttpResponse.StatusCode != 200 {
 		t.Fatalf("HttpResponse = %+v", result.HttpResponse)
 	}
@@ -44,6 +46,7 @@ func TestOperationLibrarySearch(t *testing.T) {
 	result, err = c.LibrarySearch(t.Context(), LibraryID("v-id"), LibrarySearchOptions{
 		Limit: new(7),
 		Q:     "v-Q",
+		Sort:  "v-Sort",
 	})
 	if err == nil || client.StatusCode(err) != 0 || result.HttpResponse == nil {
 		t.Errorf("an answer that does not decode = %v", err)
@@ -54,6 +57,7 @@ func TestOperationLibrarySearch(t *testing.T) {
 	result, err = c.LibrarySearch(t.Context(), LibraryID("v-id"), LibrarySearchOptions{
 		Limit: new(7),
 		Q:     "v-Q",
+		Sort:  "v-Sort",
 	})
 	if client.StatusCode(err) != 418 || result.HttpResponse == nil {
 		t.Errorf("an undocumented status = %v, %+v", err, result.HttpResponse)

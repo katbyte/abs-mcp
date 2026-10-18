@@ -14,34 +14,34 @@ import (
 
 // MeCreateBookmarkResponse is the result of MeCreateBookmark.
 //
-// Answer is the MeCreateBookmarkAnswer answered, nil when the server answered none (a 204), which
+// Answer is the AudioBookmark answered, nil when the server answered none (a 204), which
 // Answered tells. The same record is embedded, so res.Answer.Name may be read as
 // res.Name; when nothing was answered the embedded record is a zero one, so that
 // read is empty rather than a panic. Only the method sets the two; a response built
 // by hand sets both or neither.
 type MeCreateBookmarkResponse struct {
 	HttpResponse *http.Response
-	Answer       *MeCreateBookmarkAnswer
-	*MeCreateBookmarkAnswer
+	Answer       *AudioBookmark
+	*AudioBookmark
 }
 
 // Answered reports whether the server answered with a body that was decoded:
 // false for a 204, or a call that failed before one came.
 func (r MeCreateBookmarkResponse) Answered() bool { return r.Answer != nil }
 
-// Record is the MeCreateBookmarkAnswer answered, as a value to change and write back, or an
+// Record is the AudioBookmark answered, as a value to change and write back, or an
 // error when the server answered none.
-func (r MeCreateBookmarkResponse) Record() (MeCreateBookmarkAnswer, error) {
+func (r MeCreateBookmarkResponse) Record() (AudioBookmark, error) {
 	if r.Answer == nil {
-		return MeCreateBookmarkAnswer{}, errors.New("MeCreateBookmark answered no MeCreateBookmarkAnswer")
+		return AudioBookmark{}, errors.New("MeCreateBookmark answered no AudioBookmark")
 	}
 
 	return *r.Answer, nil
 }
 
 // MeCreateBookmark calls POST /api/me/item/{id}/bookmark.
-func (c Client) MeCreateBookmark(ctx context.Context, id UserID, input MeCreateBookmarkRequest) (result MeCreateBookmarkResponse, err error) {
-	result.MeCreateBookmarkAnswer = &MeCreateBookmarkAnswer{}
+func (c Client) MeCreateBookmark(ctx context.Context, id LibraryItemID, input MeCreateBookmarkRequest) (result MeCreateBookmarkResponse, err error) {
+	result.AudioBookmark = &AudioBookmark{}
 	opts := client.RequestOptions{
 		ContentType: "application/json",
 		ExpectedStatusCodes: []int{
@@ -70,12 +70,12 @@ func (c Client) MeCreateBookmark(ctx context.Context, id UserID, input MeCreateB
 		return
 	}
 
-	var answer MeCreateBookmarkAnswer
+	var answer AudioBookmark
 	result.Answer = &answer
 	if err = resp.Unmarshal(result.Answer); err != nil {
 		return
 	}
-	result.MeCreateBookmarkAnswer = result.Answer
+	result.AudioBookmark = result.Answer
 
 	return
 }

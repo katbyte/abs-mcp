@@ -28,7 +28,8 @@ func TestAnEpisodeTitleTwoShareIsRefused(t *testing.T) {
 
 	f := newFakeABS(t)
 	f.json("GET /api/items/"+podcastID, twoOfOneTitle())
-	f.json("DELETE /api/podcasts/"+podcastID+"/episode/e2", `OK`)
+	// the server answers a delete with the podcast as it is left
+	f.json("DELETE /api/podcasts/"+podcastID+"/episode/e2", podcastWith(`{"id":"e1","title":"Episode 12"}`))
 	call := toolCaller(t, f)
 
 	for tool, args := range map[string]map[string]any{
@@ -77,7 +78,7 @@ func TestPodcastEpisodeDeleteNeedsConfirm(t *testing.T) {
 	})
 	f.mux.HandleFunc("DELETE /api/podcasts/"+podcastID+"/episode/e2", func(w http.ResponseWriter, _ *http.Request) {
 		gone.Store(true)
-		_, _ = io.WriteString(w, `OK`)
+		_, _ = io.WriteString(w, podcastWith(`{"id":"e1","title":"Episode 12"}`))
 	})
 	call := toolCaller(t, f)
 

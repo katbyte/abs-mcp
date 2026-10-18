@@ -12,7 +12,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
+	"github.com/katbyte/go-kt/pointer"
 )
 
 // Duplicate candidates: pairs audit_duplicates' keys do not join that are
@@ -560,7 +561,7 @@ func candidateApart(a, b int) float64 {
 // lengths come from the listing already swept; the album rule reads the
 // first file's tags, fetched only for the pairs by one author whose lengths
 // already agree, a batch at a time.
-func (d *dupCollector) candidates(ctx context.Context, client *abs.Client, groups []dupGroup, skip map[string]bool) ([]dupCandidate, error) {
+func (d *dupCollector) candidates(ctx context.Context, gen *api.Client, groups []dupGroup, skip map[string]bool) ([]dupCandidate, error) {
 	group := map[string]int{} // item id -> its group, for the pairs already joined
 	for g := range groups {
 		for _, it := range groups[g].Items {
@@ -652,18 +653,18 @@ func (d *dupCollector) candidates(ctx context.Context, client *abs.Client, group
 		}
 	}
 	albums := map[string]string{}
-	ids := make([]string, 0, len(need))
+	ids := make([]api.LibraryItemID, 0, len(need))
 	for id := range need {
-		ids = append(ids, id)
+		ids = append(ids, api.LibraryItemID(id))
 	}
 	slices.Sort(ids)
 	for chunk := range slices.Chunk(ids, embedBatchSize) {
-		items, err := client.ItemsBatch(ctx, chunk)
+		items, err := itemsBatch(ctx, gen, chunk)
 		if err != nil {
 			return nil, err
 		}
 		for k := range items {
-			albums[items[k].ID] = candidateAlbum(&items[k])
+			albums[string(items[k].Id)] = candidateAlbum(&items[k])
 		}
 	}
 	for _, p := range pending {
@@ -723,12 +724,12 @@ func (d *dupCollector) titleCandidate(i, j int, fi, fj *candidateFacts) string {
 }
 
 // candidateAlbum is the album tag of an item's first audio file.
-func candidateAlbum(it *abs.Item) string {
+func candidateAlbum(it *api.LibraryItemExpanded) string {
 	files := slices.Clone(it.Media.AudioFiles)
-	slices.SortStableFunc(files, func(a, b abs.AudioFile) int { return cmp.Compare(a.Index, b.Index) })
+	slices.SortStableFunc(files, func(a, b api.AudioFile) int { return cmp.Compare(a.Index, b.Index) })
 	for _, f := range files {
 		if !f.Exclude {
-			return strings.TrimSpace(f.MetaTags["tagAlbum"])
+			return strings.TrimSpace(pointer.From(f.MetaTags).TagAlbum)
 		}
 	}
 	return ""

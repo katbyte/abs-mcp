@@ -15,13 +15,18 @@ func TestOperationLibraryItemGetLibraryFile(t *testing.T) {
 	t.Parallel()
 
 	c, s := newOperationServer(t, 200, "application/octet-stream", "file bytes")
-	result, err := c.LibraryItemGetLibraryFile(t.Context(), LibraryItemID("v-id"), "p/fileid")
+	result, err := c.LibraryItemGetLibraryFile(t.Context(), LibraryItemID("v-id"), "p/fileid", LibraryItemGetLibraryFileOptions{
+		Range: "v-Range",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	r, body := s.only(t)
 	_ = body
 	expectRequest(t, r, http.MethodGet, "/api/items/v-id/file/p%2Ffileid")
+	if got := r.Header.Get("Range"); got != "v-Range" {
+		t.Errorf("header Range = %q, want %q", got, "v-Range")
+	}
 	if got := r.Header.Get("Accept"); !strings.HasPrefix(got, "application/octet-stream") {
 		t.Errorf("Accept = %q, want application/octet-stream asked for first", got)
 	}
@@ -35,7 +40,9 @@ func TestOperationLibraryItemGetLibraryFile(t *testing.T) {
 		t.Errorf("Bytes over the size = %q, %v", data, err)
 	}
 	c, _ = newOperationServer(t, 200, "application/octet-stream", "file bytes")
-	result, err = c.LibraryItemGetLibraryFile(t.Context(), LibraryItemID("v-id"), "p/fileid")
+	result, err = c.LibraryItemGetLibraryFile(t.Context(), LibraryItemID("v-id"), "p/fileid", LibraryItemGetLibraryFileOptions{
+		Range: "v-Range",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +50,9 @@ func TestOperationLibraryItemGetLibraryFile(t *testing.T) {
 		t.Errorf("Bytes = %q, %v", data, err)
 	}
 	c, _ = newOperationServer(t, 200, "application/octet-stream", "file bytes")
-	result, err = c.LibraryItemGetLibraryFile(t.Context(), LibraryItemID("v-id"), "p/fileid")
+	result, err = c.LibraryItemGetLibraryFile(t.Context(), LibraryItemID("v-id"), "p/fileid", LibraryItemGetLibraryFileOptions{
+		Range: "v-Range",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,8 +72,19 @@ func TestOperationLibraryItemGetLibraryFile(t *testing.T) {
 
 	// a status the operation does not document is an error, with the response
 	c, _ = newOperationServer(t, 418, "text/plain", "no")
-	result, err = c.LibraryItemGetLibraryFile(t.Context(), LibraryItemID("v-id"), "p/fileid")
+	result, err = c.LibraryItemGetLibraryFile(t.Context(), LibraryItemID("v-id"), "p/fileid", LibraryItemGetLibraryFileOptions{
+		Range: "v-Range",
+	})
 	if client.StatusCode(err) != 418 || result.HttpResponse == nil {
 		t.Errorf("an undocumented status = %v, %+v", err, result.HttpResponse)
+	}
+
+	// the options may be left out, and two are refused before any request
+	c, s = newOperationServer(t, 200, "application/octet-stream", "file bytes")
+	if _, err = c.LibraryItemGetLibraryFile(t.Context(), LibraryItemID("v-id"), "p/fileid"); err != nil {
+		t.Errorf("without options = %v", err)
+	}
+	if _, err = c.LibraryItemGetLibraryFile(t.Context(), LibraryItemID("v-id"), "p/fileid", LibraryItemGetLibraryFileOptions{}, LibraryItemGetLibraryFileOptions{}); err == nil || len(s.requests) != 1 {
+		t.Errorf("two options structs = %v, %d requests", err, len(s.requests))
 	}
 }

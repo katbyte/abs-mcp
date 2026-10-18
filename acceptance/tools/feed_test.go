@@ -13,7 +13,9 @@ import (
 	"testing"
 	"time"
 
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/go-kt/mcp/acctest"
+	"github.com/katbyte/go-kt/pointer"
 )
 
 // fetch gets a url as a listener would, with no account: the status and the
@@ -163,11 +165,11 @@ func TestFeedEditLinkExpiresAndDownloads(t *testing.T) {
 	if err != nil || expires.Before(asked.Add(48*time.Hour-time.Minute)) || expires.After(time.Now().Add(48*time.Hour+time.Minute)) {
 		t.Errorf("expires = %v (%v), want two days from now", out["expires"], err)
 	}
-	share, err := admin.ItemShare(ctx, id)
+	share, err := itemShare(admin, id)
 	if err != nil || share == nil {
 		t.Fatalf("the book's link, as the server holds it: %v %v", share, err)
 	}
-	if share.Slug != "zzyzx-lent" || !share.IsDownloadable || share.ExpiresAt != acctest.Str(out["expires"]) {
+	if share.Slug != "zzyzx-lent" || !pointer.From(share.IsDownloadable) || share.ExpiresAt != acctest.Str(out["expires"]) {
 		t.Errorf("the server holds %+v, want it downloadable and closing %v", share, out["expires"])
 	}
 	if status, body := download(t, server, "zzyzx-lent"); status != http.StatusOK {
@@ -185,7 +187,7 @@ func TestFeedEditLinkExpiresAndDownloads(t *testing.T) {
 	if !acctest.BoolOf(out["opened"]) || out["expires"] != nil {
 		t.Fatalf("a link with no end = %v", out)
 	}
-	if share, err = admin.ItemShare(ctx, id); err != nil || share == nil || share.IsDownloadable || share.ExpiresAt != "" {
+	if share, err = itemShare(admin, id); err != nil || share == nil || pointer.From(share.IsDownloadable) || share.ExpiresAt != "" {
 		t.Errorf("the server holds %+v (%v), want it neither downloadable nor closing", share, err)
 	}
 	if status, body := download(t, server, "zzyzx-kept"); status != http.StatusForbidden {
@@ -205,4 +207,14 @@ func TestFeedEditLinkExpiresAndDownloads(t *testing.T) {
 			t.Errorf("feed_edit %v: %s", c.args, msg)
 		}
 	}
+}
+
+// itemShare is the share link open on a book, as the server holds it, or nil for none.
+func itemShare(admin *api.Client, id string) (*api.MediaItemShareForClient, error) {
+	it, err := record(admin.LibraryItemFindOne(ctx, api.LibraryItemID(id), api.LibraryItemFindOneOptions{Expanded: "1", Include: "share"}))
+	if err != nil {
+		return nil, err
+	}
+
+	return it.MediaItemShare, nil
 }

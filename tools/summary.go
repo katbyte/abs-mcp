@@ -1,7 +1,10 @@
 package tools
 
 import (
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	"cmp"
+	"strings"
+
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 )
 
 // progressSummary is the trimmed view of a listening-progress record.
@@ -15,10 +18,11 @@ type progressSummary struct {
 	ProgressID  string `json:"progress_id,omitempty"          jsonschema:"the id of the progress record"`
 }
 
-func progressOf(p *abs.MediaProgress) *progressSummary {
+func progressOf(p *api.MediaProgress) *progressSummary {
 	if p == nil {
 		return nil
 	}
+
 	return &progressSummary{
 		Percent:     percent(p.Progress),
 		Finished:    p.IsFinished,
@@ -26,7 +30,7 @@ func progressOf(p *abs.MediaProgress) *progressSummary {
 		LastUpdate:  fmtTime(p.LastUpdate),
 		FinishedAt:  fmtTime(p.FinishedAt),
 		Hidden:      p.HideFromContinueListening,
-		ProgressID:  p.ID,
+		ProgressID:  p.Id,
 	}
 }
 
@@ -65,50 +69,70 @@ type itemSummary struct {
 	Progress  *progressSummary `json:"progress,omitempty"     jsonschema:"the API key user's listening progress, when known"`
 }
 
-func summarize(it *abs.Item) itemSummary {
-	m := &it.Media.Metadata
+// summarize is the summary of an item as a library's list sends it.
+func summarize(it *api.LibraryItemMinified) itemSummary {
+	filledMinified(it)
+	m := it.Media.Metadata
 	s := itemSummary{
-		ID:        it.ID,
+		ID:        string(it.Id),
 		Type:      it.MediaType,
 		Title:     m.Title,
 		Subtitle:  m.Subtitle,
 		Author:    m.AuthorDisplay(),
 		Narrator:  m.NarratorDisplay(),
 		Series:    m.SeriesDisplay(),
-		Year:      m.PublishedYear.String(),
+		Year:      m.PublishedYear,
 		Publisher: m.Publisher,
 		Genres:    m.Genres,
 		Tags:      it.Media.Tags,
 		Language:  m.Language,
-		ASIN:      m.ASIN,
-		ISBN:      m.ISBN,
+		ASIN:      m.Asin,
+		ISBN:      m.Isbn,
 		Duration:  wholeSec(it.Media.Duration),
 		Size:      it.SizeBytes(),
 		Tracks:    it.Media.NumTracks,
 		Chapters:  it.Media.NumChapters,
 		Ebook:     it.Media.EbookFormat,
-		Abridged:  m.Abridged,
-		Explicit:  m.Explicit,
+		Abridged:  m.Abridged != nil && *m.Abridged,
+		Explicit:  m.Explicit != nil && *m.Explicit,
 		NoCover:   !it.HasCover(),
 		Missing:   it.IsMissing,
 		Invalid:   it.IsInvalid,
 		Path:      it.RelPath,
 		Added:     fmtDate(it.AddedAt),
-		Progress:  progressOf(it.UserMediaProgress),
 	}
 	if it.IsPodcast() {
 		s.Episodes = it.Media.NumEpisodes
-		if s.Episodes == 0 {
-			s.Episodes = len(it.Media.Episodes)
-		}
-		s.FeedURL = m.FeedURL
+		s.FeedURL = m.FeedUrl
 		s.Year = m.ReleaseDate
 	}
-	// expanded shape: counts come from the slices
-	if s.Tracks == 0 && len(it.Media.Tracks) > 0 {
+
+	return s
+}
+
+// summarizeWhole is the summary of an item fetched whole: the list's summary, its counts taken from the files and episodes where the record
+// has none, and the API key user's progress in it.
+func summarizeWhole(it *api.LibraryItemExpanded) itemSummary {
+	filledExpanded(it)
+	m := it.Minified()
+	s := summarize(&m)
+	s.Progress = progressOf(it.UserMediaProgress)
+
+	// a series the whole item names is the whole list of them, not the one a list was filtered by
+	s.Series = it.Media.Metadata.SeriesDisplay()
+	if s.Author == "" {
+		s.Author = it.Media.Metadata.AuthorDisplay()
+	}
+	if s.Narrator == "" {
+		s.Narrator = strings.Join(it.Media.Metadata.Narrators, ", ")
+	}
+	if it.IsPodcast() && s.Episodes == 0 {
+		s.Episodes = len(it.Media.Episodes)
+	}
+	if s.Tracks == 0 {
 		s.Tracks = len(it.Media.Tracks)
 	}
-	if s.Chapters == 0 && len(it.Media.Chapters) > 0 {
+	if s.Chapters == 0 {
 		s.Chapters = len(it.Media.Chapters)
 	}
 	if s.Ebook == "" && it.Media.EbookFile != nil {
@@ -118,11 +142,23 @@ func summarize(it *abs.Item) itemSummary {
 	return s
 }
 
-func summarizeAll(items []abs.Item) []itemSummary {
+// summarizeAll summarizes the items of a list.
+func summarizeAll(items []api.LibraryItemMinified) []itemSummary {
 	out := make([]itemSummary, 0, len(items))
 	for i := range items {
 		out = append(out, summarize(&items[i]))
 	}
+
+	return out
+}
+
+// summarizeAllWhole summarizes items fetched whole.
+func summarizeAllWhole(items []api.LibraryItemExpanded) []itemSummary {
+	out := make([]itemSummary, 0, len(items))
+	for i := range items {
+		out = append(out, summarizeWhole(&items[i]))
+	}
+
 	return out
 }
 
@@ -142,31 +178,43 @@ type episodeSummary struct {
 	Progress    *progressSummary `json:"progress,omitempty"`
 }
 
-func summarizeEpisode(e *abs.Episode, podcastTitle string, withDescription bool) episodeSummary {
+// summarizeEpisode is the summary of a podcast's episode, with the API key user's progress in it when known.
+func summarizeEpisode(e *api.PodcastEpisode, podcastTitle string, withDescription bool, progress *api.MediaProgress) episodeSummary {
 	s := episodeSummary{
-		ID:        e.ID,
-		PodcastID: e.LibraryItemID,
+		ID:        string(e.Id),
+		PodcastID: string(e.LibraryItemId),
 		Podcast:   podcastTitle,
 		Title:     e.Title,
-		Season:    e.Season.String(),
-		Episode:   e.Episode.String(),
+		Season:    e.Season,
+		Episode:   e.Episode,
 		Type:      e.EpisodeType,
-		Published: fmtDate(e.PublishedAt),
-		Duration:  wholeSec(e.DurationSeconds()),
-		Progress:  progressOf(e.Progress),
+		Published: cmp.Or(fmtDate(e.PublishedAt), e.PubDate),
+		Duration:  wholeSec(episodeLength(e)),
+		Progress:  progressOf(progress),
 	}
-	if s.Published == "" {
-		s.Published = e.PubDate
-	}
-	if e.Size > 0 {
-		s.Size = e.Size
-	} else if e.AudioFile != nil {
-		s.Size = e.AudioFile.Metadata.Size
+	switch {
+	case e.Size > 0:
+		s.Size = int64(e.Size)
+	case e.AudioFile != nil && e.AudioFile.Metadata != nil:
+		s.Size = int64(e.AudioFile.Metadata.Size)
 	}
 	if withDescription {
 		s.Description = clip(plain(e.Description), descriptionCap)
 	}
 	return s
+}
+
+// episodeLength is an episode's length in seconds: its own, or its file's.
+func episodeLength(e *api.PodcastEpisode) float64 {
+	switch {
+	case e.Duration > 0:
+		return e.Duration
+	case e.AudioFile != nil:
+		return e.AudioFile.Duration
+	case e.AudioTrack != nil:
+		return e.AudioTrack.Duration
+	}
+	return 0
 }
 
 // libraryRow is the trimmed view of a library.
@@ -179,11 +227,12 @@ type libraryRow struct {
 	LastScan  string   `json:"last_scan,omitempty"`
 }
 
-func libraryRowOf(l *abs.Library) libraryRow {
-	r := libraryRow{ID: l.ID, Name: l.Name, MediaType: l.MediaType, Provider: l.Provider, LastScan: fmtTime(l.LastScan)}
+func libraryRowOf(l *api.Library) libraryRow {
+	r := libraryRow{ID: string(l.Id), Name: l.Name, MediaType: l.MediaType, Provider: l.Provider, LastScan: fmtTime(l.LastScan)}
 	for _, f := range l.Folders {
 		r.Folders = append(r.Folders, f.FullPath)
 	}
+
 	return r
 }
 
@@ -205,18 +254,19 @@ type sessionSummary struct {
 	LastUpdated string `json:"last_updated,omitempty"`
 }
 
-func summarizeSession(s *abs.Session) sessionSummary {
+// summarizeSession is the summary of a playback session as the server holds it.
+func summarizeSession(s *api.PlaybackSession) sessionSummary {
 	out := sessionSummary{
-		ID:          s.ID,
-		UserID:      s.UserID,
-		ItemID:      s.LibraryItemID,
-		EpisodeID:   s.EpisodeID,
+		ID:          s.Id,
+		UserID:      string(s.UserId),
+		ItemID:      string(s.LibraryItemId),
+		EpisodeID:   string(s.EpisodeId),
 		Title:       s.DisplayTitle,
 		Author:      s.DisplayAuthor,
 		Type:        s.MediaType,
 		Listened:    wholeSec(s.TimeListening),
 		Position:    wholeSec(s.CurrentTime),
-		Device:      s.DeviceInfo.Describe(),
+		Device:      cmp.Or(describeDevice(s.DeviceInfo), s.MediaPlayer),
 		Started:     fmtTime(s.StartedAt),
 		LastUpdated: fmtTime(s.UpdatedAt),
 	}
@@ -224,10 +274,26 @@ func summarizeSession(s *abs.Session) sessionSummary {
 		out.Percent = percent(s.CurrentTime / s.Duration)
 	}
 	if s.User != nil {
-		out.User = s.User.Name
+		out.User = cmp.Or(s.User.Name, s.User.Username)
 	}
-	if out.Device == "" && s.MediaPlayer != "" {
-		out.Device = s.MediaPlayer
-	}
+
 	return out
+}
+
+// describeDevice is what played a session, as one line: the app or browser, and the device or system it ran on.
+func describeDevice(d *api.DeviceInfo) string {
+	if d == nil {
+		return ""
+	}
+
+	var parts []string
+	if app := cmp.Or(d.ClientName, d.BrowserName); app != "" {
+		parts = append(parts, app)
+	}
+	device := cmp.Or(d.DeviceName, strings.TrimSpace(d.Manufacturer+" "+d.Model), strings.TrimSpace(d.OsName+" "+d.OsVersion))
+	if device != "" {
+		parts = append(parts, "on "+device)
+	}
+
+	return strings.Join(parts, " ")
 }

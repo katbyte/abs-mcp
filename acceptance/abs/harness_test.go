@@ -1,43 +1,42 @@
 //go:build acceptance
 
-// Live tests for the client against a real Audiobookshelf in Docker.
+// Live tests for the client generated into sdk/abs, against a real Audiobookshelf in Docker.
 //
-// This layer tests one thing: that every response the server sends decodes
-// into the types here with the fields actually populated. It makes no
-// assertions about projection, name resolution or worklists - those are the
-// tool layer's job and are covered in ../tools.
-//
-// The split matters because sdk/abs-byhand is typed against an API with no OpenAPI
-// spec and no versioning (the published docs say outright that they are
-// unmaintained), so this is the layer that notices when the server changes
-// shape underneath us. Every bug found in the first pass of these suites was
-// here, not in the tools.
+// What the server answers to a read is the read sweep's (sweep_test.go): it calls every GET of the API document and fails one that does not
+// decode. What is here is what a sweep cannot do: the calls that change something, in the order a caller makes them, read back to see they
+// took; and the few reads that once came back wrong in a way that decoding alone does not catch. It makes no assertions about projection,
+// name resolution or worklists, which are the tool layer's job and are covered in ../tools.
 //
 //	make test-sdk
 //
-// It runs against its own container, on its own port, so it cannot interfere
-// with the tool suite's fixtures.
+// It runs against its own container, on its own port, so it cannot interfere with the tool suite's fixtures.
 package abs_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"image"
+	_ "image/jpeg" // the covers the suite sets are JPEGs
+	"io"
+	"mime/multipart"
 	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	"github.com/katbyte/abs-mcp/sdk/abs"
 	"github.com/katbyte/abs-mcp/sdk/pandorest/answers"
 	"github.com/katbyte/go-kt/test/env"
 	"github.com/katbyte/go-kt/test/replayproxy"
+	pclient "github.com/katbyte/pandorest/client"
 )
 
 var (
 	client   *abs.Client
 	recorder *answers.Recorder // saves what the server answers when ABS_TEST_ANSWERS is set, for the API document; nil otherwise
-	fiction  string            // the book library these tests create and scan
-	podcasts string            // the podcast library, for the episode endpoints
+	fiction  abs.LibraryID     // the book library these tests create and scan
+	podcasts abs.LibraryID     // the podcast library, for the episode endpoints
 )
 
 var (
@@ -100,7 +99,7 @@ func TestMain(m *testing.M) {
 			os.Exit(1)
 		}
 	}
-	if client, err = abs.New(server, token, recorder.Option()); err != nil {
+	if client, err = connect(token); err != nil {
 		panic(err)
 	}
 	if err := startProxy(); err != nil {
@@ -141,6 +140,11 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+// connect is a client for the suite's server with an account's key, which records what it reads when the suite records.
+func connect(key string, opts ...pclient.Option) (*abs.Client, error) {
+	return abs.New(os.Getenv("ABS_SERVER"), key, append(opts, pclient.WithTransport(recorder.Transport()))...)
+}
+
 func skipUnlessLive(t *testing.T) context.Context {
 	t.Helper()
 
@@ -151,15 +155,88 @@ func skipUnlessLive(t *testing.T) context.Context {
 	return t.Context()
 }
 
-// must unwraps a call that must not fail. Go only allows a multi-value call as
-// a function's sole argument, so this cannot also take *testing.T - it panics
-// instead, which the test framework reports as a failure. That is the right
-// severity here: if the server will not answer, nothing downstream is
-// meaningful.
-func must[T any](v T, err error) T {
+// must is what a call that must not fail answered. Go only allows a multi-value call as a function's sole argument, so this cannot also take
+// *testing.T - it panics instead, which the test framework reports as a failure. That is the right severity here: if the server will not
+// answer, nothing downstream is meaningful.
+func must[T any, R interface{ Record() (T, error) }](res R, err error) T {
+	v, err := record(res, err)
 	if err != nil {
 		panic(err)
 	}
 
 	return v
+}
+
+// record is what a call answered, or the call's error.
+func record[T any, R interface{ Record() (T, error) }](res R, err error) (T, error) {
+	if err != nil {
+		var none T
+		return none, err
+	}
+
+	return res.Record()
+}
+
+// afterwards is the context for a clean-up step, which runs once the test's own context is cancelled.
+func afterwards(t *testing.T) context.Context {
+	t.Helper()
+
+	return context.WithoutCancel(t.Context())
+}
+
+// errorOf is a call's error, its answer dropped, for a step that only needs to know it went through.
+func errorOf[R any](_ R, err error) error { return err }
+
+// firstItems is up to n of a library's items, in the server's own order.
+func firstItems(ctx context.Context, lib abs.LibraryID, n int) []abs.LibraryItemMinified {
+	return must(client.LibraryGetLibraryItems(ctx, lib, abs.LibraryGetLibraryItemsOptions{Limit: &n})).Results
+}
+
+// firstAuthors is up to n of a library's authors. The server pages them only when given a page as well as a limit, and answers a page as
+// results where it answers all of them as authors.
+func firstAuthors(ctx context.Context, lib abs.LibraryID, n int) []abs.Author {
+	return must(client.LibraryGetAuthors(ctx, lib, abs.LibraryGetAuthorsOptions{Limit: &n, Page: new(0)})).Results
+}
+
+// form is a file sent as one field of a form, with the form's other fields beside it, and the content type that names the form's boundary.
+func form(field, filename string, content []byte, fields map[string]string) (body io.Reader, contentType string, err error) {
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	for k, v := range fields {
+		if err := w.WriteField(k, v); err != nil {
+			return nil, "", err
+		}
+	}
+	part, err := w.CreateFormFile(field, filename)
+	if err != nil {
+		return nil, "", err
+	}
+	if _, err := part.Write(content); err != nil {
+		return nil, "", err
+	}
+	if err := w.Close(); err != nil {
+		return nil, "", err
+	}
+
+	return &buf, w.FormDataContentType(), nil
+}
+
+// coverSize is the size of an item's cover, read from the file itself rather than the copy the server cuts to size.
+func coverSize(ctx context.Context, id abs.LibraryItemID) (width, height int, err error) {
+	got, err := client.LibraryItemGetCover(ctx, id, abs.LibraryItemGetCoverOptions{Raw: "1"})
+	if err != nil {
+		return 0, 0, err
+	}
+	body, _ := got.Reader()
+	defer func() { _ = body.Close() }()
+
+	cfg, _, err := image.DecodeConfig(body)
+
+	return cfg.Width, cfg.Height, err
+}
+
+// whole is one item with everything the server keeps on it, its files and chapters among them.
+func whole(ctx context.Context, id abs.LibraryItemID) *abs.LibraryItemExpanded {
+	it := must(client.LibraryItemFindOne(ctx, id, abs.LibraryItemFindOneOptions{Expanded: "1"}))
+	return &it
 }

@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
+	api "github.com/katbyte/abs-mcp/sdk/abs"
 	mcpregistry "github.com/katbyte/go-kt/mcp/registry"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -48,20 +48,20 @@ type matchedOut struct {
 }
 
 // hasASIN is a matched book as the audits that look an asin up see it.
-func hasASIN(it *abs.Item) bool { return strings.TrimSpace(it.Media.Metadata.ASIN) != "" }
+func hasASIN(asin, _ string) bool { return strings.TrimSpace(asin) != "" }
 
 // hasASINOrISBN is a matched book as the provider tag sees it: an isbn names
 // a store's record too.
-func hasASINOrISBN(it *abs.Item) bool {
-	return hasASIN(it) || strings.TrimSpace(it.Media.Metadata.ISBN) != ""
+func hasASINOrISBN(asin, isbn string) bool {
+	return hasASIN(asin, isbn) || strings.TrimSpace(isbn) != ""
 }
 
 // bookWindow is which matched books matchedWindow hands on.
 type bookWindow struct {
-	Filter  string               // a built library_items filter; empty is every book
-	Matched func(*abs.Item) bool // what counts as matched
-	Offset  int                  // matched books to pass over first
-	Limit   int                  // matched books to hand on; 0 is every one
+	Filter  string                       // a built library_items filter; empty is every book
+	Matched func(asin, isbn string) bool // what counts as matched, by the ids a book carries; nil is every book
+	Offset  int                          // matched books to pass over first
+	Limit   int                          // matched books to hand on; 0 is every one
 
 	// seen counts the matched books walked so far, carried on from one
 	// library into the next when a call walks several
@@ -76,30 +76,25 @@ type bookWindow struct {
 // added: by title, a book retitled between two calls moved across the
 // offset and another was skipped. more says a matched book lies past the
 // window.
-func matchedWindow(ctx context.Context, client *abs.Client, libraryID string, w bookWindow, fn func(*abs.Item) error) (more bool, err error) {
+func matchedWindow(ctx context.Context, gen *api.Client, libraryID api.LibraryID, w bookWindow, fn func(*api.LibraryItemMinified) error) (more bool, err error) {
 	seen := w.seen
 	if seen == nil {
 		seen = new(int)
 	}
-	lerr := client.ItemsAll(ctx, libraryID, abs.ItemsOptions{Sort: "addedAt", Filter: w.Filter}, func(items []abs.Item) bool {
-		for j := range items {
-			it := &items[j]
-			if it.IsPodcast() || !w.Matched(it) {
-				continue
-			}
-			*seen++
-			if *seen <= w.Offset {
-				continue
-			}
-			if w.Limit > 0 && *seen > w.Offset+w.Limit {
-				more = true
-				return false
-			}
-			if err = fn(it); err != nil {
-				return false
-			}
+	lerr := eachItem(ctx, gen, libraryID, api.LibraryGetLibraryItemsOptions{Sort: "addedAt", Filter: w.Filter}, func(it *api.LibraryItemMinified) bool {
+		if it.IsPodcast() || (w.Matched != nil && !w.Matched(it.Media.Metadata.Asin, it.Media.Metadata.Isbn)) {
+			return true
 		}
-		return true
+		*seen++
+		if *seen <= w.Offset {
+			return true
+		}
+		if w.Limit > 0 && *seen > w.Offset+w.Limit {
+			more = true
+			return false
+		}
+		err = fn(it)
+		return err == nil
 	})
 	if err != nil {
 		return false, err
@@ -107,22 +102,33 @@ func matchedWindow(ctx context.Context, client *abs.Client, libraryID string, w 
 	return more, lerr
 }
 
+// searchBooks asks a provider for the books matching a title and author, or an asin or isbn given as the title. With an item, the server
+// scores each hit against it and puts the Audible ones nearest its length first.
+func searchBooks(ctx context.Context, gen *api.Client, provider, title, author string, item api.LibraryItemID) ([]api.SearchFindBooksAnswer, error) {
+	got, err := gen.SearchFindBooks(ctx, api.SearchFindBooksOptions{Provider: provider, Title: title, Author: author, Id: string(item)})
+	if err != nil {
+		return nil, err
+	}
+
+	return got.Answer, nil
+}
+
 // checkMatched compares one matched book with the provider's record for its
 // asin, trying each provider in turn until one has it, and adds a finding when
 // they disagree. A book bought from another store is not in the library's
 // region: the same recording has a different asin in each, and a Canadian
 // library set to the US store had none of its Black Library asins found there.
-func checkMatched(ctx context.Context, client *abs.Client, it *abs.Item, providers []string, tolerance float64, fields bool, out *matchedOut) error {
-	asin := strings.TrimSpace(it.Media.Metadata.ASIN)
+func checkMatched(ctx context.Context, gen *api.Client, it *api.LibraryItemMinified, providers []string, tolerance float64, fields bool, out *matchedOut) error {
+	asin := strings.TrimSpace(it.Media.Metadata.Asin)
 	out.Scanned++
-	f := matchedFinding{ID: it.ID, Title: it.Title(), ASIN: asin, Duration: wholeSec(it.Media.Duration)}
-	var hit *abs.BookSearchResult
+	f := matchedFinding{ID: string(it.Id), Title: it.Title(), ASIN: asin, Duration: wholeSec(it.Media.Duration)}
+	var hit *api.SearchFindBooksAnswer
 	for _, provider := range providers {
-		results, err := client.SearchBooks(ctx, provider, asin, "", it.ID)
+		results, err := searchBooks(ctx, gen, provider, asin, "", it.Id)
 		if err != nil {
 			return err
 		}
-		if idx := slices.IndexFunc(results, func(r abs.BookSearchResult) bool { return strings.EqualFold(r.ASIN, asin) }); idx >= 0 {
+		if idx := slices.IndexFunc(results, func(r api.SearchFindBooksAnswer) bool { return strings.EqualFold(r.Asin, asin) }); idx >= 0 {
 			hit, f.FoundIn = &results[idx], provider
 			break
 		}
@@ -149,7 +155,7 @@ func checkMatched(ctx context.Context, client *abs.Client, it *abs.Item, provide
 		out.Counts.NarratorDiffers++
 	}
 	if fields {
-		if f.Fields = fieldDiffs(it, hit); len(f.Fields) > 0 {
+		if f.Fields = fieldDiffs(it.Media.Metadata, it.Media.Metadata.SeriesDisplay(), hit); len(f.Fields) > 0 {
 			f.Problems = append(f.Problems, "fields_differ")
 			out.Counts.FieldsDiffer++
 			if out.FieldCounts == nil {
@@ -187,27 +193,27 @@ type matchedScope struct {
 
 // sweepMatched checks the matched books a scope selects and says whether
 // more lie past the window.
-func sweepMatched(ctx context.Context, client *abs.Client, prov providerConfig, lib *abs.Library, scope matchedScope, out *matchedOut) (more bool, err error) {
+func sweepMatched(ctx context.Context, gen *api.Client, prov providerConfig, lib *api.Library, scope matchedScope, out *matchedOut) (more bool, err error) {
 	if lib.IsPodcast() {
 		return false, nil
 	}
-	if err := prov.checkProviders(ctx, client, scope.Providers, true); err != nil {
+	if err := prov.checkProviders(ctx, gen, scope.Providers, true); err != nil {
 		return false, err
 	}
-	providers := prov.providersFor(scope.Providers, lib)
+	providers := prov.providersFor(scope.Providers, lib.Provider)
 	var filter string
 	if scope.Filter != "" {
-		if filter, err = buildFilter(ctx, client, lib, scope.Filter); err != nil {
+		if filter, err = buildFilter(ctx, gen, lib, scope.Filter); err != nil {
 			return false, err
 		}
 	}
-	return matchedWindow(ctx, client, lib.ID, bookWindow{Filter: filter, Matched: hasASIN, Offset: scope.Offset, Limit: scope.Limit, seen: scope.seen}, func(it *abs.Item) error {
-		return checkMatched(ctx, client, it, prov.providerOrder(it, providers), scope.Tolerance, scope.Fields, out)
+	return matchedWindow(ctx, gen, lib.Id, bookWindow{Filter: filter, Matched: hasASIN, Offset: scope.Offset, Limit: scope.Limit, seen: scope.seen}, func(it *api.LibraryItemMinified) error {
+		return checkMatched(ctx, gen, it, prov.providerOrder(it.Media.Tags, providers), scope.Tolerance, scope.Fields, out)
 	})
 }
 
 func registerMatchedAudit(r *registry) {
-	client := r.client
+	gen := r.gen
 	prov := r.providerConfig()
 
 	type matchedIn struct {
@@ -232,7 +238,7 @@ func registerMatchedAudit(r *registry) {
 		if in.Tolerance < 0 || in.Tolerance > maxDurationTolerance {
 			return nil, matchedOut{}, fmt.Errorf("tolerance %g is outside 0 to %g: the editions it tells apart are ten to nineteen percent shorter, and past a tenth they count as the same recording", in.Tolerance, maxDurationTolerance)
 		}
-		libs, err := resolveLibraries(ctx, client, in.Library)
+		libs, err := resolveLibraries(ctx, gen, in.Library)
 		if err != nil {
 			return nil, matchedOut{}, err
 		}
@@ -253,7 +259,7 @@ func registerMatchedAudit(r *registry) {
 		// count of books walked carries on from one library to the next
 		walked := new(int)
 		for i := range libs {
-			more, err := sweepMatched(ctx, client, prov, &libs[i], matchedScope{Providers: in.Providers, Tolerance: in.Tolerance, Limit: limit, Offset: offset, Filter: strings.TrimSpace(in.Filter), Fields: in.Fields, seen: walked}, &out)
+			more, err := sweepMatched(ctx, gen, prov, &libs[i], matchedScope{Providers: in.Providers, Tolerance: in.Tolerance, Limit: limit, Offset: offset, Filter: strings.TrimSpace(in.Filter), Fields: in.Fields, seen: walked}, &out)
 			if err != nil {
 				return nil, matchedOut{}, err
 			}

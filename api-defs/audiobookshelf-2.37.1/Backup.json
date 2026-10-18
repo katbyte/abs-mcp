@@ -19,7 +19,7 @@
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -123,7 +123,7 @@
       "Response": {
         "ContentType": "text/plain",
         "Type": {
-          "Type": "RawFile"
+          "Type": "String"
         }
       },
       "ExpectedStatusCodes": [
@@ -155,23 +155,8 @@
   ],
   "Models": [
     {
-      "Name": "BackupCreateAnswer",
-      "Fields": [
-        {
-          "Name": "Backups",
-          "JsonName": "backups",
-          "Type": {
-            "Type": "List",
-            "NestedItem": {
-              "Type": "Reference",
-              "ReferenceName": "BackupCreateAnswerBackups"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "Name": "BackupCreateAnswerBackups",
+      "Name": "Backup",
+      "SchemaName": "Backup",
       "Fields": [
         {
           "Name": "BackupDirPath",
@@ -241,6 +226,22 @@
           "JsonName": "serverVersion",
           "Type": {
             "Type": "String"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "BackupCreateAnswer",
+      "Fields": [
+        {
+          "Name": "Backups",
+          "JsonName": "backups",
+          "Type": {
+            "Type": "List",
+            "NestedItem": {
+              "Type": "Reference",
+              "ReferenceName": "Backup"
+            }
           }
         }
       ]
@@ -255,83 +256,8 @@
             "Type": "List",
             "NestedItem": {
               "Type": "Reference",
-              "ReferenceName": "BackupDeleteAnswerBackups"
+              "ReferenceName": "Backup"
             }
-          }
-        }
-      ]
-    },
-    {
-      "Name": "BackupDeleteAnswerBackups",
-      "Fields": [
-        {
-          "Name": "BackupDirPath",
-          "JsonName": "backupDirPath",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "CreatedAt",
-          "JsonName": "createdAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "DatePretty",
-          "JsonName": "datePretty",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "FileSize",
-          "JsonName": "fileSize",
-          "Type": {
-            "Type": "Integer"
-          }
-        },
-        {
-          "Name": "Filename",
-          "JsonName": "filename",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "FullPath",
-          "JsonName": "fullPath",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Key",
-          "JsonName": "key",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Path",
-          "JsonName": "path",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "ServerVersion",
-          "JsonName": "serverVersion",
-          "Type": {
-            "Type": "String"
           }
         }
       ]
@@ -360,83 +286,8 @@
             "Type": "List",
             "NestedItem": {
               "Type": "Reference",
-              "ReferenceName": "BackupGetAllAnswerBackups"
+              "ReferenceName": "Backup"
             }
-          }
-        }
-      ]
-    },
-    {
-      "Name": "BackupGetAllAnswerBackups",
-      "Fields": [
-        {
-          "Name": "BackupDirPath",
-          "JsonName": "backupDirPath",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "CreatedAt",
-          "JsonName": "createdAt",
-          "Type": {
-            "Type": "UnixMillis"
-          }
-        },
-        {
-          "Name": "DatePretty",
-          "JsonName": "datePretty",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "FileSize",
-          "JsonName": "fileSize",
-          "Type": {
-            "Type": "Integer"
-          }
-        },
-        {
-          "Name": "Filename",
-          "JsonName": "filename",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "FullPath",
-          "JsonName": "fullPath",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Id",
-          "JsonName": "id",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Key",
-          "JsonName": "key",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "Path",
-          "JsonName": "path",
-          "Type": {
-            "Type": "String"
-          }
-        },
-        {
-          "Name": "ServerVersion",
-          "JsonName": "serverVersion",
-          "Type": {
-            "Type": "String"
           }
         }
       ]
@@ -462,7 +313,8 @@
           "Type": {
             "Type": "List",
             "NestedItem": {
-              "Type": "Any"
+              "Type": "Reference",
+              "ReferenceName": "Backup"
             }
           }
         }

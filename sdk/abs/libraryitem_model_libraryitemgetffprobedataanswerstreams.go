@@ -9,7 +9,7 @@ type LibraryItemGetFFprobeDataAnswerStreams struct {
 	BitsPerRawSample   string                                             `json:"bits_per_raw_sample,omitempty"`
 	BitsPerSample      float64                                            `json:"bits_per_sample,omitempty"`
 	ChannelLayout      string                                             `json:"channel_layout,omitempty"`
-	Channels           float64                                            `json:"channels,omitempty"`
+	Channels           int                                                `json:"channels,omitempty"`
 	ChromaLocation     string                                             `json:"chroma_location,omitempty"`
 	CodecLongName      string                                             `json:"codec_long_name,omitempty"`
 	CodecName          string                                             `json:"codec_name,omitempty"`
@@ -26,7 +26,7 @@ type LibraryItemGetFFprobeDataAnswerStreams struct {
 	DurationTs         float64                                            `json:"duration_ts,omitempty"`
 	HasBFrames         float64                                            `json:"has_b_frames,omitempty"`
 	Height             float64                                            `json:"height,omitempty"`
-	Index              float64                                            `json:"index,omitempty"`
+	Index              int                                                `json:"index,omitempty"`
 	InitialPadding     float64                                            `json:"initial_padding,omitempty"`
 	Level              float64                                            `json:"level,omitempty"`
 	MimeCodecString    string                                             `json:"mime_codec_string,omitempty"`

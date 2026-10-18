@@ -3,6 +3,7 @@
 package abs
 
 import (
+	"encoding/json"
 	"net/http"
 	"reflect"
 	"testing"
@@ -14,13 +15,21 @@ func TestOperationPlaylistCreate(t *testing.T) {
 	t.Parallel()
 
 	c, s := newOperationServer(t, 200, "application/json", "{}")
-	result, err := c.PlaylistCreate(t.Context())
+	result, err := c.PlaylistCreate(t.Context(), PlaylistCreateRequest{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	r, body := s.only(t)
-	_ = body
 	expectRequest(t, r, http.MethodPost, "/api/playlists")
+	if got := r.Header.Get("Content-Type"); got != "application/json" {
+		t.Errorf("Content-Type = %q, want %q", got, "application/json")
+	}
+	if !json.Valid([]byte(body)) {
+		t.Errorf("body = %q, want JSON", body)
+	}
+	if body != "{}" {
+		t.Errorf("an empty record sent %q, want %q: a field never set went out", body, "{}")
+	}
 	if result.HttpResponse == nil || result.HttpResponse.StatusCode != 200 {
 		t.Fatalf("HttpResponse = %+v", result.HttpResponse)
 	}
@@ -36,14 +45,14 @@ func TestOperationPlaylistCreate(t *testing.T) {
 
 	// an answer that does not decode is an error, with the response
 	c, _ = newOperationServer(t, 200, "application/json", "<html>")
-	result, err = c.PlaylistCreate(t.Context())
+	result, err = c.PlaylistCreate(t.Context(), PlaylistCreateRequest{})
 	if err == nil || client.StatusCode(err) != 0 || result.HttpResponse == nil {
 		t.Errorf("an answer that does not decode = %v", err)
 	}
 
 	// a status the operation does not document is an error, with the response
 	c, _ = newOperationServer(t, 418, "text/plain", "no")
-	result, err = c.PlaylistCreate(t.Context())
+	result, err = c.PlaylistCreate(t.Context(), PlaylistCreateRequest{})
 	if client.StatusCode(err) != 418 || result.HttpResponse == nil {
 		t.Errorf("an undocumented status = %v, %+v", err, result.HttpResponse)
 	}

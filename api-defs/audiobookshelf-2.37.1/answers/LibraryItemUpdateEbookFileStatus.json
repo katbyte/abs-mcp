@@ -1,0 +1,10 @@
+{
+  "operation": "LibraryItemUpdateEbookFileStatus",
+  "method": "PATCH",
+  "path": "/api/items/{id}/ebook/{fileid}/status",
+  "sent": [
+    {
+      "isSupplementary": true
+    }
+  ]
+}

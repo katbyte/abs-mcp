@@ -4,5 +4,5 @@ package abs
 
 // MiscGetLoggerDataAnswer is an object the document declares inline.
 type MiscGetLoggerDataAnswer struct {
-	CurrentDailyLogs []MiscGetLoggerDataAnswerCurrentDailyLogs `json:"currentDailyLogs,omitzero"`
+	CurrentDailyLogs ListOrEmpty[MiscGetLoggerDataAnswerCurrentDailyLogs] `json:"currentDailyLogs,omitzero"`
 }

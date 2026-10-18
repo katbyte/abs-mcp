@@ -8,7 +8,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/katbyte/abs-mcp/sdk/abs-byhand"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -161,24 +160,25 @@ func TestProviderTag(t *testing.T) {
 	t.Parallel()
 
 	var prov providerConfig // the default prefix
-	it := &abs.Item{Media: abs.Media{Tags: []string{"Fantasy", defaultProviderTag + "audible.ca"}}}
-	if prov.providerTag(it) != "audible.ca" {
-		t.Errorf("providerTag = %q", prov.providerTag(it))
+	tags := []string{"Fantasy", defaultProviderTag + "audible.ca"}
+	if prov.providerTag(tags) != "audible.ca" {
+		t.Errorf("providerTag = %q", prov.providerTag(tags))
 	}
-	if got := prov.providerOrder(it, []string{"audible", "audible.ca"}); !slices.Equal(got, []string{"audible.ca", "audible"}) {
+	if got := prov.providerOrder(tags, []string{"audible", "audible.ca"}); !slices.Equal(got, []string{"audible.ca", "audible"}) {
 		t.Errorf("providerOrder = %v", got)
 	}
-	if got := prov.withProviderTag(it.Media.Tags, "audible"); !slices.Equal(got, []string{"Fantasy", defaultProviderTag + "audible"}) {
+	if got := prov.withProviderTag(tags, "audible"); !slices.Equal(got, []string{"Fantasy", defaultProviderTag + "audible"}) {
 		t.Errorf("withProviderTag = %v", got)
 	}
-	none := &abs.Item{MediaType: "book", Media: abs.Media{Tags: []string{defaultProviderTag + "none"}}}
-	if !prov.markedUnmatchable(none) {
+	none := shortBook("", "", "")
+	none.Media.Tags = []string{defaultProviderTag + "none"}
+	if !prov.markedUnmatchable(none.Media.Tags) {
 		t.Error("provider:none not recognised")
 	}
 	if _, bad := prov.auditCheck("unmatched")(none); bad {
 		t.Error("audit_unmatched reported a book marked provider:none")
 	}
-	if got := prov.providerOrder(none, []string{"audible"}); !slices.Equal(got, []string{"audible"}) {
+	if got := prov.providerOrder(none.Media.Tags, []string{"audible"}); !slices.Equal(got, []string{"audible"}) {
 		t.Errorf("providerOrder with none = %v", got)
 	}
 }
@@ -187,15 +187,15 @@ func TestProviderTagPrefix(t *testing.T) {
 	t.Parallel()
 
 	prov := providerConfig{tag: "provider:"}
-	it := &abs.Item{Media: abs.Media{Tags: []string{"zz-provider:audible", "provider:audible.ca"}}}
-	if got := prov.providerTag(it); got != "audible.ca" {
+	tags := []string{"zz-provider:audible", "provider:audible.ca"}
+	if got := prov.providerTag(tags); got != "audible.ca" {
 		t.Errorf("providerTag with a custom prefix = %q", got)
 	}
 	if got := prov.withProviderTag([]string{"Fantasy"}, "audible"); !slices.Equal(got, []string{"Fantasy", "provider:audible"}) {
 		t.Errorf("withProviderTag = %v", got)
 	}
 	off := providerConfig{tag: "off"}
-	if off.providerTag(it) != "" || !slices.Equal(off.withProviderTag([]string{"Fantasy"}, "audible"), []string{"Fantasy"}) {
+	if off.providerTag(tags) != "" || !slices.Equal(off.withProviderTag([]string{"Fantasy"}, "audible"), []string{"Fantasy"}) {
 		t.Error("off still tags")
 	}
 }
@@ -383,9 +383,8 @@ func TestProviderTagTextSaysItIsTheDefault(t *testing.T) {
 	t.Parallel()
 
 	f := newFakeABS(t)
-	client := f.client(t)
 	srv := mcp.NewServer(&mcp.Implementation{Name: "t", Version: "0"}, nil)
-	if _, err := RegisterAll(srv, client, Options{}); err != nil {
+	if _, err := RegisterAll(srv, f.gen(t), Options{}); err != nil {
 		t.Fatal(err)
 	}
 	st, ct := mcp.NewInMemoryTransports()
