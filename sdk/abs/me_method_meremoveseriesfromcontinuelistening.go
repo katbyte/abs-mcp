@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -48,12 +47,12 @@ func (c Client) MeRemoveSeriesFromContinueListening(ctx context.Context, id Seri
 		},
 		HTTPMethod: http.MethodGet,
 		Operation:  "MeRemoveSeriesFromContinueListening",
-		Path:       fmt.Sprintf("/api/me/series/%s/remove-from-continue-listening", url.PathEscape(string(id))),
+		Path:       "/api/me/series/" + url.PathEscape(string(id)) + "/remove-from-continue-listening",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -62,15 +61,15 @@ func (c Client) MeRemoveSeriesFromContinueListening(ctx context.Context, id Seri
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer UserForBrowser
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.UserForBrowser = result.Answer
 
-	return
+	return result, nil
 }

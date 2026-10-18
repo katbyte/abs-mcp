@@ -47,8 +47,7 @@ type LibraryGetSeriesForLibraryOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o LibraryGetSeriesForLibraryOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -66,8 +65,7 @@ func (o LibraryGetSeriesForLibraryOptions) ToQuery() *client.QueryParams {
 // LibraryGetSeriesForLibrary calls GET /api/libraries/{id}/series/{seriesId}.
 func (c Client) LibraryGetSeriesForLibrary(ctx context.Context, id LibraryID, seriesId SeriesID, options ...LibraryGetSeriesForLibraryOptions) (result LibraryGetSeriesForLibraryResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("LibraryGetSeriesForLibrary takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("LibraryGetSeriesForLibrary takes one options struct at most, not %d", len(options))
 	}
 	var option LibraryGetSeriesForLibraryOptions
 	if len(options) == 1 {
@@ -82,12 +80,12 @@ func (c Client) LibraryGetSeriesForLibrary(ctx context.Context, id LibraryID, se
 		HTTPMethod:    http.MethodGet,
 		Operation:     "LibraryGetSeriesForLibrary",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/libraries/%s/series/%s", url.PathEscape(string(id)), url.PathEscape(string(seriesId))),
+		Path:          "/api/libraries/" + url.PathEscape(string(id)) + "/series/" + url.PathEscape(string(seriesId)),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -96,15 +94,15 @@ func (c Client) LibraryGetSeriesForLibrary(ctx context.Context, id LibraryID, se
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer Series
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.Series = result.Answer
 
-	return
+	return result, nil
 }

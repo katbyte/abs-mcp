@@ -54,8 +54,7 @@ type LibraryGetAllSeriesForLibraryOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o LibraryGetAllSeriesForLibraryOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -88,8 +87,7 @@ func (o LibraryGetAllSeriesForLibraryOptions) ToQuery() *client.QueryParams {
 // LibraryGetAllSeriesForLibrary calls GET /api/libraries/{id}/series.
 func (c Client) LibraryGetAllSeriesForLibrary(ctx context.Context, id LibraryID, options ...LibraryGetAllSeriesForLibraryOptions) (result LibraryGetAllSeriesForLibraryResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("LibraryGetAllSeriesForLibrary takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("LibraryGetAllSeriesForLibrary takes one options struct at most, not %d", len(options))
 	}
 	var option LibraryGetAllSeriesForLibraryOptions
 	if len(options) == 1 {
@@ -104,12 +102,12 @@ func (c Client) LibraryGetAllSeriesForLibrary(ctx context.Context, id LibraryID,
 		HTTPMethod:    http.MethodGet,
 		Operation:     "LibraryGetAllSeriesForLibrary",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/libraries/%s/series", url.PathEscape(string(id))),
+		Path:          "/api/libraries/" + url.PathEscape(string(id)) + "/series",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -118,17 +116,17 @@ func (c Client) LibraryGetAllSeriesForLibrary(ctx context.Context, id LibraryID,
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer LibraryGetAllSeriesForLibraryAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.LibraryGetAllSeriesForLibraryAnswer = result.Answer
 
-	return
+	return result, nil
 }
 
 // LibraryGetAllSeriesForLibraryCompleteResult is every result LibraryGetAllSeriesForLibraryComplete loaded.
@@ -142,8 +140,7 @@ type LibraryGetAllSeriesForLibraryCompleteResult struct {
 // options.Limit is the page size, client.DefaultPageSize when unset.
 func (c Client) LibraryGetAllSeriesForLibraryComplete(ctx context.Context, id LibraryID, options ...LibraryGetAllSeriesForLibraryOptions) (result LibraryGetAllSeriesForLibraryCompleteResult, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("LibraryGetAllSeriesForLibraryComplete takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("LibraryGetAllSeriesForLibraryComplete takes one options struct at most, not %d", len(options))
 	}
 	var option LibraryGetAllSeriesForLibraryOptions
 	if len(options) == 1 {
@@ -165,17 +162,16 @@ func (c Client) LibraryGetAllSeriesForLibraryComplete(ctx context.Context, id Li
 		page, err = c.LibraryGetAllSeriesForLibrary(ctx, id, option)
 		result.LatestHttpResponse = page.HttpResponse
 		if err != nil {
-			err = fmt.Errorf("loading results: %w", err)
-			return
+			return result, fmt.Errorf("loading results: %w", err)
 		}
 		if page.Answer == nil || len(page.Answer.Results) == 0 {
-			return
+			return result, nil
 		}
 		result.Items = append(result.Items, page.Answer.Results...)
 		// a short page is the last; so is the page that reaches the total, when
 		// the server reports one
 		if len(page.Answer.Results) < limit || page.Answer.Total > 0 && (number+1)*limit >= page.Answer.Total {
-			return
+			return result, nil
 		}
 		number++
 	}
@@ -225,8 +221,8 @@ func (c Client) LibraryGetAllSeriesForLibraryEach(ctx context.Context, id Librar
 			if page.Answer == nil || len(page.Answer.Results) == 0 {
 				return
 			}
-			for _, item := range page.Answer.Results {
-				if !yield(item, nil) {
+			for i := range page.Answer.Results {
+				if !yield(page.Answer.Results[i], nil) {
 					return
 				}
 			}

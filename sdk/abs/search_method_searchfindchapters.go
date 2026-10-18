@@ -46,8 +46,7 @@ type SearchFindChaptersOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o SearchFindChaptersOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -65,8 +64,7 @@ func (o SearchFindChaptersOptions) ToQuery() *client.QueryParams {
 // SearchFindChapters calls GET /api/search/chapters.
 func (c Client) SearchFindChapters(ctx context.Context, options ...SearchFindChaptersOptions) (result SearchFindChaptersResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("SearchFindChapters takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("SearchFindChapters takes one options struct at most, not %d", len(options))
 	}
 	var option SearchFindChaptersOptions
 	if len(options) == 1 {
@@ -86,7 +84,7 @@ func (c Client) SearchFindChapters(ctx context.Context, options ...SearchFindCha
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -95,15 +93,15 @@ func (c Client) SearchFindChapters(ctx context.Context, options ...SearchFindCha
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer SearchFindChaptersAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.SearchFindChaptersAnswer = result.Answer
 
-	return
+	return result, nil
 }

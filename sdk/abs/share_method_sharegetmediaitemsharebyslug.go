@@ -47,8 +47,7 @@ type ShareGetMediaItemShareBySlugOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o ShareGetMediaItemShareBySlugOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -63,8 +62,7 @@ func (o ShareGetMediaItemShareBySlugOptions) ToQuery() *client.QueryParams {
 // ShareGetMediaItemShareBySlug calls GET /public/share/{slug}.
 func (c Client) ShareGetMediaItemShareBySlug(ctx context.Context, slug string, options ...ShareGetMediaItemShareBySlugOptions) (result ShareGetMediaItemShareBySlugResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("ShareGetMediaItemShareBySlug takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("ShareGetMediaItemShareBySlug takes one options struct at most, not %d", len(options))
 	}
 	var option ShareGetMediaItemShareBySlugOptions
 	if len(options) == 1 {
@@ -79,12 +77,12 @@ func (c Client) ShareGetMediaItemShareBySlug(ctx context.Context, slug string, o
 		HTTPMethod:    http.MethodGet,
 		Operation:     "ShareGetMediaItemShareBySlug",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/public/share/%s", url.PathEscape(slug)),
+		Path:          "/public/share/" + url.PathEscape(slug),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -93,15 +91,15 @@ func (c Client) ShareGetMediaItemShareBySlug(ctx context.Context, slug string, o
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer MediaItemShareForClient
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.MediaItemShareForClient = result.Answer
 
-	return
+	return result, nil
 }

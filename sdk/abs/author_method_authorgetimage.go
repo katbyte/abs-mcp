@@ -28,7 +28,7 @@ type AuthorGetImageResponse struct {
 // answer, so a deferred Close is always safe. The body stays readable after
 // the result goes out of scope, and has no size or time limit of the client's:
 // the caller's context is the one bound on a slow read.
-func (r AuthorGetImageResponse) Reader() (io.ReadCloser, string) {
+func (r AuthorGetImageResponse) Reader() (body io.ReadCloser, contentType string) {
 	if r.HttpResponse == nil || r.HttpResponse.Body == nil {
 		return http.NoBody, ""
 	}
@@ -68,14 +68,14 @@ func (r AuthorGetImageResponse) WriteTo(w io.Writer) (int64, error) {
 	return client.Copy(w, r.HttpResponse.Body)
 }
 
-// Bytes reads the file whole, up to max bytes, and closes the body: a file
-// over max is a client.TooLargeError rather than cut short without a word.
-func (r AuthorGetImageResponse) Bytes(max int64) ([]byte, error) {
+// Bytes reads the file whole, up to limit bytes, and closes the body: a file
+// over the limit is a client.TooLargeError rather than cut short without a word.
+func (r AuthorGetImageResponse) Bytes(limit int64) ([]byte, error) {
 	if r.HttpResponse == nil || r.HttpResponse.Body == nil {
 		return nil, errors.New("no answer to read")
 	}
 
-	return client.ReadAtMost(r.HttpResponse.Body, max)
+	return client.ReadAtMost(r.HttpResponse.Body, limit)
 }
 
 // AuthorGetImageOptions holds the query and header parameters of AuthorGetImage.
@@ -88,8 +88,7 @@ type AuthorGetImageOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o AuthorGetImageOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -113,8 +112,7 @@ func (o AuthorGetImageOptions) ToQuery() *client.QueryParams {
 // AuthorGetImage calls GET /api/authors/{id}/image.
 func (c Client) AuthorGetImage(ctx context.Context, id AuthorID, options ...AuthorGetImageOptions) (result AuthorGetImageResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("AuthorGetImage takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("AuthorGetImage takes one options struct at most, not %d", len(options))
 	}
 	var option AuthorGetImageOptions
 	if len(options) == 1 {
@@ -129,13 +127,13 @@ func (c Client) AuthorGetImage(ctx context.Context, id AuthorID, options ...Auth
 		HTTPMethod:     http.MethodGet,
 		Operation:      "AuthorGetImage",
 		OptionsObject:  option,
-		Path:           fmt.Sprintf("/api/authors/%s/image", url.PathEscape(string(id))),
+		Path:           "/api/authors/" + url.PathEscape(string(id)) + "/image",
 		StreamResponse: true,
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -144,8 +142,8 @@ func (c Client) AuthorGetImage(ctx context.Context, id AuthorID, options ...Auth
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
-	return
+	return result, nil
 }

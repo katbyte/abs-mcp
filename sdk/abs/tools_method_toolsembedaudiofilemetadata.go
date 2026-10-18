@@ -31,8 +31,7 @@ type ToolsEmbedAudioFileMetadataOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o ToolsEmbedAudioFileMetadataOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -50,8 +49,7 @@ func (o ToolsEmbedAudioFileMetadataOptions) ToQuery() *client.QueryParams {
 // ToolsEmbedAudioFileMetadata calls POST /api/tools/item/{id}/embed-metadata.
 func (c Client) ToolsEmbedAudioFileMetadata(ctx context.Context, id LibraryItemID, options ...ToolsEmbedAudioFileMetadataOptions) (result ToolsEmbedAudioFileMetadataResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("ToolsEmbedAudioFileMetadata takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("ToolsEmbedAudioFileMetadata takes one options struct at most, not %d", len(options))
 	}
 	var option ToolsEmbedAudioFileMetadataOptions
 	if len(options) == 1 {
@@ -66,12 +64,12 @@ func (c Client) ToolsEmbedAudioFileMetadata(ctx context.Context, id LibraryItemI
 		HTTPMethod:    http.MethodPost,
 		Operation:     "ToolsEmbedAudioFileMetadata",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/tools/item/%s/embed-metadata", url.PathEscape(string(id))),
+		Path:          "/api/tools/item/" + url.PathEscape(string(id)) + "/embed-metadata",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -80,14 +78,14 @@ func (c Client) ToolsEmbedAudioFileMetadata(ctx context.Context, id LibraryItemI
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer string
 	result.Answer = &answer
-	if err = resp.Text(result.Answer); err != nil {
-		return
+	if err := resp.Text(result.Answer); err != nil {
+		return result, err
 	}
 
-	return
+	return result, nil
 }

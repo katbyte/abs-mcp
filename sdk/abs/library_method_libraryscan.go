@@ -30,8 +30,7 @@ type LibraryScanOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o LibraryScanOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -46,8 +45,7 @@ func (o LibraryScanOptions) ToQuery() *client.QueryParams {
 // LibraryScan calls POST /api/libraries/{id}/scan.
 func (c Client) LibraryScan(ctx context.Context, id LibraryID, options ...LibraryScanOptions) (result LibraryScanResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("LibraryScan takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("LibraryScan takes one options struct at most, not %d", len(options))
 	}
 	var option LibraryScanOptions
 	if len(options) == 1 {
@@ -62,12 +60,12 @@ func (c Client) LibraryScan(ctx context.Context, id LibraryID, options ...Librar
 		HTTPMethod:    http.MethodPost,
 		Operation:     "LibraryScan",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/libraries/%s/scan", url.PathEscape(string(id))),
+		Path:          "/api/libraries/" + url.PathEscape(string(id)) + "/scan",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -76,14 +74,14 @@ func (c Client) LibraryScan(ctx context.Context, id LibraryID, options ...Librar
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer string
 	result.Answer = &answer
-	if err = resp.Text(result.Answer); err != nil {
-		return
+	if err := resp.Text(result.Answer); err != nil {
+		return result, err
 	}
 
-	return
+	return result, nil
 }

@@ -4,7 +4,6 @@ package abs
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -33,16 +32,16 @@ func (c Client) PodcastDownloadEpisodes(ctx context.Context, id LibraryItemID, i
 		},
 		HTTPMethod: http.MethodPost,
 		Operation:  "PodcastDownloadEpisodes",
-		Path:       fmt.Sprintf("/api/podcasts/%s/download-episodes", url.PathEscape(string(id))),
+		Path:       "/api/podcasts/" + url.PathEscape(string(id)) + "/download-episodes",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
-	if err = req.Marshal(input); err != nil {
-		return
+	if err := req.Marshal(input); err != nil {
+		return result, err
 	}
 
 	var resp *client.Response
@@ -51,14 +50,14 @@ func (c Client) PodcastDownloadEpisodes(ctx context.Context, id LibraryItemID, i
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer string
 	result.Answer = &answer
-	if err = resp.Text(result.Answer); err != nil {
-		return
+	if err := resp.Text(result.Answer); err != nil {
+		return result, err
 	}
 
-	return
+	return result, nil
 }

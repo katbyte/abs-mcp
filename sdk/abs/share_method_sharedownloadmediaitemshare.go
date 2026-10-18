@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -28,7 +27,7 @@ type ShareDownloadMediaItemShareResponse struct {
 // answer, so a deferred Close is always safe. The body stays readable after
 // the result goes out of scope, and has no size or time limit of the client's:
 // the caller's context is the one bound on a slow read.
-func (r ShareDownloadMediaItemShareResponse) Reader() (io.ReadCloser, string) {
+func (r ShareDownloadMediaItemShareResponse) Reader() (body io.ReadCloser, contentType string) {
 	if r.HttpResponse == nil || r.HttpResponse.Body == nil {
 		return http.NoBody, ""
 	}
@@ -68,14 +67,14 @@ func (r ShareDownloadMediaItemShareResponse) WriteTo(w io.Writer) (int64, error)
 	return client.Copy(w, r.HttpResponse.Body)
 }
 
-// Bytes reads the file whole, up to max bytes, and closes the body: a file
-// over max is a client.TooLargeError rather than cut short without a word.
-func (r ShareDownloadMediaItemShareResponse) Bytes(max int64) ([]byte, error) {
+// Bytes reads the file whole, up to limit bytes, and closes the body: a file
+// over the limit is a client.TooLargeError rather than cut short without a word.
+func (r ShareDownloadMediaItemShareResponse) Bytes(limit int64) ([]byte, error) {
 	if r.HttpResponse == nil || r.HttpResponse.Body == nil {
 		return nil, errors.New("no answer to read")
 	}
 
-	return client.ReadAtMost(r.HttpResponse.Body, max)
+	return client.ReadAtMost(r.HttpResponse.Body, limit)
 }
 
 // ShareDownloadMediaItemShare calls GET /public/share/{slug}/download.
@@ -87,13 +86,13 @@ func (c Client) ShareDownloadMediaItemShare(ctx context.Context, slug string) (r
 		},
 		HTTPMethod:     http.MethodGet,
 		Operation:      "ShareDownloadMediaItemShare",
-		Path:           fmt.Sprintf("/public/share/%s/download", url.PathEscape(slug)),
+		Path:           "/public/share/" + url.PathEscape(slug) + "/download",
 		StreamResponse: true,
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -102,8 +101,8 @@ func (c Client) ShareDownloadMediaItemShare(ctx context.Context, slug string) (r
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
-	return
+	return result, nil
 }

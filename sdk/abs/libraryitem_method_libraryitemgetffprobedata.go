@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -48,12 +47,12 @@ func (c Client) LibraryItemGetFFprobeData(ctx context.Context, id LibraryItemID,
 		},
 		HTTPMethod: http.MethodGet,
 		Operation:  "LibraryItemGetFFprobeData",
-		Path:       fmt.Sprintf("/api/items/%s/ffprobe/%s", url.PathEscape(string(id)), url.PathEscape(fileid)),
+		Path:       "/api/items/" + url.PathEscape(string(id)) + "/ffprobe/" + url.PathEscape(fileid),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -62,15 +61,15 @@ func (c Client) LibraryItemGetFFprobeData(ctx context.Context, id LibraryItemID,
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer LibraryItemGetFFprobeDataAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.LibraryItemGetFFprobeDataAnswer = result.Answer
 
-	return
+	return result, nil
 }

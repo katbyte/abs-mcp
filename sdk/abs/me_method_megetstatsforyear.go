@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -48,12 +47,12 @@ func (c Client) MeGetStatsForYear(ctx context.Context, year string) (result MeGe
 		},
 		HTTPMethod: http.MethodGet,
 		Operation:  "MeGetStatsForYear",
-		Path:       fmt.Sprintf("/api/me/stats/year/%s", url.PathEscape(year)),
+		Path:       "/api/me/stats/year/" + url.PathEscape(year),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -62,15 +61,15 @@ func (c Client) MeGetStatsForYear(ctx context.Context, year string) (result MeGe
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer MeGetStatsForYearAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.MeGetStatsForYearAnswer = result.Answer
 
-	return
+	return result, nil
 }

@@ -32,8 +32,7 @@ type ToolsEncodeM4bOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o ToolsEncodeM4bOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -54,8 +53,7 @@ func (o ToolsEncodeM4bOptions) ToQuery() *client.QueryParams {
 // ToolsEncodeM4b calls POST /api/tools/item/{id}/encode-m4b.
 func (c Client) ToolsEncodeM4b(ctx context.Context, id LibraryItemID, options ...ToolsEncodeM4bOptions) (result ToolsEncodeM4bResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("ToolsEncodeM4b takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("ToolsEncodeM4b takes one options struct at most, not %d", len(options))
 	}
 	var option ToolsEncodeM4bOptions
 	if len(options) == 1 {
@@ -70,12 +68,12 @@ func (c Client) ToolsEncodeM4b(ctx context.Context, id LibraryItemID, options ..
 		HTTPMethod:    http.MethodPost,
 		Operation:     "ToolsEncodeM4b",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/tools/item/%s/encode-m4b", url.PathEscape(string(id))),
+		Path:          "/api/tools/item/" + url.PathEscape(string(id)) + "/encode-m4b",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -84,14 +82,14 @@ func (c Client) ToolsEncodeM4b(ctx context.Context, id LibraryItemID, options ..
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer string
 	result.Answer = &answer
-	if err = resp.Text(result.Answer); err != nil {
-		return
+	if err := resp.Text(result.Answer); err != nil {
+		return result, err
 	}
 
-	return
+	return result, nil
 }

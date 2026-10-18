@@ -46,8 +46,7 @@ type MeGetAllLibraryItemsInProgressOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o MeGetAllLibraryItemsInProgressOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -62,8 +61,7 @@ func (o MeGetAllLibraryItemsInProgressOptions) ToQuery() *client.QueryParams {
 // MeGetAllLibraryItemsInProgress calls GET /api/me/items-in-progress.
 func (c Client) MeGetAllLibraryItemsInProgress(ctx context.Context, options ...MeGetAllLibraryItemsInProgressOptions) (result MeGetAllLibraryItemsInProgressResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("MeGetAllLibraryItemsInProgress takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("MeGetAllLibraryItemsInProgress takes one options struct at most, not %d", len(options))
 	}
 	var option MeGetAllLibraryItemsInProgressOptions
 	if len(options) == 1 {
@@ -83,7 +81,7 @@ func (c Client) MeGetAllLibraryItemsInProgress(ctx context.Context, options ...M
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -92,15 +90,15 @@ func (c Client) MeGetAllLibraryItemsInProgress(ctx context.Context, options ...M
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer MeGetAllLibraryItemsInProgressAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.MeGetAllLibraryItemsInProgressAnswer = result.Answer
 
-	return
+	return result, nil
 }

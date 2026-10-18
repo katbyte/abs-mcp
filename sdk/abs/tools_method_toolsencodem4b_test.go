@@ -31,7 +31,7 @@ func TestOperationToolsEncodeM4b(t *testing.T) {
 	if got := r.Header.Get("Accept"); !strings.HasPrefix(got, "text/plain") {
 		t.Errorf("Accept = %q, want text/plain asked for first", got)
 	}
-	if result.HttpResponse == nil || result.HttpResponse.StatusCode != 200 {
+	if result.HttpResponse == nil || result.HttpResponse.StatusCode != http.StatusOK {
 		t.Fatalf("HttpResponse = %+v", result.HttpResponse)
 	}
 	if result.Answer == nil || *result.Answer != "some text, as sent\n" {

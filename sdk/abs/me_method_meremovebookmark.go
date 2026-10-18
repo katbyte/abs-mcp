@@ -4,7 +4,6 @@ package abs
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -32,12 +31,12 @@ func (c Client) MeRemoveBookmark(ctx context.Context, id LibraryItemID, time str
 		},
 		HTTPMethod: http.MethodDelete,
 		Operation:  "MeRemoveBookmark",
-		Path:       fmt.Sprintf("/api/me/item/%s/bookmark/%s", url.PathEscape(string(id)), url.PathEscape(time)),
+		Path:       "/api/me/item/" + url.PathEscape(string(id)) + "/bookmark/" + url.PathEscape(time),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -46,14 +45,14 @@ func (c Client) MeRemoveBookmark(ctx context.Context, id LibraryItemID, time str
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer string
 	result.Answer = &answer
-	if err = resp.Text(result.Answer); err != nil {
-		return
+	if err := resp.Text(result.Answer); err != nil {
+		return result, err
 	}
 
-	return
+	return result, nil
 }

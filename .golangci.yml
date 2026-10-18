@@ -80,6 +80,9 @@ linters:
     - makezero                  # finds slice declarations with non-zero initial length but capacity is initialized
 
   exclusions:
+    # the client generated into sdk/abs is linted like the code written by hand, its tests included, so a pandorest release that writes
+    # something the linters flag is caught here
+    generated: disable
     rules:
       # flag names ("repo", "build-type-id", ...) repeat across cobra/viper registration, env binding, and
       # validation lists by design; hoisting them into constants would just add indirection
@@ -105,6 +108,18 @@ linters:
         text: '^G(204|301|304|306|702|703|704)\b'
         linters:
           - gosec
+      # the generated client names operations and fields after the API, such as an API key's token or a password change, which reads as
+      # a credential written into the code (G101) though none is
+      - path: 'sdk/abs/'
+        text: '^G101\b'
+        linters:
+          - gosec
+      # pandorest 0.13.1 writes two path parameters of one type each with its type (id string, index string); until it writes them
+      # combined, the two operations that take two are left to it
+      - path: 'sdk/abs/'
+        text: 'paramTypeCombine'
+        linters:
+          - gocritic
       # the steps of the fix journey take t and are not helpers: marked as helpers, a failure would
       # name the line that ran the step rather than the line in it that failed
       - path: 'acceptance/tools/journey_fix_test\.go'

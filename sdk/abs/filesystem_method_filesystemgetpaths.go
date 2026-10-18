@@ -47,8 +47,7 @@ type FileSystemGetPathsOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o FileSystemGetPathsOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -66,8 +65,7 @@ func (o FileSystemGetPathsOptions) ToQuery() *client.QueryParams {
 // FileSystemGetPaths calls GET /api/filesystem.
 func (c Client) FileSystemGetPaths(ctx context.Context, options ...FileSystemGetPathsOptions) (result FileSystemGetPathsResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("FileSystemGetPaths takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("FileSystemGetPaths takes one options struct at most, not %d", len(options))
 	}
 	var option FileSystemGetPathsOptions
 	if len(options) == 1 {
@@ -87,7 +85,7 @@ func (c Client) FileSystemGetPaths(ctx context.Context, options ...FileSystemGet
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -96,15 +94,15 @@ func (c Client) FileSystemGetPaths(ctx context.Context, options ...FileSystemGet
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer FileSystemGetPathsAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.FileSystemGetPathsAnswer = result.Answer
 
-	return
+	return result, nil
 }

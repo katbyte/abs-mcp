@@ -31,8 +31,7 @@ type LibraryGetUserPersonalizedShelvesOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o LibraryGetUserPersonalizedShelvesOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -53,8 +52,7 @@ func (o LibraryGetUserPersonalizedShelvesOptions) ToQuery() *client.QueryParams 
 // LibraryGetUserPersonalizedShelves calls GET /api/libraries/{id}/personalized.
 func (c Client) LibraryGetUserPersonalizedShelves(ctx context.Context, id LibraryID, options ...LibraryGetUserPersonalizedShelvesOptions) (result LibraryGetUserPersonalizedShelvesResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("LibraryGetUserPersonalizedShelves takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("LibraryGetUserPersonalizedShelves takes one options struct at most, not %d", len(options))
 	}
 	var option LibraryGetUserPersonalizedShelvesOptions
 	if len(options) == 1 {
@@ -68,12 +66,12 @@ func (c Client) LibraryGetUserPersonalizedShelves(ctx context.Context, id Librar
 		HTTPMethod:    http.MethodGet,
 		Operation:     "LibraryGetUserPersonalizedShelves",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/libraries/%s/personalized", url.PathEscape(string(id))),
+		Path:          "/api/libraries/" + url.PathEscape(string(id)) + "/personalized",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -82,12 +80,12 @@ func (c Client) LibraryGetUserPersonalizedShelves(ctx context.Context, id Librar
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
-	if err = resp.Unmarshal(&result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(&result.Answer); err != nil {
+		return result, err
 	}
 
-	return
+	return result, nil
 }

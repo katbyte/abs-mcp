@@ -4,7 +4,6 @@ package abs
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -25,16 +24,16 @@ func (c Client) ShareUpdateMediaItemShareProgress(ctx context.Context, slug stri
 		},
 		HTTPMethod: http.MethodPatch,
 		Operation:  "ShareUpdateMediaItemShareProgress",
-		Path:       fmt.Sprintf("/public/share/%s/progress", url.PathEscape(slug)),
+		Path:       "/public/share/" + url.PathEscape(slug) + "/progress",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
-	if err = req.Marshal(input); err != nil {
-		return
+	if err := req.Marshal(input); err != nil {
+		return result, err
 	}
 
 	var resp *client.Response
@@ -43,8 +42,8 @@ func (c Client) ShareUpdateMediaItemShareProgress(ctx context.Context, slug stri
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
-	return
+	return result, nil
 }

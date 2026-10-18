@@ -48,8 +48,7 @@ type MeGetSessionsOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o MeGetSessionsOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -67,8 +66,7 @@ func (o MeGetSessionsOptions) ToQuery() *client.QueryParams {
 // MeGetSessions calls GET /api/me/sessions.
 func (c Client) MeGetSessions(ctx context.Context, options ...MeGetSessionsOptions) (result MeGetSessionsResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("MeGetSessions takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("MeGetSessions takes one options struct at most, not %d", len(options))
 	}
 	var option MeGetSessionsOptions
 	if len(options) == 1 {
@@ -88,7 +86,7 @@ func (c Client) MeGetSessions(ctx context.Context, options ...MeGetSessionsOptio
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -97,17 +95,17 @@ func (c Client) MeGetSessions(ctx context.Context, options ...MeGetSessionsOptio
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer MeGetSessionsAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.MeGetSessionsAnswer = result.Answer
 
-	return
+	return result, nil
 }
 
 // MeGetSessionsCompleteResult is every result MeGetSessionsComplete loaded.
@@ -121,8 +119,7 @@ type MeGetSessionsCompleteResult struct {
 // options.ItemsPerPage is the page size, client.DefaultPageSize when unset.
 func (c Client) MeGetSessionsComplete(ctx context.Context, options ...MeGetSessionsOptions) (result MeGetSessionsCompleteResult, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("MeGetSessionsComplete takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("MeGetSessionsComplete takes one options struct at most, not %d", len(options))
 	}
 	var option MeGetSessionsOptions
 	if len(options) == 1 {
@@ -144,17 +141,16 @@ func (c Client) MeGetSessionsComplete(ctx context.Context, options ...MeGetSessi
 		page, err = c.MeGetSessions(ctx, option)
 		result.LatestHttpResponse = page.HttpResponse
 		if err != nil {
-			err = fmt.Errorf("loading results: %w", err)
-			return
+			return result, fmt.Errorf("loading results: %w", err)
 		}
 		if page.Answer == nil || len(page.Answer.Sessions) == 0 {
-			return
+			return result, nil
 		}
 		result.Items = append(result.Items, page.Answer.Sessions...)
 		// a short page is the last; so is the page that reaches the total, when
 		// the server reports one
 		if len(page.Answer.Sessions) < limit || page.Answer.Total > 0 && (number+1)*limit >= page.Answer.Total {
-			return
+			return result, nil
 		}
 		number++
 	}
@@ -204,8 +200,8 @@ func (c Client) MeGetSessionsEach(ctx context.Context, options ...MeGetSessionsO
 			if page.Answer == nil || len(page.Answer.Sessions) == 0 {
 				return
 			}
-			for _, item := range page.Answer.Sessions {
-				if !yield(item, nil) {
+			for i := range page.Answer.Sessions {
+				if !yield(page.Answer.Sessions[i], nil) {
 					return
 				}
 			}

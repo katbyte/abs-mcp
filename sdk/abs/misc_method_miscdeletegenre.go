@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -48,12 +47,12 @@ func (c Client) MiscDeleteGenre(ctx context.Context, genre string) (result MiscD
 		},
 		HTTPMethod: http.MethodDelete,
 		Operation:  "MiscDeleteGenre",
-		Path:       fmt.Sprintf("/api/genres/%s", url.PathEscape(genre)),
+		Path:       "/api/genres/" + url.PathEscape(genre),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -62,15 +61,15 @@ func (c Client) MiscDeleteGenre(ctx context.Context, genre string) (result MiscD
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer MiscDeleteGenreAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.MiscDeleteGenreAnswer = result.Answer
 
-	return
+	return result, nil
 }

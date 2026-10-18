@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -48,12 +47,12 @@ func (c Client) UserGetListeningStats(ctx context.Context, id UserID) (result Us
 		},
 		HTTPMethod: http.MethodGet,
 		Operation:  "UserGetListeningStats",
-		Path:       fmt.Sprintf("/api/users/%s/listening-stats", url.PathEscape(string(id))),
+		Path:       "/api/users/" + url.PathEscape(string(id)) + "/listening-stats",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -62,15 +61,15 @@ func (c Client) UserGetListeningStats(ctx context.Context, id UserID) (result Us
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer ListeningStats
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.ListeningStats = result.Answer
 
-	return
+	return result, nil
 }

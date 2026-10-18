@@ -4,7 +4,6 @@ package abs
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -33,16 +32,16 @@ func (c Client) MeCreateUpdateMediaProgress(ctx context.Context, libraryItemId L
 		},
 		HTTPMethod: http.MethodPatch,
 		Operation:  "MeCreateUpdateMediaProgress",
-		Path:       fmt.Sprintf("/api/me/progress/%s/%s", url.PathEscape(string(libraryItemId)), url.PathEscape(string(episodeId))),
+		Path:       "/api/me/progress/" + url.PathEscape(string(libraryItemId)) + "/" + url.PathEscape(string(episodeId)),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
-	if err = req.Marshal(input); err != nil {
-		return
+	if err := req.Marshal(input); err != nil {
+		return result, err
 	}
 
 	var resp *client.Response
@@ -51,14 +50,14 @@ func (c Client) MeCreateUpdateMediaProgress(ctx context.Context, libraryItemId L
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer string
 	result.Answer = &answer
-	if err = resp.Text(result.Answer); err != nil {
-		return
+	if err := resp.Text(result.Answer); err != nil {
+		return result, err
 	}
 
-	return
+	return result, nil
 }

@@ -50,8 +50,7 @@ type LibraryGetUserPlaylistsForLibraryOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o LibraryGetUserPlaylistsForLibraryOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -72,8 +71,7 @@ func (o LibraryGetUserPlaylistsForLibraryOptions) ToQuery() *client.QueryParams 
 // LibraryGetUserPlaylistsForLibrary calls GET /api/libraries/{id}/playlists.
 func (c Client) LibraryGetUserPlaylistsForLibrary(ctx context.Context, id LibraryID, options ...LibraryGetUserPlaylistsForLibraryOptions) (result LibraryGetUserPlaylistsForLibraryResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("LibraryGetUserPlaylistsForLibrary takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("LibraryGetUserPlaylistsForLibrary takes one options struct at most, not %d", len(options))
 	}
 	var option LibraryGetUserPlaylistsForLibraryOptions
 	if len(options) == 1 {
@@ -88,12 +86,12 @@ func (c Client) LibraryGetUserPlaylistsForLibrary(ctx context.Context, id Librar
 		HTTPMethod:    http.MethodGet,
 		Operation:     "LibraryGetUserPlaylistsForLibrary",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/libraries/%s/playlists", url.PathEscape(string(id))),
+		Path:          "/api/libraries/" + url.PathEscape(string(id)) + "/playlists",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -102,17 +100,17 @@ func (c Client) LibraryGetUserPlaylistsForLibrary(ctx context.Context, id Librar
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer LibraryGetUserPlaylistsForLibraryAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.LibraryGetUserPlaylistsForLibraryAnswer = result.Answer
 
-	return
+	return result, nil
 }
 
 // LibraryGetUserPlaylistsForLibraryCompleteResult is every result LibraryGetUserPlaylistsForLibraryComplete loaded.
@@ -126,8 +124,7 @@ type LibraryGetUserPlaylistsForLibraryCompleteResult struct {
 // options.Limit is the page size, client.DefaultPageSize when unset.
 func (c Client) LibraryGetUserPlaylistsForLibraryComplete(ctx context.Context, id LibraryID, options ...LibraryGetUserPlaylistsForLibraryOptions) (result LibraryGetUserPlaylistsForLibraryCompleteResult, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("LibraryGetUserPlaylistsForLibraryComplete takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("LibraryGetUserPlaylistsForLibraryComplete takes one options struct at most, not %d", len(options))
 	}
 	var option LibraryGetUserPlaylistsForLibraryOptions
 	if len(options) == 1 {
@@ -149,17 +146,16 @@ func (c Client) LibraryGetUserPlaylistsForLibraryComplete(ctx context.Context, i
 		page, err = c.LibraryGetUserPlaylistsForLibrary(ctx, id, option)
 		result.LatestHttpResponse = page.HttpResponse
 		if err != nil {
-			err = fmt.Errorf("loading results: %w", err)
-			return
+			return result, fmt.Errorf("loading results: %w", err)
 		}
 		if page.Answer == nil || len(page.Answer.Results) == 0 {
-			return
+			return result, nil
 		}
 		result.Items = append(result.Items, page.Answer.Results...)
 		// a short page is the last; so is the page that reaches the total, when
 		// the server reports one
 		if len(page.Answer.Results) < limit || page.Answer.Total > 0 && (number+1)*limit >= page.Answer.Total {
-			return
+			return result, nil
 		}
 		number++
 	}
@@ -209,8 +205,8 @@ func (c Client) LibraryGetUserPlaylistsForLibraryEach(ctx context.Context, id Li
 			if page.Answer == nil || len(page.Answer.Results) == 0 {
 				return
 			}
-			for _, item := range page.Answer.Results {
-				if !yield(item, nil) {
+			for i := range page.Answer.Results {
+				if !yield(page.Answer.Results[i], nil) {
 					return
 				}
 			}

@@ -46,8 +46,7 @@ type LibraryGetPodcastTitlesOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o LibraryGetPodcastTitlesOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -62,8 +61,7 @@ func (o LibraryGetPodcastTitlesOptions) ToQuery() *client.QueryParams {
 // LibraryGetPodcastTitles calls GET /api/libraries/{id}/podcast-titles.
 func (c Client) LibraryGetPodcastTitles(ctx context.Context, id LibraryID, options ...LibraryGetPodcastTitlesOptions) (result LibraryGetPodcastTitlesResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("LibraryGetPodcastTitles takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("LibraryGetPodcastTitles takes one options struct at most, not %d", len(options))
 	}
 	var option LibraryGetPodcastTitlesOptions
 	if len(options) == 1 {
@@ -78,12 +76,12 @@ func (c Client) LibraryGetPodcastTitles(ctx context.Context, id LibraryID, optio
 		HTTPMethod:    http.MethodGet,
 		Operation:     "LibraryGetPodcastTitles",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/libraries/%s/podcast-titles", url.PathEscape(string(id))),
+		Path:          "/api/libraries/" + url.PathEscape(string(id)) + "/podcast-titles",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -92,15 +90,15 @@ func (c Client) LibraryGetPodcastTitles(ctx context.Context, id LibraryID, optio
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer LibraryGetPodcastTitlesAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.LibraryGetPodcastTitlesAnswer = result.Answer
 
-	return
+	return result, nil
 }

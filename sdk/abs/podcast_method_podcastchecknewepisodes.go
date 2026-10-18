@@ -47,8 +47,7 @@ type PodcastCheckNewEpisodesOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o PodcastCheckNewEpisodesOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -63,8 +62,7 @@ func (o PodcastCheckNewEpisodesOptions) ToQuery() *client.QueryParams {
 // PodcastCheckNewEpisodes calls GET /api/podcasts/{id}/checknew.
 func (c Client) PodcastCheckNewEpisodes(ctx context.Context, id LibraryItemID, options ...PodcastCheckNewEpisodesOptions) (result PodcastCheckNewEpisodesResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("PodcastCheckNewEpisodes takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("PodcastCheckNewEpisodes takes one options struct at most, not %d", len(options))
 	}
 	var option PodcastCheckNewEpisodesOptions
 	if len(options) == 1 {
@@ -79,12 +77,12 @@ func (c Client) PodcastCheckNewEpisodes(ctx context.Context, id LibraryItemID, o
 		HTTPMethod:    http.MethodGet,
 		Operation:     "PodcastCheckNewEpisodes",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/podcasts/%s/checknew", url.PathEscape(string(id))),
+		Path:          "/api/podcasts/" + url.PathEscape(string(id)) + "/checknew",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -93,15 +91,15 @@ func (c Client) PodcastCheckNewEpisodes(ctx context.Context, id LibraryItemID, o
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer PodcastCheckNewEpisodesAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.PodcastCheckNewEpisodesAnswer = result.Answer
 
-	return
+	return result, nil
 }

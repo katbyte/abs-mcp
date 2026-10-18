@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -28,7 +27,7 @@ type ShareGetMediaItemShareAudioTrackResponse struct {
 // answer, so a deferred Close is always safe. The body stays readable after
 // the result goes out of scope, and has no size or time limit of the client's:
 // the caller's context is the one bound on a slow read.
-func (r ShareGetMediaItemShareAudioTrackResponse) Reader() (io.ReadCloser, string) {
+func (r ShareGetMediaItemShareAudioTrackResponse) Reader() (body io.ReadCloser, contentType string) {
 	if r.HttpResponse == nil || r.HttpResponse.Body == nil {
 		return http.NoBody, ""
 	}
@@ -68,14 +67,14 @@ func (r ShareGetMediaItemShareAudioTrackResponse) WriteTo(w io.Writer) (int64, e
 	return client.Copy(w, r.HttpResponse.Body)
 }
 
-// Bytes reads the file whole, up to max bytes, and closes the body: a file
-// over max is a client.TooLargeError rather than cut short without a word.
-func (r ShareGetMediaItemShareAudioTrackResponse) Bytes(max int64) ([]byte, error) {
+// Bytes reads the file whole, up to limit bytes, and closes the body: a file
+// over the limit is a client.TooLargeError rather than cut short without a word.
+func (r ShareGetMediaItemShareAudioTrackResponse) Bytes(limit int64) ([]byte, error) {
 	if r.HttpResponse == nil || r.HttpResponse.Body == nil {
 		return nil, errors.New("no answer to read")
 	}
 
-	return client.ReadAtMost(r.HttpResponse.Body, max)
+	return client.ReadAtMost(r.HttpResponse.Body, limit)
 }
 
 // ShareGetMediaItemShareAudioTrack calls GET /public/share/{slug}/track/{index}.
@@ -88,13 +87,13 @@ func (c Client) ShareGetMediaItemShareAudioTrack(ctx context.Context, slug strin
 		},
 		HTTPMethod:     http.MethodGet,
 		Operation:      "ShareGetMediaItemShareAudioTrack",
-		Path:           fmt.Sprintf("/public/share/%s/track/%s", url.PathEscape(slug), url.PathEscape(index)),
+		Path:           "/public/share/" + url.PathEscape(slug) + "/track/" + url.PathEscape(index),
 		StreamResponse: true,
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -103,8 +102,8 @@ func (c Client) ShareGetMediaItemShareAudioTrack(ctx context.Context, slug strin
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
-	return
+	return result, nil
 }

@@ -25,13 +25,13 @@ func TestOperationLibraryItemDownloadLibraryFile(t *testing.T) {
 	if got := r.Header.Get("Accept"); !strings.HasPrefix(got, "application/octet-stream") {
 		t.Errorf("Accept = %q, want application/octet-stream asked for first", got)
 	}
-	if result.HttpResponse == nil || result.HttpResponse.StatusCode != 200 {
+	if result.HttpResponse == nil || result.HttpResponse.StatusCode != http.StatusOK {
 		t.Fatalf("HttpResponse = %+v", result.HttpResponse)
 	}
 	if _, contentType := result.Reader(); contentType == "" || result.ContentLength() != 10 || result.Filename() != "answer.bin" {
 		t.Errorf("Reader = %q, length %d, filename %q", contentType, result.ContentLength(), result.Filename())
 	}
-	if data, err := result.Bytes(9); err == nil || string(data) != "" {
+	if data, err := result.Bytes(9); err == nil || len(data) != 0 {
 		t.Errorf("Bytes over the size = %q, %v", data, err)
 	}
 	c, _ = newOperationServer(t, 200, "application/octet-stream", "file bytes")

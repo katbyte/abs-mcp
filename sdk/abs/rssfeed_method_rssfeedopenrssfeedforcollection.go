@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -49,16 +48,16 @@ func (c Client) RSSFeedOpenRSSFeedForCollection(ctx context.Context, collectionI
 		},
 		HTTPMethod: http.MethodPost,
 		Operation:  "RSSFeedOpenRSSFeedForCollection",
-		Path:       fmt.Sprintf("/api/feeds/collection/%s/open", url.PathEscape(string(collectionId))),
+		Path:       "/api/feeds/collection/" + url.PathEscape(string(collectionId)) + "/open",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
-	if err = req.Marshal(input); err != nil {
-		return
+	if err := req.Marshal(input); err != nil {
+		return result, err
 	}
 
 	var resp *client.Response
@@ -67,15 +66,15 @@ func (c Client) RSSFeedOpenRSSFeedForCollection(ctx context.Context, collectionI
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer RSSFeedOpenRSSFeedForCollectionAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.RSSFeedOpenRSSFeedForCollectionAnswer = result.Answer
 
-	return
+	return result, nil
 }

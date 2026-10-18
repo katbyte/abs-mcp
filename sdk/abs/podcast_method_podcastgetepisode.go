@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -48,12 +47,12 @@ func (c Client) PodcastGetEpisode(ctx context.Context, id LibraryItemID, episode
 		},
 		HTTPMethod: http.MethodGet,
 		Operation:  "PodcastGetEpisode",
-		Path:       fmt.Sprintf("/api/podcasts/%s/episode/%s", url.PathEscape(string(id)), url.PathEscape(string(episodeId))),
+		Path:       "/api/podcasts/" + url.PathEscape(string(id)) + "/episode/" + url.PathEscape(string(episodeId)),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -62,15 +61,15 @@ func (c Client) PodcastGetEpisode(ctx context.Context, id LibraryItemID, episode
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer PodcastEpisode
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.PodcastEpisode = result.Answer
 
-	return
+	return result, nil
 }

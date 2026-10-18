@@ -51,7 +51,7 @@ func (c Client) MeGetListeningStats(ctx context.Context) (result MeGetListeningS
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -60,15 +60,15 @@ func (c Client) MeGetListeningStats(ctx context.Context) (result MeGetListeningS
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer ListeningStats
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.ListeningStats = result.Answer
 
-	return
+	return result, nil
 }

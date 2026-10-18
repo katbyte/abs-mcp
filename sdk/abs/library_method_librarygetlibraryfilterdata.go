@@ -46,8 +46,7 @@ type LibraryGetLibraryFilterDataOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o LibraryGetLibraryFilterDataOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -62,8 +61,7 @@ func (o LibraryGetLibraryFilterDataOptions) ToQuery() *client.QueryParams {
 // LibraryGetLibraryFilterData calls GET /api/libraries/{id}/filterdata.
 func (c Client) LibraryGetLibraryFilterData(ctx context.Context, id LibraryID, options ...LibraryGetLibraryFilterDataOptions) (result LibraryGetLibraryFilterDataResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("LibraryGetLibraryFilterData takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("LibraryGetLibraryFilterData takes one options struct at most, not %d", len(options))
 	}
 	var option LibraryGetLibraryFilterDataOptions
 	if len(options) == 1 {
@@ -78,12 +76,12 @@ func (c Client) LibraryGetLibraryFilterData(ctx context.Context, id LibraryID, o
 		HTTPMethod:    http.MethodGet,
 		Operation:     "LibraryGetLibraryFilterData",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/libraries/%s/filterdata", url.PathEscape(string(id))),
+		Path:          "/api/libraries/" + url.PathEscape(string(id)) + "/filterdata",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -92,15 +90,15 @@ func (c Client) LibraryGetLibraryFilterData(ctx context.Context, id LibraryID, o
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer LibraryFilterData
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.LibraryFilterData = result.Answer
 
-	return
+	return result, nil
 }

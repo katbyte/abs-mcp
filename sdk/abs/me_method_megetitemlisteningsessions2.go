@@ -49,8 +49,7 @@ type MeGetItemListeningSessions2Options struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o MeGetItemListeningSessions2Options) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -68,8 +67,7 @@ func (o MeGetItemListeningSessions2Options) ToQuery() *client.QueryParams {
 // MeGetItemListeningSessions2 calls GET /api/me/item/listening-sessions/{libraryItemId}.
 func (c Client) MeGetItemListeningSessions2(ctx context.Context, libraryItemId LibraryItemID, options ...MeGetItemListeningSessions2Options) (result MeGetItemListeningSessions2Response, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("MeGetItemListeningSessions2 takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("MeGetItemListeningSessions2 takes one options struct at most, not %d", len(options))
 	}
 	var option MeGetItemListeningSessions2Options
 	if len(options) == 1 {
@@ -84,12 +82,12 @@ func (c Client) MeGetItemListeningSessions2(ctx context.Context, libraryItemId L
 		HTTPMethod:    http.MethodGet,
 		Operation:     "MeGetItemListeningSessions2",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/me/item/listening-sessions/%s", url.PathEscape(string(libraryItemId))),
+		Path:          "/api/me/item/listening-sessions/" + url.PathEscape(string(libraryItemId)),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -98,17 +96,17 @@ func (c Client) MeGetItemListeningSessions2(ctx context.Context, libraryItemId L
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer MeGetItemListeningSessions2Answer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.MeGetItemListeningSessions2Answer = result.Answer
 
-	return
+	return result, nil
 }
 
 // MeGetItemListeningSessions2CompleteResult is every result MeGetItemListeningSessions2Complete loaded.
@@ -122,8 +120,7 @@ type MeGetItemListeningSessions2CompleteResult struct {
 // options.ItemsPerPage is the page size, client.DefaultPageSize when unset.
 func (c Client) MeGetItemListeningSessions2Complete(ctx context.Context, libraryItemId LibraryItemID, options ...MeGetItemListeningSessions2Options) (result MeGetItemListeningSessions2CompleteResult, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("MeGetItemListeningSessions2Complete takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("MeGetItemListeningSessions2Complete takes one options struct at most, not %d", len(options))
 	}
 	var option MeGetItemListeningSessions2Options
 	if len(options) == 1 {
@@ -145,17 +142,16 @@ func (c Client) MeGetItemListeningSessions2Complete(ctx context.Context, library
 		page, err = c.MeGetItemListeningSessions2(ctx, libraryItemId, option)
 		result.LatestHttpResponse = page.HttpResponse
 		if err != nil {
-			err = fmt.Errorf("loading results: %w", err)
-			return
+			return result, fmt.Errorf("loading results: %w", err)
 		}
 		if page.Answer == nil || len(page.Answer.Sessions) == 0 {
-			return
+			return result, nil
 		}
 		result.Items = append(result.Items, page.Answer.Sessions...)
 		// a short page is the last; so is the page that reaches the total, when
 		// the server reports one
 		if len(page.Answer.Sessions) < limit || page.Answer.Total > 0 && (number+1)*limit >= page.Answer.Total {
-			return
+			return result, nil
 		}
 		number++
 	}
@@ -205,8 +201,8 @@ func (c Client) MeGetItemListeningSessions2Each(ctx context.Context, libraryItem
 			if page.Answer == nil || len(page.Answer.Sessions) == 0 {
 				return
 			}
-			for _, item := range page.Answer.Sessions {
-				if !yield(item, nil) {
+			for i := range page.Answer.Sessions {
+				if !yield(page.Answer.Sessions[i], nil) {
 					return
 				}
 			}

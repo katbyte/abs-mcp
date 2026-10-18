@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -48,12 +47,12 @@ func (c Client) PlaylistFindOne(ctx context.Context, id PlaylistID) (result Play
 		},
 		HTTPMethod: http.MethodGet,
 		Operation:  "PlaylistFindOne",
-		Path:       fmt.Sprintf("/api/playlists/%s", url.PathEscape(string(id))),
+		Path:       "/api/playlists/" + url.PathEscape(string(id)),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -62,15 +61,15 @@ func (c Client) PlaylistFindOne(ctx context.Context, id PlaylistID) (result Play
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer Playlist
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.Playlist = result.Answer
 
-	return
+	return result, nil
 }

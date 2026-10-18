@@ -46,8 +46,7 @@ type LibraryStatsOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o LibraryStatsOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -62,8 +61,7 @@ func (o LibraryStatsOptions) ToQuery() *client.QueryParams {
 // LibraryStats calls GET /api/libraries/{id}/stats.
 func (c Client) LibraryStats(ctx context.Context, id LibraryID, options ...LibraryStatsOptions) (result LibraryStatsResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("LibraryStats takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("LibraryStats takes one options struct at most, not %d", len(options))
 	}
 	var option LibraryStatsOptions
 	if len(options) == 1 {
@@ -78,12 +76,12 @@ func (c Client) LibraryStats(ctx context.Context, id LibraryID, options ...Libra
 		HTTPMethod:    http.MethodGet,
 		Operation:     "LibraryStats",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/libraries/%s/stats", url.PathEscape(string(id))),
+		Path:          "/api/libraries/" + url.PathEscape(string(id)) + "/stats",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -92,15 +90,15 @@ func (c Client) LibraryStats(ctx context.Context, id LibraryID, options ...Libra
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer LibraryStatsAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.LibraryStatsAnswer = result.Answer
 
-	return
+	return result, nil
 }

@@ -46,8 +46,7 @@ type SeriesFindOneOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o SeriesFindOneOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -62,8 +61,7 @@ func (o SeriesFindOneOptions) ToQuery() *client.QueryParams {
 // SeriesFindOne calls GET /api/series/{id}.
 func (c Client) SeriesFindOne(ctx context.Context, id SeriesID, options ...SeriesFindOneOptions) (result SeriesFindOneResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("SeriesFindOne takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("SeriesFindOne takes one options struct at most, not %d", len(options))
 	}
 	var option SeriesFindOneOptions
 	if len(options) == 1 {
@@ -78,12 +76,12 @@ func (c Client) SeriesFindOne(ctx context.Context, id SeriesID, options ...Serie
 		HTTPMethod:    http.MethodGet,
 		Operation:     "SeriesFindOne",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/series/%s", url.PathEscape(string(id))),
+		Path:          "/api/series/" + url.PathEscape(string(id)),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -92,15 +90,15 @@ func (c Client) SeriesFindOne(ctx context.Context, id SeriesID, options ...Serie
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer Series
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.Series = result.Answer
 
-	return
+	return result, nil
 }

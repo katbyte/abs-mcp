@@ -49,8 +49,7 @@ type LibraryGetRecentEpisodesOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o LibraryGetRecentEpisodesOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -71,8 +70,7 @@ func (o LibraryGetRecentEpisodesOptions) ToQuery() *client.QueryParams {
 // LibraryGetRecentEpisodes calls GET /api/libraries/{id}/recent-episodes.
 func (c Client) LibraryGetRecentEpisodes(ctx context.Context, id LibraryID, options ...LibraryGetRecentEpisodesOptions) (result LibraryGetRecentEpisodesResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("LibraryGetRecentEpisodes takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("LibraryGetRecentEpisodes takes one options struct at most, not %d", len(options))
 	}
 	var option LibraryGetRecentEpisodesOptions
 	if len(options) == 1 {
@@ -87,12 +85,12 @@ func (c Client) LibraryGetRecentEpisodes(ctx context.Context, id LibraryID, opti
 		HTTPMethod:    http.MethodGet,
 		Operation:     "LibraryGetRecentEpisodes",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/libraries/%s/recent-episodes", url.PathEscape(string(id))),
+		Path:          "/api/libraries/" + url.PathEscape(string(id)) + "/recent-episodes",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -101,15 +99,15 @@ func (c Client) LibraryGetRecentEpisodes(ctx context.Context, id LibraryID, opti
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer LibraryGetRecentEpisodesAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.LibraryGetRecentEpisodesAnswer = result.Answer
 
-	return
+	return result, nil
 }

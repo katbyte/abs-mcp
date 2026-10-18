@@ -51,7 +51,7 @@ func (c Client) MiscGetAuthSettings(ctx context.Context) (result MiscGetAuthSett
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -60,15 +60,15 @@ func (c Client) MiscGetAuthSettings(ctx context.Context) (result MiscGetAuthSett
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer MiscGetAuthSettingsAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.MiscGetAuthSettingsAnswer = result.Answer
 
-	return
+	return result, nil
 }

@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -48,12 +47,12 @@ func (c Client) MiscDeleteTag(ctx context.Context, tag string) (result MiscDelet
 		},
 		HTTPMethod: http.MethodDelete,
 		Operation:  "MiscDeleteTag",
-		Path:       fmt.Sprintf("/api/tags/%s", url.PathEscape(tag)),
+		Path:       "/api/tags/" + url.PathEscape(tag),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -62,15 +61,15 @@ func (c Client) MiscDeleteTag(ctx context.Context, tag string) (result MiscDelet
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer MiscDeleteTagAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.MiscDeleteTagAnswer = result.Answer
 
-	return
+	return result, nil
 }

@@ -4,7 +4,6 @@ package abs
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -32,12 +31,12 @@ func (c Client) LibraryItemDeleteLibraryFile(ctx context.Context, id LibraryItem
 		},
 		HTTPMethod: http.MethodDelete,
 		Operation:  "LibraryItemDeleteLibraryFile",
-		Path:       fmt.Sprintf("/api/items/%s/file/%s", url.PathEscape(string(id)), url.PathEscape(fileid)),
+		Path:       "/api/items/" + url.PathEscape(string(id)) + "/file/" + url.PathEscape(fileid),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -46,14 +45,14 @@ func (c Client) LibraryItemDeleteLibraryFile(ctx context.Context, id LibraryItem
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer string
 	result.Answer = &answer
-	if err = resp.Text(result.Answer); err != nil {
-		return
+	if err := resp.Text(result.Answer); err != nil {
+		return result, err
 	}
 
-	return
+	return result, nil
 }

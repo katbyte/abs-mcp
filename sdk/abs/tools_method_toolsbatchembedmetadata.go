@@ -30,8 +30,7 @@ type ToolsBatchEmbedMetadataOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o ToolsBatchEmbedMetadataOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -49,8 +48,7 @@ func (o ToolsBatchEmbedMetadataOptions) ToQuery() *client.QueryParams {
 // ToolsBatchEmbedMetadata calls POST /api/tools/batch/embed-metadata.
 func (c Client) ToolsBatchEmbedMetadata(ctx context.Context, input ToolsBatchEmbedMetadataRequest, options ...ToolsBatchEmbedMetadataOptions) (result ToolsBatchEmbedMetadataResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("ToolsBatchEmbedMetadata takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("ToolsBatchEmbedMetadata takes one options struct at most, not %d", len(options))
 	}
 	var option ToolsBatchEmbedMetadataOptions
 	if len(options) == 1 {
@@ -71,11 +69,11 @@ func (c Client) ToolsBatchEmbedMetadata(ctx context.Context, input ToolsBatchEmb
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
-	if err = req.Marshal(input); err != nil {
-		return
+	if err := req.Marshal(input); err != nil {
+		return result, err
 	}
 
 	var resp *client.Response
@@ -84,14 +82,14 @@ func (c Client) ToolsBatchEmbedMetadata(ctx context.Context, input ToolsBatchEmb
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer string
 	result.Answer = &answer
-	if err = resp.Text(result.Answer); err != nil {
-		return
+	if err := resp.Text(result.Answer); err != nil {
+		return result, err
 	}
 
-	return
+	return result, nil
 }

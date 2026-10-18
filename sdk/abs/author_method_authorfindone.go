@@ -46,8 +46,7 @@ type AuthorFindOneOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o AuthorFindOneOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -62,8 +61,7 @@ func (o AuthorFindOneOptions) ToQuery() *client.QueryParams {
 // AuthorFindOne calls GET /api/authors/{id}.
 func (c Client) AuthorFindOne(ctx context.Context, id AuthorID, options ...AuthorFindOneOptions) (result AuthorFindOneResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("AuthorFindOne takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("AuthorFindOne takes one options struct at most, not %d", len(options))
 	}
 	var option AuthorFindOneOptions
 	if len(options) == 1 {
@@ -78,12 +76,12 @@ func (c Client) AuthorFindOne(ctx context.Context, id AuthorID, options ...Autho
 		HTTPMethod:    http.MethodGet,
 		Operation:     "AuthorFindOne",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/authors/%s", url.PathEscape(string(id))),
+		Path:          "/api/authors/" + url.PathEscape(string(id)),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -92,15 +90,15 @@ func (c Client) AuthorFindOne(ctx context.Context, id AuthorID, options ...Autho
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer Author
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.Author = result.Answer
 
-	return
+	return result, nil
 }

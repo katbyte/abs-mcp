@@ -45,8 +45,7 @@ type MiscGetTasksOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o MiscGetTasksOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -61,8 +60,7 @@ func (o MiscGetTasksOptions) ToQuery() *client.QueryParams {
 // MiscGetTasks calls GET /api/tasks.
 func (c Client) MiscGetTasks(ctx context.Context, options ...MiscGetTasksOptions) (result MiscGetTasksResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("MiscGetTasks takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("MiscGetTasks takes one options struct at most, not %d", len(options))
 	}
 	var option MiscGetTasksOptions
 	if len(options) == 1 {
@@ -82,7 +80,7 @@ func (c Client) MiscGetTasks(ctx context.Context, options ...MiscGetTasksOptions
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -91,15 +89,15 @@ func (c Client) MiscGetTasks(ctx context.Context, options ...MiscGetTasksOptions
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer MiscGetTasksAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.MiscGetTasksAnswer = result.Answer
 
-	return
+	return result, nil
 }

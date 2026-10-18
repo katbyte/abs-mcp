@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -49,16 +48,16 @@ func (c Client) LibraryItemMatch(ctx context.Context, id LibraryItemID, input Li
 		},
 		HTTPMethod: http.MethodPost,
 		Operation:  "LibraryItemMatch",
-		Path:       fmt.Sprintf("/api/items/%s/match", url.PathEscape(string(id))),
+		Path:       "/api/items/" + url.PathEscape(string(id)) + "/match",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
-	if err = req.Marshal(input); err != nil {
-		return
+	if err := req.Marshal(input); err != nil {
+		return result, err
 	}
 
 	var resp *client.Response
@@ -67,15 +66,15 @@ func (c Client) LibraryItemMatch(ctx context.Context, id LibraryItemID, input Li
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer LibraryItemMatchAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.LibraryItemMatchAnswer = result.Answer
 
-	return
+	return result, nil
 }

@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -49,16 +48,16 @@ func (c Client) CollectionRemoveBatch(ctx context.Context, id CollectionID, inpu
 		},
 		HTTPMethod: http.MethodPost,
 		Operation:  "CollectionRemoveBatch",
-		Path:       fmt.Sprintf("/api/collections/%s/batch/remove", url.PathEscape(string(id))),
+		Path:       "/api/collections/" + url.PathEscape(string(id)) + "/batch/remove",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
-	if err = req.Marshal(input); err != nil {
-		return
+	if err := req.Marshal(input); err != nil {
+		return result, err
 	}
 
 	var resp *client.Response
@@ -67,15 +66,15 @@ func (c Client) CollectionRemoveBatch(ctx context.Context, id CollectionID, inpu
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer Collection
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.Collection = result.Answer
 
-	return
+	return result, nil
 }

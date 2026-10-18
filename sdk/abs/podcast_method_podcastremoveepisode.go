@@ -46,8 +46,7 @@ type PodcastRemoveEpisodeOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o PodcastRemoveEpisodeOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -62,8 +61,7 @@ func (o PodcastRemoveEpisodeOptions) ToQuery() *client.QueryParams {
 // PodcastRemoveEpisode calls DELETE /api/podcasts/{id}/episode/{episodeId}.
 func (c Client) PodcastRemoveEpisode(ctx context.Context, id LibraryItemID, episodeId EpisodeID, options ...PodcastRemoveEpisodeOptions) (result PodcastRemoveEpisodeResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("PodcastRemoveEpisode takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("PodcastRemoveEpisode takes one options struct at most, not %d", len(options))
 	}
 	var option PodcastRemoveEpisodeOptions
 	if len(options) == 1 {
@@ -78,12 +76,12 @@ func (c Client) PodcastRemoveEpisode(ctx context.Context, id LibraryItemID, epis
 		HTTPMethod:    http.MethodDelete,
 		Operation:     "PodcastRemoveEpisode",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/podcasts/%s/episode/%s", url.PathEscape(string(id)), url.PathEscape(string(episodeId))),
+		Path:          "/api/podcasts/" + url.PathEscape(string(id)) + "/episode/" + url.PathEscape(string(episodeId)),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -92,15 +90,15 @@ func (c Client) PodcastRemoveEpisode(ctx context.Context, id LibraryItemID, epis
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer LibraryItem
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.LibraryItem = result.Answer
 
-	return
+	return result, nil
 }

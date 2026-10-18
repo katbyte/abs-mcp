@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -49,16 +48,16 @@ func (c Client) ApiKeyUpdate(ctx context.Context, id string, input ApiKeyUpdateR
 		},
 		HTTPMethod: http.MethodPatch,
 		Operation:  "ApiKeyUpdate",
-		Path:       fmt.Sprintf("/api/api-keys/%s", url.PathEscape(id)),
+		Path:       "/api/api-keys/" + url.PathEscape(id),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
-	if err = req.Marshal(input); err != nil {
-		return
+	if err := req.Marshal(input); err != nil {
+		return result, err
 	}
 
 	var resp *client.Response
@@ -67,15 +66,15 @@ func (c Client) ApiKeyUpdate(ctx context.Context, id string, input ApiKeyUpdateR
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer ApiKeyUpdateAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.ApiKeyUpdateAnswer = result.Answer
 
-	return
+	return result, nil
 }

@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -48,12 +47,12 @@ func (c Client) MeGetBookmarksForLibraryItem(ctx context.Context, libraryItemId 
 		},
 		HTTPMethod: http.MethodGet,
 		Operation:  "MeGetBookmarksForLibraryItem",
-		Path:       fmt.Sprintf("/api/me/bookmarks/%s", url.PathEscape(string(libraryItemId))),
+		Path:       "/api/me/bookmarks/" + url.PathEscape(string(libraryItemId)),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -62,15 +61,15 @@ func (c Client) MeGetBookmarksForLibraryItem(ctx context.Context, libraryItemId 
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer MeGetBookmarksForLibraryItemAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.MeGetBookmarksForLibraryItemAnswer = result.Answer
 
-	return
+	return result, nil
 }

@@ -4,6 +4,7 @@ package abs
 
 import (
 	"errors"
+	"slices"
 
 	"github.com/katbyte/pandorest/client"
 )
@@ -33,7 +34,7 @@ func New(baseURL, apiKey string, opts ...client.Option) (*Client, error) {
 		return nil, errors.New("API key is required")
 	}
 	// the credential is a secret whatever the authorizer makes of it, so no error repeats it
-	c, err := service.New(baseURL, client.Bearer(apiKey), append(opts[:len(opts):len(opts)], client.WithSecrets(apiKey))...)
+	c, err := service.New(baseURL, client.Bearer(apiKey), append(slices.Clip(opts), client.WithSecrets(apiKey))...)
 	if err != nil {
 		return nil, err
 	}

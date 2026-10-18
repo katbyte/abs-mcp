@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -48,12 +47,12 @@ func (c Client) UserDelete(ctx context.Context, id UserID) (result UserDeleteRes
 		},
 		HTTPMethod: http.MethodDelete,
 		Operation:  "UserDelete",
-		Path:       fmt.Sprintf("/api/users/%s", url.PathEscape(string(id))),
+		Path:       "/api/users/" + url.PathEscape(string(id)),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -62,15 +61,15 @@ func (c Client) UserDelete(ctx context.Context, id UserID) (result UserDeleteRes
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer UserDeleteAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.UserDeleteAnswer = result.Answer
 
-	return
+	return result, nil
 }

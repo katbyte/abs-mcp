@@ -54,8 +54,7 @@ type LibraryGetCollectionsForLibraryOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o LibraryGetCollectionsForLibraryOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -88,8 +87,7 @@ func (o LibraryGetCollectionsForLibraryOptions) ToQuery() *client.QueryParams {
 // LibraryGetCollectionsForLibrary calls GET /api/libraries/{id}/collections.
 func (c Client) LibraryGetCollectionsForLibrary(ctx context.Context, id LibraryID, options ...LibraryGetCollectionsForLibraryOptions) (result LibraryGetCollectionsForLibraryResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("LibraryGetCollectionsForLibrary takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("LibraryGetCollectionsForLibrary takes one options struct at most, not %d", len(options))
 	}
 	var option LibraryGetCollectionsForLibraryOptions
 	if len(options) == 1 {
@@ -104,12 +102,12 @@ func (c Client) LibraryGetCollectionsForLibrary(ctx context.Context, id LibraryI
 		HTTPMethod:    http.MethodGet,
 		Operation:     "LibraryGetCollectionsForLibrary",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/libraries/%s/collections", url.PathEscape(string(id))),
+		Path:          "/api/libraries/" + url.PathEscape(string(id)) + "/collections",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -118,17 +116,17 @@ func (c Client) LibraryGetCollectionsForLibrary(ctx context.Context, id LibraryI
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer LibraryGetCollectionsForLibraryAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.LibraryGetCollectionsForLibraryAnswer = result.Answer
 
-	return
+	return result, nil
 }
 
 // LibraryGetCollectionsForLibraryCompleteResult is every result LibraryGetCollectionsForLibraryComplete loaded.
@@ -142,8 +140,7 @@ type LibraryGetCollectionsForLibraryCompleteResult struct {
 // options.Limit is the page size, client.DefaultPageSize when unset.
 func (c Client) LibraryGetCollectionsForLibraryComplete(ctx context.Context, id LibraryID, options ...LibraryGetCollectionsForLibraryOptions) (result LibraryGetCollectionsForLibraryCompleteResult, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("LibraryGetCollectionsForLibraryComplete takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("LibraryGetCollectionsForLibraryComplete takes one options struct at most, not %d", len(options))
 	}
 	var option LibraryGetCollectionsForLibraryOptions
 	if len(options) == 1 {
@@ -165,17 +162,16 @@ func (c Client) LibraryGetCollectionsForLibraryComplete(ctx context.Context, id 
 		page, err = c.LibraryGetCollectionsForLibrary(ctx, id, option)
 		result.LatestHttpResponse = page.HttpResponse
 		if err != nil {
-			err = fmt.Errorf("loading results: %w", err)
-			return
+			return result, fmt.Errorf("loading results: %w", err)
 		}
 		if page.Answer == nil || len(page.Answer.Results) == 0 {
-			return
+			return result, nil
 		}
 		result.Items = append(result.Items, page.Answer.Results...)
 		// a short page is the last; so is the page that reaches the total, when
 		// the server reports one
 		if len(page.Answer.Results) < limit || page.Answer.Total > 0 && (number+1)*limit >= page.Answer.Total {
-			return
+			return result, nil
 		}
 		number++
 	}
@@ -225,8 +221,8 @@ func (c Client) LibraryGetCollectionsForLibraryEach(ctx context.Context, id Libr
 			if page.Answer == nil || len(page.Answer.Results) == 0 {
 				return
 			}
-			for _, item := range page.Answer.Results {
-				if !yield(item, nil) {
+			for i := range page.Answer.Results {
+				if !yield(page.Answer.Results[i], nil) {
 					return
 				}
 			}

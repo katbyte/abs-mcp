@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -48,12 +47,12 @@ func (c Client) AuthorDeleteImage(ctx context.Context, id AuthorID) (result Auth
 		},
 		HTTPMethod: http.MethodDelete,
 		Operation:  "AuthorDeleteImage",
-		Path:       fmt.Sprintf("/api/authors/%s/image", url.PathEscape(string(id))),
+		Path:       "/api/authors/" + url.PathEscape(string(id)) + "/image",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -62,15 +61,15 @@ func (c Client) AuthorDeleteImage(ctx context.Context, id AuthorID) (result Auth
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer AuthorDeleteImageAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.AuthorDeleteImageAnswer = result.Answer
 
-	return
+	return result, nil
 }

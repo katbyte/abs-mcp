@@ -27,7 +27,7 @@ func TestOperationLibraryGetUserPersonalizedShelves(t *testing.T) {
 	expectQuery(t, r, "include", "v-Include")
 	expectQuery(t, r, "limit", "7")
 	expectQuery(t, r, "sort", "v-Sort")
-	if result.HttpResponse == nil || result.HttpResponse.StatusCode != 200 {
+	if result.HttpResponse == nil || result.HttpResponse.StatusCode != http.StatusOK {
 		t.Fatalf("HttpResponse = %+v", result.HttpResponse)
 	}
 	if result.Answer == nil || !result.Answered() {

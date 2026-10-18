@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -49,16 +48,16 @@ func (c Client) LibraryItemStartPlaybackSession(ctx context.Context, id LibraryI
 		},
 		HTTPMethod: http.MethodPost,
 		Operation:  "LibraryItemStartPlaybackSession",
-		Path:       fmt.Sprintf("/api/items/%s/play", url.PathEscape(string(id))),
+		Path:       "/api/items/" + url.PathEscape(string(id)) + "/play",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
-	if err = req.Marshal(input); err != nil {
-		return
+	if err := req.Marshal(input); err != nil {
+		return result, err
 	}
 
 	var resp *client.Response
@@ -67,15 +66,15 @@ func (c Client) LibraryItemStartPlaybackSession(ctx context.Context, id LibraryI
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer PlaybackSessionForClient
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.PlaybackSessionForClient = result.Answer
 
-	return
+	return result, nil
 }

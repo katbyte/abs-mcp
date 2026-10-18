@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -49,16 +48,16 @@ func (c Client) MeUpdateBookmark(ctx context.Context, id LibraryItemID, input Me
 		},
 		HTTPMethod: http.MethodPatch,
 		Operation:  "MeUpdateBookmark",
-		Path:       fmt.Sprintf("/api/me/item/%s/bookmark", url.PathEscape(string(id))),
+		Path:       "/api/me/item/" + url.PathEscape(string(id)) + "/bookmark",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
-	if err = req.Marshal(input); err != nil {
-		return
+	if err := req.Marshal(input); err != nil {
+		return result, err
 	}
 
 	var resp *client.Response
@@ -67,15 +66,15 @@ func (c Client) MeUpdateBookmark(ctx context.Context, id LibraryItemID, input Me
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer AudioBookmark
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.AudioBookmark = result.Answer
 
-	return
+	return result, nil
 }

@@ -46,8 +46,7 @@ type PodcastQuickMatchEpisodesOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o PodcastQuickMatchEpisodesOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -62,8 +61,7 @@ func (o PodcastQuickMatchEpisodesOptions) ToQuery() *client.QueryParams {
 // PodcastQuickMatchEpisodes calls POST /api/podcasts/{id}/match-episodes.
 func (c Client) PodcastQuickMatchEpisodes(ctx context.Context, id LibraryItemID, options ...PodcastQuickMatchEpisodesOptions) (result PodcastQuickMatchEpisodesResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("PodcastQuickMatchEpisodes takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("PodcastQuickMatchEpisodes takes one options struct at most, not %d", len(options))
 	}
 	var option PodcastQuickMatchEpisodesOptions
 	if len(options) == 1 {
@@ -78,12 +76,12 @@ func (c Client) PodcastQuickMatchEpisodes(ctx context.Context, id LibraryItemID,
 		HTTPMethod:    http.MethodPost,
 		Operation:     "PodcastQuickMatchEpisodes",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/podcasts/%s/match-episodes", url.PathEscape(string(id))),
+		Path:          "/api/podcasts/" + url.PathEscape(string(id)) + "/match-episodes",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -92,15 +90,15 @@ func (c Client) PodcastQuickMatchEpisodes(ctx context.Context, id LibraryItemID,
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer PodcastQuickMatchEpisodesAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.PodcastQuickMatchEpisodesAnswer = result.Answer
 
-	return
+	return result, nil
 }

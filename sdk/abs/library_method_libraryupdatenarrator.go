@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -49,16 +48,16 @@ func (c Client) LibraryUpdateNarrator(ctx context.Context, id LibraryID, narrato
 		},
 		HTTPMethod: http.MethodPatch,
 		Operation:  "LibraryUpdateNarrator",
-		Path:       fmt.Sprintf("/api/libraries/%s/narrators/%s", url.PathEscape(string(id)), url.PathEscape(narratorId)),
+		Path:       "/api/libraries/" + url.PathEscape(string(id)) + "/narrators/" + url.PathEscape(narratorId),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
-	if err = req.Marshal(input); err != nil {
-		return
+	if err := req.Marshal(input); err != nil {
+		return result, err
 	}
 
 	var resp *client.Response
@@ -67,15 +66,15 @@ func (c Client) LibraryUpdateNarrator(ctx context.Context, id LibraryID, narrato
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer LibraryUpdateNarratorAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.LibraryUpdateNarratorAnswer = result.Answer
 
-	return
+	return result, nil
 }

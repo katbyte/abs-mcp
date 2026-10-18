@@ -48,8 +48,7 @@ type LibraryItemFindOneOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o LibraryItemFindOneOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -70,8 +69,7 @@ func (o LibraryItemFindOneOptions) ToQuery() *client.QueryParams {
 // LibraryItemFindOne calls GET /api/items/{id}.
 func (c Client) LibraryItemFindOne(ctx context.Context, id LibraryItemID, options ...LibraryItemFindOneOptions) (result LibraryItemFindOneResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("LibraryItemFindOne takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("LibraryItemFindOne takes one options struct at most, not %d", len(options))
 	}
 	var option LibraryItemFindOneOptions
 	if len(options) == 1 {
@@ -86,12 +84,12 @@ func (c Client) LibraryItemFindOne(ctx context.Context, id LibraryItemID, option
 		HTTPMethod:    http.MethodGet,
 		Operation:     "LibraryItemFindOne",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/items/%s", url.PathEscape(string(id))),
+		Path:          "/api/items/" + url.PathEscape(string(id)),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -100,15 +98,15 @@ func (c Client) LibraryItemFindOne(ctx context.Context, id LibraryItemID, option
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer LibraryItemExpanded
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.LibraryItemExpanded = result.Answer
 
-	return
+	return result, nil
 }

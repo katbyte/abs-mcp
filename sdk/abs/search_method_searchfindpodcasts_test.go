@@ -25,7 +25,7 @@ func TestOperationSearchFindPodcasts(t *testing.T) {
 	expectRequest(t, r, http.MethodGet, "/api/search/podcast")
 	expectQuery(t, r, "country", "v-Country")
 	expectQuery(t, r, "term", "v-Term")
-	if result.HttpResponse == nil || result.HttpResponse.StatusCode != 200 {
+	if result.HttpResponse == nil || result.HttpResponse.StatusCode != http.StatusOK {
 		t.Fatalf("HttpResponse = %+v", result.HttpResponse)
 	}
 	if result.Answer == nil || !result.Answered() {

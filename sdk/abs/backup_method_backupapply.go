@@ -4,7 +4,6 @@ package abs
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -32,12 +31,12 @@ func (c Client) BackupApply(ctx context.Context, id string) (result BackupApplyR
 		},
 		HTTPMethod: http.MethodGet,
 		Operation:  "BackupApply",
-		Path:       fmt.Sprintf("/api/backups/%s/apply", url.PathEscape(id)),
+		Path:       "/api/backups/" + url.PathEscape(id) + "/apply",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -46,14 +45,14 @@ func (c Client) BackupApply(ctx context.Context, id string) (result BackupApplyR
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer string
 	result.Answer = &answer
-	if err = resp.Text(result.Answer); err != nil {
-		return
+	if err := resp.Text(result.Answer); err != nil {
+		return result, err
 	}
 
-	return
+	return result, nil
 }

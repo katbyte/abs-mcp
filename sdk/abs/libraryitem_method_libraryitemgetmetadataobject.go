@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -48,12 +47,12 @@ func (c Client) LibraryItemGetMetadataObject(ctx context.Context, id LibraryItem
 		},
 		HTTPMethod: http.MethodGet,
 		Operation:  "LibraryItemGetMetadataObject",
-		Path:       fmt.Sprintf("/api/items/%s/metadata-object", url.PathEscape(string(id))),
+		Path:       "/api/items/" + url.PathEscape(string(id)) + "/metadata-object",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -62,15 +61,15 @@ func (c Client) LibraryItemGetMetadataObject(ctx context.Context, id LibraryItem
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer LibraryItemGetMetadataObjectAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.LibraryItemGetMetadataObjectAnswer = result.Answer
 
-	return
+	return result, nil
 }

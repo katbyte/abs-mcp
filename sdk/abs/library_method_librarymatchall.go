@@ -30,8 +30,7 @@ type LibraryMatchAllOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o LibraryMatchAllOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -46,8 +45,7 @@ func (o LibraryMatchAllOptions) ToQuery() *client.QueryParams {
 // LibraryMatchAll calls GET /api/libraries/{id}/matchall.
 func (c Client) LibraryMatchAll(ctx context.Context, id LibraryID, options ...LibraryMatchAllOptions) (result LibraryMatchAllResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("LibraryMatchAll takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("LibraryMatchAll takes one options struct at most, not %d", len(options))
 	}
 	var option LibraryMatchAllOptions
 	if len(options) == 1 {
@@ -62,12 +60,12 @@ func (c Client) LibraryMatchAll(ctx context.Context, id LibraryID, options ...Li
 		HTTPMethod:    http.MethodGet,
 		Operation:     "LibraryMatchAll",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/libraries/%s/matchall", url.PathEscape(string(id))),
+		Path:          "/api/libraries/" + url.PathEscape(string(id)) + "/matchall",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -76,14 +74,14 @@ func (c Client) LibraryMatchAll(ctx context.Context, id LibraryID, options ...Li
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer string
 	result.Answer = &answer
-	if err = resp.Text(result.Answer); err != nil {
-		return
+	if err := resp.Text(result.Answer); err != nil {
+		return result, err
 	}
 
-	return
+	return result, nil
 }

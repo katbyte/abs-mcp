@@ -46,8 +46,7 @@ type LibraryRemoveAllMetadataFilesOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o LibraryRemoveAllMetadataFilesOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -62,8 +61,7 @@ func (o LibraryRemoveAllMetadataFilesOptions) ToQuery() *client.QueryParams {
 // LibraryRemoveAllMetadataFiles calls POST /api/libraries/{id}/remove-metadata.
 func (c Client) LibraryRemoveAllMetadataFiles(ctx context.Context, id LibraryID, options ...LibraryRemoveAllMetadataFilesOptions) (result LibraryRemoveAllMetadataFilesResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("LibraryRemoveAllMetadataFiles takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("LibraryRemoveAllMetadataFiles takes one options struct at most, not %d", len(options))
 	}
 	var option LibraryRemoveAllMetadataFilesOptions
 	if len(options) == 1 {
@@ -78,12 +76,12 @@ func (c Client) LibraryRemoveAllMetadataFiles(ctx context.Context, id LibraryID,
 		HTTPMethod:    http.MethodPost,
 		Operation:     "LibraryRemoveAllMetadataFiles",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/libraries/%s/remove-metadata", url.PathEscape(string(id))),
+		Path:          "/api/libraries/" + url.PathEscape(string(id)) + "/remove-metadata",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -92,15 +90,15 @@ func (c Client) LibraryRemoveAllMetadataFiles(ctx context.Context, id LibraryID,
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer LibraryRemoveAllMetadataFilesAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.LibraryRemoveAllMetadataFilesAnswer = result.Answer
 
-	return
+	return result, nil
 }

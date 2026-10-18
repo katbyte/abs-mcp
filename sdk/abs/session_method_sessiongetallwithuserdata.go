@@ -51,8 +51,7 @@ type SessionGetAllWithUserDataOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o SessionGetAllWithUserDataOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -79,8 +78,7 @@ func (o SessionGetAllWithUserDataOptions) ToQuery() *client.QueryParams {
 // SessionGetAllWithUserData calls GET /api/sessions.
 func (c Client) SessionGetAllWithUserData(ctx context.Context, options ...SessionGetAllWithUserDataOptions) (result SessionGetAllWithUserDataResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("SessionGetAllWithUserData takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("SessionGetAllWithUserData takes one options struct at most, not %d", len(options))
 	}
 	var option SessionGetAllWithUserDataOptions
 	if len(options) == 1 {
@@ -100,7 +98,7 @@ func (c Client) SessionGetAllWithUserData(ctx context.Context, options ...Sessio
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -109,17 +107,17 @@ func (c Client) SessionGetAllWithUserData(ctx context.Context, options ...Sessio
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer SessionGetAllWithUserDataAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.SessionGetAllWithUserDataAnswer = result.Answer
 
-	return
+	return result, nil
 }
 
 // SessionGetAllWithUserDataCompleteResult is every result SessionGetAllWithUserDataComplete loaded.
@@ -133,8 +131,7 @@ type SessionGetAllWithUserDataCompleteResult struct {
 // options.ItemsPerPage is the page size, client.DefaultPageSize when unset.
 func (c Client) SessionGetAllWithUserDataComplete(ctx context.Context, options ...SessionGetAllWithUserDataOptions) (result SessionGetAllWithUserDataCompleteResult, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("SessionGetAllWithUserDataComplete takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("SessionGetAllWithUserDataComplete takes one options struct at most, not %d", len(options))
 	}
 	var option SessionGetAllWithUserDataOptions
 	if len(options) == 1 {
@@ -156,17 +153,16 @@ func (c Client) SessionGetAllWithUserDataComplete(ctx context.Context, options .
 		page, err = c.SessionGetAllWithUserData(ctx, option)
 		result.LatestHttpResponse = page.HttpResponse
 		if err != nil {
-			err = fmt.Errorf("loading results: %w", err)
-			return
+			return result, fmt.Errorf("loading results: %w", err)
 		}
 		if page.Answer == nil || len(page.Answer.Sessions) == 0 {
-			return
+			return result, nil
 		}
 		result.Items = append(result.Items, page.Answer.Sessions...)
 		// a short page is the last; so is the page that reaches the total, when
 		// the server reports one
 		if len(page.Answer.Sessions) < limit || page.Answer.Total > 0 && (number+1)*limit >= page.Answer.Total {
-			return
+			return result, nil
 		}
 		number++
 	}
@@ -216,8 +212,8 @@ func (c Client) SessionGetAllWithUserDataEach(ctx context.Context, options ...Se
 			if page.Answer == nil || len(page.Answer.Sessions) == 0 {
 				return
 			}
-			for _, item := range page.Answer.Sessions {
-				if !yield(item, nil) {
+			for i := range page.Answer.Sessions {
+				if !yield(page.Answer.Sessions[i], nil) {
 					return
 				}
 			}

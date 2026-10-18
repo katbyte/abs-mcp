@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -48,12 +47,12 @@ func (c Client) MeGetMediaProgress(ctx context.Context, id LibraryItemID, episod
 		},
 		HTTPMethod: http.MethodGet,
 		Operation:  "MeGetMediaProgress",
-		Path:       fmt.Sprintf("/api/me/progress/%s/%s", url.PathEscape(string(id)), url.PathEscape(string(episodeId))),
+		Path:       "/api/me/progress/" + url.PathEscape(string(id)) + "/" + url.PathEscape(string(episodeId)),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -62,15 +61,15 @@ func (c Client) MeGetMediaProgress(ctx context.Context, id LibraryItemID, episod
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer MediaProgress
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.MediaProgress = result.Answer
 
-	return
+	return result, nil
 }

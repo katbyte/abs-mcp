@@ -24,7 +24,7 @@ func TestOperationLibraryRemoveAllMetadataFiles(t *testing.T) {
 	_ = body
 	expectRequest(t, r, http.MethodPost, "/api/libraries/v-id/remove-metadata")
 	expectQuery(t, r, "ext", "v-Ext")
-	if result.HttpResponse == nil || result.HttpResponse.StatusCode != 200 {
+	if result.HttpResponse == nil || result.HttpResponse.StatusCode != http.StatusOK {
 		t.Fatalf("HttpResponse = %+v", result.HttpResponse)
 	}
 	if result.Answer == nil || !result.Answered() {
@@ -33,7 +33,7 @@ func TestOperationLibraryRemoveAllMetadataFiles(t *testing.T) {
 	if result.LibraryRemoveAllMetadataFilesAnswer != result.Answer {
 		t.Error("the embedded answer is not the answer")
 	}
-	if record, err := result.Record(); err != nil || !reflect.DeepEqual(record, *result.Answer) {
+	if record, err := result.Record(); err != nil || !reflect.DeepEqual(&record, result.Answer) {
 		t.Errorf("Record = %+v, %v", record, err)
 	}
 

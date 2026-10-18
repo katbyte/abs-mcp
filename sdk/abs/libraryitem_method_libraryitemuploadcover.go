@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -52,16 +51,16 @@ func (c Client) LibraryItemUploadCover(ctx context.Context, id LibraryItemID, in
 		},
 		HTTPMethod: http.MethodPost,
 		Operation:  "LibraryItemUploadCover",
-		Path:       fmt.Sprintf("/api/items/%s/cover", url.PathEscape(string(id))),
+		Path:       "/api/items/" + url.PathEscape(string(id)) + "/cover",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
-	if err = req.SetBody(input, contentType); err != nil {
-		return
+	if err := req.SetBody(input, contentType); err != nil {
+		return result, err
 	}
 
 	var resp *client.Response
@@ -70,15 +69,15 @@ func (c Client) LibraryItemUploadCover(ctx context.Context, id LibraryItemID, in
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer LibraryItemUploadCoverAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.LibraryItemUploadCoverAnswer = result.Answer
 
-	return
+	return result, nil
 }

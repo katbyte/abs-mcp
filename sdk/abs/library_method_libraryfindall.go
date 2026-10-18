@@ -46,8 +46,7 @@ type LibraryFindAllOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o LibraryFindAllOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -65,8 +64,7 @@ func (o LibraryFindAllOptions) ToQuery() *client.QueryParams {
 // LibraryFindAll calls GET /api/libraries.
 func (c Client) LibraryFindAll(ctx context.Context, options ...LibraryFindAllOptions) (result LibraryFindAllResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("LibraryFindAll takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("LibraryFindAll takes one options struct at most, not %d", len(options))
 	}
 	var option LibraryFindAllOptions
 	if len(options) == 1 {
@@ -86,7 +84,7 @@ func (c Client) LibraryFindAll(ctx context.Context, options ...LibraryFindAllOpt
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -95,15 +93,15 @@ func (c Client) LibraryFindAll(ctx context.Context, options ...LibraryFindAllOpt
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer LibraryFindAllAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.LibraryFindAllAnswer = result.Answer
 
-	return
+	return result, nil
 }

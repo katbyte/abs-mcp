@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -49,16 +48,16 @@ func (c Client) SeriesUpdate(ctx context.Context, id SeriesID, input SeriesUpdat
 		},
 		HTTPMethod: http.MethodPatch,
 		Operation:  "SeriesUpdate",
-		Path:       fmt.Sprintf("/api/series/%s", url.PathEscape(string(id))),
+		Path:       "/api/series/" + url.PathEscape(string(id)),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
-	if err = req.Marshal(input); err != nil {
-		return
+	if err := req.Marshal(input); err != nil {
+		return result, err
 	}
 
 	var resp *client.Response
@@ -67,15 +66,15 @@ func (c Client) SeriesUpdate(ctx context.Context, id SeriesID, input SeriesUpdat
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer Series
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.Series = result.Answer
 
-	return
+	return result, nil
 }

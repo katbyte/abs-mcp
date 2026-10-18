@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -48,12 +47,12 @@ func (c Client) SessionGetOpenSession(ctx context.Context, id string) (result Se
 		},
 		HTTPMethod: http.MethodGet,
 		Operation:  "SessionGetOpenSession",
-		Path:       fmt.Sprintf("/api/session/%s", url.PathEscape(id)),
+		Path:       "/api/session/" + url.PathEscape(id),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -62,15 +61,15 @@ func (c Client) SessionGetOpenSession(ctx context.Context, id string) (result Se
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer PlaybackSessionForClient
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.PlaybackSessionForClient = result.Answer
 
-	return
+	return result, nil
 }

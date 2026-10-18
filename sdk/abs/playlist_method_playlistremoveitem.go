@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -48,12 +47,12 @@ func (c Client) PlaylistRemoveItem(ctx context.Context, id PlaylistID, libraryIt
 		},
 		HTTPMethod: http.MethodDelete,
 		Operation:  "PlaylistRemoveItem",
-		Path:       fmt.Sprintf("/api/playlists/%s/item/%s/%s", url.PathEscape(string(id)), url.PathEscape(string(libraryItemId)), url.PathEscape(string(episodeId))),
+		Path:       "/api/playlists/" + url.PathEscape(string(id)) + "/item/" + url.PathEscape(string(libraryItemId)) + "/" + url.PathEscape(string(episodeId)),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -62,15 +61,15 @@ func (c Client) PlaylistRemoveItem(ctx context.Context, id PlaylistID, libraryIt
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer Playlist
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.Playlist = result.Answer
 
-	return
+	return result, nil
 }

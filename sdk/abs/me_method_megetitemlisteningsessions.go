@@ -49,8 +49,7 @@ type MeGetItemListeningSessionsOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o MeGetItemListeningSessionsOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -68,8 +67,7 @@ func (o MeGetItemListeningSessionsOptions) ToQuery() *client.QueryParams {
 // MeGetItemListeningSessions calls GET /api/me/item/listening-sessions/{libraryItemId}/{episodeId}.
 func (c Client) MeGetItemListeningSessions(ctx context.Context, libraryItemId LibraryItemID, episodeId EpisodeID, options ...MeGetItemListeningSessionsOptions) (result MeGetItemListeningSessionsResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("MeGetItemListeningSessions takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("MeGetItemListeningSessions takes one options struct at most, not %d", len(options))
 	}
 	var option MeGetItemListeningSessionsOptions
 	if len(options) == 1 {
@@ -84,12 +82,12 @@ func (c Client) MeGetItemListeningSessions(ctx context.Context, libraryItemId Li
 		HTTPMethod:    http.MethodGet,
 		Operation:     "MeGetItemListeningSessions",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/me/item/listening-sessions/%s/%s", url.PathEscape(string(libraryItemId)), url.PathEscape(string(episodeId))),
+		Path:          "/api/me/item/listening-sessions/" + url.PathEscape(string(libraryItemId)) + "/" + url.PathEscape(string(episodeId)),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -98,17 +96,17 @@ func (c Client) MeGetItemListeningSessions(ctx context.Context, libraryItemId Li
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer MeGetItemListeningSessionsAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.MeGetItemListeningSessionsAnswer = result.Answer
 
-	return
+	return result, nil
 }
 
 // MeGetItemListeningSessionsCompleteResult is every result MeGetItemListeningSessionsComplete loaded.
@@ -122,8 +120,7 @@ type MeGetItemListeningSessionsCompleteResult struct {
 // options.ItemsPerPage is the page size, client.DefaultPageSize when unset.
 func (c Client) MeGetItemListeningSessionsComplete(ctx context.Context, libraryItemId LibraryItemID, episodeId EpisodeID, options ...MeGetItemListeningSessionsOptions) (result MeGetItemListeningSessionsCompleteResult, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("MeGetItemListeningSessionsComplete takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("MeGetItemListeningSessionsComplete takes one options struct at most, not %d", len(options))
 	}
 	var option MeGetItemListeningSessionsOptions
 	if len(options) == 1 {
@@ -145,17 +142,16 @@ func (c Client) MeGetItemListeningSessionsComplete(ctx context.Context, libraryI
 		page, err = c.MeGetItemListeningSessions(ctx, libraryItemId, episodeId, option)
 		result.LatestHttpResponse = page.HttpResponse
 		if err != nil {
-			err = fmt.Errorf("loading results: %w", err)
-			return
+			return result, fmt.Errorf("loading results: %w", err)
 		}
 		if page.Answer == nil || len(page.Answer.Sessions) == 0 {
-			return
+			return result, nil
 		}
 		result.Items = append(result.Items, page.Answer.Sessions...)
 		// a short page is the last; so is the page that reaches the total, when
 		// the server reports one
 		if len(page.Answer.Sessions) < limit || page.Answer.Total > 0 && (number+1)*limit >= page.Answer.Total {
-			return
+			return result, nil
 		}
 		number++
 	}
@@ -205,8 +201,8 @@ func (c Client) MeGetItemListeningSessionsEach(ctx context.Context, libraryItemI
 			if page.Answer == nil || len(page.Answer.Sessions) == 0 {
 				return
 			}
-			for _, item := range page.Answer.Sessions {
-				if !yield(item, nil) {
+			for i := range page.Answer.Sessions {
+				if !yield(page.Answer.Sessions[i], nil) {
 					return
 				}
 			}

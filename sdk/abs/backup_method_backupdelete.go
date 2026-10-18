@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -48,12 +47,12 @@ func (c Client) BackupDelete(ctx context.Context, id string) (result BackupDelet
 		},
 		HTTPMethod: http.MethodDelete,
 		Operation:  "BackupDelete",
-		Path:       fmt.Sprintf("/api/backups/%s", url.PathEscape(id)),
+		Path:       "/api/backups/" + url.PathEscape(id),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -62,15 +61,15 @@ func (c Client) BackupDelete(ctx context.Context, id string) (result BackupDelet
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer BackupDeleteAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.BackupDeleteAnswer = result.Answer
 
-	return
+	return result, nil
 }

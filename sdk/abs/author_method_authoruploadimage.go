@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -49,16 +48,16 @@ func (c Client) AuthorUploadImage(ctx context.Context, id AuthorID, input Author
 		},
 		HTTPMethod: http.MethodPost,
 		Operation:  "AuthorUploadImage",
-		Path:       fmt.Sprintf("/api/authors/%s/image", url.PathEscape(string(id))),
+		Path:       "/api/authors/" + url.PathEscape(string(id)) + "/image",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
-	if err = req.Marshal(input); err != nil {
-		return
+	if err := req.Marshal(input); err != nil {
+		return result, err
 	}
 
 	var resp *client.Response
@@ -67,15 +66,15 @@ func (c Client) AuthorUploadImage(ctx context.Context, id AuthorID, input Author
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer AuthorUploadImageAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.AuthorUploadImageAnswer = result.Answer
 
-	return
+	return result, nil
 }

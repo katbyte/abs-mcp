@@ -4,7 +4,6 @@ package abs
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -24,12 +23,12 @@ func (c Client) ShareDeleteMediaItemShare(ctx context.Context, id string) (resul
 		},
 		HTTPMethod: http.MethodDelete,
 		Operation:  "ShareDeleteMediaItemShare",
-		Path:       fmt.Sprintf("/api/share/mediaitem/%s", url.PathEscape(id)),
+		Path:       "/api/share/mediaitem/" + url.PathEscape(id),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -38,8 +37,8 @@ func (c Client) ShareDeleteMediaItemShare(ctx context.Context, id string) (resul
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
-	return
+	return result, nil
 }

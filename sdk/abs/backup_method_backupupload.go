@@ -55,11 +55,11 @@ func (c Client) BackupUpload(ctx context.Context, input io.Reader, contentType s
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
-	if err = req.SetBody(input, contentType); err != nil {
-		return
+	if err := req.SetBody(input, contentType); err != nil {
+		return result, err
 	}
 
 	var resp *client.Response
@@ -68,15 +68,15 @@ func (c Client) BackupUpload(ctx context.Context, input io.Reader, contentType s
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer BackupUploadAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.BackupUploadAnswer = result.Answer
 
-	return
+	return result, nil
 }

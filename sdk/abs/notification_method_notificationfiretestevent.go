@@ -29,8 +29,7 @@ type NotificationFireTestEventOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o NotificationFireTestEventOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -45,8 +44,7 @@ func (o NotificationFireTestEventOptions) ToQuery() *client.QueryParams {
 // NotificationFireTestEvent calls GET /api/notifications/test.
 func (c Client) NotificationFireTestEvent(ctx context.Context, options ...NotificationFireTestEventOptions) (result NotificationFireTestEventResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("NotificationFireTestEvent takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("NotificationFireTestEvent takes one options struct at most, not %d", len(options))
 	}
 	var option NotificationFireTestEventOptions
 	if len(options) == 1 {
@@ -66,7 +64,7 @@ func (c Client) NotificationFireTestEvent(ctx context.Context, options ...Notifi
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -75,14 +73,14 @@ func (c Client) NotificationFireTestEvent(ctx context.Context, options ...Notifi
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer string
 	result.Answer = &answer
-	if err = resp.Text(result.Answer); err != nil {
-		return
+	if err := resp.Text(result.Answer); err != nil {
+		return result, err
 	}
 
-	return
+	return result, nil
 }

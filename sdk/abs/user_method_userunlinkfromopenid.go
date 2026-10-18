@@ -4,7 +4,6 @@ package abs
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -32,12 +31,12 @@ func (c Client) UserUnlinkFromOpenID(ctx context.Context, id UserID) (result Use
 		},
 		HTTPMethod: http.MethodPatch,
 		Operation:  "UserUnlinkFromOpenID",
-		Path:       fmt.Sprintf("/api/users/%s/openid-unlink", url.PathEscape(string(id))),
+		Path:       "/api/users/" + url.PathEscape(string(id)) + "/openid-unlink",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -46,14 +45,14 @@ func (c Client) UserUnlinkFromOpenID(ctx context.Context, id UserID) (result Use
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer string
 	result.Answer = &answer
-	if err = resp.Text(result.Answer); err != nil {
-		return
+	if err := resp.Text(result.Answer); err != nil {
+		return result, err
 	}
 
-	return
+	return result, nil
 }

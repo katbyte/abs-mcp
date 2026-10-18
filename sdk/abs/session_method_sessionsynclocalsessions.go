@@ -52,11 +52,11 @@ func (c Client) SessionSyncLocalSessions(ctx context.Context, input SessionSyncL
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
-	if err = req.Marshal(input); err != nil {
-		return
+	if err := req.Marshal(input); err != nil {
+		return result, err
 	}
 
 	var resp *client.Response
@@ -65,15 +65,15 @@ func (c Client) SessionSyncLocalSessions(ctx context.Context, input SessionSyncL
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer SessionSyncLocalSessionsAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.SessionSyncLocalSessionsAnswer = result.Answer
 
-	return
+	return result, nil
 }

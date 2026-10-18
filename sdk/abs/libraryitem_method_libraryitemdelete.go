@@ -30,8 +30,7 @@ type LibraryItemDeleteOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o LibraryItemDeleteOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -46,8 +45,7 @@ func (o LibraryItemDeleteOptions) ToQuery() *client.QueryParams {
 // LibraryItemDelete calls DELETE /api/items/{id}.
 func (c Client) LibraryItemDelete(ctx context.Context, id LibraryItemID, options ...LibraryItemDeleteOptions) (result LibraryItemDeleteResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("LibraryItemDelete takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("LibraryItemDelete takes one options struct at most, not %d", len(options))
 	}
 	var option LibraryItemDeleteOptions
 	if len(options) == 1 {
@@ -62,12 +60,12 @@ func (c Client) LibraryItemDelete(ctx context.Context, id LibraryItemID, options
 		HTTPMethod:    http.MethodDelete,
 		Operation:     "LibraryItemDelete",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/items/%s", url.PathEscape(string(id))),
+		Path:          "/api/items/" + url.PathEscape(string(id)),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -76,14 +74,14 @@ func (c Client) LibraryItemDelete(ctx context.Context, id LibraryItemID, options
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer string
 	result.Answer = &answer
-	if err = resp.Text(result.Answer); err != nil {
-		return
+	if err := resp.Text(result.Answer); err != nil {
+		return result, err
 	}
 
-	return
+	return result, nil
 }

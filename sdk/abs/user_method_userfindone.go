@@ -5,7 +5,6 @@ package abs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -48,12 +47,12 @@ func (c Client) UserFindOne(ctx context.Context, id UserID) (result UserFindOneR
 		},
 		HTTPMethod: http.MethodGet,
 		Operation:  "UserFindOne",
-		Path:       fmt.Sprintf("/api/users/%s", url.PathEscape(string(id))),
+		Path:       "/api/users/" + url.PathEscape(string(id)),
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -62,15 +61,15 @@ func (c Client) UserFindOne(ctx context.Context, id UserID) (result UserFindOneR
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer UserForBrowser
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.UserForBrowser = result.Answer
 
-	return
+	return result, nil
 }

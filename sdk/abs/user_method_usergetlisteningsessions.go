@@ -49,8 +49,7 @@ type UserGetListeningSessionsOptions struct {
 
 // ToHeaders returns the header parameters the options set.
 func (o UserGetListeningSessionsOptions) ToHeaders() *client.Headers {
-	out := client.Headers{}
-	return &out
+	return &client.Headers{}
 }
 
 // ToQuery returns the query parameters the options set.
@@ -68,8 +67,7 @@ func (o UserGetListeningSessionsOptions) ToQuery() *client.QueryParams {
 // UserGetListeningSessions calls GET /api/users/{id}/listening-sessions.
 func (c Client) UserGetListeningSessions(ctx context.Context, id UserID, options ...UserGetListeningSessionsOptions) (result UserGetListeningSessionsResponse, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("UserGetListeningSessions takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("UserGetListeningSessions takes one options struct at most, not %d", len(options))
 	}
 	var option UserGetListeningSessionsOptions
 	if len(options) == 1 {
@@ -84,12 +82,12 @@ func (c Client) UserGetListeningSessions(ctx context.Context, id UserID, options
 		HTTPMethod:    http.MethodGet,
 		Operation:     "UserGetListeningSessions",
 		OptionsObject: option,
-		Path:          fmt.Sprintf("/api/users/%s/listening-sessions", url.PathEscape(string(id))),
+		Path:          "/api/users/" + url.PathEscape(string(id)) + "/listening-sessions",
 	}
 
 	req, err := c.Client.NewRequest(ctx, opts)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var resp *client.Response
@@ -98,17 +96,17 @@ func (c Client) UserGetListeningSessions(ctx context.Context, id UserID, options
 		result.HttpResponse = resp.Response
 	}
 	if err != nil {
-		return
+		return result, err
 	}
 
 	var answer UserGetListeningSessionsAnswer
 	result.Answer = &answer
-	if err = resp.Unmarshal(result.Answer); err != nil {
-		return
+	if err := resp.Unmarshal(result.Answer); err != nil {
+		return result, err
 	}
 	result.UserGetListeningSessionsAnswer = result.Answer
 
-	return
+	return result, nil
 }
 
 // UserGetListeningSessionsCompleteResult is every result UserGetListeningSessionsComplete loaded.
@@ -122,8 +120,7 @@ type UserGetListeningSessionsCompleteResult struct {
 // options.ItemsPerPage is the page size, client.DefaultPageSize when unset.
 func (c Client) UserGetListeningSessionsComplete(ctx context.Context, id UserID, options ...UserGetListeningSessionsOptions) (result UserGetListeningSessionsCompleteResult, err error) {
 	if len(options) > 1 {
-		err = fmt.Errorf("UserGetListeningSessionsComplete takes one options struct at most, not %d", len(options))
-		return
+		return result, fmt.Errorf("UserGetListeningSessionsComplete takes one options struct at most, not %d", len(options))
 	}
 	var option UserGetListeningSessionsOptions
 	if len(options) == 1 {
@@ -145,17 +142,16 @@ func (c Client) UserGetListeningSessionsComplete(ctx context.Context, id UserID,
 		page, err = c.UserGetListeningSessions(ctx, id, option)
 		result.LatestHttpResponse = page.HttpResponse
 		if err != nil {
-			err = fmt.Errorf("loading results: %w", err)
-			return
+			return result, fmt.Errorf("loading results: %w", err)
 		}
 		if page.Answer == nil || len(page.Answer.Sessions) == 0 {
-			return
+			return result, nil
 		}
 		result.Items = append(result.Items, page.Answer.Sessions...)
 		// a short page is the last; so is the page that reaches the total, when
 		// the server reports one
 		if len(page.Answer.Sessions) < limit || page.Answer.Total > 0 && (number+1)*limit >= page.Answer.Total {
-			return
+			return result, nil
 		}
 		number++
 	}
@@ -205,8 +201,8 @@ func (c Client) UserGetListeningSessionsEach(ctx context.Context, id UserID, opt
 			if page.Answer == nil || len(page.Answer.Sessions) == 0 {
 				return
 			}
-			for _, item := range page.Answer.Sessions {
-				if !yield(item, nil) {
+			for i := range page.Answer.Sessions {
+				if !yield(page.Answer.Sessions[i], nil) {
 					return
 				}
 			}
