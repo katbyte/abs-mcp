@@ -1,3 +1,9 @@
+## Unreleased
+
+### Fixed
+
+- a bare `make` formats and builds, rather than only building a lint tool
+
 ## 0.7.1 (2026-10-18)
 
 ### Breaking

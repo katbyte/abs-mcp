@@ -1,5 +1,7 @@
 # recipes use bash for pipefail support (ubuntu's default sh is dash)
 SHELL := /bin/bash
+# a bare make formats and builds; without this it runs the first rule, which builds a lint tool
+.DEFAULT_GOAL := default
 
 GIT_COMMIT=$(shell git describe --always --long --dirty)
 # the fallback has to guard git describe itself, not the pipeline: sed exits 0
